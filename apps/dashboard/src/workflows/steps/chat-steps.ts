@@ -5,16 +5,16 @@ import {
 } from "@notra/ai/billing/autumn";
 import { checkChatBilling } from "@notra/ai/billing/chat-billing";
 import { FEATURES } from "@notra/ai/billing/features";
-import { startChatAbortPolling } from "@notra/ai/chat/abort-polling";
 import {
   claimChatWorkflowRequest,
   clearActiveChatStream,
-  clearChatAbortFlag,
+  getActiveChatStream,
   getChatProjectId,
   getChatStreamChannelName,
   loadChatHistory,
   replaceChatHistory,
 } from "@notra/ai/chat/history";
+import { createChatStreamLifecycle } from "@notra/ai/chat/stream-lifecycle";
 import {
   getGitHubIntegrationById,
   getGitHubIntegrationsByOrganization,
@@ -30,11 +30,14 @@ import { realtime } from "@notra/ai/realtime";
 import type { ChatUsageSnapshot } from "@notra/ai/types/chat";
 import type { StandaloneChatContextItem } from "@notra/ai/types/standalone-chat";
 import { buildChatFinishMetadata } from "@notra/ai/utils/chat";
+import { createChatActivityTimingTracker } from "@notra/ai/utils/chat-activity-timing";
+import { forwardChatStream } from "@notra/ai/utils/forward-chat-stream";
 import { routeUsageProperties } from "@notra/ai/utils/route-usage";
 import { toAgentTokenUsage } from "@notra/ai/utils/token-usage";
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
 import { flushPostHogServer } from "@notra/posthog/server";
-import { toUIMessageStream, type UIMessageChunk } from "ai";
+import { toUIMessageStream } from "ai";
+import { Effect } from "effect";
 import { nanoid } from "nanoid";
 
 import { AI_CREDITS_SOURCE_STANDALONE_CHAT } from "@/constants/studio-analytics";
@@ -65,6 +68,15 @@ export async function resolveChatStreamStep(
   input: ResolveChatStreamInput
 ): Promise<ResolveChatStreamResult> {
   "use step";
+  if (input.streamId) {
+    const activeStreamId = await getActiveChatStream(
+      input.organizationId,
+      input.chatId
+    );
+    return activeStreamId === input.streamId
+      ? { status: "ready", streamId: input.streamId }
+      : { status: "superseded" };
+  }
   const messages = await loadChatHistory(input.organizationId, input.chatId);
   const latestMessage = messages.at(-1);
   if (!latestMessage) {
@@ -163,13 +175,14 @@ export async function streamChatResponseStep(
     surface,
   } = input;
 
-  const messages = await loadChatHistory(organizationId, chatId);
+  const [messages, projectId] = await Promise.all([
+    loadChatHistory(organizationId, chatId),
+    getChatProjectId(organizationId, chatId),
+  ]);
   if (messages.length === 0) {
     await clearActiveChatStream(organizationId, chatId, streamId);
     return { status: "empty_history" };
   }
-
-  const projectId = await getChatProjectId(organizationId, chatId);
 
   const channelName = getChatStreamChannelName(
     organizationId,
@@ -189,46 +202,16 @@ export async function streamChatResponseStep(
     return { status: "realtime_unavailable" };
   }
 
-  const abortController = new AbortController();
-  let stopAbortPolling: (() => void) | null = null;
+  const lifecycle = await createChatStreamLifecycle({
+    organizationId,
+    chatId,
+    streamId,
+  });
   const streamStartedAt = Date.now();
   const timing: { firstChunkAt: number | null } = { firstChunkAt: null };
   const usageSnapshot: ChatUsageSnapshot = {};
 
-  let buffer: UIMessageChunk[] = [];
-  let flushPromise: Promise<void> | null = null;
-
-  const flushBuffer = async () => {
-    while (buffer.length > 0) {
-      const batch = buffer;
-      buffer = [];
-      await channel.emit("ai.chunk", batch as never);
-    }
-  };
-
-  const scheduleFlush = () => {
-    if (flushPromise) {
-      return;
-    }
-    flushPromise = flushBuffer().finally(() => {
-      flushPromise = null;
-    });
-  };
-
-  const drainPendingFlushes = async () => {
-    if (flushPromise) {
-      await flushPromise;
-    }
-    await flushBuffer();
-  };
-
   try {
-    stopAbortPolling = startChatAbortPolling({
-      organizationId,
-      chatId,
-      streamId,
-      onAbort: () => abortController.abort(),
-    });
     const { stream, routingDecision } = await orchestrateStandaloneChat(
       {
         organizationId,
@@ -237,7 +220,7 @@ export async function streamChatResponseStep(
         messages,
         context: standaloneContext as StandaloneChatContextItem[],
         maxSteps: 50,
-        abortSignal: abortController.signal,
+        abortSignal: lifecycle.signal,
         requestedModel: model,
         enableThinking,
         thinkingLevel,
@@ -344,12 +327,14 @@ export async function streamChatResponseStep(
       decision: routingDecision,
     });
 
+    const activityTiming = createChatActivityTimingTracker(messages.at(-1));
     const uiStream = toUIMessageStream({
       stream: stream.stream,
       originalMessages: messages,
       generateMessageId: nanoid,
       sendReasoning: enableThinking !== false,
       messageMetadata: ({ part }) => {
+        const activityTimings = activityTiming.record(part);
         const effectiveThinkingLevel =
           enableThinking === false
             ? "off"
@@ -368,6 +353,7 @@ export async function streamChatResponseStep(
 
         if (part.type === "finish") {
           return buildChatFinishMetadata({
+            activityTimings: activityTiming.timings,
             streamStartedAt,
             firstChunkAt: timing.firstChunkAt,
             finishedAt: Date.now(),
@@ -380,25 +366,21 @@ export async function streamChatResponseStep(
           });
         }
 
-        return;
+        return activityTimings ? { activityTimings } : undefined;
       },
       onEnd: async ({ messages: responseMessages }) => {
-        try {
-          const saved = await replaceChatHistory(
-            organizationId,
-            chatId,
-            responseMessages,
-            undefined,
-            streamId
+        const saved = await replaceChatHistory(
+          organizationId,
+          chatId,
+          responseMessages,
+          undefined,
+          messages.at(-1)?.id
+        );
+        if (!saved) {
+          console.warn(
+            `${LOG_PREFIX} Skipped saving response: chat was deleted`,
+            { requestId, organizationId, chatId }
           );
-          if (!saved) {
-            console.warn(
-              `${LOG_PREFIX} Skipped saving response: chat was deleted`,
-              { requestId, organizationId, chatId }
-            );
-          }
-        } finally {
-          await clearActiveChatStream(organizationId, chatId, streamId);
         }
       },
       onError: (error) => {
@@ -407,39 +389,18 @@ export async function streamChatResponseStep(
       },
     });
 
-    const reader = uiStream.getReader();
-    try {
-      while (!abortController.signal.aborted) {
-        // react-doctor-disable-next-line react-doctor/async-await-in-loop -- stream chunks must be forwarded in order
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
-        }
-        buffer.push(value as UIMessageChunk);
-        scheduleFlush();
-      }
-    } finally {
-      reader.releaseLock();
-    }
-
-    if (abortController.signal.aborted) {
-      buffer.push(
-        { type: "abort", reason: "user-stopped" },
-        { type: "finish", finishReason: "stop" }
-      );
-      scheduleFlush();
-    }
-
-    await drainPendingFlushes();
-    return abortController.signal.aborted
-      ? { status: "aborted" }
-      : { status: "completed" };
+    await Effect.runPromise(
+      forwardChatStream({
+        stream: uiStream,
+        emit: (batch) => channel.emit("ai.chunk", batch as never),
+      }),
+      { signal: lifecycle.signal }
+    );
+    return { status: "completed" };
   } catch (error) {
     const isAbort =
-      abortController.signal.aborted ||
+      lifecycle.signal.aborted ||
       (error instanceof Error && error.name === "AbortError");
-
-    await drainPendingFlushes();
 
     if (isAbort) {
       console.log(`${LOG_PREFIX} Aborted by user:`, { requestId, chatId });
@@ -472,13 +433,9 @@ export async function streamChatResponseStep(
       });
     }
 
-    await clearActiveChatStream(organizationId, chatId, streamId);
     return isAbort ? { status: "aborted" } : { status: "failed" };
   } finally {
-    stopAbortPolling?.();
-    await clearChatAbortFlag(organizationId, chatId, streamId).catch(
-      () => undefined
-    );
+    await lifecycle.close();
     await flushPostHogServer();
   }
 }
