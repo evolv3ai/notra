@@ -50,13 +50,14 @@ export function GeoProjectDeleteSection({
       heading="Delete project"
       headingAs="h2"
     >
-      <div className="space-y-4">
+      <div className="flex flex-col gap-4">
         <p className="text-muted-foreground text-sm text-pretty">
           {isLastProject
             ? "This is your only project. Create another project before deleting it."
             : "Permanently delete this project and all of its tracking data."}
         </p>
         <Button
+          className="self-end"
           disabled={isLastProject}
           onClick={() => setOpen(true)}
           type="button"

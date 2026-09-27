@@ -13,7 +13,6 @@ import { GEO_WRITER_TOPIC_MIN_LENGTH } from "@notra/geo-core/constants/geo";
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
 import {
   ResponsiveDialog,
-  ResponsiveDialogContent,
   ResponsiveDialogDescription,
   ResponsiveDialogTitle,
 } from "@notra/ui/components/shared/responsive-dialog";
@@ -32,6 +31,10 @@ import {
 
 import { Button } from "@/components/button";
 import { useGeoProjectScope } from "@/components/providers/geo-project-provider";
+import {
+  SplitModalContent,
+  SplitModalPane,
+} from "@/components/shared/split-modal";
 import { GEO_WRITE_DIALOG_ENTRIES } from "@/constants/geo-analytics";
 import {
   GEO_WRITE_ACTION_HELP,
@@ -228,13 +231,13 @@ function WriteDialogForm({
   };
 
   return (
-    <ResponsiveDialogContent
-      className="flex h-[min(44rem,88svh)] max-h-[88svh] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl md:flex-row"
-      showCloseButton={false}
+    <SplitModalContent
+      className="h-[min(44rem,88svh)] max-h-[88svh] sm:max-w-5xl"
+      responsive
     >
       <nav
         aria-label="Write sections"
-        className="hidden w-56 shrink-0 flex-col gap-1 border-r p-2 pt-3 md:flex"
+        className="hidden w-56 shrink-0 flex-col gap-1 p-2 pt-3 md:flex"
       >
         <p className="text-muted-foreground px-2 pt-1 text-[11px] font-medium uppercase">
           Overview
@@ -245,7 +248,7 @@ function WriteDialogForm({
             <button
               aria-current={active ? "location" : undefined}
               className={cn(
-                "duration-fast hover:bg-muted/80 flex min-h-8 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors",
+                "duration-fast hover:bg-muted/80 focus-visible:outline-ring flex min-h-8 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2",
                 active
                   ? "bg-muted text-foreground"
                   : "text-muted-foreground hover:text-foreground"
@@ -265,7 +268,7 @@ function WriteDialogForm({
         })}
       </nav>
 
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <SplitModalPane>
         <header className="flex shrink-0 items-start justify-between gap-3 border-b px-4 py-3.5 md:px-5">
           <div className="min-w-0 space-y-1">
             <ResponsiveDialogTitle className="text-sm leading-none font-medium">
@@ -418,8 +421,8 @@ function WriteDialogForm({
           }}
           pendingAction={pendingAction}
         />
-      </section>
-    </ResponsiveDialogContent>
+      </SplitModalPane>
+    </SplitModalContent>
   );
 }
 

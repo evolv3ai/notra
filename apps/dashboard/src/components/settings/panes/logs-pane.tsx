@@ -125,15 +125,15 @@ export function LogsSettingsPane() {
           emptyState={
             filtersActive
               ? {
-                  title: "No logs match your filters",
-                  description: "Try a different search, source, or status.",
+                  title: "No matching logs",
+                  description: "Try another search or reset your filters.",
                   actionLabel: "Reset filters",
                   onActionClick: resetFilters,
                 }
               : {
-                  title: "No logs yet",
+                  title: "No activity yet",
                   description:
-                    "Activity from your integrations, automations, GEO scans, and syncs will show up here.",
+                    "Events from integrations, automations, GEO scans, and syncs will appear here when they run.",
                 }
           }
           onPageChange={setPage}

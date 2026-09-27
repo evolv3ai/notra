@@ -88,7 +88,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {ReactQueryDevtools ? <ReactQueryDevtools initialIsOpen={false} /> : null}
+      <Suspense fallback={null}>
+        {ReactQueryDevtools ? (
+          <ReactQueryDevtools initialIsOpen={false} />
+        ) : null}
+      </Suspense>
       <ThemeProvider attribute="class" disableTransitionOnChange enableSystem>
         <TooltipProvider delay={500}>
           <NuqsAdapter>
@@ -100,7 +104,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
             ) : null}
           </NuqsAdapter>
           <Toaster position="bottom-right" />
-          <DatabuddyAnalytics />
+          <Suspense fallback={null}>
+            <DatabuddyAnalytics />
+          </Suspense>
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>
