@@ -47,7 +47,7 @@ export const AVAILABLE_MODELS = [
     id: "openai/gpt-5.6-sol",
     label: "GPT-5.6 Sol",
     description: "OpenAI model with a ZDR route",
-    pricing: "$2 input / $10 output per 1M",
+    pricing: "$2–4 input / $10–20 output per 1M",
     provider: "openai",
   },
 ] satisfies [ChatModelOption, ...ChatModelOption[]];

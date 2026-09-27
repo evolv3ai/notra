@@ -612,7 +612,7 @@ export const GEO_PROMPT_INTENT_LABELS: Record<GeoPromptIntent, string> = {
   other: "Other",
 };
 export const GEO_GAP_TITLE_MAX_LENGTH = 160;
-export const GEO_DISCOVERY_MODEL = "anthropic/claude-sonnet-4.6";
+export const GEO_DISCOVERY_MODEL = "anthropic/claude-sonnet-5";
 export const GEO_DISCOVERY_MAX_TOKENS = 5000;
 export const GEO_DISCOVERY_MAX_ALIASES = 6;
 export const GEO_DISCOVERY_MIN_COMPETITORS = 5;
