@@ -44,6 +44,7 @@ export function GeoUpgradeDialog({
   slug,
   open,
   onOpenChange,
+  onOpenChangeComplete,
 }: GeoUpgradeDialogProps) {
   const t = useTranslations("billing.geoUpgrade");
   const tCommon2 = useTranslations("common");
@@ -170,7 +171,11 @@ export function GeoUpgradeDialog({
   }
 
   return (
-    <ResponsiveDialog onOpenChange={handleOpenChange} open={open}>
+    <ResponsiveDialog
+      onOpenChange={handleOpenChange}
+      onOpenChangeComplete={onOpenChangeComplete}
+      open={open}
+    >
       <ResponsiveDialogContent className="flex max-h-[90svh] flex-col overflow-hidden sm:max-w-5xl">
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>{t("title")}</ResponsiveDialogTitle>

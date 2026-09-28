@@ -49,15 +49,21 @@ if (process.env.NOTRA_GEO_UPGRADE_CLIENT_TEST !== "1") {
     GeoUpgradeDialog: ({
       open,
       onOpenChange,
+      onOpenChangeComplete,
     }: {
       open: boolean;
       onOpenChange: (open: boolean) => void;
+      onOpenChangeComplete: (open: boolean) => void;
     }) =>
       open ? (
         <button onClick={() => onOpenChange(false)} type="button">
           Close upgrade
         </button>
-      ) : null,
+      ) : (
+        <button onClick={() => onOpenChangeComplete(false)} type="button">
+          Finish close
+        </button>
+      ),
   }));
   mock.module("@/components/empty-state-preview", () => ({
     EmptyStateAnalyticsPreview: () => null,
@@ -121,6 +127,10 @@ if (process.env.NOTRA_GEO_UPGRADE_CLIENT_TEST !== "1") {
         localStorageKeys.geoUpgradeDismissed(organization.id)
       )
     ).toBe("1");
+    expect(push).not.toHaveBeenCalled();
+    await act(async () => {
+      button("Finish close")?.click();
+    });
     expect(push).toHaveBeenCalledWith("/fixture");
 
     await act(async () => root.unmount());
@@ -140,6 +150,9 @@ if (process.env.NOTRA_GEO_UPGRADE_CLIENT_TEST !== "1") {
 
     await act(async () => {
       button("Close upgrade")?.click();
+    });
+    await act(async () => {
+      button("Finish close")?.click();
     });
     expect(push).toHaveBeenCalledTimes(1);
     expect(container.textContent).not.toContain("Close upgrade");
@@ -163,6 +176,10 @@ if (process.env.NOTRA_GEO_UPGRADE_CLIENT_TEST !== "1") {
         button("Close upgrade")?.click();
       });
       expect(container.textContent).not.toContain("Close upgrade");
+      expect(push).not.toHaveBeenCalled();
+      await act(async () => {
+        button("Finish close")?.click();
+      });
       expect(push).toHaveBeenCalledWith("/fixture");
     } finally {
       if (original) {

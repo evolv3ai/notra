@@ -73,6 +73,7 @@ export function GeoUpgradeGate({
     (reopenedOrganizationId === organizationId ||
       (dismissedOrganizationId !== organizationId && !dismissedInStorage));
   const shownForOrganizationRef = useRef<string | null>(null);
+  const navigateAfterCloseRef = useRef(false);
 
   useEffect(() => {
     if (!dialogOpen || shownForOrganizationRef.current === organizationId) {
@@ -134,7 +135,7 @@ export function GeoUpgradeGate({
     // here, which would reopen this paywall in a loop. Switch the sidebar to
     // Studio first so the redirect lets the user land on the Studio home.
     pickSidebarMode("studio", sidebarRouteFromPathname(pathname));
-    router.push(`/${slug}`);
+    navigateAfterCloseRef.current = true;
   }
 
   return (
@@ -169,6 +170,12 @@ export function GeoUpgradeGate({
         </div>
       </div>
       <GeoUpgradeDialog
+        onOpenChangeComplete={(open) => {
+          if (!open && navigateAfterCloseRef.current) {
+            navigateAfterCloseRef.current = false;
+            router.push(`/${slug}`);
+          }
+        }}
         onOpenChange={(open) => {
           if (!open) {
             handleDismiss();
