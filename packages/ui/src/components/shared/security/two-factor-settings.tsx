@@ -234,7 +234,6 @@ export function TwoFactorSettings({
 
   const action = isEnabled ? null : (
     <Button
-      className="rounded-xl"
       disabled={isStartingEnrollment}
       onClick={onStartEnrollment}
       size="sm"
