@@ -33,6 +33,7 @@ import {
   getProductPrice,
   groupBillingPlans,
   planGroupDescription,
+  planRenewalTerms,
   selectPlanVariant,
   zdrAddonToggle,
 } from "@/utils/billing-plans";
@@ -176,6 +177,7 @@ export function PricingClient({
         key={group.id}
         name={group.name}
         price={getProductPrice(plan).amount}
+        renewalTerms={planRenewalTerms(plan)}
       />
     );
   }
