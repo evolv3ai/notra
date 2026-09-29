@@ -165,6 +165,10 @@ export interface TrafficPageViewProps {
   ingestSetup: GeoIngestSetupResponse | undefined;
 }
 
+export interface GeoTrafficSkeletonProps {
+  geoRange?: GeoRangeControl;
+}
+
 export interface GeoLayoutProps {
   children: ReactNode;
   modal: ReactNode;
@@ -716,6 +720,7 @@ export interface GeoScanFrequencySelectProps {
 
 export interface AiTrafficCardProps {
   traffic: AiTrafficResponse | undefined;
+  range?: GeoRangeQuery;
   /** Top pages across every host, for the source drawer. */
   pages: readonly GeoTrafficPage[];
   settingsHref: string;
