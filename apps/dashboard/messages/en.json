@@ -6214,7 +6214,9 @@
     "activityDescription": "Your content creation over the year",
     "emptyAction": "View content",
     "emptyDescription": "You have no new posts today. Create one now or review your existing drafts on the content page.",
-    "emptyTitle": "No content created today"
+    "emptyTitle": "No content created today",
+    "upgradeTitle": "Create with Studio",
+    "upgradeDescription": "Studio is included in paid plans. Upgrade to create content and use AI tools."
   },
   "ai": {
     "toolBlock": {

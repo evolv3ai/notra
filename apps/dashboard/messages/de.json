@@ -6214,7 +6214,9 @@
     "activityDescription": "Deine Inhaltserstellung im Jahresverlauf",
     "emptyAction": "Inhalte ansehen",
     "emptyDescription": "Du hast heute noch keine neuen Beiträge. Erstelle jetzt einen oder sieh dir deine Entwürfe auf der Inhaltsseite an.",
-    "emptyTitle": "Heute noch keine Inhalte erstellt"
+    "emptyTitle": "Heute noch keine Inhalte erstellt",
+    "upgradeTitle": "Mit Studio Inhalte erstellen",
+    "upgradeDescription": "Studio ist in den kostenpflichtigen Plänen enthalten. Upgrade, um Inhalte zu erstellen und KI-Tools zu nutzen."
   },
   "ai": {
     "toolBlock": {
