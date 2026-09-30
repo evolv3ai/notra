@@ -1,12 +1,15 @@
 "use client";
 
 import {
+  BubbleChatQuestionIcon,
   Copy01Icon,
   Delete02Icon,
   PauseIcon,
   PlayIcon,
+  PlusSignIcon,
   SearchIcon,
   Tag01Icon,
+  Upload01Icon,
   ViewIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -25,6 +28,14 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
 } from "@notra/ui/components/ui/context-menu";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@notra/ui/components/ui/empty";
 import { Input } from "@notra/ui/components/ui/input";
 import {
   Select,
@@ -36,7 +47,7 @@ import {
 import { Switch } from "@notra/ui/components/ui/switch";
 import { useTranslations } from "next-intl";
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
-import { useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/button";
@@ -46,7 +57,6 @@ import {
   PromptPresenceBadge,
 } from "@/components/geo/prompt-badges";
 import { PromptDetailDialog } from "@/components/geo/prompt-detail-dialog";
-import { PromptSavedViewsMenu } from "@/components/geo/prompt-saved-views-menu";
 import { PromptTagsActionDialog } from "@/components/geo/prompt-tags-action-dialog";
 import { Table, type TableColumn } from "@/components/motion/table";
 import { GEO_PROMPT_DETAIL_SURFACES } from "@/constants/geo-analytics";
@@ -57,17 +67,15 @@ import {
 import { useGeoPromptsDb } from "@/lib/hooks/use-geo-db";
 import { useGeoPromptIntentLabel } from "@/lib/hooks/use-geo-prompt-intent-label";
 import { useGeoPromptSourceLabels } from "@/lib/hooks/use-geo-prompt-source-labels";
-import { useGeoSavedViews } from "@/lib/hooks/use-geo-saved-views";
 import type {
   GeoPromptIntentFilter,
-  GeoPromptSavedView,
   GeoPromptTableFilters,
   GeoPromptTableRow,
   PromptTagsDialogTarget,
   PromptsTableProps,
 } from "@/types/geo";
 import { copyTextToClipboard } from "@/utils/copy-to-clipboard";
-import { promptFiltersActive } from "@/utils/geo-prompt-views";
+import { promptFiltersActive } from "@/utils/geo-prompt-filters";
 import {
   buildPromptTableRows,
   promptPresenceSortValue,
@@ -115,6 +123,7 @@ function PromptRowActions({
       {pauseSwitch}
       <Button
         aria-label={tGeoShared("removePrompt", { prompt: row.prompt })}
+        className="group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:hover)]:opacity-0"
         disabled={isPending}
         onClick={(event) => {
           event.stopPropagation();
@@ -191,6 +200,8 @@ export function PromptsTable({
   prompts,
   results,
   isScanning = false,
+  onAddPrompt,
+  onImportCsv,
 }: PromptsTableProps) {
   const t = useTranslations("geo.promptsTable");
   const sourceLabels = useGeoPromptSourceLabels();
@@ -198,6 +209,7 @@ export function PromptsTable({
   const tCommon2 = useTranslations("common");
   const intentLabel = useGeoPromptIntentLabel();
   const tCommon = useTranslations("common.actions");
+  const tPages = useTranslations("geo.pages.shared");
   const intentFilterLabel = (value: GeoPromptIntentFilter) =>
     value === GEO_PROMPT_FILTER_ALL ? t("allIntents") : intentLabel(value);
   const promptRemoveDescription = (items: string[]) =>
@@ -205,13 +217,13 @@ export function PromptsTable({
       ? t("removeDescriptionMany")
       : t("removeDescriptionOne", { prompt: items[0] ?? "" });
   const {
+    isLoading: promptsLoading,
     pendingPromptIds,
     togglePrompt,
     removePrompts,
     setPromptTags,
     addTagsToPrompts,
   } = useGeoPromptsDb(organizationId);
-  const { views, saveView, removeView } = useGeoSavedViews(organizationId);
   const [search, setSearch] = useQueryState(
     "q",
     parseAsString.withDefault("").withOptions({ clearOnDefault: true })
@@ -267,14 +279,6 @@ export function PromptsTable({
     setDeleteOpen(true);
   };
 
-  const applyView = (view: GeoPromptSavedView) => {
-    setSearch(view.query.q);
-    setIntent(view.query.intent);
-    setTag(view.query.tag);
-    setSource(view.query.source);
-    toast.success(t("viewApplied", { name: view.name }));
-  };
-
   const applyTags = (tags: string[]) => {
     if (!tagsTarget) {
       return;
@@ -298,9 +302,45 @@ export function PromptsTable({
     }
   };
 
-  let emptyState = t("noMatches");
+  const clearFilters = () => {
+    setSearch(GEO_PROMPT_DEFAULT_FILTERS.q);
+    setIntent(GEO_PROMPT_DEFAULT_FILTERS.intent);
+    setTag(GEO_PROMPT_DEFAULT_FILTERS.tag);
+    setSource(GEO_PROMPT_DEFAULT_FILTERS.source);
+  };
+
+  const noPromptsTracked = !promptsLoading && prompts.length === 0;
+  const staleFilters = noPromptsTracked && promptFiltersActive(filters);
+  // The empty state hides the filter bar, so filters left in the URL would
+  // silently hide the next prompt someone adds.
+  useEffect(() => {
+    if (!staleFilters) {
+      return;
+    }
+    void setSearch(GEO_PROMPT_DEFAULT_FILTERS.q);
+    void setIntent(GEO_PROMPT_DEFAULT_FILTERS.intent);
+    void setTag(GEO_PROMPT_DEFAULT_FILTERS.tag);
+    void setSource(GEO_PROMPT_DEFAULT_FILTERS.source);
+  }, [staleFilters, setSearch, setIntent, setTag, setSource]);
+
+  let emptyState: ReactNode = (
+    <Empty className="py-8 md:py-8">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <HugeiconsIcon icon={SearchIcon} />
+        </EmptyMedia>
+        <EmptyTitle className="text-foreground">{t("noMatches")}</EmptyTitle>
+        <EmptyDescription>{t("noMatchesDescription")}</EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button onClick={clearFilters} size="sm" variant="outline">
+          {t("clearFilters")}
+        </Button>
+      </EmptyContent>
+    </Empty>
+  );
   if (prompts.length === 0) {
-    emptyState = isScanning ? tGeoShared("scanningEngines") : t("emptyIdle");
+    emptyState = tGeoShared("scanningEngines");
   }
 
   const columns: TableColumn<GeoPromptTableRow>[] = [
@@ -385,6 +425,33 @@ export function PromptsTable({
       ),
     },
   ];
+
+  // Nothing tracked yet: filters and an empty table would only add noise.
+  if (noPromptsTracked && !isScanning) {
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <HugeiconsIcon icon={BubbleChatQuestionIcon} />
+          </EmptyMedia>
+          <EmptyTitle>{t("emptyTitle")}</EmptyTitle>
+          <EmptyDescription>{t("emptyIdle")}</EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button onClick={onAddPrompt} size="sm">
+              <HugeiconsIcon icon={PlusSignIcon} size={14} />
+              {tGeoShared("addPrompt")}
+            </Button>
+            <Button onClick={onImportCsv} size="sm" variant="outline">
+              <HugeiconsIcon icon={Upload01Icon} size={14} />
+              {tPages("importCsv")}
+            </Button>
+          </div>
+        </EmptyContent>
+      </Empty>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -475,30 +542,8 @@ export function PromptsTable({
               ))}
             </SelectContent>
           </Select>
-          <PromptSavedViewsMenu
-            filters={filters}
-            onApply={applyView}
-            onRemove={(viewId) => {
-              removeView(viewId);
-              toast.success(t("viewDeleted"));
-            }}
-            onSave={(name) => {
-              saveView(name, filters);
-              toast.success(t("viewSaved"));
-            }}
-            views={views}
-          />
           {promptFiltersActive(filters) ? (
-            <Button
-              onClick={() => {
-                setSearch(GEO_PROMPT_DEFAULT_FILTERS.q);
-                setIntent(GEO_PROMPT_DEFAULT_FILTERS.intent);
-                setTag(GEO_PROMPT_DEFAULT_FILTERS.tag);
-                setSource(GEO_PROMPT_DEFAULT_FILTERS.source);
-              }}
-              size="sm"
-              variant="ghost"
-            >
+            <Button onClick={clearFilters} size="sm" variant="ghost">
               {tCommon("clear")}
             </Button>
           ) : null}

@@ -45,32 +45,23 @@ export interface SearchConsoleToolbarProps {
   organizationId: string;
   callbackPath: string;
   isPending: boolean;
-  onDismiss?: () => void;
   onPropertyPickerOpenChange: (open: boolean) => void;
   propertyPickerOpen: boolean;
   status: GeoSearchConsoleStatus | undefined;
 }
 
-export interface SearchConsoleHeaderRowProps {
-  action?: ReactNode;
-  titleId: string;
-  onDismiss?: () => void;
-}
-
-export interface SearchConsoleConnectActionProps {
+export interface SearchConsoleSetupStateProps {
   organizationId: string;
   callbackPath: string;
-  configured: boolean;
-  reauth: boolean;
-}
-
-export interface SearchConsoleSelectSiteStateProps {
-  organizationId: string;
-  callbackPath: string;
-  onOpenChange: (open: boolean) => void;
-  open: boolean;
   status: GeoSearchConsoleStatus;
   websiteUrl: string | null;
+}
+
+export interface SearchConsoleReconnectButtonProps {
+  organizationId: string;
+  callbackPath: string;
+  label: string;
+  variant?: "default" | "outline";
 }
 
 export interface SearchConsolePropertyPickerProps {
@@ -90,20 +81,17 @@ export interface SearchConsoleConnectedStateProps {
   websiteUrl: string | null;
 }
 
-export interface PromptSuggestionsToolbarProps {
-  checking: boolean;
-  showSearchConsole: boolean;
-  trackAllPending: boolean;
-  suggestionsCount: number;
-  callbackPath: string;
-  isSearchConsolePending: boolean;
-  connectPromo: boolean;
-  onDismissCard: () => void;
-  onPropertyPickerOpenChange: (open: boolean) => void;
-  organizationId: string;
-  propertyPickerOpen: boolean;
-  status: GeoSearchConsoleStatus | undefined;
-  onTrackAll: () => void;
+export interface TrackAllButtonProps {
+  pending: boolean;
+  onClick: () => void;
+}
+
+export interface SuggestionDetailActionsProps {
+  accepting: boolean;
+  disabled: boolean;
+  dismissing: boolean;
+  onAccept: () => void;
+  onDismiss: () => void;
 }
 
 export interface DismissSuggestionDialogProps {

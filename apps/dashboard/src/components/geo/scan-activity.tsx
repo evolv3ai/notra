@@ -1,5 +1,15 @@
 "use client";
 
+import { AiChat02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@notra/ui/components/ui/empty";
 import { Skeleton } from "@notra/ui/components/ui/skeleton";
 import { useTranslations } from "next-intl";
 
@@ -15,6 +25,7 @@ const SCAN_SKELETON_ROWS = 3;
 /** The latest scan as a regular section: status header plus its answers table. */
 export function ScanActivity({ organizationId }: GeoScanActivityProps) {
   const tGeoShared = useTranslations("geo.shared");
+  const tEmpty = useTranslations("geo.scanActivityStatus.empty");
   const isScanning = useIsGeoScanning(organizationId);
   const latest = useGeoScanRuns(organizationId);
   const newest = latest.data?.runs[0];
@@ -32,7 +43,17 @@ export function ScanActivity({ organizationId }: GeoScanActivityProps) {
   }
 
   if (!newest && !isScanning) {
-    return null;
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <HugeiconsIcon icon={AiChat02Icon} />
+          </EmptyMedia>
+          <EmptyTitle>{tEmpty("title")}</EmptyTitle>
+          <EmptyDescription>{tEmpty("description")}</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
   }
 
   return (
