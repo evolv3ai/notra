@@ -24,6 +24,16 @@
        never make the document itself scroll sideways under the fixed sidebar. */
     overflow-x: clip;
   }
+
+  /* No macOS rubber-band on the fixed app shell. Scoped to shell routes so
+     scrollable pages (onboarding, auth) keep it, and gated to fine pointers
+     so touch devices keep pull-to-refresh. */
+  @media (pointer: fine) {
+    html:has([data-dashboard-shell]),
+    html:has([data-dashboard-shell]) body {
+      overscroll-behavior: none;
+    }
+  }
 }
 
 @layer components {
