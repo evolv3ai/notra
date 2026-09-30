@@ -40,6 +40,9 @@
         "credits": {
           "description": "KI-Credit-Guthaben und Aufladungen"
         },
+        "webhooks": {
+          "description": "Endpunkte und Zustellverlauf"
+        },
         "logs": {
           "description": "Integrations-Events"
         },
@@ -68,6 +71,7 @@
         "usage": "Sieh dir verbleibende Kontingente und die Nutzung im Zeitverlauf an",
         "usage-alerts": "Konfiguriere Warnungen für Nutzung und Restguthaben",
         "credits": "Behalte dein KI-Credit-Guthaben und deine Nutzung im Blick",
+        "webhooks": "Verbinde deine Workflows und prüfe jede Zustellung",
         "logs": "Sieh dir Integrations-Events und ihren Zustellstatus an",
         "dev": "Nur in der Entwicklung verfügbare Tools zum Testen lokaler Abläufe",
         "geo-languages": "Sprachen, in denen deine Prompts gescannt werden",
@@ -164,6 +168,80 @@
         "resetFilters": "Filter zurücksetzen",
         "emptyTitle": "Noch keine Aktivität",
         "emptyDescription": "Events aus Integrationen, Automatisierungen, GEO-Scans und Syncs erscheinen hier, sobald sie laufen."
+      },
+      "webhooks": {
+        "period": "Letzte 30 Tage",
+        "refresh": "Webhook-Aktivität aktualisieren",
+        "addEndpoint": "Endpunkt hinzufügen",
+        "views": "Webhook-Ansichten",
+        "deliveries": "Zustellungen",
+        "endpoints": "Endpunkte",
+        "toasts": {
+          "retryQueued": "Zustellung wird erneut versucht",
+          "endpointRemoved": "Endpunkt entfernt"
+        },
+        "metrics": {
+          "total": "Zustellungen",
+          "succeeded": "Zugestellt",
+          "active": "Läuft",
+          "failed": "Fehlgeschlagen"
+        },
+        "statuses": {
+          "all": "Alle Status",
+          "succeeded": "Zugestellt",
+          "failed": "Fehlgeschlagen",
+          "retrying": "Neuer Versuch",
+          "pending": "Ausstehend",
+          "sending": "Wird gesendet",
+          "cancelled": "Abgebrochen"
+        },
+        "columns": {
+          "event": "Event und Ziel",
+          "response": "Antwort",
+          "attempts": "Versuche"
+        },
+        "filterLabel": "Zustellungen nach Status filtern",
+        "empty": {
+          "allTitle": "Hier tauchen deine Events auf",
+          "allDescription": "Füg einen Endpunkt hinzu und generier dann einen Post. Jede Zustellung und jeder neue Versuch landet hier.",
+          "filteredTitle": "Keine Zustellungen mit diesem Status",
+          "filteredDescription": "Wähl einen anderen Filter, um mehr von deinem Verlauf zu sehen."
+        },
+        "pageSummary": "{range} Zustellungen, aktualisiert alle {seconds} s",
+        "endpointsEmpty": {
+          "title": "Verbinde deinen ersten Endpunkt",
+          "description": "Wähl aus, welche Events an deinen Workflow gehen."
+        },
+        "create": {
+          "readyTitle": "Dein Endpunkt ist bereit",
+          "title": "Endpunkt hinzufügen",
+          "readyDescription": "Kopier dir das Signing Secret jetzt. Du siehst es danach nicht mehr.",
+          "description": "Schick Notra-Events an jeden öffentlichen HTTPS-Endpunkt.",
+          "secret": "Signing Secret",
+          "copySecret": "Signing Secret kopieren",
+          "secretCopied": "Signing Secret kopiert",
+          "secretHint": "Prüf mit diesem Secret die Signatur jeder Anfrage, bevor du sie verarbeitest.",
+          "url": "Endpunkt-URL",
+          "events": "Events",
+          "submit": "Endpunkt erstellen"
+        },
+        "details": {
+          "title": "Zustelldetails",
+          "description": "Jeder Versuch, vom ersten Senden bis zur letzten Antwort.",
+          "history": "Versuchsverlauf",
+          "retention": "Wir speichern den Zustellverlauf 30 Tage lang.",
+          "retry": "Zustellung wiederholen",
+          "queueing": "Wird eingereiht…",
+          "destination": "Ziel",
+          "eventId": "Event-ID",
+          "deliveryId": "Zustell-ID",
+          "nextAttempt": "Nächster Versuch",
+          "queued": "In der Warteschlange. Der erste Versuch hat noch nicht angefangen.",
+          "attempt": "Versuch {number}",
+          "inFlight": "Sendet",
+          "payload": "Request-Payload",
+          "payloadCopied": "Payload kopiert"
+        }
       }
     },
     "logs": {
@@ -1994,6 +2072,7 @@
       "acmeIncSlug": "acme-gmbh",
       "clearSearch": "Suche leeren",
       "usageAlerts": "Nutzungswarnungen",
+      "webhooks": "Webhooks",
       "regenerate": "Neu generieren",
       "nameLogo": "{name}-Logo",
       "loading": "Wird geladen…",

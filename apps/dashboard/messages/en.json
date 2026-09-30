@@ -40,6 +40,9 @@
         "credits": {
           "description": "AI credit balance and top-ups"
         },
+        "webhooks": {
+          "description": "Endpoints and delivery history"
+        },
         "logs": {
           "description": "Integration events"
         },
@@ -68,6 +71,7 @@
         "usage": "See remaining quotas and usage over time",
         "usage-alerts": "Configure alerts for usage and remaining balances",
         "credits": "Monitor your AI credit balance and usage",
+        "webhooks": "Connect your workflows and check every delivery",
         "logs": "View integration events and their delivery status",
         "dev": "Development-only tools for testing local flows",
         "geo-languages": "Languages your prompts are scanned in",
@@ -164,6 +168,80 @@
         "resetFilters": "Reset filters",
         "emptyTitle": "No activity yet",
         "emptyDescription": "Events from integrations, automations, GEO scans and syncs will appear here when they run."
+      },
+      "webhooks": {
+        "period": "Last 30 days",
+        "refresh": "Refresh webhook activity",
+        "addEndpoint": "Add endpoint",
+        "views": "Webhook views",
+        "deliveries": "Deliveries",
+        "endpoints": "Endpoints",
+        "toasts": {
+          "retryQueued": "Delivery queued for retry",
+          "endpointRemoved": "Endpoint removed"
+        },
+        "metrics": {
+          "total": "Deliveries",
+          "succeeded": "Delivered",
+          "active": "In progress",
+          "failed": "Failed"
+        },
+        "statuses": {
+          "all": "All statuses",
+          "succeeded": "Delivered",
+          "failed": "Failed",
+          "retrying": "Retrying",
+          "pending": "Pending",
+          "sending": "Sending",
+          "cancelled": "Cancelled"
+        },
+        "columns": {
+          "event": "Event and destination",
+          "response": "Response",
+          "attempts": "Attempts"
+        },
+        "filterLabel": "Filter deliveries by status",
+        "empty": {
+          "allTitle": "Your events show up here",
+          "allDescription": "Add an endpoint, then generate a post. Every delivery and retry gets logged here.",
+          "filteredTitle": "No deliveries with this status",
+          "filteredDescription": "Pick another filter to see more of your history."
+        },
+        "pageSummary": "{range} deliveries, refreshes every {seconds}s",
+        "endpointsEmpty": {
+          "title": "Connect your first endpoint",
+          "description": "Pick which events go to your workflow."
+        },
+        "create": {
+          "readyTitle": "Your endpoint is ready",
+          "title": "Add an endpoint",
+          "readyDescription": "Copy the signing secret now. You won't see it again.",
+          "description": "Send Notra events to any public HTTPS endpoint.",
+          "secret": "Signing secret",
+          "copySecret": "Copy signing secret",
+          "secretCopied": "Signing secret copied",
+          "secretHint": "Use this secret to check each request's signature before you process it.",
+          "url": "Endpoint URL",
+          "events": "Listen for",
+          "submit": "Create endpoint"
+        },
+        "details": {
+          "title": "Delivery details",
+          "description": "Every attempt, from the first send to the final response.",
+          "history": "Attempt history",
+          "retention": "Delivery history is kept for 30 days.",
+          "retry": "Retry delivery",
+          "queueing": "Queueing…",
+          "destination": "Destination",
+          "eventId": "Event ID",
+          "deliveryId": "Delivery ID",
+          "nextAttempt": "Next attempt",
+          "queued": "Queued. The first attempt hasn't started yet.",
+          "attempt": "Attempt {number}",
+          "inFlight": "Sending",
+          "payload": "Request payload",
+          "payloadCopied": "Payload copied"
+        }
       }
     },
     "logs": {
@@ -1994,6 +2072,7 @@
       "acmeIncSlug": "acme-inc",
       "clearSearch": "Clear search",
       "usageAlerts": "Usage alerts",
+      "webhooks": "Webhooks",
       "regenerate": "Regenerate",
       "nameLogo": "{name} logo",
       "loading": "Loading…",

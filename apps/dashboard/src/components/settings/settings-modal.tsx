@@ -150,6 +150,13 @@ const UsageSettingsPane = dynamic(
     })),
   { loading: SettingsPaneFallback }
 );
+const WebhooksSettingsPane = dynamic(
+  () =>
+    import("@/components/settings/panes/webhooks-pane").then((mod) => ({
+      default: mod.WebhooksSettingsPane,
+    })),
+  { loading: SettingsPaneFallback }
+);
 
 const STANDARD_SETTINGS_PANES = {
   account: AccountSettingsPane,
@@ -164,6 +171,7 @@ const STANDARD_SETTINGS_PANES = {
   notifications: NotificationsSettingsPane,
   usage: UsageSettingsPane,
   "usage-alerts": UsageAlertsSettingsPane,
+  webhooks: WebhooksSettingsPane,
 } satisfies Record<StandardSettingsSectionId, ComponentType>;
 
 const GEO_SETTINGS_PANE_SECTIONS = {
