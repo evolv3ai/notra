@@ -11,9 +11,13 @@ import {
   LIVE_DEMO_FALLBACK_URL,
   LIVE_DEMO_IFRAME_SANDBOX,
   LIVE_DEMO_IFRAME_TITLE,
+  LIVE_DEMO_LOAD_TIMEOUT_MS,
+  LIVE_DEMO_LOADING_LABEL,
   LIVE_DEMO_OPEN_LABEL,
   LIVE_DEMO_PREVIEW_ALT,
   LIVE_DEMO_PREVIEW_SRC,
+  LIVE_DEMO_STALLED_ACTION,
+  LIVE_DEMO_STALLED_LABEL,
 } from "@/constants/landing/live-demo";
 
 function openStandaloneDemo() {
@@ -22,8 +26,23 @@ function openStandaloneDemo() {
 
 export function LiveDemoEmbed() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [loaded, setLoaded] = useState(false);
+  // The iframe mounts on the first click; the preview stays on top until the
+  // demo has finished its entry redirects so fullscreen never opens blank.
+  const [mounted, setMounted] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [stalled, setStalled] = useState(false);
   const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!mounted || ready) {
+      return;
+    }
+    const timeout = window.setTimeout(
+      () => setStalled(true),
+      LIVE_DEMO_LOAD_TIMEOUT_MS
+    );
+    return () => window.clearTimeout(timeout);
+  }, [mounted, ready]);
 
   useEffect(() => {
     const sync = () =>
@@ -32,13 +51,20 @@ export function LiveDemoEmbed() {
     return () => document.removeEventListener("fullscreenchange", sync);
   }, []);
 
+  const openStalledDemo = () => {
+    openStandaloneDemo();
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    }
+  };
+
   const openFullscreen = async () => {
     const container = containerRef.current;
     if (!container?.requestFullscreen) {
       openStandaloneDemo();
       return;
     }
-    setLoaded(true);
+    setMounted(true);
     try {
       await container.requestFullscreen();
     } catch {
@@ -52,26 +78,48 @@ export function LiveDemoEmbed() {
         className="group border-border bg-background relative size-full overflow-hidden rounded-2xl border lg:rounded-b-none lg:border-b-0 [&:fullscreen]:rounded-none [&:fullscreen]:border-0"
         ref={containerRef}
       >
-        {loaded ? (
+        {mounted ? (
           <iframe
             allow="clipboard-write"
             className="size-full"
-            inert={!expanded}
+            inert={!(expanded && ready)}
+            onLoad={() => setReady(true)}
             referrerPolicy="strict-origin-when-cross-origin"
             sandbox={LIVE_DEMO_IFRAME_SANDBOX}
             src={LIVE_DEMO_EMBED_URL}
             title={LIVE_DEMO_IFRAME_TITLE}
           />
-        ) : (
+        ) : null}
+        {ready ? null : (
           <Image
             alt={LIVE_DEMO_PREVIEW_ALT}
-            className="object-cover object-top-left"
+            className="pointer-events-none object-cover object-top-left"
             fill
             priority
             sizes="(min-width: 64rem) 64rem, 100vw"
             src={LIVE_DEMO_PREVIEW_SRC}
           />
         )}
+        {mounted && !ready ? (
+          <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/30">
+            <span
+              aria-live="polite"
+              className="bg-foreground text-background rounded-full px-5 py-2.5 text-sm font-medium"
+              role="status"
+            >
+              {stalled ? LIVE_DEMO_STALLED_LABEL : LIVE_DEMO_LOADING_LABEL}
+            </span>
+            {stalled ? (
+              <button
+                className="bg-background text-foreground pointer-events-auto cursor-pointer rounded-full px-5 py-2.5 text-sm font-medium"
+                onClick={openStalledDemo}
+                type="button"
+              >
+                {LIVE_DEMO_STALLED_ACTION}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         {expanded ? (
           <button
             aria-label={LIVE_DEMO_CLOSE_LABEL}
