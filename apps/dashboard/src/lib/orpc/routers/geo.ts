@@ -38,6 +38,7 @@ import {
 import type { GeoRouterError } from "@notra/geo-core/geo/errors";
 import {
   loadGeoContentGaps,
+  refreshGeoContentGapsBestEffort,
   setGeoPromptGapIgnored,
 } from "@notra/geo-core/geo/gaps";
 import {
@@ -429,11 +430,17 @@ async function runGscSyncOrBadRequest(
   projectId: string
 ): Promise<GscSyncResult> {
   try {
-    return await Effect.runPromise(
+    const result = await Effect.runPromise(
       syncGscSuggestions(organizationId, projectId).pipe(
         Effect.provide(geoCoreDashboardLayer)
       )
     );
+    if (result.status === "completed") {
+      await Effect.runPromise(
+        refreshGeoContentGapsBestEffort({ organizationId, projectId })
+      );
+    }
+    return result;
   } catch (error) {
     throw badRequest(await toGscErrorMessage(error, "sync"));
   }
@@ -917,7 +924,10 @@ export const geoRouter = {
     .input(geoSettingsUpsertInputSchema)
     .handler(
       geoHandler(
-        (input) => upsertGeoSettings(input),
+        (input) =>
+          upsertGeoSettings(input).pipe(
+            Effect.tap(() => refreshGeoContentGapsBestEffort(input))
+          ),
         ({ context, input, output }) => {
           trackGeoRouterEvent({
             context,
@@ -1007,7 +1017,10 @@ export const geoRouter = {
     .input(geoCompetitorUpsertInputSchema)
     .handler(
       geoOpenHandler(
-        (input) => upsertGeoCompetitor(input, input),
+        (input) =>
+          upsertGeoCompetitor(input, input).pipe(
+            Effect.tap(() => refreshGeoContentGapsBestEffort(input))
+          ),
         ({ context, input, output }) => {
           trackGeoRouterEvent({
             context,
@@ -1030,7 +1043,10 @@ export const geoRouter = {
     .input(geoCompetitorDeleteInputSchema)
     .handler(
       geoOpenHandler(
-        (input) => deleteGeoCompetitor(input, input.name),
+        (input) =>
+          deleteGeoCompetitor(input, input.name).pipe(
+            Effect.tap(() => refreshGeoContentGapsBestEffort(input))
+          ),
         ({ context, input, output }) => {
           trackGeoRouterEvent({
             context,
@@ -1045,7 +1061,10 @@ export const geoRouter = {
     .input(geoCompetitorsImportInputSchema)
     .handler(
       geoOpenHandler(
-        (input) => importGeoCompetitors(input, input.rows),
+        (input) =>
+          importGeoCompetitors(input, input.rows).pipe(
+            Effect.tap(() => refreshGeoContentGapsBestEffort(input))
+          ),
         ({ context, input, output }) => {
           trackGeoRouterEvent({
             context,
@@ -1234,7 +1253,9 @@ export const geoRouter = {
   promptsCreate: authorizedProcedure.input(geoPromptCreateInputSchema).handler(
     geoHandler(
       (input) =>
-        createGeoPrompt(input, input.prompt, input.id, input.tags ?? []),
+        createGeoPrompt(input, input.prompt, input.id, input.tags ?? []).pipe(
+          Effect.tap(() => refreshGeoContentGapsBestEffort(input))
+        ),
       ({ context, input, output }) => {
         trackGeoRouterEvent({
           context,
@@ -1250,7 +1271,10 @@ export const geoRouter = {
   ),
   promptsImport: authorizedProcedure.input(geoPromptsImportInputSchema).handler(
     geoHandler(
-      (input) => importGeoPrompts(input, input.rows),
+      (input) =>
+        importGeoPrompts(input, input.rows).pipe(
+          Effect.tap(() => refreshGeoContentGapsBestEffort(input))
+        ),
       ({ context, input, output }) => {
         trackGeoRouterEvent({
           context,
@@ -1267,7 +1291,10 @@ export const geoRouter = {
   ),
   promptsDelete: authorizedProcedure.input(geoPromptDeleteInputSchema).handler(
     geoHandler(
-      (input) => deleteGeoPrompt(input, input.promptId),
+      (input) =>
+        deleteGeoPrompt(input, input.promptId).pipe(
+          Effect.tap(() => refreshGeoContentGapsBestEffort(input))
+        ),
       ({ context, input }) => {
         trackGeoRouterEvent({
           context,
@@ -1283,7 +1310,7 @@ export const geoRouter = {
       updateGeoPrompt(input, input.promptId, {
         enabled: input.enabled,
         tags: input.tags,
-      })
+      }).pipe(Effect.tap(() => refreshGeoContentGapsBestEffort(input)))
     )
   ),
   promptTranslations: authorizedProcedure
@@ -1305,12 +1332,17 @@ export const geoRouter = {
     .input(geoAutoPromptToggleInputSchema)
     .handler(
       geoHandler((input) =>
-        toggleGeoAutoPrompt(input, input.promptId, input.enabled)
+        toggleGeoAutoPrompt(input, input.promptId, input.enabled).pipe(
+          Effect.tap(() => refreshGeoContentGapsBestEffort(input))
+        )
       )
     ),
   promptsToggle: authorizedProcedure.input(geoPromptToggleInputSchema).handler(
     geoHandler(
-      (input) => toggleGeoPrompt(input, input.promptId, input.enabled),
+      (input) =>
+        toggleGeoPrompt(input, input.promptId, input.enabled).pipe(
+          Effect.tap(() => refreshGeoContentGapsBestEffort(input))
+        ),
       ({ context, input }) => {
         trackGeoRouterEvent({
           context,
@@ -1807,7 +1839,10 @@ export const geoRouter = {
     .input(geoPromptGapIgnoreInputSchema)
     .handler(
       geoHandler(
-        (input) => setGeoPromptGapIgnored(input),
+        (input) =>
+          setGeoPromptGapIgnored(input).pipe(
+            Effect.tap(() => refreshGeoContentGapsBestEffort(input))
+          ),
         ({ context, input }) => {
           trackGeoRouterEvent({
             context,
@@ -1862,6 +1897,10 @@ export const geoRouter = {
         ),
         toGeoOrpcError
       );
+      await runOrpcEffect(
+        refreshGeoContentGapsBestEffort(input),
+        toGeoOrpcError
+      );
       trackGeoRouterEvent({
         context,
         input,
@@ -1895,6 +1934,10 @@ export const geoRouter = {
         ),
         toGeoOrpcError
       );
+      await runOrpcEffect(
+        refreshGeoContentGapsBestEffort(input),
+        toGeoOrpcError
+      );
       trackGeoRouterEvent({
         context,
         input,
@@ -1916,12 +1959,17 @@ export const geoRouter = {
         assertActiveSubscription(input.organizationId),
       ]);
 
-      return runOrpcEffect(
+      const result = await runOrpcEffect(
         updateGeoContentBrief(input).pipe(
           Effect.provide(geoCoreDashboardLayer)
         ),
         toGeoOrpcError
       );
+      await runOrpcEffect(
+        refreshGeoContentGapsBestEffort(input),
+        toGeoOrpcError
+      );
+      return result;
     }),
   sampleData: authorizedProcedure
     .input(geoOrganizationInputSchema)
@@ -2110,6 +2158,10 @@ export const geoRouter = {
         const tErrors = await getTranslations("errors.geo");
         throw badRequest(tErrors("gscChangedBeforeConnect"));
       }
+      await runOrpcEffect(
+        refreshGeoContentGapsBestEffort(input),
+        toGeoOrpcError
+      );
 
       const selectedIntegration = await getGscIntegration(input.organizationId);
       let scheduleId = selectedIntegration?.qstashScheduleId ?? null;
@@ -2251,6 +2303,21 @@ export const geoRouter = {
       if (!integration) {
         return { disconnected: false };
       }
+      const affectedProjects = await db
+        .select({ id: projects.id })
+        .from(projects)
+        .where(eq(projects.organizationId, input.organizationId));
+      await Promise.all(
+        affectedProjects.map((project) =>
+          runOrpcEffect(
+            refreshGeoContentGapsBestEffort({
+              organizationId: input.organizationId,
+              projectId: project.id,
+            }),
+            toGeoOrpcError
+          )
+        )
+      );
       trackGeoRouterEvent({
         context,
         input,
@@ -2289,6 +2356,10 @@ export const geoRouter = {
         prompt: accepted,
         suggestion,
       } = await runOrpcEffect(acceptSuggestion(input), toGeoOrpcError);
+      await runOrpcEffect(
+        refreshGeoContentGapsBestEffort(input),
+        toGeoOrpcError
+      );
       const keywordSummary = summarizeSuggestionKeywords(
         suggestion.sourceKeywords
       );
@@ -2333,6 +2404,10 @@ export const geoRouter = {
       if (rows.length === 0) {
         return { accepted: 0 };
       }
+      await runOrpcEffect(
+        refreshGeoContentGapsBestEffort(input),
+        toGeoOrpcError
+      );
 
       const keywordSummary = summarizeSuggestionKeywords(
         rows.flatMap((row) => row.sourceKeywords)
@@ -2362,6 +2437,10 @@ export const geoRouter = {
 
       const result = await runOrpcEffect(
         dismissSuggestion(input),
+        toGeoOrpcError
+      );
+      await runOrpcEffect(
+        refreshGeoContentGapsBestEffort(input),
         toGeoOrpcError
       );
       trackGeoRouterEvent({

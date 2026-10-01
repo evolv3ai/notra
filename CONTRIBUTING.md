@@ -93,6 +93,12 @@ Helpful provider docs:
 bun run db:migrate
 ```
 
+Content Gaps reads a saved snapshot per project. A project without one builds it
+on its first read. Scans, Search Console syncs, and gap mutations refresh it,
+and the dashboard's hourly `/api/cron/geo-content-gaps` job refreshes up to 25
+missing or day-old snapshots per run. Keep `CRON_SECRET` configured in deployed
+environments so rolling 30-day gaps continue to expire without page-load work.
+
 6. Start development:
 
 ```bash

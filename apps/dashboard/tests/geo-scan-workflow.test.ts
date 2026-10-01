@@ -34,6 +34,10 @@ const syncShelf =
   mock<
     typeof import("../src/workflows/steps/sync-geo-shelf-citations").syncGeoShelfCitationsStep
   >();
+const refreshGaps =
+  mock<
+    typeof import("../src/workflows/steps/refresh-geo-content-gaps").refreshGeoContentGapsStep
+  >();
 // These tests exercise orchestration decisions as ordinary functions. The
 // durable runtime and model/billing steps have separate integration
 // boundaries — the activity-log steps are mocked too, otherwise they would
@@ -44,6 +48,9 @@ mock.module("../src/workflows/steps/start-geo-sentiment", () => ({
 }));
 mock.module("../src/workflows/steps/sync-geo-shelf-citations", () => ({
   syncGeoShelfCitationsStep: syncShelf,
+}));
+mock.module("../src/workflows/steps/refresh-geo-content-gaps", () => ({
+  refreshGeoContentGapsStep: refreshGaps,
 }));
 mock.module("../src/workflows/steps/content-generation-steps", () => ({
   appendAutomationLog: appendLog,
@@ -96,12 +103,14 @@ beforeEach(() => {
     fetchRetention,
     startSentiment,
     syncShelf,
+    refreshGaps,
   ]) {
     fn.mockReset();
   }
   appendLog.mockResolvedValue(undefined);
   startSentiment.mockResolvedValue("sentiment-run");
   syncShelf.mockResolvedValue(0);
+  refreshGaps.mockResolvedValue(undefined);
   fetchRetention.mockResolvedValue(30);
   renewClaim.mockImplementation(async (_projectId, claimedAt) => claimedAt);
   listProjects.mockResolvedValue(["project-test"]);
@@ -188,6 +197,10 @@ describe("GEO scan workflow orchestration", () => {
       plan.claimedAt,
       { retried: false }
     );
+    expect(refreshGaps).toHaveBeenCalledWith({
+      organizationId: plan.context.organizationId,
+      projectId: plan.context.projectId,
+    });
     expect(sleep).not.toHaveBeenCalled();
   });
 

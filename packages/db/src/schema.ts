@@ -1524,6 +1524,17 @@ export const geoSettings = pgTable(
   ]
 );
 
+export const geoContentGapSnapshots = pgTable("geo_content_gap_snapshots", {
+  projectId: text("project_id")
+    .primaryKey()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  snapshot: jsonb("snapshot").notNull(),
+  updatedAt: timestamp("updated_at").notNull(),
+});
+
 export const geoPrompts = pgTable(
   "geo_prompts",
   {

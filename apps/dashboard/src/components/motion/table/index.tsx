@@ -73,6 +73,7 @@ export function Table<T>({
   skeletonRows = 3,
   emptyState: emptyStateProp,
   onRowClick,
+  rowKeyboardActivation = true,
   isRowClickable,
   renderRowContextMenu,
   renderRowDetail,
@@ -302,6 +303,7 @@ export function Table<T>({
             onToggleRow={toggleRow}
             onCellEdit={onCellEdit}
             onRowClick={onRowClick}
+            rowKeyboardActivation={rowKeyboardActivation}
             isRowClickable={isRowClickable}
             onRowPointerEnter={onRowPointerEnter}
             renderRowContextMenu={renderRowContextMenu}

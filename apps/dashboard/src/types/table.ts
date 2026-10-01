@@ -105,6 +105,7 @@ export interface UseTableViewportOptions<T> extends Omit<
 export interface TableBodyProps<T> extends Pick<
   TableProps<T>,
   | "onRowClick"
+  | "rowKeyboardActivation"
   | "isRowClickable"
   | "onRowPointerEnter"
   | "onCellEdit"

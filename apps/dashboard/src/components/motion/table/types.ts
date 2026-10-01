@@ -102,6 +102,8 @@ interface TableBaseProps<T> {
   skeletonRows?: number;
   /** Called when a row is clicked or activated with Enter/Space. */
   onRowClick?: (row: T) => void;
+  /** Set false when a native control inside the row provides its keyboard action. */
+  rowKeyboardActivation?: boolean;
   /** Only matching rows receive click handlers, keyboard activation, and pointer styling. */
   isRowClickable?: (row: T) => boolean;
   /** Menu content shown when a row is opened with the context-menu gesture. */
