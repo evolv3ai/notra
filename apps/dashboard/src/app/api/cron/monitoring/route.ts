@@ -1,4 +1,5 @@
 import { flushLogs } from "@notra/ai/evlog";
+import { isDemoMode } from "@notra/utils/demo-mode";
 import { Effect, Result } from "effect";
 
 import { checkMissedGeoScans } from "@/lib/analytics/geo-scan-watchdog";
@@ -13,6 +14,12 @@ export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
     return new Response("Unauthorized", { status: 401 });
+  }
+  // The public demo runs no background jobs; scans start on demand. Checked
+  // after auth so reading the request keeps this route dynamic (a static
+  // 204 breaks the build).
+  if (isDemoMode()) {
+    return new Response(null, { status: 204 });
   }
   try {
     await checkMissedGeoScans();

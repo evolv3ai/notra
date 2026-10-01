@@ -44,6 +44,7 @@ import {
   updateExpectedPostCountInputSchema,
 } from "@notra/schemas/dashboard/content";
 import { clearCompletedGenerationSchema } from "@notra/schemas/dashboard/generations";
+import { isDemoMode } from "@notra/utils/demo-mode";
 import { slugify } from "@notra/utils/slugify";
 import { publishEventInTransaction } from "@notra/webhooks/drizzle";
 import { postPublishedInput } from "@notra/webhooks/utils/posts";
@@ -70,6 +71,7 @@ import {
   GITHUB_API_MAX_RESULTS,
   GITHUB_API_PAGE_SIZE,
 } from "@/constants/content-preview";
+import { DEMO_DISABLED_MESSAGE } from "@/constants/demo";
 import { trackServerEvent } from "@/lib/analytics/posthog-server";
 import { getEnabledDataPoints } from "@/lib/analytics/studio-events";
 import { assertOrganizationAccess } from "@/lib/auth/organization";
@@ -102,6 +104,7 @@ import { ratelimit } from "@/utils/ratelimit";
 import {
   badRequest,
   conflict,
+  forbidden,
   internalServerError,
   notFound,
   paymentRequired,
@@ -911,6 +914,10 @@ export const contentRouter = {
         organizationId: input.organizationId,
       });
       await assertActiveSubscription(input.organizationId);
+      // The demo's repository is fictional; GitHub writes need a real one.
+      if (isDemoMode()) {
+        throw forbidden(DEMO_DISABLED_MESSAGE);
+      }
 
       if (
         process.env.UPSTASH_REDIS_REST_URL &&
