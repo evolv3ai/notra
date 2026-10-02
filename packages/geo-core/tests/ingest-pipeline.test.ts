@@ -1,89 +1,71 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { GeoIngestIdentity } from "@notra/geo-core/types/geo";
+import type { Ratelimit } from "@upstash/ratelimit";
+import { Effect } from "effect";
 
-import type { GeoVisitorClassification } from "@/types/geo";
-
-const CRAWLER_CLASSIFICATION: GeoVisitorClassification = {
-  visitorType: "crawler",
-  source: "GPTBot",
-  agent: "GPTBot",
-  category: "training-crawler",
-  confidence: "certain",
-};
-
-const HUMAN_CLASSIFICATION: GeoVisitorClassification = {
-  visitorType: "human",
-  source: "human",
-  agent: "",
-  category: "",
-  confidence: "",
-};
-
-const ingestGeoTrafficEvents = mock(async () => null);
+const STORED = { successful_rows: 1, quarantined_rows: 0 };
+const ingestGeoTrafficEvents = mock(
+  async (): Promise<typeof STORED | null> => STORED
+);
 const isGeoIngestIdentityActive = mock(async () => true);
 const loadIngestAllowedHosts = mock(async (): Promise<string[] | null> => [
   "example.com",
 ]);
-const ratelimitLimit = mock(async () => ({ success: true }));
-const trackGeoIngestAnalytics = mock(async () => {});
-const geoLogInfo = mock(() => {});
-const flushGeoLog = mock(async () => {});
+const ratelimitLimit = mock(
+  async (): Promise<
+    Pick<Awaited<ReturnType<Ratelimit["limit"]>>, "success" | "reason">
+  > => ({
+    success: true,
+  })
+);
+const trackGeoIngestAnalytics = mock(() => Effect.void);
 const verifyGeoIngestToken = mock((): GeoIngestIdentity => ({
   organizationId: "org_1",
   projectId: "proj_1",
   generation: 1,
 }));
-const classifyVisitor = mock(
-  (): GeoVisitorClassification => CRAWLER_CLASSIFICATION
-);
 const resolveJourneyId = mock(() => ({ journeyId: "journey_1", path: "/" }));
 
 mock.module("@notra/analytics/tinybird/client", () => ({
   ingestGeoTrafficEvents,
-}));
-mock.module("@notra/ai/evlog", () => ({
-  geoLog: { info: geoLogInfo, warn: () => {}, error: () => {} },
-  flushGeoLog,
 }));
 mock.module("@notra/geo-core/geo/ingest", () => ({
   verifyGeoIngestToken,
   getGeoIngestTokenGeneration: async () => 1,
   geoIngestHostsCacheKey: () => "hosts:key",
 }));
-mock.module("@/lib/geo-ingest/classify-visitor", () => ({
-  classifyVisitor,
-}));
-mock.module("@/lib/geo-ingest/identity", () => ({
+mock.module("../src/ingest/identity", () => ({
   isGeoIngestIdentityActive,
 }));
-mock.module("@/lib/geo-ingest/hosts", () => ({
+mock.module("../src/ingest/hosts", () => ({
   loadIngestAllowedHosts,
 }));
-mock.module("@/lib/geo-ingest/analytics", () => ({
+mock.module("../src/ingest/analytics", () => ({
   trackGeoIngestAnalytics,
 }));
-mock.module("@/lib/geo-ingest/journey", () => ({
+mock.module("../src/ingest/journey", () => ({
   resolveJourneyId,
 }));
-mock.module("@/utils/ratelimit", () => ({
-  ratelimit: { geoIngest: { limit: ratelimitLimit } },
-}));
-mock.module("next/server", () => ({
-  after: () => {},
+mock.module("../src/ingest/ratelimit", () => ({
+  geoIngestRatelimit: { limit: ratelimitLimit },
 }));
 
-const { Effect } = await import("effect");
-const { runGeoIngest } = await import("./pipeline");
+const { runGeoIngest } = await import("../src/ingest/pipeline");
 const {
   GeoIngestInvalidPayloadError,
   GeoIngestInvalidTokenError,
   GeoIngestFailedError,
+  GeoIngestRateLimitedError,
   GeoIngestUnparseableUrlError,
-} = await import("./errors");
+} = await import("../src/ingest/errors");
 
 function ingestRequest(
-  body: unknown = { method: "GET", url: "https://example.com/" }
+  body: unknown = {
+    method: "GET",
+    url: "https://example.com/",
+    userAgent: "GPTBot",
+  }
 ) {
   return {
     headers: new Headers({ authorization: "Bearer token_1" }),
@@ -93,7 +75,7 @@ function ingestRequest(
 
 async function run(request: unknown) {
   return Effect.runPromise(
-    Effect.result(runGeoIngest(request as never)) as never
+    Effect.result(runGeoIngest(request as never, () => {})) as never
   ) as Promise<
     | { _tag: "Success"; success: unknown }
     | { _tag: "Failure"; failure: unknown }
@@ -108,8 +90,6 @@ describe("runGeoIngest ordering", () => {
       loadIngestAllowedHosts,
       ratelimitLimit,
       trackGeoIngestAnalytics,
-      geoLogInfo,
-      flushGeoLog,
     ]) {
       m.mockClear();
     }
@@ -119,18 +99,42 @@ describe("runGeoIngest ordering", () => {
       projectId: "proj_1",
       generation: 1,
     }));
-    classifyVisitor.mockClear();
     resolveJourneyId.mockClear();
-    classifyVisitor.mockImplementation(() => CRAWLER_CLASSIFICATION);
     isGeoIngestIdentityActive.mockImplementation(async () => true);
     loadIngestAllowedHosts.mockImplementation(async () => ["example.com"]);
     ratelimitLimit.mockImplementation(async () => ({ success: true }));
+    ingestGeoTrafficEvents.mockImplementation(async () => STORED);
+  });
+
+  test("fails instead of acknowledging when Tinybird is not configured", async () => {
+    ingestGeoTrafficEvents.mockImplementation(async () => null);
+    const outcome = await run(ingestRequest());
+    expect(outcome._tag).toBe("Failure");
+    if (outcome._tag === "Failure") {
+      expect(outcome.failure).toBeInstanceOf(GeoIngestFailedError);
+    }
+  });
+
+  test("fails instead of acknowledging a quarantined row", async () => {
+    ingestGeoTrafficEvents.mockImplementation(async () => ({
+      successful_rows: 0,
+      quarantined_rows: 1,
+    }));
+    const outcome = await run(ingestRequest());
+    expect(outcome._tag).toBe("Failure");
+    if (outcome._tag === "Failure") {
+      expect(outcome.failure).toBeInstanceOf(GeoIngestFailedError);
+    }
   });
 
   test("drops untracked visitors without any Redis/DB/Tinybird I/O", async () => {
-    classifyVisitor.mockImplementation(() => HUMAN_CLASSIFICATION);
-
-    const outcome = await run(ingestRequest());
+    const outcome = await run(
+      ingestRequest({
+        method: "GET",
+        url: "https://example.com/",
+        userAgent: "Mozilla/5.0",
+      })
+    );
 
     expect(outcome._tag).toBe("Success");
     expect(isGeoIngestIdentityActive).not.toHaveBeenCalled();
@@ -147,6 +151,54 @@ describe("runGeoIngest ordering", () => {
     expect(loadIngestAllowedHosts).toHaveBeenCalledTimes(1);
     expect(ratelimitLimit).toHaveBeenCalledTimes(1);
     expect(ingestGeoTrafficEvents).toHaveBeenCalledTimes(1);
+  });
+
+  test("defers analytics until after the event was stored", async () => {
+    const tasks: Array<() => Promise<void>> = [];
+    await Effect.runPromise(
+      runGeoIngest(ingestRequest(), (task) => tasks.push(task))
+    );
+
+    expect(ingestGeoTrafficEvents).toHaveBeenCalledTimes(1);
+    expect(trackGeoIngestAnalytics).not.toHaveBeenCalled();
+    expect(tasks).toHaveLength(1);
+    await tasks[0]?.();
+    expect(trackGeoIngestAnalytics).toHaveBeenCalledTimes(1);
+  });
+
+  test("rejects tracked traffic when the rate-limit transport fails", async () => {
+    ratelimitLimit.mockImplementation(async () => {
+      throw new Error("Redis unavailable");
+    });
+    const outcome = await run(ingestRequest());
+    expect(outcome._tag).toBe("Failure");
+    if (outcome._tag === "Failure") {
+      expect(outcome.failure).toBeInstanceOf(GeoIngestFailedError);
+    }
+    expect(ingestGeoTrafficEvents).not.toHaveBeenCalled();
+  });
+
+  test("rejects Upstash timeout responses even when success is true", async () => {
+    ratelimitLimit.mockImplementation(async () => ({
+      success: true,
+      reason: "timeout",
+    }));
+    const outcome = await run(ingestRequest());
+    expect(outcome._tag).toBe("Failure");
+    if (outcome._tag === "Failure") {
+      expect(outcome.failure).toBeInstanceOf(GeoIngestFailedError);
+    }
+    expect(ingestGeoTrafficEvents).not.toHaveBeenCalled();
+  });
+
+  test("rejects actual rate-limit hits without writing an event", async () => {
+    ratelimitLimit.mockImplementation(async () => ({ success: false }));
+    const outcome = await run(ingestRequest());
+    expect(outcome._tag).toBe("Failure");
+    if (outcome._tag === "Failure") {
+      expect(outcome.failure).toBeInstanceOf(GeoIngestRateLimitedError);
+    }
+    expect(ingestGeoTrafficEvents).not.toHaveBeenCalled();
   });
 
   test("rejects revoked identities for tracked traffic with 401", async () => {
