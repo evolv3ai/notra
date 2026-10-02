@@ -1349,6 +1349,8 @@ export interface PromptScanButtonProps {
   organizationId: string;
   row: GeoPromptTableRow;
   compact?: boolean;
+  /** Filled primary trigger for the main action of a surface. */
+  primary?: boolean;
   onPrepare?: () => void;
 }
 
