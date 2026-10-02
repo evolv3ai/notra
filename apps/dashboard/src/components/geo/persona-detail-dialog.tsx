@@ -123,23 +123,19 @@ function PersonaDetailHeader({
                     className="shrink-0"
                     disabled={
                       !persona.enabled ||
-                      persona.conversationPrompts.length === 0 ||
-                      isRunning
+                      persona.conversationPrompts.length === 0
                     }
                     focusableWhenDisabled
+                    loading={isRunning}
                     onClick={onRun}
                     size="sm"
                     type="button"
                   />
                 }
               >
-                <HugeiconsIcon
-                  className={isRunning ? "animate-spin" : undefined}
-                  icon={isRunning ? Loading03Icon : PlayIcon}
-                  size={14}
-                />
-                {isRunning ? t("running") : tGeoShared("runScan")}
-                {isRunning ? null : <PersonaAnswerCostBadge />}
+                <HugeiconsIcon icon={PlayIcon} size={14} />
+                {tGeoShared("runScan")}
+                <PersonaAnswerCostBadge />
               </TooltipTrigger>
               <TooltipContent>
                 {t("answerCost", {
