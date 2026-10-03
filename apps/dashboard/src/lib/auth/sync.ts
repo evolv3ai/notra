@@ -117,12 +117,30 @@ const fetchGitHubAccountId = Effect.fn("auth.sync.fetchGitHubAccountId")(
   }
 );
 
+// Epoch values at or above this are milliseconds (seconds would be ~year 5138).
+const EPOCH_MILLISECONDS_THRESHOLD = 100_000_000_000;
+const MILLISECONDS_PER_SECOND = 1000;
+
+// WorkOS returns oauthTokens.expiresAt in epoch milliseconds (seen with GitHub App
+// user tokens, which expire after 8h). Treating it as seconds overflows Postgres.
+function toTokenExpiryDate(expiresAt: number | undefined): Date | null {
+  if (!expiresAt) {
+    return null;
+  }
+  return new Date(
+    expiresAt >= EPOCH_MILLISECONDS_THRESHOLD
+      ? expiresAt
+      : expiresAt * MILLISECONDS_PER_SECOND
+  );
+}
+
 const persistSocialConnection = Effect.fn("auth.sync.persistSocialConnection")(
   function* (userId: string, provider: string, tokens: OAuthProviderTokens) {
     const providerAccountId =
       provider === "github"
         ? yield* fetchGitHubAccountId(tokens.accessToken)
         : "";
+    const accessTokenExpiresAt = toTokenExpiryDate(tokens.expiresAt);
 
     yield* Effect.tryPromise({
       try: () =>
@@ -136,9 +154,7 @@ const persistSocialConnection = Effect.fn("auth.sync.persistSocialConnection")(
             accessToken: tokens.accessToken,
             refreshToken: tokens.refreshToken ?? null,
             scope: tokens.scopes?.join(" ") ?? null,
-            accessTokenExpiresAt: tokens.expiresAt
-              ? new Date(tokens.expiresAt * 1000)
-              : null,
+            accessTokenExpiresAt,
           })
           .onConflictDoUpdate({
             target: [socialConnections.userId, socialConnections.provider],
@@ -147,9 +163,7 @@ const persistSocialConnection = Effect.fn("auth.sync.persistSocialConnection")(
               accessToken: tokens.accessToken,
               refreshToken: tokens.refreshToken ?? null,
               scope: tokens.scopes?.join(" ") ?? null,
-              accessTokenExpiresAt: tokens.expiresAt
-                ? new Date(tokens.expiresAt * 1000)
-                : null,
+              accessTokenExpiresAt,
             },
           }),
       catch: (cause) =>
