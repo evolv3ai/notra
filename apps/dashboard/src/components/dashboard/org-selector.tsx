@@ -59,6 +59,7 @@ import { cn, errorMessageOr } from "@/lib/utils";
 import type { OrganizationOptionsListProps } from "@/types/dashboard";
 import { planDisplayName } from "@/utils/billing-plans";
 import { setLastVisitedOrganization } from "@/utils/cookies";
+import { canCreateAdditionalOrganizations } from "@/utils/organization-limits";
 import { QUERY_KEYS } from "@/utils/query-keys";
 import { scheduleDemo } from "@/utils/schedule-demo";
 
@@ -382,7 +383,7 @@ export function OrgSelector() {
   }
 
   function handleCreateOrganization() {
-    if (!hasActivePaidPlan) {
+    if (!canCreateAdditionalOrganizations(hasActivePaidPlan)) {
       toast(t("subscribeToCreate"), {
         action: {
           label: tCommon("upgrade"),
