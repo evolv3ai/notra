@@ -8,7 +8,7 @@ serves http://localhost:3090 and binds only to 127.0.0.1.
 | Checkout the instance runs from | `/home/evolv3ai/dev/notra` (branch `local/run`) |
 | Compose file | `deploy/omarchy/compose.yaml` |
 | Secrets | `/home/evolv3ai/firstmate-homes/vibe/data/notra-deploy/.env` (chmod 600, template: `.env.example`) |
-| Boot unit | `~/.config/systemd/user/notra.service` (user unit; lingering is on) |
+| Boot | `docker.service` enabled at boot plus `restart: unless-stopped` |
 | Data | Docker volumes `notra_postgres-data`, `notra_redis-data`, `notra_workflow-data` |
 
 ## Services
@@ -81,33 +81,11 @@ To copy the raw volume instead, stop the stack first:
 
 ## Start on boot
 
-Docker on omarchy is socket-activated, so the daemon only starts when something
-talks to it. The user unit below runs `up -d` at boot (lingering is enabled),
-which starts the daemon and the stack; the `unless-stopped` restart policy keeps
-the containers up afterwards.
-
-```ini
-# ~/.config/systemd/user/notra.service
-[Unit]
-Description=Notra self-hosted stack (docker compose)
-After=network-online.target
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=/home/evolv3ai/dev/notra
-Environment=NOTRA_ENV_FILE=/home/evolv3ai/firstmate-homes/vibe/data/notra-deploy/.env
-ExecStart=/usr/bin/docker compose -p notra --env-file ${NOTRA_ENV_FILE} -f deploy/omarchy/compose.yaml up -d
-ExecStop=/usr/bin/docker compose -p notra --env-file ${NOTRA_ENV_FILE} -f deploy/omarchy/compose.yaml stop
-
-[Install]
-WantedBy=default.target
-```
-
-```bash
-systemctl --user daemon-reload
-systemctl --user enable --now notra.service
-```
+`docker.service` is enabled (`sudo systemctl enable docker.service`), so the
+daemon starts at boot instead of waiting for socket activation, and every
+long-running service has `restart: unless-stopped`. After a reboot the stack
+comes back on its own unless you stopped it with `notra stop`; start it again
+with `notra up -d`.
 
 ## Known limits
 

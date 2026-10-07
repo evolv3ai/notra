@@ -84,7 +84,8 @@ services:
 
   dashboard:
     image: notra-dashboard:local
-    pull_policy: build
+    # Built locally; plain `up -d` reuses the image, `up -d --build` rebuilds it.
+    pull_policy: never
     build:
       context: ../..
       dockerfile: apps/dashboard/Dockerfile
