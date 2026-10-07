@@ -20,6 +20,10 @@ serves http://localhost:3090 and binds only to 127.0.0.1.
 - `redis` and `redis-http`: Redis plus
   [serverless-redis-http](https://github.com/hiett/serverless-redis-http),
   which serves the Upstash REST API Notra expects.
+- `redis-rest`: `redis-rest-shim.mjs`, in front of `redis-http`. It strips the
+  Upstash-only Lua flag that `@upstash/ratelimit` sends (open-source Redis
+  rejects it, which breaks sign-up) and serves `SUBSCRIBE` as server-sent
+  events, which serverless-redis-http lacks and live chat streaming needs.
 
 The compose file sets `NOTRA_SELF_HOSTED=true`, which skips Autumn billing
 gates while no `AUTUMN_SECRET_KEY` is set, and
@@ -105,12 +109,27 @@ systemctl --user daemon-reload
 systemctl --user enable --now notra.service
 ```
 
+## Known limits
+
+- Features whose keys are unset stay off: GEO website discovery during
+  onboarding needs `CONTEXT_DEV_API_KEY` (use **Skip this step**), email needs
+  `RESEND_API_KEY` (the log shows `Resend API key not set`; nothing breaks),
+  repository-based content needs the GitHub App.
+- QStash schedules and webhooks call back to the app, so they need a public URL.
+  Content you start from the dashboard does not; it runs in Vercel Workflow's
+  local world inside the container.
+
 ## First login
 
 Sign-in uses WorkOS AuthKit. The WorkOS environment must list
 `http://localhost:3090/auth/callback` as a redirect URI and have email and
-password authentication enabled. Open http://localhost:3090, choose **Sign up**,
-then create the first organization in onboarding.
+password authentication enabled. Open http://localhost:3090, choose
+**Register**, enter the 6-digit code WorkOS emails you, then create the first
+organization in onboarding.
+
+A WorkOS staging environment ships a test organization that claims
+`example.com` through SSO, so addresses on that domain get "Your organization
+requires a different sign-in method".
 
 If you change `NOTRA_PORT` or `NOTRA_PUBLIC_URL`, update the WorkOS redirect URI
 and rebuild: `NEXT_PUBLIC_*` values are baked into the image.

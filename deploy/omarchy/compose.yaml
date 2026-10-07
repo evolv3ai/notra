@@ -43,7 +43,7 @@ services:
       retries: 20
 
   # Notra talks to Redis through the Upstash REST API. Serverless Redis HTTP
-  # serves that API over the local Redis, so UPSTASH_REDIS_REST_URL points here.
+  # serves that API over the local Redis.
   redis-http:
     image: hiett/serverless-redis-http:latest
     restart: unless-stopped
@@ -54,6 +54,22 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+
+  # Fills two gaps between SRH and Upstash's REST API (see the script): the
+  # Upstash-only Lua flag @upstash/ratelimit sends, and SUBSCRIBE over
+  # server-sent events for @upstash/realtime. UPSTASH_REDIS_REST_URL points here.
+  redis-rest:
+    image: node:24-alpine
+    restart: unless-stopped
+    <<: *env-file
+    command: ["node", "/shim/redis-rest-shim.mjs"]
+    volumes:
+      - ./redis-rest-shim.mjs:/shim/redis-rest-shim.mjs:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      redis-http:
+        condition: service_started
 
   # Applies pending drizzle migrations, then exits. The dashboard waits for it.
   migrate:
@@ -85,7 +101,7 @@ services:
       NEXT_PUBLIC_WORKOS_REDIRECT_URI: ${NOTRA_PUBLIC_URL:-http://localhost:3090}/auth/callback
       NEXT_PUBLIC_UNLIMITED_ORGANIZATIONS: "true"
       NOTRA_SELF_HOSTED: "true"
-      UPSTASH_REDIS_REST_URL: http://redis-http:80
+      UPSTASH_REDIS_REST_URL: http://redis-rest:8080
     ports:
       - "127.0.0.1:${NOTRA_PORT:-3090}:3000"
     volumes:
@@ -94,7 +110,7 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      redis-http:
+      redis-rest:
         condition: service_started
     healthcheck:
       test:
