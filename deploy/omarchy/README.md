@@ -1,7 +1,9 @@
 # Notra on omarchy
 
-A persistent, self-hosted Notra dashboard in Docker on the omarchy host. It
-serves http://localhost:3090 and binds only to 127.0.0.1.
+A persistent, self-hosted Notra dashboard in Docker on the omarchy host. Open it
+from any machine on the tailnet at https://omarchy.dwelf-stork.ts.net:3090. The
+container binds only to 127.0.0.1:3090, and Tailscale Serve puts it on the
+tailnet with HTTPS. It is not on the public internet.
 
 | Piece | Where |
 | --- | --- |
@@ -9,6 +11,7 @@ serves http://localhost:3090 and binds only to 127.0.0.1.
 | Compose file | `deploy/omarchy/compose.yaml` |
 | Secrets | `/home/evolv3ai/firstmate-homes/vibe/data/notra-deploy/.env` (chmod 600, template: `.env.example`) |
 | Boot | `docker.service` enabled at boot plus `restart: unless-stopped` |
+| Tailnet access | `tailscale serve --bg --https=3090 http://127.0.0.1:3090` (persists across reboots) |
 | Data | Docker volumes `notra_postgres-data`, `notra_redis-data`, `notra_workflow-data` |
 
 ## Services
@@ -87,6 +90,21 @@ long-running service has `restart: unless-stopped`. After a reboot the stack
 comes back on its own unless you stopped it with `notra stop`; start it again
 with `notra up -d`.
 
+## Reach it from other machines
+
+The app's public URL is `NOTRA_PUBLIC_URL` in the secrets file, currently
+`https://omarchy.dwelf-stork.ts.net:3090`. Tailscale Serve terminates HTTPS with
+the tailnet certificate and proxies to the loopback port:
+
+```bash
+tailscale serve --bg --https=3090 http://127.0.0.1:3090   # once; it persists
+tailscale serve status                                     # should list the proxy, "tailnet only"
+```
+
+Serving over HTTPS matters: AuthKit sets secure session cookies, and browsers
+restrict plain-HTTP origins other than localhost. Never use `tailscale funnel`
+here, because that would publish the app to the internet.
+
 ## Known limits
 
 - Features whose keys are unset stay off: GEO website discovery during
@@ -100,14 +118,16 @@ with `notra up -d`.
 ## First login
 
 Sign-in uses WorkOS AuthKit. The WorkOS environment must list
-`http://localhost:3090/auth/callback` as a redirect URI and have email and
-password authentication enabled. Open http://localhost:3090, choose
-**Register**, enter the 6-digit code WorkOS emails you, then create the first
-organization in onboarding.
+`<NOTRA_PUBLIC_URL>/auth/callback`
+(`https://omarchy.dwelf-stork.ts.net:3090/auth/callback`) as a redirect URI and
+have email and password authentication enabled. The WorkOS environment is the
+same one the earlier local stack used, so existing accounts **log in**. A new
+account chooses **Register** and enters the 6-digit code WorkOS emails.
 
 A WorkOS staging environment ships a test organization that claims
 `example.com` through SSO, so addresses on that domain get "Your organization
 requires a different sign-in method".
 
 If you change `NOTRA_PORT` or `NOTRA_PUBLIC_URL`, update the WorkOS redirect URI
-and rebuild: `NEXT_PUBLIC_*` values are baked into the image.
+and the Tailscale Serve port, then rebuild with `notra up -d --build`:
+`NEXT_PUBLIC_*` values are baked into the image.
