@@ -1,0 +1,132 @@
+# Self-hosted Notra dashboard on omarchy. See README.md in this directory.
+#
+# Run from the repository root:
+#   docker compose -p notra --env-file "$NOTRA_ENV_FILE" \
+#     -f deploy/omarchy/compose.yaml up -d --build
+#
+# Secrets come from $NOTRA_ENV_FILE (see .env.example); nothing secret lives
+# in this file. Passing the same file as --env-file lets it also override the
+# non-secret knobs interpolated below (port and public URL).
+
+name: notra
+
+x-env-file: &env-file
+  env_file:
+    - ${NOTRA_ENV_FILE:-/home/evolv3ai/firstmate-homes/vibe/data/notra-deploy/.env}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    <<: *env-file
+    environment:
+      POSTGRES_DB: notra
+      POSTGRES_USER: notra
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notra -d notra"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Notra talks to Redis through the Upstash REST API. Serverless Redis HTTP
+  # serves that API over the local Redis.
+  redis-http:
+    image: hiett/serverless-redis-http:latest
+    restart: unless-stopped
+    <<: *env-file
+    environment:
+      SRH_MODE: env
+      SRH_CONNECTION_STRING: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # Fills two gaps between SRH and Upstash's REST API (see the script): the
+  # Upstash-only Lua flag @upstash/ratelimit sends, and SUBSCRIBE over
+  # server-sent events for @upstash/realtime. UPSTASH_REDIS_REST_URL points here.
+  redis-rest:
+    image: node:24-alpine
+    restart: unless-stopped
+    <<: *env-file
+    command: ["node", "/shim/redis-rest-shim.mjs"]
+    volumes:
+      - ./redis-rest-shim.mjs:/shim/redis-rest-shim.mjs:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      redis-http:
+        condition: service_started
+
+  # Applies pending drizzle migrations, then exits. The dashboard waits for it.
+  migrate:
+    image: notra-dashboard:local
+    pull_policy: never
+    restart: "no"
+    <<: *env-file
+    command: ["/migrate/run.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  dashboard:
+    image: notra-dashboard:local
+    # Built locally; plain `up -d` reuses the image, `up -d --build` rebuilds it.
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: apps/dashboard/Dockerfile
+      args:
+        NEXT_PUBLIC_SITE_URL: ${NOTRA_PUBLIC_URL:-http://localhost:3090}
+        NEXT_PUBLIC_APP_URL: ${NOTRA_PUBLIC_URL:-http://localhost:3090}
+        NEXT_PUBLIC_UNLIMITED_ORGANIZATIONS: "true"
+    restart: unless-stopped
+    <<: *env-file
+    environment:
+      APP_URL: ${NOTRA_PUBLIC_URL:-http://localhost:3090}
+      NEXT_PUBLIC_SITE_URL: ${NOTRA_PUBLIC_URL:-http://localhost:3090}
+      NEXT_PUBLIC_APP_URL: ${NOTRA_PUBLIC_URL:-http://localhost:3090}
+      NEXT_PUBLIC_WORKOS_REDIRECT_URI: ${NOTRA_PUBLIC_URL:-http://localhost:3090}/auth/callback
+      NEXT_PUBLIC_UNLIMITED_ORGANIZATIONS: "true"
+      NOTRA_SELF_HOSTED: "true"
+      UPSTASH_REDIS_REST_URL: http://redis-rest:8080
+    ports:
+      - "127.0.0.1:${NOTRA_PORT:-3090}:3000"
+    volumes:
+      # Vercel Workflow's local world keeps run state on disk.
+      - workflow-data:/app/apps/dashboard/.workflow-data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis-rest:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/healthcheck').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  postgres-data:
+  redis-data:
+  workflow-data:
