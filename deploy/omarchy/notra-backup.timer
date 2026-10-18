@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the Notra database backup nightly at 03:30 Central
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 America/Chicago
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target
