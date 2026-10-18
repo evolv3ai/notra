@@ -70,17 +70,60 @@ serving until the new container replaces it.
 
 ## Back up and restore the database
 
+### Nightly backup
+
+`backup.sh` runs a read-only `pg_dump -Fc` inside the postgres container, using
+the stack's env file, and writes `notra-YYYY-MM-DDTHHMMSS.dump` to
+`/home/evolv3ai/backups/notra/` (mode 600). It keeps the newest 14 dumps and
+deletes older ones only by that name pattern. Any failure exits non-zero, so it
+shows up in the journal. `NOTRA_BACKUP_DIR`, `NOTRA_BACKUP_KEEP`, `NOTRA_DIR`
+and `NOTRA_ENV_FILE` override the defaults.
+
+The systemd units `notra-backup.service` and `notra-backup.timer` run it at
+03:30 Central (`Nice=10`, idle I/O). They are system units that run as
+`evolv3ai` with the `docker` group: the long-lived user manager predates the
+docker group membership, so a user unit cannot reach the Docker socket.
+Install them once:
+
 ```bash
-mkdir -p ~/backups/notra
-notra exec -T postgres pg_dump -U notra -d notra -Fc > ~/backups/notra/notra-$(date +%F).dump
+cd /home/evolv3ai/dev/notra/deploy/omarchy
+sudo install -m 644 notra-backup.service notra-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now notra-backup.timer
 ```
 
-Restore into the running stack (overwrites existing data):
+Check it:
 
 ```bash
-notra stop dashboard
-notra exec -T postgres pg_restore -U notra -d notra --clean --if-exists < ~/backups/notra/notra-YYYY-MM-DD.dump
-notra start dashboard
+sudo systemctl start notra-backup.service   # run once now
+journalctl -u notra-backup.service -n 20
+systemctl list-timers notra-backup.timer
+ls -lh ~/backups/notra/
+```
+
+Possible follow-up: copy the dumps offsite (for example to Dropbox); today they
+live only on this host.
+
+### Restore
+
+Restore into a scratch database first, never the live `notra` database unless
+you mean to replace it:
+
+```bash
+dump=~/backups/notra/notra-YYYY-MM-DDTHHMMSS.dump
+pg_restore --list "$dump" | head   # or: notra exec -T postgres pg_restore --list < "$dump"
+notra exec -T postgres createdb -U notra notra_scratch
+notra exec -T postgres pg_restore -U notra -d notra_scratch --no-owner < "$dump"
+notra exec -T postgres psql -U notra -d notra_scratch -c '\dt'
+notra exec -T postgres dropdb -U notra notra_scratch   # when done
+```
+
+Replacing the live database overwrites existing data:
+
+```bash
+notra stop dashboard api
+notra exec -T postgres pg_restore -U notra -d notra --clean --if-exists < "$dump"
+notra start dashboard api
 ```
 
 To copy the raw volume instead, stop the stack first:

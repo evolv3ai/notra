@@ -1,0 +1,13 @@
+[Unit]
+Description=Nightly pg_dump of Notra's database
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=evolv3ai
+Group=evolv3ai
+SupplementaryGroups=docker
+ExecStart=/home/evolv3ai/dev/notra/deploy/omarchy/backup.sh
+Nice=10
+IOSchedulingClass=idle
