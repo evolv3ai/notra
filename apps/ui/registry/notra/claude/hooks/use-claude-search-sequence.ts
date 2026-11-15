@@ -14,11 +14,6 @@ interface ClaudeSearchSequence {
   visibleCount: number;
 }
 
-/**
- * Reveals rows one by one after the verb has been shown for a moment. Each
- * entry of `toolFlags` (a comma separated list of booleans) says whether that
- * row is a tool row, which is held longer than a plain step.
- */
 export const useClaudeSearchSequence = (
   toolFlags: string,
   enabled: boolean

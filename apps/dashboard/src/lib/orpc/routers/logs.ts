@@ -7,17 +7,10 @@ import {
 // biome-ignore lint/performance/noNamespaceImport: Zod recommended way of importing
 import * as z from "zod";
 
-import { assertOrganizationAccess } from "@/lib/auth/organization";
-import { authorizedProcedure } from "@/lib/orpc/base";
+import { authorizedProcedure, withOrganizationAccess } from "@/lib/orpc/base";
 import { notFound } from "@/lib/orpc/utils/errors";
 import { listWebhookLogs } from "@/lib/webhooks/logging";
 import type { Log, LogsResponse } from "@/types/webhooks/webhooks";
-
-function paginateLogs(logs: Log[], page: number, pageSize: number) {
-  const startIndex = (page - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  return logs.slice(startIndex, endIndex);
-}
 
 function filterLogs(
   logs: Log[],
@@ -50,12 +43,8 @@ export const logsRouter = {
   webhooks: {
     overview: authorizedProcedure
       .input(organizationIdInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-          user: context.user,
-        });
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         const logs = await listWebhookLogs(
           input.organizationId,
           "github",
@@ -70,12 +59,8 @@ export const logsRouter = {
       }),
     get: authorizedProcedure
       .input(webhookLogDetailInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-          user: context.user,
-        });
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         const logs = await listWebhookLogs(
           input.organizationId,
           "github",
@@ -91,13 +76,8 @@ export const logsRouter = {
       }),
     list: authorizedProcedure
       .input(listWebhookLogsInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-          user: context.user,
-        });
-
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         const logs = await listWebhookLogs(
           input.organizationId,
           input.integrationType,
@@ -110,14 +90,10 @@ export const logsRouter = {
           search: input.search,
         });
 
-        const paginatedLogs = paginateLogs(
-          filteredLogs,
-          input.page,
-          input.pageSize
-        );
+        const startIndex = (input.page - 1) * input.pageSize;
 
         const response: LogsResponse = {
-          logs: paginatedLogs,
+          logs: filteredLogs.slice(startIndex, startIndex + input.pageSize),
           pagination: {
             page: input.page,
             pageSize: input.pageSize,

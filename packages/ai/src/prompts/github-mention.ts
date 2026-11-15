@@ -5,7 +5,7 @@ import type {
   GitHubMentionReviewThread,
   GitHubMentionVoice,
 } from "@notra/ai/types/github-mention";
-import { sanitizeUntrustedText } from "@notra/ai/utils/iris-untrusted";
+import { sanitizeUntrustedText } from "@notra/ai/utils/untrusted-text";
 
 function clip(text: string, limit: number) {
   return text.length > limit ? `${text.slice(0, limit)}…` : text;
@@ -19,7 +19,6 @@ function untrustedBlock(label: string, value: unknown) {
   ].join("\n");
 }
 
-/** The organization wrote these fields, so they steer the edit like instructions. */
 function voiceSection(voice: GitHubMentionVoice | null) {
   if (!voice) {
     return "";
@@ -62,7 +61,6 @@ export function getGitHubMentionPrompt(params: {
   publicationPath: string | null;
   publicationTitle: string | null;
   markdown: string | null;
-  /** True when the markdown is the pull request file, which is ahead of the Notra post. */
   markdownFromPullRequest?: boolean;
   thread: ReadonlyArray<{ author: string; body: string }>;
   review: GitHubMentionReviewThread | null;
@@ -156,6 +154,7 @@ export function getGitHubMentionPrompt(params: {
       : "If they want the published content updated, call updatePublishedContent.",
     "If they want other files on this pull request changed, read them with getPullRequestFile, then suggest or commit with commitFilesToPullRequest.",
     "If they want a content file moved or placed where the site loads posts, discover the destination with listRepositoryDirectory and getPullRequestFile, then use moveContentFile.",
+    "If they want an OG or cover image for the post, create it with createOgImage and reference it in the frontmatter.",
     "Only call runRepoSandbox when you need a working tree (multiple files, layout, verification).",
   ]
     .filter(Boolean)
@@ -176,6 +175,7 @@ export function getGitHubMentionInstructions(params?: {
 Rules:
 - Browse repositories selectively: listRepositoryDirectory returns only immediate children, with folders first and small pages. Start at the root or a known directory, use entryType=directories to navigate, and open a child by appending its name to the current path. Use nameContains within a directory and nextOffset only when more entries are needed. getPullRequestFile returns bounded character slices; follow nextOffset when necessary and never treat a partial slice as the full file when committing or suggesting replacement contents. Read the source and a few relevant loaders/examples instead of enumerating the entire repository.
 - Moving or renaming content files into an existing site content directory is content work. When asked to find where a post belongs and move it there, investigate with listRepositoryDirectory and getPullRequestFile: read the source, existing posts and relevant loaders/configuration to establish the destination and required frontmatter. Reading application code/configuration for this purpose is allowed. Use moveContentFile to commit the move; it preserves the complete source contents. Make required frontmatter and relative image/link edits separately with the content edit tools, after reading the complete file. Preserve the post and follow the existing content conventions. Do not guess a destination or use the sandbox for moves or deletions. If the destination exists, stop and ask the commenter for a different path. Never overwrite, delete, merge or silently rename around the collision, and never bypass it with another tool. If the site requires actual application/routing/configuration changes, explain that specific limitation instead of claiming every content move requires routing changes. A move on a PR does not prove the post is deployed or visible on the homepage; only claim what you verified.
+- An OG, social, cover or hero image for a post is content work, and you can make one with createOgImage. Before calling it, find out how the site wires these images: read the frontmatter of a few neighbouring posts and, if needed, the loader that reads it. Use the same field (image, ogImage, cover and the like) and put the PNG where the other posts keep theirs, named after the post. If the site renders OG images itself from a route or component and posts carry no image field, say so instead of adding a file nobody reads. After the image is committed, set the frontmatter field to the path the site expects with updatePublishedContent for the Notra post, or commitFilesToPullRequest for other files. Show the image in your reply with markdown: ![OG image](previewUrl).
 - Stay strictly within content work. If asked to build or change a product feature, application code, tests, configuration, workflows, dependencies, or infrastructure, do not call tools and turn it down: begin the final response with exactly \`<!-- notra:declined -->\` on its own line, then say that you can only help with content here, and that product features, code, tests and configuration need a regular development workflow. Keep that substance and say nothing else about it, in the language of the comment. Do not reinterpret the request as a documentation change unless the user explicitly asks for documentation. Use the same marker whenever one of these rules or a tool safeguard requires you to decline the request. The marker is removed before the reply is posted.
 - If the user is asking a question, reply in plain GitHub-flavored markdown. Do not commit.
 - If they want the content Notra published updated, update the Notra post first, then commit onto the mention pull request unless they clearly asked for a separate pull request.

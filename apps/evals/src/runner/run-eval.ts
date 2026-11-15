@@ -21,9 +21,7 @@ export interface RunHandle {
 export interface StartRunOptions {
   suite: AnySuite;
   config: RunConfig;
-  /** Called after every task state change. The run object is mutated in place. */
   onUpdate?: (run: EvalRun) => void;
-  /** Re-run only these tasks of an existing run (retry errors). */
   resume?: EvalRun;
 }
 
@@ -43,7 +41,6 @@ function buildTasks(suite: AnySuite, config: RunConfig): TaskResult[] {
     (testCase) => wanted.size === 0 || wanted.has(testCase.id)
   );
   const tasks: TaskResult[] = [];
-  // Interleave contenders so every model progresses at the same pace.
   for (let repeat = 0; repeat < config.repeats; repeat += 1) {
     for (const testCase of cases) {
       for (const contender of config.contenders) {
@@ -88,6 +85,9 @@ async function executeTask(
       task.output = result.output;
       task.usage = result.usage;
       task.costUsd = result.costUsd;
+      task.costSource = result.costSource;
+      task.reportedCostUsd = result.reportedCostUsd;
+      task.estimatedCostUsd = result.estimatedCostUsd;
       task.transcript = result.transcript;
       task.called = true;
     }
@@ -134,7 +134,6 @@ export function startRun(options: StartRunOptions): RunHandle {
       if (task.status === "done") {
         continue;
       }
-      // Keep a finished model call so only its scoring is retried.
       Object.assign(
         task,
         task.called
@@ -156,7 +155,6 @@ export function startRun(options: StartRunOptions): RunHandle {
 
   let lastSave = 0;
   let pendingSave: ReturnType<typeof setTimeout> | undefined;
-  // Saves run one after another so an older snapshot never overwrites a newer one.
   let saveChain: Promise<void> = Promise.resolve();
   const enqueueSave = () => {
     saveChain = saveChain.then(() => saveRun(run)).catch(() => undefined);

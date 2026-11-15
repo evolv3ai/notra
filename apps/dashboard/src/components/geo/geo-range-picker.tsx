@@ -1,9 +1,8 @@
 "use client";
 
-import { ArrowDown01Icon, Calendar03Icon } from "@hugeicons/core-free-icons";
+import { Calendar03Icon, UnfoldMoreIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
-  GEO_FILTER_TRIGGER_CLASS,
   GEO_MAX_RANGE_DAYS,
   GEO_RANGE_PRESETS,
 } from "@notra/geo-core/constants/geo";
@@ -15,13 +14,13 @@ import {
 } from "@notra/ui/components/ui/popover";
 import { TRANSITION } from "@notra/ui/lib/motion";
 import { LazyMotion, m, useReducedMotion } from "motion/react";
-import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
-import type { DateRange } from "react-day-picker";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Calendar } from "@/components/calendar";
 import { GEO_RANGE_PRESET_LABEL_KEYS } from "@/constants/geo-analytics";
 import { useAnimatedSize } from "@/lib/hooks/use-animated-size";
+import { useRangeSelection } from "@/lib/hooks/use-range-selection";
 import type { GeoRangePickerProps } from "@/types/geo";
 import {
   geoCalendarDefaultMonth,
@@ -38,22 +37,32 @@ export function GeoRangePicker({ control }: GeoRangePickerProps) {
   const tLabels = useTranslations("common.labels");
   const locale = useLocale();
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<DateRange | undefined>();
   const reduceMotion = useReducedMotion();
   const { ref: contentRef, size } = useAnimatedSize();
 
-  const selected =
-    draft ??
-    (control.preset === "custom"
+  const committed =
+    control.preset === "custom"
       ? {
           from: parseLocalDay(control.range.dateFrom),
           to: parseLocalDay(control.range.dateTo),
         }
-      : undefined);
+      : undefined;
+
+  const { calendarProps, reset } = useRangeSelection({
+    committed,
+    disabled: { after: new Date() },
+    maxDays: GEO_MAX_RANGE_DAYS,
+    onCommit: (range) => {
+      control.setCustom({
+        dateFrom: localDayString(range.from),
+        dateTo: localDayString(range.to),
+      });
+    },
+  });
 
   const handleOpenChange = (next: boolean) => {
     if (!next) {
-      setDraft(undefined);
+      reset();
     }
     setOpen(next);
   };
@@ -62,12 +71,11 @@ export function GeoRangePicker({ control }: GeoRangePickerProps) {
     <Popover onOpenChange={handleOpenChange} open={open}>
       <PopoverTrigger
         aria-label={t("label")}
-        className={GEO_FILTER_TRIGGER_CLASS}
+        render={<Button size="sm" variant="secondary" />}
       >
         <HugeiconsIcon
-          className="text-muted-foreground"
+          className="text-muted-foreground size-3.5"
           icon={Calendar03Icon}
-          size={12}
         />
         <span className="tabular-nums">
           {control.preset === "custom"
@@ -75,9 +83,9 @@ export function GeoRangePicker({ control }: GeoRangePickerProps) {
             : tLabels(GEO_RANGE_PRESET_LABEL_KEYS[control.preset])}
         </span>
         <HugeiconsIcon
-          className="text-muted-foreground"
-          icon={ArrowDown01Icon}
-          size={12}
+          className="text-muted-foreground pointer-events-none size-4"
+          icon={UnfoldMoreIcon}
+          strokeWidth={2}
         />
       </PopoverTrigger>
       <PopoverContent align="end" className="w-auto overflow-hidden p-0">
@@ -110,21 +118,10 @@ export function GeoRangePicker({ control }: GeoRangePickerProps) {
                 ))}
               </div>
               <Calendar
-                defaultMonth={geoCalendarDefaultMonth(selected?.from)}
-                disabled={{ after: new Date() }}
-                max={GEO_MAX_RANGE_DAYS - 1}
+                defaultMonth={geoCalendarDefaultMonth(committed?.from)}
                 mode="range"
                 numberOfMonths={2}
-                onSelect={(next) => {
-                  setDraft(next);
-                  if (next?.from && next.to) {
-                    control.setCustom({
-                      dateFrom: localDayString(next.from),
-                      dateTo: localDayString(next.to),
-                    });
-                  }
-                }}
-                selected={selected}
+                {...calendarProps}
               />
             </div>
           </m.div>

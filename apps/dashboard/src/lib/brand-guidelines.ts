@@ -132,7 +132,7 @@ async function captureDesktopScreenshots(sourceUrl: string) {
   return responses;
 }
 
-async function getGuidelineByBrandSettingsId(brandSettingsId: string) {
+export async function getGuidelineByBrandSettingsId(brandSettingsId: string) {
   return db.query.brandGuidelines.findFirst({
     where: eq(brandGuidelines.brandSettingsId, brandSettingsId),
     with: {
@@ -364,10 +364,7 @@ export async function applyBrandGuidelineScreenshotsStep(
           (typeof response.screenshot === "object"
             ? response.screenshot.format
             : undefined) ?? "png",
-        height:
-          (typeof response.screenshot === "object"
-            ? response.screenshot.height
-            : response.height) ?? config.height,
+        height: getScreenshotResponseHeight(response) ?? config.height,
         index,
         scrollOffset,
         screenshotType: response.screenshotType,

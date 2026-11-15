@@ -1,14 +1,22 @@
 import { db } from "@notra/db/drizzle";
 import { linearIntegrations } from "@notra/db/schema";
+import {
+  decryptToken,
+  encryptToken,
+} from "@notra/db/utils/integration-encryption";
 import { and, eq } from "drizzle-orm";
 import { customAlphabet } from "nanoid";
 
-import { decryptToken, encryptToken } from "../crypto/token-encryption";
 import type { CreateLinearIntegrationParams } from "../types/integrations";
 import type { LinearToolContext } from "../types/tools";
 import { hasOrganizationAccess } from "../utils/organization-access";
 
 const nanoid = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 16);
+const createdByUserRelation = {
+  createdByUser: {
+    columns: { id: true, name: true, email: true, image: true },
+  },
+} as const;
 
 export async function createLinearIntegration(
   params: CreateLinearIntegrationParams
@@ -28,18 +36,14 @@ export async function createLinearIntegration(
     throw new Error("User does not have access to this organization.");
   }
 
-  const encryptedAccessToken = encryptToken(accessToken);
-
-  const id = `lin_${nanoid()}`;
-
   const [integration] = await db
     .insert(linearIntegrations)
     .values({
-      id,
+      id: `lin_${nanoid()}`,
       organizationId,
       createdByUserId: userId,
       displayName,
-      encryptedAccessToken,
+      encryptedAccessToken: encryptToken(accessToken),
       linearOrganizationId,
       linearOrganizationName: linearOrganizationName ?? null,
       linearTeamId: linearTeamId ?? null,
@@ -53,16 +57,7 @@ export async function createLinearIntegration(
 export async function getLinearIntegrationById(integrationId: string) {
   const integration = await db.query.linearIntegrations.findFirst({
     where: eq(linearIntegrations.id, integrationId),
-    with: {
-      createdByUser: {
-        columns: {
-          id: true,
-          name: true,
-          email: true,
-          image: true,
-        },
-      },
-    },
+    with: createdByUserRelation,
   });
 
   return integration ?? null;
@@ -73,16 +68,7 @@ export async function getLinearIntegrationsByOrganization(
 ) {
   return db.query.linearIntegrations.findMany({
     where: eq(linearIntegrations.organizationId, organizationId),
-    with: {
-      createdByUser: {
-        columns: {
-          id: true,
-          name: true,
-          email: true,
-          image: true,
-        },
-      },
-    },
+    with: createdByUserRelation,
     orderBy: (table, { desc }) => [desc(table.createdAt)],
   });
 }
@@ -151,13 +137,6 @@ export async function getLinearToolContextByIntegrationId(
   integrationId: string,
   options?: { organizationId?: string }
 ): Promise<LinearToolContext> {
-  const whereClause = options?.organizationId
-    ? and(
-        eq(linearIntegrations.id, integrationId),
-        eq(linearIntegrations.organizationId, options.organizationId)
-      )
-    : eq(linearIntegrations.id, integrationId);
-
   const [integration] = await db
     .select({
       id: linearIntegrations.id,
@@ -167,7 +146,14 @@ export async function getLinearToolContextByIntegrationId(
       enabled: linearIntegrations.enabled,
     })
     .from(linearIntegrations)
-    .where(whereClause)
+    .where(
+      and(
+        eq(linearIntegrations.id, integrationId),
+        options?.organizationId
+          ? eq(linearIntegrations.organizationId, options.organizationId)
+          : undefined
+      )
+    )
     .limit(1);
 
   if (!integration) {

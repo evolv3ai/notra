@@ -1,0 +1,139 @@
+---
+title: "Repository layout"
+description: "Which files Notra Sites reads from your repository, and how file paths become URLs."
+authors:
+  - handle: jan
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/sites/repository
+  type: reference
+  applies_to:
+    - notra
+  language: en
+  status: stable
+---
+
+A site lives on the **Production branch** you select, at the repository root or in a folder you choose with **Site is in a subdirectory**. An empty root directory means the repository root. Every path on this page is relative to that selected site root. Pushes that don't change anything in the folder [don't deploy](/sites/publishing#what-triggers-a-deploy), so several sites can live in one repository.
+
+For an existing `hosted-site/blog.json`, choose root directory `hosted-site`, not `hosted-site/blog` or the config file itself. Notra reads `blog.json`, `blog/`, `changelog/` and the other files below from that folder on the selected branch. If there are several configs, choose the one you want to publish; you don't need a starter PR for an existing site.
+
+```text
+blog.json              # optional: settings, see the blog.json reference
+.notraignore           # optional: exclude files from production and previews
+blog/                  # blog posts, one file per post
+  hello-world.mdx
+  2026/launch.mdx
+changelog/             # changelog entries, one file per release
+  2026-10-01.mdx
+snippets/              # reusable MDX and your own React components
+  newsletter.jsx
+  install.mdx
+public/                # images, videos, fonts and other static files
+  images/cover.png
+header.mdx             # optional: your own header
+footer.mdx             # optional: your own footer
+slots/                 # optional: content at fixed places on every page
+  after-post.mdx
+style.css              # optional: any .css file loads on every page
+script.js              # optional: custom JavaScript on every page
+```
+
+Notra loads every `.css` file in the site root and its subfolders on every page. It also loads every `.js` file outside `blog/`, `changelog/`, `snippets/`, `public/`, `styles/` and `slots/` as a [custom script](/sites/custom-scripts). Files excluded by [`.notraignore`](#exclude-files-with-notraignore) aren't loaded. Notra ignores other files, such as a `README.md` or a `package.json`. If the repository also holds your app's code, put the site in its own folder and turn on **Site is in a subdirectory**.
+
+## What Notra builds
+
+Notra compiles this repository format into a blog and changelog. It doesn't install your repository's dependencies, run `package.json` scripts, upload a `dist/` directory or start an application server. Pointing the root directory at a Vite or Next.js app doesn't turn it into a Notra site.
+
+You can add client-side experiences with [custom components](/sites/custom-components), [plain browser scripts](/sites/custom-scripts) and the allowed files in `public/`. If you build those scripts or assets with another tool, commit the compatible output in this layout before deploying. Apps that need a different build pipeline, server or unsupported asset types must be hosted separately; you can link to them or embed them where the app allows it.
+
+### Checklist for developers and coding agents
+
+- Find the existing `blog.json` on the intended production branch before creating new site files.
+- Select its containing folder as the site root, and keep content, chrome, scripts and public assets relative to that root.
+- Set Blog and Changelog URL paths separately from the source folder. Leave a section path empty to disable it.
+- Use the [blog.json reference](/sites/reference/blog-json), [custom components](/sites/custom-components) and [custom scripts](/sites/custom-scripts) for the supported format, rather than adding a repository build command.
+
+## Exclude files with .notraignore
+
+Add an optional `.notraignore` at the selected site root to keep files out of both production builds and previews. Patterns follow `.gitignore` syntax and are relative to that root, not to the repository root:
+
+```text .notraignore
+# Internal posts and unfinished content
+blog/internal/
+blog/work-in-progress/*
+
+# Keep one finished post in the build
+!blog/work-in-progress/ready.mdx
+
+# Assets and scripts that should not be published
+public/private/
+scripts/experimental.js
+```
+
+Matched files aren't validated, compiled or copied into the output. Ignored posts have no page URL and don't appear in indexes, feeds, sitemaps or Markdown exports. Imports of an ignored file fail with a file-not-found error, and links to ignored pages or assets no longer have a published target.
+
+Patterns are case-sensitive. As with `.gitignore`, you can't re-include a file inside an excluded directory without re-including the directory first. Existing file-type, hidden-file and `node_modules` exclusions still apply; `!` can't override them. `blog.json` always remains active, and `.notraignore` itself is never published. The ignore file must be a regular file no larger than 512 KB.
+
+The editor keeps ignored files in its file tree so you can still edit them. **Check for problems** applies the rules, including unpublished edits to `.notraignore`. Changes to the ignore file are included in deployment comparisons.
+
+Use [`draft: true`](/sites/posts#drafts) when a post should still appear in previews. Use `.notraignore` when it should be absent from all new builds. This isn't access control: files remain in Git, and already-created deployments aren't changed retroactively.
+
+## blog.json is optional
+
+Without a `blog.json` at the selected site root on the production branch, the hosted site builds with the standard layout and the site name from the dashboard. A config elsewhere in the repository isn't used. Add one when you want your own colors, logo, navigation, authors or analytics. See the [blog.json reference](/sites/reference/blog-json).
+
+`blog.json` must sit at the root of the site folder, and the `$schema` line gives you autocomplete and inline errors in your editor:
+
+```json blog.json
+{
+  "$schema": "https://usenotra.com/schemas/blog.json",
+  "name": "Acme"
+}
+```
+
+## From file to URL
+
+The source root chooses which files to build; the section path chooses where they appear on the deployed address. With root directory `hosted-site`, `hosted-site/blog/hello-world.mdx` becomes `/blog/hello-world` when Blog is `/blog`, or `/hello-world` when Blog is `/`. The folder name `hosted-site` isn't part of the URL.
+
+Every `.md` or `.mdx` file in an enabled `blog/` or `changelog/` section that isn't excluded by [`.notraignore`](#exclude-files-with-notraignore) becomes a page, and the path of the file becomes the URL below the section path. With the default `/blog` and `/changelog` paths:
+
+| File | URL |
+| --- | --- |
+| `blog/hello-world.mdx` | `/blog/hello-world` |
+| `blog/2026/launch.mdx` | `/blog/2026/launch` |
+| `blog/guides/index.mdx` | `/blog/guides` |
+| `changelog/2026-10-01.mdx` | `/changelog/2026-10-01` |
+| `blog/_drafts/idea.mdx` | Not published |
+
+- File and folder names in `blog/` and `changelog/` may only use **lowercase letters, digits and dashes**, so `My Post.mdx` stops the build with `slug_invalid`.
+- Notra never publishes files and folders that start with `_`, so use them for notes or for MDX you import into other posts.
+- An MDX file that another file imports is a snippet rather than a page.
+- Two files can't end up at the same URL, for example `blog/launch.mdx` and `blog/launch/index.mdx`.
+
+Each section also gets an index page (`/blog`), an RSS feed (`/blog/feed.xml`), a sitemap (`/blog/sitemap.xml`), `llms.txt` and a Markdown version of every page. See [AI agents and search](/sites/agents).
+
+## Static files
+
+Put images, videos, PDFs and fonts in `public/` and reference them from the root of the site:
+
+```mdx
+![The new editor](/images/editor.png)
+```
+
+Notra rewrites the path at build time so it works under `/blog`, `/changelog` and on every domain, which puts the file `public/images/editor.png` at `/blog/images/editor.png`. Always use paths that start with `/`, because relative paths like `./editor.png` don't work.
+
+## Allowed files
+
+| Kind | Extensions |
+| --- | --- |
+| Content | `.md`, `.mdx` |
+| Components and scripts | `.jsx`, `.js` |
+| Settings | `.json` |
+| Styles | `.css` |
+| Images | `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.avif`, `.svg`, `.ico` |
+| Video | `.mp4`, `.webm` |
+| Rive and WebAssembly | `.riv`, `.wasm` |
+| Other | `.pdf`, `.txt`, `.woff`, `.woff2` |
+
+Notra skips other files, dotfiles, `node_modules` and symbolic links, and file names may only use letters, digits, spaces and `._-@()+`. For size limits, see [Limits](/sites/reference/limits).

@@ -34,6 +34,7 @@ export const GEO_SHELF_OPPORTUNITY_STATUSES = [
 ] as const;
 export const GEO_SHELF_PRIORITIES = ["low", "medium", "high"] as const;
 export const GEO_SHELF_SHELF_FILTERS = [
+  "relevant",
   "all",
   "opportunities",
   "on_shelf",
@@ -60,8 +61,6 @@ export const GEO_SHELF_SEARCH_MAX_LENGTH = 200;
 export const GEO_SHELF_NOTES_MAX_LENGTH = 2000;
 export const GEO_SHELF_TITLE_MAX_LENGTH = 200;
 export const GEO_SHELF_URL_MAX_LENGTH = 2048;
-// Shelf sources are public web pages: only http(s) URLs on a real, publicly
-// resolvable hostname are accepted.
 export const GEO_SHELF_URL_PROTOCOL_PATTERN = /^https?$/;
 export const GEO_SHELF_URL_INVALID_MESSAGE =
   "Enter a public http or https page URL";

@@ -119,9 +119,9 @@ export class ByteReader {
 
   readString(): string {
     const start = this.pos;
-    let end = start;
-    while (this.buf[end] !== 0) {
-      end += 1;
+    const end = this.buf.indexOf(0, start);
+    if (end === -1) {
+      throw new Error(`unterminated string at offset ${start}`);
     }
     const s = textDecoder.decode(this.buf.subarray(start, end));
     this.pos = end + 1;

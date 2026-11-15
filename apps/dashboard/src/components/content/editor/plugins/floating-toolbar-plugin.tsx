@@ -2,6 +2,7 @@
 
 import {
   CodeIcon,
+  Comment01Icon,
   Link01Icon,
   TextBoldIcon,
   TextItalicIcon,
@@ -19,9 +20,16 @@ import {
   FORMAT_TEXT_COMMAND,
   SELECTION_CHANGE_COMMAND,
 } from "lexical";
-import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "use-intl";
+
+import { useContentComments } from "@/components/content/inline-comments/content-comments-provider";
+import type { CommentAnchorQuote } from "@/types/content/inline-comments";
+import {
+  captureSelectionCommentAnchor,
+  refreshCommentAnchor,
+} from "@/utils/comment-anchor";
 
 interface FloatingToolbarProps {
   editor: ReturnType<typeof useLexicalComposerContext>[0];
@@ -52,8 +60,10 @@ function FloatingToolbar({
 }: FloatingToolbarProps) {
   const t = useTranslations("content.editor.toolbar");
   const tCommon = useTranslations("common");
+  const comments = useContentComments();
   const toolbarRef = useRef<HTMLDivElement>(null);
   const linkInputRef = useRef<HTMLInputElement>(null);
+  const commentQuoteRef = useRef<CommentAnchorQuote | null>(null);
   const [linkUrl, setLinkUrl] = useState("https://");
   const [isEditingExistingLink, setIsEditingExistingLink] = useState(false);
 
@@ -71,20 +81,24 @@ function FloatingToolbar({
     }
 
     const range = selection.getRangeAt(0);
+    const root = editor.getRootElement();
+    if (root) {
+      commentQuoteRef.current = captureSelectionCommentAnchor<Node>(
+        root,
+        selection
+      );
+    }
     const rect = range.getBoundingClientRect();
     const anchorRect = anchorElem.getBoundingClientRect();
 
-    // Calculate position above selection
     const spaceAbove = rect.top - anchorRect.top;
     const toolbarHeight = toolbar.offsetHeight;
     const minSpaceNeeded = toolbarHeight + 16;
 
     let top: number;
     if (spaceAbove < minSpaceNeeded) {
-      // Not enough space above, position below selection
       top = rect.bottom - anchorRect.top + 8;
     } else {
-      // Position above selection
       top = rect.top - anchorRect.top - toolbarHeight - 8;
     }
 
@@ -97,7 +111,7 @@ function FloatingToolbar({
     toolbar.style.top = `${top}px`;
     toolbar.style.left = `${left}px`;
     toolbar.style.opacity = "1";
-  }, [anchorElem]);
+  }, [anchorElem, editor]);
 
   useEffect(() => {
     updatePosition();
@@ -134,7 +148,6 @@ function FloatingToolbar({
     );
   }, [editor, updatePosition]);
 
-  // Focus input when entering link edit mode
   useEffect(() => {
     if (isLinkEditMode) {
       const timeoutId = setTimeout(() => linkInputRef.current?.focus(), 0);
@@ -144,12 +157,10 @@ function FloatingToolbar({
 
   const handleLinkClick = useCallback(() => {
     if (isLink) {
-      // Edit existing link - populate with current URL
       setLinkUrl(existingLinkUrl || "https://");
       setIsEditingExistingLink(true);
       setIsLinkEditMode(true);
     } else {
-      // Create link with placeholder URL first, then enter edit mode
       editor.dispatchCommand(TOGGLE_LINK_COMMAND, "https://");
       setLinkUrl("https://");
       setIsEditingExistingLink(false);
@@ -160,13 +171,11 @@ function FloatingToolbar({
   const submitLink = useCallback(() => {
     const trimmedUrl = linkUrl.trim();
     if (trimmedUrl !== "" && trimmedUrl !== "https://") {
-      // Validate URL format
       let isValidUrl = false;
       try {
         new URL(trimmedUrl);
         isValidUrl = true;
       } catch {
-        // Check if it's a relative URL
         isValidUrl =
           trimmedUrl.startsWith("/") ||
           trimmedUrl.startsWith("./") ||
@@ -178,11 +187,9 @@ function FloatingToolbar({
       if (isValidUrl) {
         editor.dispatchCommand(TOGGLE_LINK_COMMAND, trimmedUrl);
       } else {
-        // Invalid URL format, remove the link
         editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
       }
     } else {
-      // Remove the link if URL is empty
       editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
     }
     setIsLinkEditMode(false);
@@ -191,8 +198,6 @@ function FloatingToolbar({
   }, [editor, linkUrl, setIsLinkEditMode]);
 
   const cancelLinkEdit = useCallback(() => {
-    // Only remove the link if we're canceling a new link creation
-    // If editing an existing link, keep the original URL
     if (!isEditingExistingLink) {
       editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
     }
@@ -281,6 +286,39 @@ function FloatingToolbar({
       >
         <HugeiconsIcon icon={Link01Icon} className="size-4" />
       </button>
+      {comments?.enabled ? (
+        <>
+          <div className="bg-border mx-1 h-4 w-px" />
+          <button
+            aria-keyshortcuts="Meta+Alt+M Control+Alt+M"
+            aria-label={t("comment")}
+            className={`${buttonClass(false)} disabled:pointer-events-none disabled:opacity-50`}
+            disabled={Boolean(comments.blockedReason)}
+            onClick={() => {
+              const root = editor.getRootElement();
+              const selectedQuote = root
+                ? captureSelectionCommentAnchor<Node>(
+                    root,
+                    root.ownerDocument.getSelection()
+                  )
+                : null;
+              const quote =
+                selectedQuote ??
+                (root && commentQuoteRef.current
+                  ? refreshCommentAnchor(root, commentQuoteRef.current)
+                  : null);
+              if (quote) {
+                comments.startComment(quote);
+              }
+            }}
+            onMouseDown={(event) => event.preventDefault()}
+            title={comments.blockedReason ?? t("commentTitle")}
+            type="button"
+          >
+            <HugeiconsIcon icon={Comment01Icon} className="size-4" />
+          </button>
+        </>
+      ) : null}
       {isLinkEditMode && (
         <div className="ml-1 flex items-center gap-1">
           <input
@@ -339,6 +377,7 @@ export function FloatingToolbarPlugin({
   const [isLink, setIsLink] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
   const [isLinkEditMode, setIsLinkEditMode] = useState(false);
+  const composingComment = useContentComments()?.composerOpen ?? false;
 
   const updateToolbar = useCallback(() => {
     editor.getEditorState().read(() => {
@@ -417,8 +456,7 @@ export function FloatingToolbarPlugin({
     );
   }, [editor, updateToolbar]);
 
-  // Keep toolbar visible while in link edit mode even if selection changes
-  if (!(isText || isLinkEditMode)) {
+  if (!(isText || isLinkEditMode) || composingComment) {
     return null;
   }
 

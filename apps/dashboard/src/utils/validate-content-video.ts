@@ -134,7 +134,6 @@ function videoTooLargeMessage() {
   return `Video must be ${MAX_CONTENT_VIDEO_BYTES / (1024 * 1024)}MB or smaller`;
 }
 
-// ponytail: no ffmpeg. A GitHub draft already rejects files over 10MB, so transcoding would not admit a larger clip.
 export function validateContentVideo(bytes: Uint8Array): ContentVideoMimeType {
   if (bytes.byteLength > MAX_CONTENT_VIDEO_BYTES) {
     throw new Error(videoTooLargeMessage());

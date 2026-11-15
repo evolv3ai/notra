@@ -1,6 +1,6 @@
 import {
   type LookbackWindow,
-  triggerTargetsSchema,
+  scheduleTargetsSchema,
 } from "@notra/schemas/dashboard/integrations";
 import {
   nullableTriggerOutputConfigSchema,
@@ -17,7 +17,7 @@ export function parseLookbackWindow(value: unknown): LookbackWindow {
 }
 
 export function parseTriggerTargets(value: unknown) {
-  const parsedTargets = triggerTargetsSchema.safeParse(value);
+  const parsedTargets = scheduleTargetsSchema.safeParse(value);
   return parsedTargets.success ? parsedTargets.data : null;
 }
 

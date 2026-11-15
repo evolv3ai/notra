@@ -17,15 +17,13 @@ import {
 import { aiSearchGroupKey } from "@notra/geo-core/utils/geo-gaps";
 
 import type {
-  GeoGapLift,
-  GeoGapLiftTone,
   GeoGapsEmptyKind,
   GeoGapsMeterTone,
   GeoGapsTab,
   GeoUnifiedSearchGap,
 } from "@/types/components/geo-gaps";
 
-import { bestFuzzyScore, fuzzyMatches } from "./fuzzy";
+import { bestFuzzyScore, FUZZY_MIN_SCORE } from "./fuzzy";
 
 export function unifySearchGaps(
   searchGaps: readonly GeoSearchGapRow[],
@@ -67,7 +65,6 @@ export function searchGapDemandRank(gap: GeoUnifiedSearchGap): number {
   const impressions = gap.kind === "console" ? (gap.row.impressions ?? 0) : 0;
   const searches =
     gap.kind === "console" ? (gap.ai?.searches ?? 0) : gap.row.searches;
-  // ponytail: simple ranking heuristic; calibrate weights once demand-to-draft data exists.
   return Math.log1p(impressions) + 2 * Math.log1p(searches);
 }
 
@@ -125,7 +122,7 @@ export function isGeoGapsTab(value: unknown): value is GeoGapsTab {
 }
 
 /** Map 0–1 intensity onto a 1–5 inspo-style meter (empty when intensity is 0). */
-export function gapMeterLevel(
+function gapMeterLevel(
   intensity: number,
   steps = GEO_GAPS_METER_STEPS
 ): number {
@@ -197,32 +194,6 @@ export function gapCanRescan(brief: GeoGapBriefRef | null): boolean {
   return brief?.status === "completed" && brief.postId !== null;
 }
 
-export function gapLift(row: GeoPromptGapRow): GeoGapLift | null {
-  const baseline = row.brief?.baseline;
-  if (!baseline) {
-    return null;
-  }
-  const after = row.mentionedEngines.length;
-  const total = after + row.engines.length;
-  return {
-    before: baseline.mentionedEngines,
-    baselineTotal: baseline.totalEngines,
-    after,
-    total,
-    delta: after - baseline.mentionedEngines,
-  };
-}
-
-export function gapLiftTone(delta: number): GeoGapLiftTone {
-  if (delta > 0) {
-    return "up";
-  }
-  if (delta < 0) {
-    return "down";
-  }
-  return "flat";
-}
-
 export function existingPageLabel(url: string): string {
   try {
     const parsed = new URL(url);
@@ -286,15 +257,17 @@ function filterGapsByQuery<T>(
   values: (row: T) => string[]
 ): T[] {
   const trimmed = query.trim();
-  const matched = rows.filter((row) => fuzzyMatches(values(row), trimmed));
   if (trimmed.length === 0) {
-    return matched;
+    return [...rows];
+  }
+  const matched = [];
+  for (const row of rows) {
+    const score = bestFuzzyScore(values(row), trimmed);
+    if (score >= FUZZY_MIN_SCORE) {
+      matched.push({ row, score });
+    }
   }
   return matched
-    .map((row) => ({
-      row,
-      score: bestFuzzyScore(values(row), trimmed),
-    }))
     .sort((left, right) => right.score - left.score)
     .map((entry) => entry.row);
 }

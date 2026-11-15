@@ -89,8 +89,8 @@ export interface GeoProspectCitedSourceJson {
 
 /**
  * Stored shape of a prospect-facing GEO report built in the console.
- * Mirrors `GeoReport` in `apps/console` (`src/types/geo-report.ts`) and
- * `geoReportSchema` there; the console owns the editor and the renderer.
+ * Shared by the console editor, renderer, and database. The console validates
+ * incoming reports with its `geoReportSchema` before persisting them.
  */
 export interface GeoProspectReportJson {
   id: string;

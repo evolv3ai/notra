@@ -132,8 +132,6 @@ function scenarioText(
   if (!scenario) {
     return localized(DEMO_CHAT_FALLBACK, german);
   }
-  // Without the matching tool, show the result inline instead of promising
-  // an action that cannot happen.
   const args = scenario.toolArgs?.(german);
   if (typeof args?.markdown === "string") {
     return `**${String(args.title ?? "")}**\n\n${args.markdown}`;
@@ -141,7 +139,6 @@ function scenarioText(
   return localized(scenario.followUp ?? scenario.reply, german);
 }
 
-/** GEO writer: search once, then save an article that passes the gate. */
 function demoWriterPlan(
   options: LanguageModelV4CallOptions,
   tools: LanguageModelV4FunctionTool[],
@@ -192,7 +189,6 @@ function demoWriterPlan(
   return { kind: "text", text: "Saved the article." };
 }
 
-/** Decides what the fake model answers for one call. */
 function planResponse(options: LanguageModelV4CallOptions): DemoPlan {
   const userText = lastUserText(options.prompt);
   const german = isGerman(userText);
@@ -288,7 +284,6 @@ function planResponse(options: LanguageModelV4CallOptions): DemoPlan {
     }
   }
 
-  // Short-output calls are titles, labels and commit messages.
   if (
     options.maxOutputTokens !== undefined &&
     options.maxOutputTokens < SHORT_OUTPUT_TOKEN_LIMIT

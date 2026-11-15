@@ -7,9 +7,11 @@ import {
 import type { MessageTableCopyFormat } from "@notra/ui/types/message-table";
 
 export const MESSAGE_TABLE_COPY_RESET_MS = 1500;
-/** Leading =/@/tab/CR are always formulas. +/− only when the rest is not a number. */
-export const CSV_FORMULA_CELL_PREFIX =
-  /^(?:[=@\t\r]|[+\-](?=\s*[A-Za-z(@=]))/;
+/**
+ * Leading =/@/tab/CR are always formulas. +/− unless the rest is only digits,
+ * spaces and number punctuation, so numbers and phone numbers stay untouched.
+ */
+export const CSV_FORMULA_CELL_PREFIX = /^(?:[=@\t\r]|[+\-](?![\d\s().,%-]*$))/;
 export const CSV_FORMULA_TEXT_MARKER = "'";
 
 export const MESSAGE_TABLE_COPY_FORMATS: readonly {

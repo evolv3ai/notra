@@ -1,224 +1,226 @@
-import { Ratelimit } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis";
-import { headers } from "next/headers";
-import type { NextRequest } from "next/server";
+import { getClientIp as getTrustedClientIp } from "@notra/utils/client-ip";
+import { createLimiter } from "@notra/utils/ratelimit";
+import type { Limiter } from "@notra/utils/types/ratelimit";
+import { getRequestHeaders as headers } from "@tanstack/react-start/server";
 
 import { COMPANY_LOGO_RATE_LIMIT_PER_USER_PER_MINUTE } from "@/constants/company-logo";
 import {
   DEMO_SANDBOX_CREATE_LIMIT,
   DEMO_SANDBOX_CREATE_WINDOW,
+  DEMO_SANDBOX_RESET_LIMIT,
+  DEMO_SANDBOX_RESET_WINDOW,
+  DEMO_SANDBOX_TIME_ZONE_LIMIT,
+  DEMO_SANDBOX_TIME_ZONE_WINDOW,
 } from "@/constants/demo";
 
-const redis = Redis.fromEnv();
-
 export const ratelimit = {
-  fetchTweet: new Ratelimit({
-    redis,
+  fetchTweet: createLimiter({
     prefix: "ratelimit:fetch-tweet",
-    limiter: Ratelimit.slidingWindow(30, "1m"),
+    requests: 30,
+    window: "1m",
   }),
-  importTweets: new Ratelimit({
-    redis,
+  importTweets: createLimiter({
     prefix: "ratelimit:import-tweets",
-    limiter: Ratelimit.slidingWindow(20, "1m"),
+    requests: 20,
+    window: "1m",
   }),
-  mcpConnection: new Ratelimit({
-    redis,
+  mcpConnection: createLimiter({
     prefix: "ratelimit:mcp-connection",
-    limiter: Ratelimit.slidingWindow(10, "1m"),
+    requests: 10,
+    window: "1m",
   }),
-  githubProbe: new Ratelimit({
-    redis,
+  githubProbe: createLimiter({
     prefix: "ratelimit:github-probe",
-    limiter: Ratelimit.slidingWindow(30, "1m"),
+    requests: 30,
+    window: "1m",
   }),
-  githubAppRepositories: new Ratelimit({
-    redis,
+  githubAppRepositories: createLimiter({
     prefix: "ratelimit:github-app-repositories",
-    limiter: Ratelimit.slidingWindow(60, "1m"),
+    requests: 60,
+    window: "1m",
   }),
-  githubAppCallback: new Ratelimit({
-    redis,
+  githubAppCallback: createLimiter({
     prefix: "ratelimit:github-app-callback",
-    limiter: Ratelimit.slidingWindow(10, "1m"),
+    requests: 10,
+    window: "1m",
   }),
-  githubPublish: new Ratelimit({
-    redis,
+  githubPublish: createLimiter({
     prefix: "ratelimit:github-publish",
-    limiter: Ratelimit.slidingWindow(10, "1m"),
+    requests: 10,
+    window: "1m",
   }),
-  granolaConnection: new Ratelimit({
-    redis,
+  granolaConnection: createLimiter({
     prefix: "ratelimit:granola-connection",
-    limiter: Ratelimit.slidingWindow(10, "1m"),
+    requests: 10,
+    window: "1m",
   }),
-  internalWorkflowStart: new Ratelimit({
-    redis,
+  internalWorkflowStart: createLimiter({
     prefix: "ratelimit:internal-workflow-start",
-    limiter: Ratelimit.slidingWindow(30, "1m"),
+    requests: 30,
+    window: "1m",
   }),
-  onboardingBrandAnalysis: new Ratelimit({
-    redis,
+  onboardingBrandAnalysis: createLimiter({
     prefix: "ratelimit:onboarding-brand-analysis",
-    limiter: Ratelimit.slidingWindow(2, "10m"),
+    requests: 2,
+    window: "10m",
   }),
-  companyLogo: new Ratelimit({
-    redis,
+  onboardingWebsiteCheck: createLimiter({
+    prefix: "ratelimit:onboarding-website-check",
+    requests: 30,
+    window: "1m",
+  }),
+  companyLogo: createLimiter({
     prefix: "ratelimit:company-logo",
-    limiter: Ratelimit.slidingWindow(
-      COMPANY_LOGO_RATE_LIMIT_PER_USER_PER_MINUTE,
-      "1m"
-    ),
+    requests: COMPANY_LOGO_RATE_LIMIT_PER_USER_PER_MINUTE,
+    window: "1m",
   }),
-  onboardingAgent: new Ratelimit({
-    redis,
+  onboardingAgent: createLimiter({
     prefix: "ratelimit:onboarding-agent",
-    limiter: Ratelimit.slidingWindow(2, "10m"),
+    requests: 2,
+    window: "10m",
   }),
-  commandPaletteNavigate: new Ratelimit({
-    redis,
+  commandPaletteNavigate: createLimiter({
     prefix: "ratelimit:cmdk-navigate",
-    limiter: Ratelimit.slidingWindow(15, "1m"),
+    requests: 15,
+    window: "1m",
   }),
-  chatStream: new Ratelimit({
-    redis,
+  chatStream: createLimiter({
     prefix: "ratelimit:chat-stream",
-    limiter: Ratelimit.slidingWindow(30, "1m"),
+    requests: 30,
+    window: "1m",
   }),
-  chatStop: new Ratelimit({
-    redis,
+  chatStop: createLimiter({
     prefix: "ratelimit:chat-stop",
-    limiter: Ratelimit.slidingWindow(30, "1m"),
+    requests: 30,
+    window: "1m",
   }),
-  chatRelay: new Ratelimit({
-    redis,
+  chatRelay: createLimiter({
     prefix: "ratelimit:chat-relay",
-    limiter: Ratelimit.slidingWindow(20, "1m"),
+    requests: 20,
+    window: "1m",
   }),
-  slackOAuth: new Ratelimit({
-    redis,
+  slackOAuth: createLimiter({
     prefix: "ratelimit:slack-oauth",
-    limiter: Ratelimit.slidingWindow(10, "10m"),
+    requests: 10,
+    window: "10m",
   }),
-  gscOAuth: new Ratelimit({
-    redis,
+  inthOAuth: createLimiter({
+    prefix: "ratelimit:inth-oauth",
+    requests: 10,
+    window: "10m",
+  }),
+  gscOAuth: createLimiter({
     prefix: "ratelimit:gsc-oauth",
-    limiter: Ratelimit.slidingWindow(10, "10m"),
+    requests: 10,
+    window: "10m",
   }),
-  geoWriterPlan: new Ratelimit({
-    redis,
+  geoWriterPlan: createLimiter({
     prefix: "ratelimit:geo-writer-plan",
-    limiter: Ratelimit.slidingWindow(10, "10m"),
+    requests: 10,
+    window: "10m",
   }),
-  geoSequenceRun: new Ratelimit({
-    redis,
+  geoSequenceRun: createLimiter({
     prefix: "ratelimit:geo-sequence-run",
-    limiter: Ratelimit.slidingWindow(10, "10m"),
+    requests: 10,
+    window: "10m",
   }),
-  geoSequencesGenerate: new Ratelimit({
-    redis,
+  geoSequencesGenerate: createLimiter({
     prefix: "ratelimit:geo-sequences-generate",
-    limiter: Ratelimit.slidingWindow(5, "10m"),
+    requests: 5,
+    window: "10m",
   }),
-  geoPersonasGenerate: new Ratelimit({
-    redis,
+  geoPersonasGenerate: createLimiter({
     prefix: "ratelimit:geo-personas-generate",
-    limiter: Ratelimit.slidingWindow(5, "10m"),
+    requests: 5,
+    window: "10m",
   }),
-  geoPersonaRun: new Ratelimit({
-    redis,
+  geoPersonaRun: createLimiter({
     prefix: "ratelimit:geo-persona-run",
-    limiter: Ratelimit.slidingWindow(10, "10m"),
+    requests: 10,
+    window: "10m",
   }),
-  geoCompetitorSuggestions: new Ratelimit({
-    redis,
+  geoCompetitorSuggestions: createLimiter({
     prefix: "ratelimit:geo-competitor-suggestions",
-    limiter: Ratelimit.slidingWindow(10, "10m"),
+    requests: 10,
+    window: "10m",
   }),
-  geoBrandSearch: new Ratelimit({
-    redis,
+  geoBrandSearch: createLimiter({
     prefix: "ratelimit:geo-brand-search",
-    limiter: Ratelimit.slidingWindow(60, "1m"),
+    requests: 60,
+    window: "1m",
   }),
-  geoShelfPreview: new Ratelimit({
-    redis,
+  geoShelfPreview: createLimiter({
     prefix: "ratelimit:geo-shelf-preview",
-    limiter: Ratelimit.slidingWindow(30, "1m"),
+    requests: 30,
+    window: "1m",
   }),
-  gscSync: new Ratelimit({
-    redis,
+  gscSync: createLimiter({
     prefix: "ratelimit:gsc-sync",
-    limiter: Ratelimit.slidingWindow(5, "10m"),
+    requests: 5,
+    window: "10m",
   }),
-  signIn: new Ratelimit({
-    redis,
+  signIn: createLimiter({
     prefix: "ratelimit:auth-sign-in",
-    limiter: Ratelimit.slidingWindow(5, "1m"),
+    requests: 5,
+    window: "1m",
   }),
-  signUp: new Ratelimit({
-    redis,
+  signUp: createLimiter({
     prefix: "ratelimit:auth-sign-up",
-    limiter: Ratelimit.slidingWindow(5, "1m"),
+    requests: 5,
+    window: "1m",
   }),
-  forgotPassword: new Ratelimit({
-    redis,
+  forgotPassword: createLimiter({
     prefix: "ratelimit:auth-forgot-password",
-    limiter: Ratelimit.slidingWindow(3, "1m"),
+    requests: 3,
+    window: "1m",
   }),
-  socialSignInStart: new Ratelimit({
-    redis,
+  socialSignInStart: createLimiter({
     prefix: "ratelimit:auth-social-start",
-    limiter: Ratelimit.slidingWindow(10, "1m"),
+    requests: 10,
+    window: "1m",
   }),
-  mfaVerify: new Ratelimit({
-    redis,
+  mfaVerify: createLimiter({
     analytics: true,
     prefix: "ratelimit:auth-mfa-verify",
-    limiter: Ratelimit.slidingWindow(5, "1m"),
+    requests: 5,
+    window: "1m",
   }),
-  demoSandboxCreate: new Ratelimit({
-    redis,
+  demoSandboxCreate: createLimiter({
     prefix: "ratelimit:demo-sandbox-create",
-    limiter: Ratelimit.slidingWindow(
-      DEMO_SANDBOX_CREATE_LIMIT,
-      DEMO_SANDBOX_CREATE_WINDOW
-    ),
+    requests: DEMO_SANDBOX_CREATE_LIMIT,
+    window: DEMO_SANDBOX_CREATE_WINDOW,
   }),
-  backupCode: new Ratelimit({
-    redis,
+  demoSandboxReset: createLimiter({
+    prefix: "ratelimit:demo-sandbox-reset",
+    requests: DEMO_SANDBOX_RESET_LIMIT,
+    window: DEMO_SANDBOX_RESET_WINDOW,
+  }),
+  demoSandboxTimeZone: createLimiter({
+    prefix: "ratelimit:demo-sandbox-time-zone",
+    requests: DEMO_SANDBOX_TIME_ZONE_LIMIT,
+    window: DEMO_SANDBOX_TIME_ZONE_WINDOW,
+  }),
+  backupCode: createLimiter({
     analytics: true,
     prefix: "ratelimit:auth-backup-code",
-    limiter: Ratelimit.slidingWindow(5, "10m"),
+    requests: 5,
+    window: "10m",
   }),
 };
 
+/** The trusted client IP, or one shared "unknown" bucket when there is none. */
 export function getClientIpFromHeaders(headersList: Headers): string {
-  if (process.env.VERCEL !== "1") {
-    return `unknown:${crypto.randomUUID()}`;
-  }
-
-  return (
-    headersList.get("x-vercel-forwarded-for")?.trim() ||
-    `unknown:${crypto.randomUUID()}`
-  );
+  return getTrustedClientIp(headersList) ?? "unknown";
 }
 
-export function getClientIp(request: NextRequest): string {
-  if (process.env.VERCEL !== "1") {
-    return "unknown";
-  }
-
-  return request.headers.get("x-vercel-forwarded-for")?.trim() || "unknown";
+export function getClientIp(request: Request): string {
+  return getClientIpFromHeaders(request.headers);
 }
 
 export async function isRateLimited(
-  limiter: Ratelimit,
+  limiter: Limiter,
   key: string
 ): Promise<boolean> {
-  if (shouldSkipRateLimiting()) {
-    return false;
-  }
-
   const headersList = await headers();
   const ip = getClientIpFromHeaders(headersList);
   const { success } = await limiter.limit(`${ip}:${key.toLowerCase()}`);
@@ -226,20 +228,9 @@ export async function isRateLimited(
 }
 
 export async function isAccountRateLimited(
-  limiter: Ratelimit,
+  limiter: Limiter,
   key: string
 ): Promise<boolean> {
-  if (shouldSkipRateLimiting()) {
-    return false;
-  }
   const { success } = await limiter.limit(key.toLowerCase());
   return !success;
-}
-
-function shouldSkipRateLimiting() {
-  return (
-    process.env.NODE_ENV !== "production" &&
-    (!process.env.UPSTASH_REDIS_REST_URL ||
-      !process.env.UPSTASH_REDIS_REST_TOKEN)
-  );
 }

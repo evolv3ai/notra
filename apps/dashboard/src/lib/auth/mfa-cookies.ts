@@ -26,6 +26,8 @@ const mfaAttemptSchema = z.object({
   startedAt: z.number().int().positive(),
 });
 
+const issuedAtSchema = z.object({ issuedAt: z.number().int().positive() });
+
 const pendingMfaFlowSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("challenge"),
@@ -47,6 +49,31 @@ const totpEnrollmentInProgressSchema = z.object({
   authenticationChallengeId: z.string().min(1),
 });
 
+/**
+ * Browser cookie expiry is advisory: a copied cookie stays validly signed
+ * forever, so every MFA cookie is also aged on the server.
+ */
+function isFresh(issuedAt: number) {
+  const age = Date.now() - issuedAt;
+  return age >= 0 && age <= MFA_COOKIE_MAX_AGE_SECONDS * 1000;
+}
+
+async function readFreshSignedCookie<T>(
+  name: string,
+  schema: z.ZodType<T>
+): Promise<T | null> {
+  const value = await readSignedCookie(name, issuedAtSchema.and(schema));
+  return value && isFresh(value.issuedAt) ? value : null;
+}
+
+function storeFreshSignedCookie(name: string, payload: object) {
+  return storeSignedCookie(
+    name,
+    { ...payload, issuedAt: Date.now() },
+    MFA_COOKIE_MAX_AGE_SECONDS
+  );
+}
+
 const mfaFlowIdSchema = z.uuid();
 
 function getPendingMfaCookieName(flowId: string) {
@@ -62,8 +89,9 @@ export function storeMfaAttempt(attempt: MfaAttempt) {
   );
 }
 
-export function readMfaAttempt() {
-  return readSignedCookie(MFA_ATTEMPT_COOKIE, mfaAttemptSchema);
+export async function readMfaAttempt() {
+  const attempt = await readSignedCookie(MFA_ATTEMPT_COOKIE, mfaAttemptSchema);
+  return attempt && isFresh(attempt.startedAt) ? attempt : null;
 }
 
 export function clearMfaAttemptCookie() {
@@ -72,18 +100,14 @@ export function clearMfaAttemptCookie() {
 
 export async function storePendingMfaFlow(flow: PendingMfaFlow) {
   const flowId = crypto.randomUUID();
-  await storeSignedCookie(
-    `${MFA_PENDING_COOKIE_PREFIX}_${flowId}`,
-    flow,
-    MFA_COOKIE_MAX_AGE_SECONDS
-  );
+  await storeFreshSignedCookie(`${MFA_PENDING_COOKIE_PREFIX}_${flowId}`, flow);
   return flowId;
 }
 
 export function readPendingMfaFlow(flowId: string) {
   const cookieName = getPendingMfaCookieName(flowId);
   return cookieName
-    ? readSignedCookie(cookieName, pendingMfaFlowSchema)
+    ? readFreshSignedCookie(cookieName, pendingMfaFlowSchema)
     : Promise.resolve(null);
 }
 
@@ -101,15 +125,11 @@ export async function clearPendingMfaFlow(flowId: string) {
 export function storeTotpEnrollmentInProgress(
   enrollment: TotpEnrollmentInProgress
 ) {
-  return storeSignedCookie(
-    TOTP_ENROLLMENT_COOKIE,
-    enrollment,
-    MFA_COOKIE_MAX_AGE_SECONDS
-  );
+  return storeFreshSignedCookie(TOTP_ENROLLMENT_COOKIE, enrollment);
 }
 
 export function readTotpEnrollmentInProgress() {
-  return readSignedCookie(
+  return readFreshSignedCookie(
     TOTP_ENROLLMENT_COOKIE,
     totpEnrollmentInProgressSchema
   );

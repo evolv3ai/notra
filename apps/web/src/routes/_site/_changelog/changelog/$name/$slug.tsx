@@ -44,12 +44,10 @@ const showcaseEntryContent = browserCollections.changelog.createClientLoader({
     return (
       <div className="mx-auto w-full max-w-190 px-4 pt-24 sm:px-6 sm:pt-28 md:px-8 md:pt-32 lg:px-0">
         <script
-          // biome-ignore lint/security/noDangerouslySetInnerHtml: server-built JSON-LD
           dangerouslySetInnerHTML={{ __html: serializeJsonLd(articleJsonLd) }}
           type="application/ld+json"
         />
         <script
-          // biome-ignore lint/security/noDangerouslySetInnerHtml: server-built JSON-LD
           dangerouslySetInnerHTML={{
             __html: serializeJsonLd(breadcrumbJsonLd),
           }}

@@ -12,7 +12,7 @@ const AUTH_TOKEN_MAX_LENGTH = 4096;
 const WORKOS_ID_MAX_LENGTH = 128;
 const ONE_TIME_CODE_REGEX = new RegExp(`^\\d{${TOTP_CODE_LENGTH}}$`);
 
-export const totpCodeSchema = z
+const totpCodeSchema = z
   .string()
   .regex(
     ONE_TIME_CODE_REGEX,
@@ -34,7 +34,7 @@ export const verifyMfaCodeInputSchema = z.object({
 
 const BACKUP_CODE_REGEX = new RegExp(`^[a-z0-9]{${BACKUP_CODE_LENGTH}}$`);
 
-export const backupCodeSchema = z
+const backupCodeSchema = z
   .string()
   .transform(normalizeBackupCode)
   .pipe(z.string().regex(BACKUP_CODE_REGEX, "Enter a valid backup code"));
@@ -45,7 +45,7 @@ export const redeemBackupCodeInputSchema = z.object({
   returnTo: returnToSchema,
 });
 
-export const secondFactorCodeSchema = z
+const secondFactorCodeSchema = z
   .string()
   .trim()
   .refine(

@@ -1,0 +1,26 @@
+{
+  "name": "@notra/sites-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:e2e": "bun --no-env-file src/run.ts",
+    "test:cleanup": "bun --no-env-file tests/cleanup.ts",
+    "check-types": "tsc --noEmit && tsc --noEmit --project tsconfig.lifecycle.json"
+  },
+  "dependencies": {
+    "@notra/sites-core": "workspace:*",
+    "emulate": "0.12.1",
+    "playwright": "1.61.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.0.0",
+    "@notra/ai": "workspace:*",
+    "@notra/db": "workspace:*",
+    "@notra/geo-core": "workspace:*",
+    "@notra/typescript-config": "workspace:*",
+    "bun-types": "1.4.4",
+    "drizzle-orm": "^0.45.3",
+    "effect": "4.1.0",
+    "typescript": "7.0.2"
+  }
+}

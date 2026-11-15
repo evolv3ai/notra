@@ -27,13 +27,11 @@ export interface TriggerOnboardingAgentSetupResult {
 
 export interface OnboardingAgentSetupTaskInput {
   domain: string;
-  email: string;
   organizationId: string;
 }
 
 export interface OnboardingSlackInviteInput {
   email: string;
-  organizationName: string;
 }
 
 export interface OnboardingSlackInviteResult {
@@ -46,7 +44,7 @@ export interface StartSelfServeOnboardingAgentInput {
   organizationId: string;
 }
 
-export type SelfServeOnboardingAgentBlockedReason =
+type SelfServeOnboardingAgentBlockedReason =
   | "already-ran"
   | "already-running"
   | "no-company-domain"

@@ -2,7 +2,7 @@
 
 import { createParser, useQueryState } from "nuqs";
 
-export const geoProjectQueryParser = createParser({
+const geoProjectQueryParser = createParser({
   parse: (value) => value.trim() || null,
   serialize: (value: string) => value.trim(),
 }).withOptions({ history: "replace" });

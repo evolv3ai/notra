@@ -22,13 +22,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@notra/ui/components/ui/dropdown-menu";
-import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 import { useQueryStates } from "nuqs";
 import { useSyncExternalStore } from "react";
+import { useTranslations } from "use-intl";
 
 import { useOrganizationsContext } from "@/components/providers/organization-provider";
 import { useBrandSettings } from "@/lib/hooks/use-brand-analysis";
+import { useRouter } from "@/lib/navigation";
 import { getBrandFaviconUrl } from "@/utils/brand";
 import {
   brandIdentityViewParser,
@@ -92,7 +92,6 @@ export function BrandTopbarIdentitySelector({ slug }: { slug: string }) {
 
   const { data } = useBrandSettings(organizationId);
   const voices = data?.voices ?? [];
-  const isReferencesView = view === "references";
   const storedVoiceId = useSyncExternalStore(
     subscribeToStoredBrandIdentity,
     () => (organizationId ? readStoredBrandIdentityId(organizationId) : null),
@@ -106,7 +105,7 @@ export function BrandTopbarIdentitySelector({ slug }: { slug: string }) {
   );
 
   const brandBasePath = `/${slug}/brand/identity`;
-  const viewSuffix = isReferencesView ? "&view=references" : "";
+  const viewSuffix = view && view !== "identity" ? `&view=${view}` : "";
 
   function handleSelectVoice(voiceId: string) {
     writeStoredBrandIdentityId(organizationId, voiceId);

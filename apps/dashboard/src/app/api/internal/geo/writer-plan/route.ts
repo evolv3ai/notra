@@ -1,3 +1,4 @@
+import { logError } from "@notra/ai/utils/server-log";
 import { toGeoFailureWire } from "@notra/geo-core/geo/failure-wire";
 import { refreshGeoContentGapsBestEffort } from "@notra/geo-core/geo/gaps";
 import { planGeoContentBrief } from "@notra/geo-core/geo/writer";
@@ -8,7 +9,6 @@ import { geoCoreDashboardLayer } from "@/lib/geo/configure";
 import { verifyInternalWorkflowRequest } from "@/lib/workflows/internal-auth";
 import { ratelimit } from "@/utils/ratelimit";
 
-/** Status the API turns back into a mapped GEO error. */
 const GEO_FAILURE_STATUS = 422;
 
 /**
@@ -47,13 +47,13 @@ export async function POST(request: Request) {
     );
   }
 
-  // The same limiter the dashboard's `geo.writerPlan` procedure uses, so both
-  // surfaces draw from one per-organization budget.
-  const { success } = await ratelimit.geoWriterPlan.limit(
-    parsed.data.organizationId
-  );
+  const { success, limit, remaining, reset } =
+    await ratelimit.geoWriterPlan.limit(parsed.data.organizationId);
   if (!success) {
-    return new Response("Too many requests", { status: 429 });
+    return Response.json(
+      { error: "Too many requests", limit, remaining, reset },
+      { status: 429 }
+    );
   }
 
   const outcome = await Effect.runPromise(
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
   );
 
   if (outcome._tag === "Failure") {
-    console.error("[GEO] Internal writer plan failed:", outcome.failure);
+    logError("[GEO] Internal writer plan failed", outcome.failure);
     return Response.json(
       { failure: toGeoFailureWire(outcome.failure) },
       { status: GEO_FAILURE_STATUS }

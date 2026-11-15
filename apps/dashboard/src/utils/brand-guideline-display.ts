@@ -4,8 +4,6 @@ import type {
   BrandGuidelineToken,
   BrandGuidelineTokenType,
 } from "@/types/hooks/brand-guidelines";
-
-const HTTP_URL_REGEX = /^https?:\/\//i;
 const HEX6_REGEX = /^#[0-9a-f]{6}$/i;
 const HEX3_REGEX = /^#[0-9a-f]{3}$/i;
 
@@ -32,17 +30,6 @@ export function formatDimensions(
   return null;
 }
 
-export function isSvgAsset(asset: {
-  format: string | null;
-  mimeType: string | null;
-}): boolean {
-  return asset.format === "svg" || asset.mimeType === "image/svg+xml";
-}
-
-export function isSafeHttpUrl(url: string): boolean {
-  return HTTP_URL_REGEX.test(url);
-}
-
 export function joinMeta(
   parts: Array<string | null | undefined | false>
 ): string {
@@ -53,7 +40,7 @@ export function cssFontFamily(family: string): string {
   return `"${family}", system-ui, sans-serif`;
 }
 
-export function googleFontHref(family: string): string {
+export function brandFontHref(family: string): string {
   return `/api/brand-font/css?family=${encodeURIComponent(family)}`;
 }
 

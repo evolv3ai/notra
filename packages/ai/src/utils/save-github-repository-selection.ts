@@ -7,11 +7,11 @@ import {
   organizations,
   repositoryOutputs,
 } from "@notra/db/schema";
+import { encryptToken } from "@notra/db/utils/integration-encryption";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { Effect } from "effect";
 import { customAlphabet } from "nanoid";
 
-import { encryptToken } from "../crypto/token-encryption";
 import {
   GitHubInstallationMissingError,
   GitHubPersistenceError,
@@ -28,8 +28,6 @@ export const saveGitHubRepositorySelection = Effect.fn(
   Effect.tryPromise({
     try: () =>
       db.transaction(async (tx) => {
-        // Serialize selection changes for this organization, including saves
-        // where no repository records exist yet.
         await tx
           .select({ id: organizations.id })
           .from(organizations)

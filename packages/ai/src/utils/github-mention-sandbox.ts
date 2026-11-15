@@ -17,7 +17,9 @@ import { logGitHubMentionEvent } from "@notra/ai/utils/github-mention-log";
 import { getGitHubMentionPathBlockReason } from "@notra/ai/utils/github-mention-path-policy";
 import { consumeGitHubMentionSandboxStream } from "@notra/ai/utils/github-mention-sandbox-usage";
 import { commitFilesToPullRequest } from "@notra/ai/utils/github-pr-commit";
+import { shellQuote } from "@notra/ai/utils/shell";
 import { syncPublishedPostAfterCommit } from "@notra/ai/utils/update-published-content";
+import { gatewayReportingHeaders } from "@notra/ai/utils/usage-attribution";
 import type { BoxConfig, Runtime, VercelModel } from "@upstash/box";
 import { Agent, Box } from "@upstash/box";
 
@@ -29,10 +31,6 @@ const SANDBOX_MODEL_ID = `vercel/${AGENT_DEFAULT_MODEL}`;
 
 const SHA_PATTERN = /^[0-9a-f]{40}$/;
 const SANDBOX_FILE_LIMIT = 25;
-
-function shellQuote(value: string) {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
 
 async function clonePullRequestBranch(params: {
   box: Awaited<ReturnType<typeof Box.create>>;
@@ -87,7 +85,6 @@ async function clonePullRequestBranch(params: {
       .catch(() => undefined);
   }
 
-  // A leftover credential would let the agent push, so verify instead of trusting the cleanup.
   const leftover = await params.box.exec.command(
     `test ! -e ${shellQuote(REPO_CLONE_TOKEN_PATH)} && test ! -e ~/.git-credentials`
   );
@@ -131,12 +128,13 @@ export async function runGitHubMentionSandbox(params: {
     };
   }
 
-  // Starting the box takes seconds and does not need the token, so both run at
-  // once. A box created while the token lookup fails would otherwise sit there
-  // until its own timeout, so it is torn down explicitly.
   const starting = Box.create({
     apiKey: boxApiKey,
     runtime: "node" satisfies Runtime,
+    attachHeaders: gatewayReportingHeaders("github-mention-sandbox", {
+      organizationId: params.context.organizationId,
+      runId: params.context.deliveryId ?? undefined,
+    }),
     agent: {
       harness: Agent.OpenCode,
       model: SANDBOX_MODEL_ID as VercelModel,
@@ -148,9 +146,6 @@ export async function runGitHubMentionSandbox(params: {
     },
     timeout: GITHUB_MENTION_SANDBOX_TIMEOUT_MS,
   } satisfies BoxConfig);
-  // Nothing awaits the box until the token is in, so a failure in between
-  // would otherwise surface as an unhandled rejection. It is still thrown
-  // below, where it belongs.
   void starting.catch(() => undefined);
 
   let token: string | null;
@@ -177,9 +172,6 @@ export async function runGitHubMentionSandbox(params: {
   });
 
   try {
-    // The box never holds a GitHub credential after the clone: the token file is
-    // removed and no git identity or token is configured. The agent can edit the
-    // working tree, but only this function can commit, through the API below.
     const baseSha = await clonePullRequestBranch({
       box,
       owner: params.context.owner,
@@ -247,9 +239,6 @@ export async function runGitHubMentionSandbox(params: {
       (file): file is { path: string; contents: string } =>
         typeof file.contents === "string"
     );
-    // Same gate as the direct commit tools, and like them all or nothing. A
-    // partial commit could land the deletion half of a rename whose new path
-    // was blocked, and the content would be gone.
     const review = await reviewGitHubMentionChange({
       octokit: params.octokit,
       context: params.context,
@@ -264,8 +253,7 @@ export async function runGitHubMentionSandbox(params: {
       changes.skipped.push({ path: finding.path, reason: finding.reason });
     }
     const files = isBlocked ? [] : readable;
-    const deletions = isBlocked ? [] : changes.deleted;
-    if (files.length === 0 && deletions.length === 0) {
+    if (files.length === 0) {
       logGitHubMentionEvent(GITHUB_MENTION_LOG_EVENTS.sandboxCompleted, {
         organizationId: params.context.organizationId,
         deliveryId: params.context.deliveryId,
@@ -291,11 +279,9 @@ export async function runGitHubMentionSandbox(params: {
       owner: params.context.owner,
       repo: params.context.repo,
       branch: params.branch,
-      // The commit must apply to exactly the tree the sandbox agent saw.
       expectedHeadOid: baseSha,
       headline: "docs: apply requested changes",
       files,
-      deletions,
     });
     params.onCommitted(commitSha);
     const postUpdated = await syncPublishedPostAfterCommit({
@@ -323,7 +309,7 @@ export async function runGitHubMentionSandbox(params: {
       deliveryId: params.context.deliveryId,
       commitSha,
       files: files.map((file) => file.path),
-      deleted: deletions,
+      deleted: [],
       skipped: changes.skipped,
       postUpdated,
       durationMs: Date.now() - startedAt,
@@ -332,7 +318,7 @@ export async function runGitHubMentionSandbox(params: {
       available: true as const,
       commitSha,
       files: files.map((file) => file.path),
-      deleted: deletions,
+      deleted: [],
       skipped: changes.skipped,
       postUpdated,
     };

@@ -1,8 +1,8 @@
 export interface OnboardingStatus {
-  hasBrandIdentity: boolean;
-  hasIntegration: boolean;
-  hasSchedule: boolean;
-  hasGeoTracking: boolean;
+  hasPrompt: boolean;
+  hasCompetitor: boolean;
+  hasScan: boolean;
+  hasAgentReadiness: boolean;
   onboardingCompleted: boolean;
   onboardingDismissed: boolean;
 }
@@ -32,9 +32,4 @@ export interface OnboardingAgentRunState extends OnboardingAgentStateSource {
 export interface InitialOnboardingAgentRun {
   organizationId: string;
   state: OnboardingAgentRunState;
-}
-
-export interface PendingOnboardingSuggestion {
-  organizationId: string;
-  suggestionId: string;
 }

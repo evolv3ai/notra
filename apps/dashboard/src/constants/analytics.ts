@@ -4,7 +4,6 @@ import type {
 } from "@/types/analytics";
 
 export const SOCIAL_ANALYTICS_FLAG_KEY = "social-analytics";
-export const ANALYTICS_NAV_LINK = "/analytics";
 export const ANALYTICS_FLAG_CACHE_TTL_MS = 60_000;
 export const ANALYTICS_FLAG_REQUEST_TIMEOUT_MS = 5000;
 export const ANALYTICS_FLAG_FAILURE_CACHE_TTL_MS = 5000;
@@ -39,10 +38,6 @@ export const ACCOUNT_POSTS_PAGE_TABLE_HEIGHT = 620;
 
 export const LEADERBOARD_PAGE_HEIGHT = 620;
 export const LEADERBOARD_EMPTY_HEIGHT = 260;
-
-export const CONNECT_LINKEDIN_CLASS =
-  "bg-[#0a66c2] text-white hover:bg-[#0a66c2]/90";
-
 export const ANALYTICS_TOOLTIP_DELAY_MS = 200;
 export const CURSOR_TOOLTIP_EDGE_PX = 200;
 

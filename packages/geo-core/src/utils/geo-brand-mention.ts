@@ -1,7 +1,5 @@
 const SEPARATOR_PATTERN = /[\s\-_/@.]+/g;
 const WORD_CHARACTER_PATTERN = /^[\p{L}\p{M}\p{N}]$/u;
-/** Scripts written without spaces between words; a Latin brand embedded in
- * their running text still counts as a whole word. */
 const UNSPACED_SCRIPT_PATTERN =
   /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]$/u;
 

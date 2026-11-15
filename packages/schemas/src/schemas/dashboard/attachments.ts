@@ -3,13 +3,7 @@ import { organizationIdSchema } from "@notra/schemas/dashboard/auth/organization
 // biome-ignore lint/performance/noNamespaceImport: Zod recommended way of importing
 import * as z from "zod";
 
-export const ATTACHMENT_FILTER = [
-  "all",
-  "image",
-  "pdf",
-  "text",
-  "other",
-] as const;
+const ATTACHMENT_FILTER = ["all", "image", "pdf", "text", "other"] as const;
 export type AttachmentFilter = (typeof ATTACHMENT_FILTER)[number];
 
 export const listAttachmentsInputSchema = z.object({

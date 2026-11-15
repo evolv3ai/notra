@@ -8,16 +8,20 @@ import { MAX_JUDGE_COMPETITORS } from "../constants/geo-conversations";
 import { GeoModelService } from "../deps";
 import type {
   GeoCheckContext,
+  GeoEngineAnswer,
   GeoGroundedEngine,
   GeoSkipFields,
   GeoZdrMode,
 } from "../types/geo";
 import type {
+  GeoConversationEngine,
   GeoConversationOutcome,
   GeoConversationSource,
 } from "../types/geo-conversations";
 import { normalizePosition } from "../utils/geo-check-evaluation";
+import { geoContextConversationPrompt } from "../utils/geo-context";
 import { geoLogWarn, logGeoSkip } from "../utils/geo-log";
+import { geoOlostepPersonaQuery } from "../utils/geo-olostep-plan";
 import { hasOwnedSourceCitation } from "../utils/geo-owned-source";
 import {
   addAgentTokenUsage,
@@ -26,13 +30,19 @@ import {
   geoCheckWriteUsage,
 } from "../utils/token-usage";
 import { judgeAnswer, requireAnswerText } from "./check-evaluation";
+import { askGeoContextAnswer } from "./context";
 import { GeoScanError } from "./errors";
+import { askGeoOlostepAnswer } from "./olostep";
 
-/** Owns the transcript, deadline and partial results for both kinds of conversation. */
+/**
+ * Owns the transcript, deadline and partial results for both kinds of
+ * conversation. Context builds fresh question-only context; Olostep reads
+ * preplanned results. Neither pretends to continue a consumer UI session.
+ */
 export const runGeoConversation = Effect.fn("geo.runConversation")(function* (
   context: GeoCheckContext,
   source: GeoConversationSource,
-  engine: GeoGroundedEngine,
+  engine: GeoConversationEngine,
   zdr: GeoZdrMode
 ) {
   const models = yield* GeoModelService;
@@ -58,13 +68,48 @@ export const runGeoConversation = Effect.fn("geo.runConversation")(function* (
     for (const [index, prompt] of source.prompts.entries()) {
       const turnStartedMs = performance.now();
       messages.push({ role: "user", content: prompt });
-      const answer = yield* models.groundedAnswer({
-        organizationId: context.organizationId,
-        engine,
-        messages,
-        zdr,
-      });
-      engineUsage = addAgentTokenUsage(engineUsage, answer.usage);
+      const logContext = {
+        projectId: context.projectId,
+        scanId: context.scanId,
+        runId: context.runId,
+        promptId: source.promptId,
+        turn: index + 1,
+      };
+      const olostep = "retrieveIds" in engine;
+      const olostepRetrieveId = olostep ? engine.retrieveIds[index] : null;
+      if (olostep && !olostepRetrieveId) {
+        logGeoSkip(
+          "olostep turn has no result",
+          { ...fields, turn: index + 1 },
+          null
+        );
+        continue;
+      }
+      let answer: GeoEngineAnswer;
+      if (olostep) {
+        answer = yield* askGeoOlostepAnswer(engine.key, olostepRetrieveId);
+      } else if ("context" in engine) {
+        const question = geoContextConversationPrompt(source.prompts, index);
+        answer = yield* askGeoContextAnswer(
+          engine.key,
+          source.snapshot
+            ? geoOlostepPersonaQuery(source.snapshot, question)
+            : question,
+          language
+        );
+      } else {
+        answer = yield* models.groundedAnswer({
+          organizationId: context.organizationId,
+          engine,
+          messages,
+          zdr,
+          logContext,
+        });
+      }
+      engineUsage = addAgentTokenUsage(
+        engineUsage,
+        agentTokenUsageFrom(answer.usage)
+      );
       if (zdr !== "none" && answer.zdrEnforced === false) {
         yield* geoLogWarn({
           ...fields,
@@ -80,7 +125,7 @@ export const runGeoConversation = Effect.fn("geo.runConversation")(function* (
         answer
       );
       messages.push({ role: "assistant", content: text });
-      const judged = yield* judgeAnswer(context, prompt, text);
+      const judged = yield* judgeAnswer(context, prompt, text, logContext);
       judgeUsage = addAgentTokenUsage(
         judgeUsage,
         agentTokenUsageFrom(judged.usage)
@@ -118,6 +163,7 @@ export const runGeoConversation = Effect.fn("geo.runConversation")(function* (
         zdrEnforced: answer.zdrEnforced,
         language,
         sources: answer.sources,
+        surfaces: answer.surfaces ?? null,
       });
     }
   });

@@ -58,7 +58,6 @@ const CitedText = ({ citations, text }: InlineTextProps) =>
     ) : null;
   });
 
-/** Bold is parsed first so a citation can sit inside a bold span. */
 const InlineText = ({ citations, text }: InlineTextProps) => (
   <span className="min-w-0">
     {splitWithOffsets(text, BOLD_PATTERN, 0).map((part) =>

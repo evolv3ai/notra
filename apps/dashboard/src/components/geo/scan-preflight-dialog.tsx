@@ -10,8 +10,8 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@notra/ui/components/shared/responsive-dialog";
-import { useLocale, useTranslations } from "next-intl";
 import { useId, useState } from "react";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { EngineIcon } from "@/components/geo/engine-icon";
@@ -271,7 +271,11 @@ export function ScanPreflightDialog({
           >
             {tCommon("actions.cancel")}
           </Button>
-          <Button disabled={isPending || !canRun} onClick={runScan}>
+          <Button
+            data-dialog-confirm
+            disabled={isPending || !canRun}
+            onClick={runScan}
+          >
             <HugeiconsIcon aria-hidden="true" icon={PlayIcon} size={14} />
             {isPending ? tCommon("labels.starting") : tGeoShared("runScan")}
           </Button>

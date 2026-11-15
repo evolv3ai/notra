@@ -2,11 +2,17 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { Data } from "effect";
+
 import type { StarVideoInputProps } from "@/types/star-video";
 
-class RenderBusy extends Error {
-  readonly _tag = "RenderBusy";
-}
+export class RenderBusy extends Data.TaggedError("RenderBusy")<{
+  readonly message: string;
+}> {}
+
+export class StarVideoRenderFailed extends Data.TaggedError(
+  "StarVideoRenderFailed"
+)<{ readonly cause: unknown }> {}
 
 const MAX_CONCURRENT_RENDERS = 2;
 let activeRenders = 0;
@@ -38,7 +44,9 @@ export async function renderStarVideo(
   inputProps: StarVideoInputProps
 ): Promise<Buffer> {
   if (activeRenders >= MAX_CONCURRENT_RENDERS) {
-    throw new RenderBusy("The renderer is busy. Please try again shortly.");
+    throw new RenderBusy({
+      message: "The renderer is busy. Please try again shortly.",
+    });
   }
   activeRenders += 1;
 

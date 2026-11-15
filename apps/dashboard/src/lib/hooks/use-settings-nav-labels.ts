@@ -1,4 +1,4 @@
-import { useTranslations } from "next-intl";
+import { useTranslations } from "use-intl";
 
 import type { SettingsNavLabels } from "@/types/settings/modal";
 
@@ -25,6 +25,11 @@ export function useSettingsNavLabels(): SettingsNavLabels {
         label: t("nav.sections.appearance.label"),
         description: t("nav.sections.appearance.description"),
         modalDescription: t("modal.descriptions.appearance"),
+      },
+      "account-api-keys": {
+        label: tLabels("apiKeys"),
+        description: t("nav.sections.account-api-keys.description"),
+        modalDescription: t("nav.sections.account-api-keys.description"),
       },
       general: {
         label: t("nav.sections.general.label"),

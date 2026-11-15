@@ -1,8 +1,12 @@
-import type { AgentTokenUsage } from "@notra/ai/types/agents";
-import type { GeoCheckWrite } from "@notra/db/types/geo-checks";
 import type { GeoPersonaSnapshot } from "@notra/db/types/geo-personas";
 
-import type { GeoCheckContext } from "./geo";
+import type {
+  GeoCheckContext,
+  GeoGroundedEngine,
+  GeoSequenceCheckOutcome,
+} from "./geo";
+import type { GeoContextConversationEngine } from "./geo-context";
+import type { GeoOlostepConversationEngine } from "./geo-olostep";
 
 export interface GeoConversationReplayInput {
   context: Omit<GeoCheckContext, "scanId" | "capturedAt">;
@@ -30,10 +34,15 @@ export interface GeoConversationSource {
   timeoutMs: number;
 }
 
-export interface GeoConversationOutcome {
-  rows: GeoCheckWrite[];
-  usage: AgentTokenUsage;
-  engineUsage?: AgentTokenUsage;
-  judgeUsage?: AgentTokenUsage;
-  droppedTurns: number;
+export type GeoConversationOutcome = GeoSequenceCheckOutcome;
+
+/** A planned persona's run; `omitted` marks one paused or archived mid-scan. */
+export interface GeoPlannedPersonaOutcome extends GeoConversationOutcome {
+  omitted?: boolean;
 }
+
+/** What a conversation talks to: a grounded route or a consumer-app capture. */
+export type GeoConversationEngine =
+  | GeoGroundedEngine
+  | GeoContextConversationEngine
+  | GeoOlostepConversationEngine;

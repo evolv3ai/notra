@@ -32,14 +32,16 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@notra/ui/components/ui/sheet";
+import { Skeleton } from "@notra/ui/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@notra/ui/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@notra/ui/components/ui/tooltip";
-import { useLocale, useTranslations } from "next-intl";
+import { useRetainedValue } from "@notra/ui/hooks/use-retained-value";
 import { useState } from "react";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { ConversationReplayThread } from "@/components/geo/conversation-replay-thread";
@@ -50,10 +52,15 @@ import { PersonaPrompts } from "@/components/geo/persona-prompts";
 import { PromptEngineSwitcher } from "@/components/geo/prompt-engine-switcher";
 import { GeoConversationSkeleton } from "@/components/geo/skeleton-parts";
 import { GEO_PERSONA_DIALOG_VIEWS } from "@/constants/geo-personas";
-import { useIsGeoScanning } from "@/lib/hooks/use-geo";
-import { useGeoPersonasGenerate } from "@/lib/hooks/use-geo-personas";
+import {
+  useIsGeoConsumerRunBlocked,
+  useIsGeoScanning,
+} from "@/lib/hooks/use-geo";
+import {
+  useGeoPersonasGenerate,
+  useIsGeoPersonaRunPending,
+} from "@/lib/hooks/use-geo-personas";
 import { usePersonaConversation } from "@/lib/hooks/use-persona-conversation";
-import { useRetainedValue } from "@/lib/hooks/use-retained-value";
 import type { GeoSequenceEngineThread } from "@/types/geo";
 import type {
   PersonaDetailDialogProps,
@@ -88,7 +95,9 @@ function PersonaDetailHeader({
   scans,
   selectedScanId,
   view,
+  isLoading,
   isRunning,
+  runDisabled,
   onRun,
   onSelectScan,
   onEngineChange,
@@ -123,7 +132,8 @@ function PersonaDetailHeader({
                     className="shrink-0"
                     disabled={
                       !persona.enabled ||
-                      persona.conversationPrompts.length === 0
+                      persona.conversationPrompts.length === 0 ||
+                      (runDisabled && !isRunning)
                     }
                     focusableWhenDisabled
                     loading={isRunning}
@@ -151,6 +161,9 @@ function PersonaDetailHeader({
             <SheetDescription className="text-muted-foreground text-xs leading-snug">
               {formatAiTrafficTimestamp(latestCheck, locale)}
             </SheetDescription>
+          ) : null}
+          {!latestCheck && isLoading ? (
+            <Skeleton className="my-0.5 h-3.5 w-28" />
           ) : null}
         </div>
       </div>
@@ -214,6 +227,12 @@ function PersonaDetailHeader({
               </SelectContent>
             </Select>
           ) : null}
+        </div>
+      ) : null}
+      {view === "conversation" && !active && isLoading ? (
+        <div className="flex items-center justify-between gap-2">
+          <Skeleton className="h-8 w-60 max-w-full rounded-lg" />
+          <Skeleton className="h-8 w-44 rounded-lg" />
         </div>
       ) : null}
     </SheetHeader>
@@ -345,6 +364,9 @@ export function PersonaDetailDialog({
   } = usePersonaConversation(organizationId, persona, open, showConversation);
 
   const isProjectScanning = useIsGeoScanning(organizationId);
+  const personaRunPending = useIsGeoPersonaRunPending(organizationId);
+  const consumerRunBlocked = useIsGeoConsumerRunBlocked(organizationId);
+  const runBlocked = personaRunPending || consumerRunBlocked;
 
   if (!persona) {
     return null;
@@ -392,7 +414,9 @@ export function PersonaDetailDialog({
       >
         <PersonaDetailHeader
           active={active}
+          isLoading={showConversationLoading}
           isRunning={runPersona.isPending}
+          runDisabled={runBlocked}
           onEngineChange={setEngine}
           onRun={onRun}
           onSelectScan={selectScan}
@@ -417,9 +441,7 @@ export function PersonaDetailDialog({
                   isProjectScanning)
               }
               enabled={persona.enabled}
-              canRun={
-                persona.conversationPrompts.length > 0 && !runPersona.isPending
-              }
+              canRun={persona.conversationPrompts.length > 0 && !runBlocked}
               onRun={onRun}
             />
           ) : null}

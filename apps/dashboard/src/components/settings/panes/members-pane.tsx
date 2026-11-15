@@ -1,5 +1,6 @@
 "use client";
 
+import { Mail01Icon } from "@hugeicons/core-free-icons";
 import { Badge } from "@notra/ui/components/ui/badge";
 import { Skeleton } from "@notra/ui/components/ui/skeleton";
 import {
@@ -9,15 +10,17 @@ import {
   TabsTrigger,
 } from "@notra/ui/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { DataTable } from "ui/table";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { useMemberColumns } from "@/components/members/columns";
 import { useInvitationColumns } from "@/components/members/invitation-columns";
 import { InviteMemberPopover } from "@/components/members/invite-member-popover";
-import { Table } from "@/components/motion/table";
 import { useOrganizationsContext } from "@/components/providers/organization-provider";
 import { SettingsPane } from "@/components/settings/settings-pane";
+import { SettingsTableEmpty } from "@/components/settings/settings-table-empty";
+import { SETTINGS_TABLE_EMPTY_HEIGHT } from "@/constants/settings";
 import { TABLE_ROW_HEIGHT } from "@/constants/table";
 import { authClient } from "@/lib/auth/client";
 import { tableHeightFor } from "@/utils/table";
@@ -25,6 +28,7 @@ import { tableHeightFor } from "@/utils/table";
 export function MembersSettingsPane() {
   const t = useTranslations("settings.panes.members");
   const tCommon = useTranslations("common");
+  const format = useFormatter();
   const memberColumns = useMemberColumns();
   const invitationColumns = useInvitationColumns();
   const { activeOrganization: organization } = useOrganizationsContext();
@@ -73,6 +77,9 @@ export function MembersSettingsPane() {
   const pendingInvitations = invitations?.filter(
     (inv) => inv.status === "pending"
   );
+  const pendingRowCount = invitationsLoading
+    ? 3
+    : (pendingInvitations?.length ?? 0);
 
   if (!organization) {
     return (
@@ -91,7 +98,7 @@ export function MembersSettingsPane() {
               {tCommon("labels.members")}
               {members && members.length > 0 ? (
                 <Badge size="sm" variant="secondary">
-                  {members.length}
+                  {format.number(members.length)}
                 </Badge>
               ) : null}
             </TabsTrigger>
@@ -99,7 +106,7 @@ export function MembersSettingsPane() {
               {tCommon("labels.pending")}
               {pendingInvitations && pendingInvitations.length > 0 ? (
                 <Badge size="sm" variant="secondary">
-                  {pendingInvitations.length}
+                  {format.number(pendingInvitations.length)}
                 </Badge>
               ) : null}
             </TabsTrigger>
@@ -108,7 +115,7 @@ export function MembersSettingsPane() {
         </div>
 
         <TabsContent className="mt-4" value="members">
-          <Table
+          <DataTable
             columns={memberColumns}
             data={members ?? []}
             emptyState={t("noMembers")}
@@ -120,14 +127,22 @@ export function MembersSettingsPane() {
         </TabsContent>
 
         <TabsContent className="mt-4" value="pending">
-          <Table
+          <DataTable
             columns={invitationColumns}
             data={pendingInvitations ?? []}
-            emptyState={t("noPending")}
+            emptyState={
+              <SettingsTableEmpty
+                description={t("noPendingDescription")}
+                icon={Mail01Icon}
+                title={t("noPending")}
+              />
+            }
             getRowId={(invitation) => invitation.id}
-            height={tableHeightFor(
-              invitationsLoading ? 3 : (pendingInvitations?.length ?? 0)
-            )}
+            height={
+              pendingRowCount > 0
+                ? tableHeightFor(pendingRowCount)
+                : SETTINGS_TABLE_EMPTY_HEIGHT
+            }
             loading={invitationsLoading}
             rowHeight={TABLE_ROW_HEIGHT}
           />

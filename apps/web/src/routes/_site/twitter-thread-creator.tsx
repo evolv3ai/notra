@@ -14,7 +14,7 @@ import { SITE_URL } from "@/utils/urls";
 
 const title = "X Thread Builder";
 const description =
-  "Draft, reorder, and ship X (Twitter) threads in a clean, distraction-free workspace. Free, no sign-up.";
+  "Draft, reorder and ship X (Twitter) threads in a clean, distraction-free workspace. Free, no sign-up.";
 const url = `${SITE_URL}/twitter-thread-creator`;
 
 const metadata: Metadata = {
@@ -68,19 +68,17 @@ function ThreadsPage() {
   return (
     <div className="flex w-full flex-col items-center">
       <script
-        // biome-ignore lint/security/noDangerouslySetInnerHtml: server-built JSON-LD
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbJsonLd) }}
         type="application/ld+json"
       />
       <script
-        // biome-ignore lint/security/noDangerouslySetInnerHtml: server-built JSON-LD
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(softwareJsonLd) }}
         type="application/ld+json"
       />
 
       <section className="flex w-full flex-col items-center gap-10 pb-16 antialiased [font-synthesis:none] md:gap-12 md:pb-24">
         <MarketingHeroWash
-          subtitle="Write, reorder, and preview your thread in one place. Free, no sign-up."
+          subtitle="Write, reorder and preview your thread in one place. Free, no sign-up."
           title={
             <>
               X (Twitter) <span className="text-primary">Threads</span> Creator

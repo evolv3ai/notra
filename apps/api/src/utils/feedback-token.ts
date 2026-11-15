@@ -19,6 +19,7 @@ import {
   FEEDBACK_TOKEN_UNAVAILABLE_ERROR,
 } from "../constants/feedback";
 import type { FeedbackTokenVerification } from "../types/feedback";
+import { isFeedbackSubmissionRequest } from "./feedback";
 import { getRedis } from "./redis";
 
 function generationCacheKey(organizationId: string) {
@@ -103,7 +104,10 @@ export async function verifyFeedbackToken(
     };
   }
 
-  if (requiredScope !== FEEDBACK_INGEST_SCOPE) {
+  if (
+    requiredScope !== FEEDBACK_INGEST_SCOPE ||
+    !isFeedbackSubmissionRequest(c.req.path, c.req.method)
+  ) {
     return { success: false, error: FEEDBACK_TOKEN_SCOPE_ERROR, status: 403 };
   }
 

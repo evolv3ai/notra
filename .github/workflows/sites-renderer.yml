@@ -1,0 +1,73 @@
+name: Sites renderer
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/sites-renderer.yml
+      - apps/sites-builder/**
+      - packages/sites-compiler/**
+      - packages/sites-core/**
+      - packages/typescript-config/**
+      - package.json
+      - bun.lock
+      - bunfig.toml
+      - patches/**
+      - LICENSE
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/sites-renderer.yml
+      - apps/sites-builder/**
+      - packages/sites-compiler/**
+      - packages/sites-core/**
+      - packages/typescript-config/**
+      - package.json
+      - bun.lock
+      - bunfig.toml
+      - patches/**
+      - LICENSE
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sites-renderer-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.11.1
+          package-manager-cache: false
+
+      # Skip lifecycle scripts so root prepare (Husky, Effect patch) stays out.
+      - name: Install dependencies
+        run: >-
+          bun --no-env-file install --frozen-lockfile --ignore-scripts
+          --filter '@notra/sites-builder'
+          --filter '@notra/sites-compiler'
+          --filter '@notra/sites-core'
+
+      - name: Test core and compiler
+        run: bun --no-env-file test packages/sites-core/tests packages/sites-compiler/tests
+
+      # Includes packaged-dev.test.ts, which exports the renderer the way the
+      # Notra CLI ships it and runs it installed on Node and Bun.
+      - name: Test renderer and CLI export
+        working-directory: apps/sites-builder
+        run: bun --no-env-file test tests

@@ -16,7 +16,6 @@ export interface RunRequest {
 
 type Focus = "suites" | "models" | "add";
 
-/** Picker state kept by the app so it survives a trip to the run screen. */
 export interface HomeMemory {
   extraModels: Contender[];
   selectedBySuite: Record<string, string[]>;

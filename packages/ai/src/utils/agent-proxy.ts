@@ -14,7 +14,7 @@ import {
 } from "@notra/ai/utils/agent-session-lock";
 import { db } from "@notra/db/drizzle";
 import { agentSessions } from "@notra/db/schema";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, or } from "drizzle-orm";
 
 export class AgentSendLockedError extends Error {
   constructor(eveSessionId: string) {
@@ -43,11 +43,10 @@ export async function createAgentSessionWithMapping(
   }
   const payload = createSessionResponseSchema.parse(await response.json());
 
-  const generatedSessionId = randomUUID();
   const inserted = await db
     .insert(agentSessions)
     .values({
-      id: generatedSessionId,
+      id: randomUUID(),
       organizationId: params.scope.organizationId,
       userId: params.scope.userId ?? null,
       chatId: params.scope.chatId ?? null,
@@ -148,12 +147,25 @@ export async function getAgentSessionMapping(
   });
 }
 
+/**
+ * Lists the organization's sessions visible to `viewerUserId`: sessions without
+ * an owner plus the viewer's own. Dashboard sessions are private to their user.
+ */
 export async function listAgentSessionMappings(
   organizationId: string,
-  limit: number
+  limit: number,
+  viewerUserId: string | null
 ) {
   return await db.query.agentSessions.findMany({
-    where: eq(agentSessions.organizationId, organizationId),
+    where: and(
+      eq(agentSessions.organizationId, organizationId),
+      viewerUserId
+        ? or(
+            isNull(agentSessions.userId),
+            eq(agentSessions.userId, viewerUserId)
+          )
+        : isNull(agentSessions.userId)
+    ),
     orderBy: [desc(agentSessions.createdAt)],
     limit,
   });

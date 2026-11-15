@@ -1,7 +1,3 @@
-// Verifies the transactional outbox adapter against the Docker Postgres with
-// the production driver (node-postgres): commit, rollback, and dedupe against
-// the Effect pipeline. Run:
-//   bun run e2e/tx-check.ts
 import "./env";
 import { drizzle } from "drizzle-orm/node-postgres";
 
@@ -38,8 +34,6 @@ try {
   );
 }
 
-// Same post published again through the same adapter returns the existing
-// event instead of creating a duplicate.
 const deduped = await db.transaction(async (tx) =>
   publishEventInTransaction(
     tx,

@@ -1,27 +1,14 @@
 import { createHmac } from "node:crypto";
 
+import { getClientNetworkKey } from "@notra/utils/client-ip";
+
 /**
- * The visitor's IP for demo rate limits. The demo is self-hosted behind
- * Cloudflare and Railway, where the shared ratelimit helper (Vercel only)
- * would hand every request a fresh random key. `x-vercel-forwarded-for` is
- * only trusted on Vercel: elsewhere any client could send it through
- * Cloudflare to dodge the per-network limit. A client that bypasses
- * Cloudflare can still spoof the other headers, but that only buys it more
- * sandboxes, which the sandbox cap still bounds.
+ * The visitor's network for demo rate limits, from the shared trusted client
+ * IP. IPv6 visitors are grouped by their /64, which a single subscriber
+ * controls entirely.
  */
 export function getDemoClientIp(headersList: Headers): string {
-  const vercelIp =
-    process.env.VERCEL === "1"
-      ? headersList.get("x-vercel-forwarded-for")?.trim()
-      : undefined;
-  const forwarded = headersList.get("x-forwarded-for")?.split(",")[0];
-  return (
-    vercelIp ||
-    headersList.get("cf-connecting-ip")?.trim() ||
-    headersList.get("x-real-ip")?.trim() ||
-    forwarded?.trim() ||
-    "unknown"
-  );
+  return getClientNetworkKey(headersList) ?? "unknown";
 }
 
 /** Rate-limit key for sandbox creation; the raw IP is never stored. */
@@ -30,5 +17,8 @@ export function hashDemoClientIp(ip: string): string {
   if (!secret) {
     throw new Error("WORKOS_COOKIE_PASSWORD must be defined");
   }
-  return createHmac("sha256", secret).update(ip).digest("hex").slice(0, 32);
+  return createHmac("sha256", secret)
+    .update(`demo-ip:${ip}`)
+    .digest("hex")
+    .slice(0, 32);
 }

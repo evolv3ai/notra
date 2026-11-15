@@ -3,6 +3,7 @@ import { defineTool } from "eve/tools";
 import { GITHUB_API_BASE, README_MAX_LENGTH } from "../constants/github";
 import { githubRepoSchema } from "../schemas/github-repo";
 import { githubRepositoryInputSchema } from "../schemas/research-tools";
+import { getPublicGithubHeaders } from "../utils/github";
 import { fetchWithTransientRetry } from "../utils/retry";
 
 export function createFetchGithubRepoTool() {
@@ -11,14 +12,7 @@ export function createFetchGithubRepoTool() {
       "Fetch a public GitHub repository's metadata and README to research the customer's product during onboarding.",
     inputSchema: githubRepositoryInputSchema,
     async execute({ owner, repo }) {
-      const headers: Record<string, string> = {
-        accept: "application/vnd.github+json",
-        "user-agent": "notra-onboarding-agent",
-      };
-      const token = process.env.GITHUB_TOKEN;
-      if (token) {
-        headers.authorization = `Bearer ${token}`;
-      }
+      const headers = getPublicGithubHeaders();
 
       const repoResponse = await fetchWithTransientRetry(
         `${GITHUB_API_BASE}/repos/${owner}/${repo}`,

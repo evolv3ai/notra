@@ -25,12 +25,28 @@ import { SITE_URL } from "@/utils/urls";
 
 const title = "Pricing";
 const description =
-  "Choose the right Notra plan for your team. Compare features across Starter, Growth, Scale, and Enterprise tiers.";
+  "Choose the right Notra plan for your team. Compare features across Free, Starter, Growth, Scale and Enterprise tiers.";
 const url = `${SITE_URL}/pricing`;
 
 const offers: OfferLike[] = Object.values(PRICING_PLANS).flatMap((plan) => {
   if (plan.pricing.monthly === null) {
     return [];
+  }
+
+  if (plan.pricing.monthly === 0) {
+    return [
+      {
+        "@type": "Offer",
+        name: `${plan.name} plan`,
+        description: plan.description,
+        price: 0,
+        priceCurrency: "USD",
+        url,
+        availability: "https://schema.org/OnlineOnly",
+        itemCondition: "https://schema.org/NewCondition",
+        category: plan.name,
+      },
+    ];
   }
 
   return [
@@ -103,12 +119,10 @@ function PricingPage() {
   return (
     <>
       <script
-        // biome-ignore lint/security/noDangerouslySetInnerHtml: server-built JSON-LD
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(productJsonLd) }}
         type="application/ld+json"
       />
       <script
-        // biome-ignore lint/security/noDangerouslySetInnerHtml: server-built JSON-LD
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbJsonLd) }}
         type="application/ld+json"
       />

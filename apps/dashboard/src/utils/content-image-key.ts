@@ -1,3 +1,5 @@
+import { getAppUrl } from "@notra/ai/utils/url";
+
 import { CONTENT_IMAGE_ROUTE } from "@/constants/content-image";
 
 const CONTENT_MEDIA_EXTENSION_SOURCE = "avif|gif|jpe?g|mp4|png|webm|webp";
@@ -96,11 +98,7 @@ export function getAppContentImageKey(
 }
 
 export function readAppOrigin() {
-  const value =
-    process.env.APP_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    null;
+  const value = getAppUrl();
   if (!value) {
     return null;
   }

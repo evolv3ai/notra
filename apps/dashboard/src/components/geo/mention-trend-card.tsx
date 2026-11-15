@@ -7,16 +7,13 @@ import {
 import type { MentionTrendRow } from "@notra/geo-core/types/geo";
 import { todayIsoDate } from "@notra/geo-core/utils/day-label";
 import { engineFamilyLabel } from "@notra/geo-core/utils/geo-engine-family";
-import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
+import { InstrumentEmpty, InstrumentModule } from "ui/card";
+import { useLocale, useTranslations } from "use-intl";
 
 import { EmptyStateTrendPreview } from "@/components/empty-state-preview";
 import { EChartsAreaChart } from "@/components/evilcharts/charts/echarts-area-chart";
 import { MentionTrendAgentsPicker } from "@/components/geo/mention-trend-agents";
-import {
-  InstrumentEmpty,
-  InstrumentModule,
-} from "@/components/instrument/instrument-module";
 import { CHART_MUTED_COLOR, CHART_PRIMARY_COLOR } from "@/constants/charts";
 import type { ChartConfig } from "@/types/charts";
 import type { MentionTrendCardProps, MentionTrendSeries } from "@/types/geo";
@@ -152,7 +149,7 @@ export function MentionTrendCard({
         />
       ) : (
         <EChartsAreaChart
-          animation={false}
+          renderer="svg"
           className="min-h-64 w-full flex-1 cursor-crosshair"
           config={config}
           curveType="monotone"

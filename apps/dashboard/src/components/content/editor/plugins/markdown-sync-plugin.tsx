@@ -3,6 +3,7 @@
 import type { Transformer } from "@lexical/markdown";
 import { $convertToMarkdownString } from "@lexical/markdown";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
+import { HISTORY_MERGE_TAG } from "lexical";
 import { useEffect } from "react";
 
 import { stripReviewMarks } from "@/utils/review-markdown";
@@ -21,12 +22,32 @@ export function MarkdownSyncPlugin({
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
-    return editor.registerUpdateListener(({ editorState }) => {
-      editorState.read(() => {
+    let active = true;
+    const syncMarkdown = () => {
+      if (!active) {
+        return;
+      }
+      editor.getEditorState().read(() => {
         const markdown = $convertToMarkdownString(transformers);
         onChange(cleanReviewMarks ? stripReviewMarks(markdown) : markdown);
       });
-    });
+    };
+    queueMicrotask(syncMarkdown);
+    const unregister = editor.registerUpdateListener(
+      ({ dirtyElements, dirtyLeaves, tags }) => {
+        if (
+          tags.has(HISTORY_MERGE_TAG) ||
+          (dirtyElements.size === 0 && dirtyLeaves.size === 0)
+        ) {
+          return;
+        }
+        syncMarkdown();
+      }
+    );
+    return () => {
+      active = false;
+      unregister();
+    };
   }, [cleanReviewMarks, editor, onChange, transformers]);
 
   return null;

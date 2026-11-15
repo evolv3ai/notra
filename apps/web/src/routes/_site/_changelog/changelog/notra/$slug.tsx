@@ -42,12 +42,10 @@ const notraChangelogContent =
       return (
         <div className="mx-auto w-full max-w-190 px-4 pt-24 sm:px-6 sm:pt-28 md:px-8 md:pt-32 lg:px-0">
           <script
-            // biome-ignore lint/security/noDangerouslySetInnerHtml: server-built JSON-LD
             dangerouslySetInnerHTML={{ __html: serializeJsonLd(articleJsonLd) }}
             type="application/ld+json"
           />
           <script
-            // biome-ignore lint/security/noDangerouslySetInnerHtml: server-built JSON-LD
             dangerouslySetInnerHTML={{
               __html: serializeJsonLd(breadcrumbJsonLd),
             }}
@@ -86,6 +84,7 @@ const notraChangelogContent =
 
 export const Route = createFileRoute("/_site/_changelog/changelog/notra/$slug")(
   {
+    codeSplitGroupings: [["loader", "component"]],
     loader: async ({ params }) => {
       const data = await getNotraChangelogEntry({
         data: { slug: params.slug },

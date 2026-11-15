@@ -1,77 +1,50 @@
-import { OpenAPIHono } from "@hono/zod-openapi";
+import type { Context } from "hono";
 
+import { ORGANIZATION_SCOPED_API_KEY_ERROR } from "../constants/skills";
+import type { ApiEnv } from "../types/env";
 import { getOrganizationId } from "../utils/auth";
+import { createOpenApiApp } from "../utils/openapi-app";
 import {
   ORGANIZATION_POST_PATH_REGEX,
   ORGANIZATION_POSTS_PATH_REGEX,
 } from "../utils/regex";
 
-export const legacyRedirectRoutes = new OpenAPIHono();
+export function redirectLegacyOrganizationPath(
+  pattern: RegExp,
+  canonicalPath: (param: (key: string) => string | undefined) => string
+) {
+  return (c: Context<ApiEnv>) => {
+    c.get("log").set({ legacyRedirect: true });
+    const orgId = getOrganizationId(c);
+    if (!orgId) {
+      return c.json({ error: ORGANIZATION_SCOPED_API_KEY_ERROR }, 403);
+    }
 
-legacyRedirectRoutes.get("/:organizationId/posts", async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
+    if (orgId !== c.req.param("organizationId")) {
+      return c.json({ error: "Forbidden: organization access denied" }, 403);
+    }
+
+    const url = new URL(c.req.url);
+    const path = url.pathname.replace(
+      pattern,
+      canonicalPath((key) => c.req.param(key))
     );
-  }
+    return c.redirect(`${path}${url.search}`, 308);
+  };
+}
 
-  const pathOrg = c.req.param("organizationId");
-  if (orgId !== pathOrg) {
-    return c.json({ error: "Forbidden: organization access denied" }, 403);
-  }
+export const legacyRedirectRoutes = createOpenApiApp();
 
-  const url = new URL(c.req.url);
-  const canonicalPath = url.pathname.replace(
-    ORGANIZATION_POSTS_PATH_REGEX,
-    "/posts"
-  );
-  return c.redirect(`${canonicalPath}${url.search}`, 308);
-});
+legacyRedirectRoutes.get(
+  "/:organizationId/posts",
+  redirectLegacyOrganizationPath(ORGANIZATION_POSTS_PATH_REGEX, () => "/posts")
+);
 
-legacyRedirectRoutes.get("/:organizationId/posts/:postId", async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
-  }
-
-  const pathOrg = c.req.param("organizationId");
-  const postId = c.req.param("postId");
-  if (orgId !== pathOrg) {
-    return c.json({ error: "Forbidden: organization access denied" }, 403);
-  }
-
-  const url = new URL(c.req.url);
-  const canonicalPath = url.pathname.replace(
+legacyRedirectRoutes.on(
+  ["GET", "PATCH"],
+  "/:organizationId/posts/:postId",
+  redirectLegacyOrganizationPath(
     ORGANIZATION_POST_PATH_REGEX,
-    `/posts/${postId}`
-  );
-  return c.redirect(`${canonicalPath}${url.search}`, 308);
-});
-
-legacyRedirectRoutes.patch("/:organizationId/posts/:postId", async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
-  }
-
-  const pathOrg = c.req.param("organizationId");
-  const postId = c.req.param("postId");
-  if (orgId !== pathOrg) {
-    return c.json({ error: "Forbidden: organization access denied" }, 403);
-  }
-
-  const url = new URL(c.req.url);
-  const canonicalPath = url.pathname.replace(
-    ORGANIZATION_POST_PATH_REGEX,
-    `/posts/${postId}`
-  );
-  return c.redirect(`${canonicalPath}${url.search}`, 308);
-});
+    (param) => `/posts/${param("postId")}`
+  )
+);

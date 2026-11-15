@@ -1,8 +1,10 @@
 import type { GeoModelCatalogEntry, GeoModelProvider } from "../types/geo";
+import { GEO_CONTEXT_API_KEY_ENV } from "./geo-context";
+import { GEO_OLOSTEP_API_KEY_ENV } from "./geo-olostep";
 
 /**
  * Providers surfaced in the GEO model picker, in display order. The live model
- * list comes from the Vercel AI Gateway feed (see `lib/geo/model-catalog.ts`);
+ * list comes from the Vercel AI Gateway feed (see `geo/model-catalog.ts`);
  * this file only holds presentation config plus a seed snapshot used when the
  * feed is unreachable. A provider is dropped from the catalog when neither the
  * feed nor `GEO_MODEL_CATALOG_STATIC` yields a model for it.
@@ -57,15 +59,15 @@ export const GEO_MODEL_PROVIDERS: readonly GeoModelProvider[] = [
     featured: false,
   },
   {
-    id: "mistral",
-    label: "Mistral AI",
-    brand: "mistral",
-    featured: false,
-  },
-  {
     id: "perplexity",
     label: "Perplexity",
     brand: "perplexity",
+    featured: true,
+  },
+  {
+    id: "microsoft",
+    label: "Microsoft",
+    brand: "copilot",
     featured: true,
   },
   {
@@ -92,10 +94,24 @@ export const GEO_MODEL_PROVIDERS: readonly GeoModelProvider[] = [
     brand: "codex",
     featured: false,
   },
+  {
+    id: "fx",
+    label: "fx",
+    brand: "fx",
+    featured: false,
+  },
 ];
 
 export const GEO_MODEL_CATALOG_SEED: readonly GeoModelCatalogEntry[] = [
-  // Anthropic
+  {
+    id: "anthropic/claude-haiku-5.5",
+    provider: "anthropic",
+    label: "Claude Haiku 5.5",
+    zdr: "all",
+    released: "2026-10-07",
+    default: false,
+    gateways: ["vercel", "openrouter"],
+  },
   {
     id: "anthropic/claude-opus-5.5",
     provider: "anthropic",
@@ -150,7 +166,6 @@ export const GEO_MODEL_CATALOG_SEED: readonly GeoModelCatalogEntry[] = [
     default: false,
     gateways: ["vercel", "openrouter"],
   },
-  // OpenAI
   {
     id: "openai/gpt-6-sol",
     provider: "openai",
@@ -184,7 +199,6 @@ export const GEO_MODEL_CATALOG_SEED: readonly GeoModelCatalogEntry[] = [
     label: "GPT-5.6 Sol",
     zdr: "some",
     released: "2026-07-09",
-    // ZDR-capable counterpart to GPT-6 Sol for technical scans.
     default: true,
     gateways: ["vercel", "openrouter"],
   },
@@ -233,7 +247,6 @@ export const GEO_MODEL_CATALOG_SEED: readonly GeoModelCatalogEntry[] = [
     default: false,
     gateways: ["vercel", "openrouter"],
   },
-  // Google
   {
     id: "google/gemini-3.8-flash",
     provider: "google",
@@ -270,7 +283,6 @@ export const GEO_MODEL_CATALOG_SEED: readonly GeoModelCatalogEntry[] = [
     default: false,
     gateways: ["vercel", "openrouter"],
   },
-  // Moonshot
   {
     id: "moonshotai/kimi-k3",
     provider: "moonshotai",
@@ -289,7 +301,15 @@ export const GEO_MODEL_CATALOG_SEED: readonly GeoModelCatalogEntry[] = [
     default: false,
     gateways: ["vercel", "openrouter"],
   },
-  // Meta
+  {
+    id: "meta/muse-wonder-1.0",
+    provider: "meta",
+    label: "Muse Wonder",
+    zdr: "none",
+    released: "2026-10-12",
+    default: false,
+    gateways: ["vercel"],
+  },
   {
     id: "meta/muse-spark-1.3",
     provider: "meta",
@@ -308,7 +328,6 @@ export const GEO_MODEL_CATALOG_SEED: readonly GeoModelCatalogEntry[] = [
     default: false,
     gateways: ["vercel", "openrouter"],
   },
-  // Z.AI
   {
     id: "zai/glm-5.3",
     provider: "zai",
@@ -336,7 +355,6 @@ export const GEO_MODEL_CATALOG_SEED: readonly GeoModelCatalogEntry[] = [
     default: false,
     gateways: ["vercel", "openrouter"],
   },
-  // xAI
   {
     id: "spacexai/grok-4.7",
     provider: "spacexai",
@@ -364,7 +382,6 @@ export const GEO_MODEL_CATALOG_SEED: readonly GeoModelCatalogEntry[] = [
     default: false,
     gateways: ["vercel", "openrouter"],
   },
-  // DeepSeek
   {
     id: "deepseek/deepseek-v4-pro",
     provider: "deepseek",
@@ -383,34 +400,6 @@ export const GEO_MODEL_CATALOG_SEED: readonly GeoModelCatalogEntry[] = [
     default: false,
     gateways: ["vercel", "openrouter"],
   },
-  // Mistral
-  {
-    id: "mistral/mistral-medium-3.5",
-    provider: "mistral",
-    label: "Mistral Medium 3.5",
-    zdr: "all",
-    released: "2026-04-29",
-    default: false,
-    gateways: ["vercel"],
-  },
-  {
-    id: "mistral/mistral-large-3",
-    provider: "mistral",
-    label: "Mistral Large 3",
-    zdr: "all",
-    released: "2025-12-02",
-    default: false,
-    gateways: ["vercel"],
-  },
-  {
-    id: "mistral/mistral-small",
-    provider: "mistral",
-    label: "Mistral Small",
-    zdr: "all",
-    released: "2024-09-17",
-    default: false,
-    gateways: ["vercel"],
-  },
   {
     id: "perplexity/sonar",
     provider: "perplexity",
@@ -425,10 +414,9 @@ export const GEO_MODEL_CATALOG_SEED: readonly GeoModelCatalogEntry[] = [
 /**
  * Models that do not run through the Notra AI router. They are appended to the
  * catalog instead of coming from the gateway feed. `zdr: "none"` because
- * neither Cursor, Box, nor SerpApi exposes an enforceable ZDR route to GEO;
- * under enforced ZDR each engine therefore needs explicit approval before it
- * is scanned. Google AI Overview is fetched through SerpApi and is also
- * non-ZDR.
+ * neither Cursor, Box, nor Olostep exposes an enforceable ZDR route; under
+ * enforced ZDR each engine therefore needs explicit approval before it is
+ * scanned.
  */
 export const GEO_MODEL_CATALOG_STATIC: readonly GeoModelCatalogEntry[] = [
   {
@@ -441,11 +429,65 @@ export const GEO_MODEL_CATALOG_STATIC: readonly GeoModelCatalogEntry[] = [
     gateways: ["cursor"],
   },
   {
-    id: "opencode/gpt-5.6-sol-medium",
+    id: "opencode/gpt-6.1-sol-medium",
     provider: "opencode",
-    label: "GPT-5.6 Sol · medium",
+    label: "GPT-6.1 Sol · medium",
     zdr: "none",
-    released: "2026-08-21",
+    released: "2026-09-29",
+    default: false,
+    gateways: ["box"],
+  },
+  {
+    id: "opencode/claude-sonnet-5.5",
+    provider: "opencode",
+    label: "Claude Sonnet 5.5",
+    zdr: "none",
+    released: "2026-09-28",
+    default: false,
+    gateways: ["box"],
+  },
+  {
+    id: "opencode/claude-opus-5.5",
+    provider: "opencode",
+    label: "Claude Opus 5.5",
+    zdr: "none",
+    released: "2026-09-22",
+    default: false,
+    gateways: ["box"],
+  },
+  {
+    id: "opencode/gpt-6-luna",
+    provider: "opencode",
+    label: "GPT-6 Luna",
+    zdr: "none",
+    released: "2026-09-22",
+    default: false,
+    gateways: ["box"],
+  },
+  {
+    id: "opencode/gpt-6-astra",
+    provider: "opencode",
+    label: "GPT-6 Astra",
+    zdr: "none",
+    released: "2026-09-04",
+    default: false,
+    gateways: ["box"],
+  },
+  {
+    id: "claude-code/claude-sonnet-5.5",
+    provider: "claude-code",
+    label: "Sonnet 5.5",
+    zdr: "none",
+    released: "2026-09-28",
+    default: false,
+    gateways: ["box"],
+  },
+  {
+    id: "claude-code/claude-opus-5.5",
+    provider: "claude-code",
+    label: "Opus 5.5",
+    zdr: "none",
+    released: "2026-09-22",
     default: false,
     gateways: ["box"],
   },
@@ -459,11 +501,20 @@ export const GEO_MODEL_CATALOG_STATIC: readonly GeoModelCatalogEntry[] = [
     gateways: ["box"],
   },
   {
-    id: "claude-code/claude-opus-5",
-    provider: "claude-code",
-    label: "Opus 5",
+    id: "codex/gpt-6.1-sol",
+    provider: "codex",
+    label: "GPT-6.1 Sol",
     zdr: "none",
-    released: "2026-07-24",
+    released: "2026-09-29",
+    default: false,
+    gateways: ["box"],
+  },
+  {
+    id: "codex/gpt-6-luna",
+    provider: "codex",
+    label: "GPT-6 Luna",
+    zdr: "none",
+    released: "2026-09-22",
     default: false,
     gateways: ["box"],
   },
@@ -477,45 +528,147 @@ export const GEO_MODEL_CATALOG_STATIC: readonly GeoModelCatalogEntry[] = [
     gateways: ["box"],
   },
   {
-    id: "codex/gpt-5.6-sol-rei",
-    provider: "codex",
-    label: "GPT-5.6 Sol Rei",
-    zdr: "none",
-    released: "2026-08-21",
-    default: false,
-    gateways: ["box"],
-  },
-  {
     id: "google/ai-overview",
     provider: "google",
     label: "AI Overview",
     zdr: "none",
     released: "2026-09-05",
     default: false,
-    gateways: ["serpapi"],
+    gateways: ["context"],
+  },
+  {
+    id: "openai/chatgpt",
+    provider: "openai",
+    label: "ChatGPT",
+    zdr: "none",
+    released: "2026-10-11",
+    default: false,
+    gateways: ["olostep"],
+  },
+  {
+    id: "perplexity/perplexity",
+    provider: "perplexity",
+    label: "Perplexity",
+    zdr: "none",
+    released: "2026-10-11",
+    default: false,
+    gateways: ["olostep"],
+  },
+  {
+    id: "google/gemini",
+    provider: "google",
+    label: "Gemini",
+    zdr: "none",
+    released: "2026-10-11",
+    default: false,
+    gateways: ["context"],
+  },
+  {
+    id: "google/ai-mode",
+    provider: "google",
+    label: "AI Mode",
+    zdr: "none",
+    released: "2026-10-11",
+    default: false,
+    gateways: ["olostep"],
+  },
+  {
+    id: "microsoft/copilot",
+    provider: "microsoft",
+    label: "Copilot",
+    zdr: "none",
+    released: "2026-10-11",
+    default: false,
+    gateways: ["olostep"],
+  },
+  {
+    id: "fx/gpt-6.1-sol",
+    provider: "fx",
+    label: "GPT-6.1 Sol",
+    zdr: "none",
+    released: "2026-09-29",
+    default: false,
+    gateways: ["box"],
+  },
+  {
+    id: "fx/gpt-5.4-mini",
+    provider: "fx",
+    label: "GPT-5.4 mini",
+    zdr: "none",
+    released: "2026-03-17",
+    default: false,
+    gateways: ["box"],
+  },
+  {
+    id: "fx/claude-opus-5.5",
+    provider: "fx",
+    label: "Claude Opus 5.5",
+    zdr: "none",
+    released: "2026-09-22",
+    default: false,
+    gateways: ["box"],
+  },
+  {
+    id: "fx/claude-sonnet-5.5",
+    provider: "fx",
+    label: "Claude Sonnet 5.5",
+    zdr: "none",
+    released: "2026-09-28",
+    default: false,
+    gateways: ["box"],
+  },
+  {
+    id: "fx/kimi-k3",
+    provider: "fx",
+    label: "Kimi K3",
+    zdr: "none",
+    released: "2026-07-16",
+    default: false,
+    gateways: ["box"],
+  },
+  {
+    id: "fx/grok-4.7",
+    provider: "fx",
+    label: "Grok 4.7",
+    zdr: "none",
+    released: "2026-09-21",
+    default: false,
+    gateways: ["box"],
   },
 ];
 
-/**
- * Environment variables that have to be set for a static engine to be
- * runnable. Static entries are hidden from the catalog while a key is missing.
- */
-const GEO_OPENCODE_ENGINE_ENV = [
+const GEO_BOX_ENGINE_ENV = [
   "UPSTASH_BOX_API_KEY",
-  "OPENROUTER_API_KEY",
+  "AI_GATEWAY_API_KEY",
 ] as const;
-const GEO_NATIVE_BOX_ENGINE_ENV = ["UPSTASH_BOX_API_KEY"] as const;
 
 export const GEO_STATIC_ENGINE_ENV: Readonly<
   Record<string, readonly string[]>
 > = {
   "cursor/composer-2.5": ["CURSOR_API_KEY"],
-  "opencode/gpt-5.6-sol-medium": GEO_OPENCODE_ENGINE_ENV,
-  "claude-code/claude-fable-5.1": GEO_NATIVE_BOX_ENGINE_ENV,
-  "claude-code/claude-opus-5": GEO_NATIVE_BOX_ENGINE_ENV,
-  "codex/gpt-6-astra": GEO_NATIVE_BOX_ENGINE_ENV,
-  "codex/gpt-5.6-sol-rei": GEO_NATIVE_BOX_ENGINE_ENV,
-  "google/ai-overview": ["SERPAPI_API_KEY"],
+  "opencode/gpt-6-astra": GEO_BOX_ENGINE_ENV,
+  "opencode/gpt-6-luna": GEO_BOX_ENGINE_ENV,
+  "opencode/gpt-6.1-sol-medium": GEO_BOX_ENGINE_ENV,
+  "opencode/claude-sonnet-5.5": GEO_BOX_ENGINE_ENV,
+  "opencode/claude-opus-5.5": GEO_BOX_ENGINE_ENV,
+  "claude-code/claude-sonnet-5.5": GEO_BOX_ENGINE_ENV,
+  "claude-code/claude-opus-5.5": GEO_BOX_ENGINE_ENV,
+  "claude-code/claude-fable-5.1": GEO_BOX_ENGINE_ENV,
+  "codex/gpt-6.1-sol": GEO_BOX_ENGINE_ENV,
+  "codex/gpt-6-luna": GEO_BOX_ENGINE_ENV,
+  "codex/gpt-6-astra": GEO_BOX_ENGINE_ENV,
+  "fx/gpt-6.1-sol": GEO_BOX_ENGINE_ENV,
+  "fx/gpt-5.4-mini": GEO_BOX_ENGINE_ENV,
+  "fx/claude-opus-5.5": GEO_BOX_ENGINE_ENV,
+  "fx/claude-sonnet-5.5": GEO_BOX_ENGINE_ENV,
+  "fx/kimi-k3": GEO_BOX_ENGINE_ENV,
+  "fx/grok-4.7": GEO_BOX_ENGINE_ENV,
+  "google/ai-overview": [GEO_CONTEXT_API_KEY_ENV],
+  "openai/chatgpt": [GEO_OLOSTEP_API_KEY_ENV],
+  "perplexity/perplexity": [GEO_OLOSTEP_API_KEY_ENV],
+  "google/gemini": [GEO_CONTEXT_API_KEY_ENV],
+  "google/ai-mode": [GEO_OLOSTEP_API_KEY_ENV],
+  "microsoft/copilot": [GEO_OLOSTEP_API_KEY_ENV],
 };
 
 /** Engines scanned when a project has not picked its own set. */
@@ -526,14 +679,11 @@ export const GEO_DEFAULT_ENGINE_IDS: readonly string[] =
 
 export const GEO_AUDIENCE_TYPES = ["technical", "general", "commerce"] as const;
 
-/**
- * Engines seeded for a brand whose buyers never pick a model themselves.
- * ChatGPT gets Sol, Claude gets Opus 5.5, and Gemini gets Flash.
- */
+/** Engines seeded for a brand whose buyers never pick a model themselves. */
 export const GEO_GENERAL_AUDIENCE_ENGINE_IDS: readonly string[] = [
   "anthropic/claude-opus-5.5",
-  "openai/gpt-5.6-sol",
-  "google/gemini-3.8-flash",
+  "openai/chatgpt",
+  "google/gemini",
 ];
 
 /**
@@ -547,17 +697,35 @@ export const GEO_COMMERCE_AUDIENCE_ENGINE_IDS: readonly string[] = [
 
 export const GEO_MODEL_FEED_URL = "https://ai-gateway.vercel.sh/v1/models";
 export const GEO_MODEL_FEED_REVALIDATE_SECONDS = 3600;
-/** Models shown per provider before "Show x other models". */
-export const GEO_PICKER_VISIBLE_MODELS = 3;
-/** Providers shown in the picker before "Show x more providers". */
-export const GEO_PICKER_VISIBLE_PROVIDERS = 7;
+
+/** Batch is a transport mode, not a separately tracked GEO model. */
+export const GEO_MODEL_BATCH_SUFFIX = "-batch";
+
+/** Meta's native search is limited to its hosted text models and excludes ZDR. */
+export const GEO_META_SEARCH_MODEL_IDS: ReadonlySet<string> = new Set([
+  "meta/muse-wonder-1.0",
+  "meta/muse-spark-1.3",
+  "meta/muse-spark-1.2",
+  "meta/muse-spark-1.1",
+]);
 /**
  * Variants kept in the catalog but hidden from the picker: tiers that answer
  * like their base model, dated snapshots, and open-weight families that no
  * consumer assistant runs.
  */
 export const GEO_MODEL_HIDDEN_ID_PATTERN =
-  /(-nano|-lite|-thinking|-reasoning|-multi-agent|-\d{4}(?:\d{4})?)$|^openai\/.+-pro$|codex|-code\b|gemma|llama|grok-build/;
+  /(-nano|-lite|-thinking|-reasoning|-multi-agent|-\d{4}(?:\d{4})?)$|^openai\/.+-pro$|codex|-code\b|gemma|llama|grok-build|safeguard|-exp$/;
+/**
+ * The picker lists only the newest release of each model line (`gpt-*-sol`,
+ * `claude-opus-*`, …). A line whose newest release trails the provider's
+ * newest model by more than this is hidden entirely.
+ */
+export const GEO_MODEL_STALE_LINE_DAYS = 365;
+/**
+ * Gateway models without a web search route answer from training data only.
+ * Each provider lists just its newest few; older ones are legacy-only.
+ */
+export const GEO_MODEL_NO_SEARCH_VISIBLE = 3;
 export const GEO_MODEL_EXCLUDED_TAGS: ReadonlySet<string> = new Set([
   "image-generation",
   "video-generation",
@@ -566,11 +734,18 @@ export const GEO_MODEL_EXCLUDED_TAGS: ReadonlySet<string> = new Set([
 export const GEO_MODEL_EXCLUDED_ID_PATTERN = /(-fast|-beta|-contributor)$/;
 /** Retire a model here; add a replacement below to migrate saved selections. */
 export const GEO_MODEL_EXCLUDED_IDS: ReadonlySet<string> = new Set([
+  "meta/muse-glimmer-30b",
   "meta/muse-spark-1.1",
   "spacexai/grok-4.6",
+  // Olostep consumer apps not released yet.
+  "perplexity/perplexity",
+  "microsoft/copilot",
 ]);
 /** Optional replacements for retired ids in saved selections and scans. */
 export const GEO_MODEL_REPLACED_IDS: Readonly<Record<string, string>> = {
+  "opencode/gpt-5.6-sol-medium": "opencode/gpt-6.1-sol-medium",
+  "claude-code/claude-opus-5": "claude-code/claude-opus-5.5",
+  "codex/gpt-5.6-sol-rei": "codex/gpt-6.1-sol",
   "meta/muse-spark-1.1": "meta/muse-spark-1.3",
   "spacexai/grok-4.6": "spacexai/grok-4.7",
 };

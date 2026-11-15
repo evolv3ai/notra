@@ -1,6 +1,24 @@
 import { describe, expect, test } from "bun:test";
 
-import { getGitHubMentionPathBlockReason } from "./github-mention-path-policy";
+import {
+  getGitHubMentionImagePathBlockReason,
+  getGitHubMentionPathBlockReason,
+} from "./github-mention-path-policy";
+
+test("generated images may only be written as relative PNG paths", () => {
+  expect(
+    getGitHubMentionImagePathBlockReason("public/blog/og/release-2-4.png")
+  ).toBeNull();
+  for (const path of [
+    "public/og.svg",
+    "public/og.png.ts",
+    ".github/og.png",
+    "../og.png",
+    "/public/og.png",
+  ]) {
+    expect(getGitHubMentionImagePathBlockReason(path)).not.toBeNull();
+  }
+});
 
 describe("getGitHubMentionPathBlockReason", () => {
   test("allows content and the data files next to it", () => {

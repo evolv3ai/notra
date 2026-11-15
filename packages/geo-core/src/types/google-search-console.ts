@@ -10,7 +10,7 @@ export interface GscOAuthState {
   callbackPath: string;
 }
 
-export type GscIntegrationStatus = "active" | "reauth_required";
+type GscIntegrationStatus = "active" | "reauth_required";
 
 export interface GeoSearchConsoleStatus {
   configured: boolean;
@@ -56,6 +56,7 @@ export interface GscSyncPayload {
 }
 
 export interface GscSuggestionGenerationParams {
+  organizationId: string;
   companyName: string | null;
   companyDescription: string | null;
   competitors: string[];

@@ -37,7 +37,6 @@ export function HeroVideoCarousel({
     };
   }, []);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: activeIndex intentionally restarts slide progress.
   useEffect(() => {
     if (prefersReducedMotion || videos.length < 2) {
       setProgress(100);

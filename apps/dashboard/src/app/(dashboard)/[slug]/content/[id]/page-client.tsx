@@ -1,12 +1,20 @@
 "use client";
 
+import { supportsPostSlug } from "@notra/ai/schemas/post";
+
 import { ChatQuoteProvider } from "@/components/chat/chat-quote";
 import {
   ContentDetailChatPanel,
   ContentDetailFloatingChat,
 } from "@/components/content/content-detail-chat-shell";
+import { ContentDetailDocumentActions } from "@/components/content/content-detail-document-actions";
 import { ContentDetailLoadedView } from "@/components/content/content-detail-loaded-view";
 import { ContentDetailNotFound } from "@/components/content/content-detail-not-found";
+import {
+  ContentSitePreviewPanel,
+  ContentSitePreviewPrefetch,
+} from "@/components/content/content-site-preview-panel";
+import { ContentOverview } from "@/components/content/overview/content-overview";
 import { GeoProjectProvider } from "@/components/providers/geo-project-provider";
 import { useContentDetailChat } from "@/lib/hooks/use-content-detail-chat";
 import { useContentDetailDocument } from "@/lib/hooks/use-content-detail-document";
@@ -32,7 +40,7 @@ function ContentDetailPage({
   organizationSlug,
   organizationId,
 }: ContentDetailPageClientProps) {
-  const { data, isPending, error } = useContent(organizationId, contentId);
+  const { data, isPending } = useContent(organizationId, contentId);
   const document = useContentDetailDocument({
     organizationId,
     contentId,
@@ -59,7 +67,7 @@ function ContentDetailPage({
     );
   }
 
-  if (error || !data?.content) {
+  if (!data?.content) {
     return (
       <>
         <ContentDetailNotFound organizationSlug={organizationSlug} />
@@ -73,7 +81,41 @@ function ContentDetailPage({
       chatInputSection={
         <ChatQuoteProvider conversationId={chat.chatPanelProps.activeChatId}>
           {floatingChat}
-          <ContentDetailChatPanel {...chat.chatPanelProps} />
+          {supportsPostSlug(data.content.contentType) ? (
+            <ContentSitePreviewPrefetch
+              contentId={contentId}
+              organizationId={organizationId}
+            />
+          ) : null}
+          <ContentDetailChatPanel
+            {...chat.chatPanelProps}
+            overview={
+              supportsPostSlug(data.content.contentType) ? (
+                <ContentOverview
+                  content={data.content}
+                  contentId={contentId}
+                  organizationId={organizationId}
+                >
+                  <ContentDetailDocumentActions
+                    content={data.content}
+                    contentId={contentId}
+                    document={document}
+                    organizationId={organizationId}
+                    organizationSlug={organizationSlug}
+                  />
+                </ContentOverview>
+              ) : undefined
+            }
+            preview={
+              supportsPostSlug(data.content.contentType) ? (
+                <ContentSitePreviewPanel
+                  contentId={contentId}
+                  document={document}
+                  organizationId={organizationId}
+                />
+              ) : undefined
+            }
+          />
         </ChatQuoteProvider>
       }
       contentId={contentId}

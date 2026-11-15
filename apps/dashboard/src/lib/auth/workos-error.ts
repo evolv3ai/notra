@@ -39,3 +39,10 @@ export function readWorkOSError(error: unknown): WorkOSErrorInfo {
 export function isWorkOSNotFound(error: unknown): boolean {
   return error instanceof NotFoundException;
 }
+
+export function nullIfWorkOSNotFound(error: unknown): null {
+  if (isWorkOSNotFound(error)) {
+    return null;
+  }
+  throw error;
+}

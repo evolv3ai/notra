@@ -9,6 +9,7 @@ import {
   SUPPORTED_AUTOMATION_OUTPUT_TYPES,
   WEBHOOK_EVENT_TYPES,
 } from "@notra/schemas/dashboard/integrations";
+import { automationNotifySchema } from "@notra/schemas/shared/automation";
 // biome-ignore lint/performance/noNamespaceImport: Zod recommended way to import
 import * as z from "zod";
 
@@ -24,6 +25,7 @@ export const eventTriggerFormSchema = z
     autoPublish: z.boolean(),
     includePreReleases: z.boolean(),
     ignoreCommitPatternsText: z.string(),
+    notify: automationNotifySchema,
   })
   .superRefine((value, ctx) => {
     if (value.eventType !== "push") {

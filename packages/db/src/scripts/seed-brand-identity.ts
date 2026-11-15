@@ -98,26 +98,26 @@ async function seedBrandIdentity() {
     columns: { id: true },
   });
   const now = new Date();
+  const brandIdentityFields = {
+    audience:
+      "Product teams validating brand guideline uploads and asset handling.",
+    companyDescription:
+      "A local QA brand identity for testing brand guideline asset uploads.",
+    companyName,
+    customInstructions:
+      "Use this identity for local upload QA. It can be deleted safely.",
+    customTone: "Clear, direct, and product-focused.",
+    language: "English",
+    toneProfile: "Professional",
+    websiteUrl,
+  };
 
   const brandIdentityId = existingBrandIdentity?.id ?? crypto.randomUUID();
 
   if (existingBrandIdentity) {
     await db
       .update(brandSettings)
-      .set({
-        audience:
-          "Product teams validating brand guideline uploads and asset handling.",
-        companyDescription:
-          "A local QA brand identity for testing brand guideline asset uploads.",
-        companyName,
-        customInstructions:
-          "Use this identity for local upload QA. It can be deleted safely.",
-        customTone: "Clear, direct, and product-focused.",
-        language: "English",
-        toneProfile: "Professional",
-        updatedAt: now,
-        websiteUrl,
-      })
+      .set({ ...brandIdentityFields, updatedAt: now })
       .where(eq(brandSettings.id, brandIdentityId));
   } else {
     await db.insert(brandSettings).values({
@@ -125,17 +125,7 @@ async function seedBrandIdentity() {
       organizationId,
       name,
       isDefault: !hasAnyBrandIdentity,
-      websiteUrl,
-      companyName,
-      companyDescription:
-        "A local QA brand identity for testing brand guideline asset uploads.",
-      toneProfile: "Professional",
-      customTone: "Clear, direct, and product-focused.",
-      customInstructions:
-        "Use this identity for local upload QA. It can be deleted safely.",
-      audience:
-        "Product teams validating brand guideline uploads and asset handling.",
-      language: "English",
+      ...brandIdentityFields,
       createdAt: now,
       updatedAt: now,
     });
@@ -169,6 +159,11 @@ async function seedBrandIdentity() {
     });
   }
 
+  const seededColorFields = {
+    lightValue: "#c8b2ee",
+    darkValue: "#9d7ad9",
+    usage: "Seed color to keep guideline sections visible for upload QA.",
+  };
   const existingSeededColor = await db.query.brandGuidelineColors.findFirst({
     where: and(
       eq(brandGuidelineColors.guidelineId, guidelineId),
@@ -181,9 +176,7 @@ async function seedBrandIdentity() {
     await db
       .update(brandGuidelineColors)
       .set({
-        lightValue: "#c8b2ee",
-        darkValue: "#9d7ad9",
-        usage: "Seed color to keep guideline sections visible for upload QA.",
+        ...seededColorFields,
         updatedAt: now,
       })
       .where(eq(brandGuidelineColors.id, existingSeededColor.id));
@@ -193,9 +186,7 @@ async function seedBrandIdentity() {
       guidelineId,
       role: "primary",
       name: SEEDED_COLOR_NAME,
-      lightValue: "#c8b2ee",
-      darkValue: "#9d7ad9",
-      usage: "Seed color to keep guideline sections visible for upload QA.",
+      ...seededColorFields,
       sortOrder: 0,
       createdAt: now,
       updatedAt: now,

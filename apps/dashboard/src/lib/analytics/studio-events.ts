@@ -42,16 +42,7 @@ export function getChatContextKinds(
 export function countMessageFileParts(
   message: MessageLike | undefined
 ): number {
-  if (!message?.parts) {
-    return 0;
-  }
-  let count = 0;
-  for (const part of message.parts) {
-    if (part.type === "file") {
-      count += 1;
-    }
-  }
-  return count;
+  return message?.parts?.filter((part) => part.type === "file").length ?? 0;
 }
 
 export function getEnabledDataPoints(

@@ -5,6 +5,7 @@ import type { EmptyStateProps } from "@/types/components/empty-state";
 function EmptyState({
   title,
   titleIcon,
+  illustration,
   description,
   action,
   actionLabel,
@@ -52,6 +53,7 @@ function EmptyState({
           preview && "-mt-4 px-6 pt-2 pb-10"
         )}
       >
+        {illustration ? <div className="mb-5">{illustration}</div> : null}
         <h3 className="flex items-center justify-center gap-2 text-lg font-semibold text-balance">
           {titleIcon}
           {title}

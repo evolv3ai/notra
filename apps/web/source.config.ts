@@ -1,9 +1,8 @@
 import { defineCollections, defineConfig } from "fumadocs-mdx/config";
-// biome-ignore lint/performance/noNamespaceImport: Zod recommended way of importing
 import * as z from "zod";
 
 import { CODE_THEMES } from "./src/constants/content";
-import { postSchema } from "./src/schemas/content";
+import { blogPostSchema, postSchema } from "./src/schemas/content";
 
 export const changelog = defineCollections({
   type: "doc",
@@ -19,7 +18,7 @@ export const blog = defineCollections({
   type: "doc",
   dir: "./src/content/blog",
   postprocess: { includeProcessedMarkdown: { headingIds: false } },
-  schema: postSchema,
+  schema: blogPostSchema,
 });
 
 export const notraChangelog = defineCollections({

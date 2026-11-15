@@ -6,8 +6,9 @@ import {
   PermissionOption,
   PermissionRow,
 } from "@notra/ui/components/ui/permission-selector";
-import { useLocale, useTranslations } from "next-intl";
 import { Activity, type ReactNode } from "react";
+import { InstrumentGrid } from "ui/card/grid";
+import { useTranslations } from "use-intl";
 
 import { BrandSentimentCard } from "@/components/geo/brand-sentiment-card";
 import { EngineRateTable } from "@/components/geo/engine-rate-table";
@@ -17,45 +18,22 @@ import { MentionRateCard } from "@/components/geo/mention-rate-card";
 import { MentionTrendCard } from "@/components/geo/mention-trend-card";
 import { ShareOfVoiceCard } from "@/components/geo/share-of-voice-card";
 import { WhatChangedCard } from "@/components/geo/what-changed-card";
-import { InstrumentGrid } from "@/components/instrument/instrument-grid";
-import { InstrumentReveal } from "@/components/instrument/instrument-reveal";
 import { trackEvent } from "@/lib/analytics/posthog-client";
 import { cn } from "@/lib/utils";
 import type { GeoTabsProps } from "@/types/geo";
-import { journeyTotals } from "@/utils/geo-journey";
 import { toGeoTab } from "@/utils/geo-tabs";
 
-function TriggerCount({ count }: { count: number }) {
-  const locale = useLocale();
-  if (count <= 0) {
-    return null;
-  }
-  return (
-    <span className="text-xs tabular-nums opacity-70">
-      {count.toLocaleString(locale)}
-    </span>
-  );
-}
-
 function TabSection({
-  active,
-  order,
   children,
   className,
 }: {
-  active: boolean;
-  order: number;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <InstrumentReveal
-      active={active}
-      className={cn("h-full", className)}
-      order={order}
-    >
+    <div className={cn("flex h-full min-w-0 flex-col", className)}>
       {children}
-    </InstrumentReveal>
+    </div>
   );
 }
 
@@ -63,7 +41,6 @@ export function GeoTabs({
   activeTab,
   onActiveTabChange,
   organizationSlug,
-  revealActive,
   settings,
   engines,
   timeseriesPoints,
@@ -78,6 +55,7 @@ export function GeoTabs({
   journeyStats,
   journeyStatsFailed,
   journeysLoading,
+  journeyRange,
   organizationId,
 }: GeoTabsProps) {
   const t = useTranslations("geo.pages.tabs");
@@ -103,27 +81,14 @@ export function GeoTabs({
           {tCommon("labels.brandSentiment")}
         </PermissionOption>
         <PermissionOption value="journeys">
-          <span className="flex items-baseline gap-1.5">
-            {tCommon("labels.journeys")}
-            <TriggerCount
-              count={
-                journeyStats
-                  ? journeyTotals(journeyStats.sources).journeys
-                  : journeys.length
-              }
-            />
-          </span>
+          {tCommon("labels.journeys")}
         </PermissionOption>
       </PermissionRow>
 
       <Activity mode={activeTab === "visibility" ? "visible" : "hidden"}>
         <div className="mt-6 flex flex-col gap-6 overflow-visible">
           <InstrumentGrid className="grid-cols-1 items-stretch gap-4 overflow-visible @min-[44rem]/main:grid-cols-12">
-            <TabSection
-              active={revealActive}
-              className="relative z-20 overflow-visible @min-[44rem]/main:col-span-5"
-              order={0}
-            >
+            <TabSection className="relative z-20 overflow-visible @min-[44rem]/main:col-span-5">
               <MentionRateCard
                 competitors={competitors}
                 engines={engines}
@@ -135,18 +100,14 @@ export function GeoTabs({
                 trackedEngines={settings.engines}
               />
             </TabSection>
-            <TabSection
-              active={revealActive}
-              className="@min-[44rem]/main:col-span-7"
-              order={1}
-            >
+            <TabSection className="@min-[44rem]/main:col-span-7">
               <MentionTrendCard
                 isScanning={isScanning}
                 points={timeseriesPoints}
               />
             </TabSection>
           </InstrumentGrid>
-          <TabSection active={revealActive} order={2}>
+          <TabSection>
             <WhatChangedCard
               competitors={competitors}
               isScanning={isScanning}
@@ -155,7 +116,7 @@ export function GeoTabs({
               promptResults={promptResults}
             />
           </TabSection>
-          <TabSection active={revealActive} order={3}>
+          <TabSection>
             <EngineRateTable
               aliases={settings.aliases}
               companyName={settings.companyName}
@@ -169,7 +130,7 @@ export function GeoTabs({
             />
           </TabSection>
           <InstrumentGrid className="grid-cols-1 gap-4 @min-[44rem]/main:grid-cols-2">
-            <TabSection active={revealActive} order={4}>
+            <TabSection>
               <ShareOfVoiceCard
                 aliases={settings.aliases}
                 companyName={settings.companyName}
@@ -181,7 +142,7 @@ export function GeoTabs({
                 timeseries={competitorShareTimeseries}
               />
             </TabSection>
-            <TabSection active={revealActive} order={5}>
+            <TabSection>
               <LanguagePerformanceCard
                 isScanning={isScanning}
                 organizationId={organizationId}
@@ -195,7 +156,7 @@ export function GeoTabs({
 
       {activeTab === "brand-sentiment" ? (
         <div className="mt-6">
-          <TabSection active={revealActive} order={0}>
+          <TabSection>
             <BrandSentimentCard
               organizationId={organizationId}
               isScanning={isScanning}
@@ -213,7 +174,7 @@ export function GeoTabs({
           loading={journeysLoading}
           organizationId={organizationId}
           organizationSlug={organizationSlug}
-          revealActive={revealActive}
+          range={journeyRange}
         />
       ) : null}
     </div>

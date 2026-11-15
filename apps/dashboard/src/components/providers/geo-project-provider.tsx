@@ -20,9 +20,7 @@ import type {
 } from "@/types/geo";
 import { normalizeGeoProjectId } from "@/utils/geo-hydration";
 
-function ignoreTrafficHost(_value: string): void {
-  // Onboarding and other unkeyed trees do not share the traffic host URL.
-}
+function ignoreTrafficHost(_value: string): void {}
 
 const GeoProjectContext = createContext<GeoProjectContextValue>({
   projectId: undefined,
@@ -52,12 +50,6 @@ export function GeoProjectQueryProvider({
   children,
 }: GeoProjectQueryProviderProps) {
   const [projectParam] = useGeoProjectQueryState();
-  // The sidebar writes the same id into the URL once `projectsList` resolves;
-  // starting from the server-resolved value keeps the scope (and every query
-  // key derived from it) stable across that rewrite. An empty `?project=` is
-  // normalised away so the client falls back exactly like the server does.
-  // Layouts cannot read search params, so the first client render may replace
-  // `initialProjectId` with `?project=` — that is hydration, not a switch.
   const urlProjectId = normalizeGeoProjectId(projectParam);
   const projectId = urlProjectId ?? initialProjectId;
   const [hostQuery, setHostQuery] = useQueryState(
@@ -76,11 +68,6 @@ export function GeoProjectQueryProvider({
     () => urlProjectId !== undefined
   );
 
-  // Mark the URL as established even when `?project=` matches the fallback.
-  // The sidebar often writes that same id; if we wait for a mismatch, the
-  // next real switch still looks like hydration and keeps the previous host.
-  // `isHydrationAlignment` below still reads the pre-update flag so a first
-  // paint of `?project=B` vs fallback `A` does not clear `host`.
   if (urlProjectId !== undefined && !seenUrlProject) {
     setSeenUrlProject(true);
   }

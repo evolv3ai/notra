@@ -21,7 +21,7 @@ export function clearPostHogIdentity(posthog: PostHog): void {
   posthog.unregister("project_id");
 }
 
-export function stripUrlQueryAndHash(url: string): string {
+function stripUrlQueryAndHash(url: string): string {
   const queryIndex = url.indexOf("?");
   const hashIndex = url.indexOf("#");
   let redactionIndex = url.length;
@@ -36,7 +36,7 @@ export function stripUrlQueryAndHash(url: string): string {
   return url.slice(0, redactionIndex);
 }
 
-export function maskOrganizationInUrl(value: string): string {
+function maskOrganizationInUrl(value: string): string {
   if (value.startsWith("/")) {
     return maskOrganizationPathname(value, POSTHOG_MASKED_ORGANIZATION_SEGMENT);
   }
@@ -57,7 +57,7 @@ export function maskOrganizationInUrl(value: string): string {
   }
 }
 
-export function redactPostHogUrl(value: string): string {
+function redactPostHogUrl(value: string): string {
   return maskOrganizationInUrl(stripUrlQueryAndHash(value));
 }
 

@@ -3,7 +3,7 @@ import type {
   TrackedAnchorClickEvent,
 } from "@/types/tracked-anchor-click";
 
-export function isModifiedClick(event: ModifiedClickEvent): boolean {
+function isModifiedClick(event: ModifiedClickEvent): boolean {
   return (
     event.button !== 0 ||
     event.metaKey ||

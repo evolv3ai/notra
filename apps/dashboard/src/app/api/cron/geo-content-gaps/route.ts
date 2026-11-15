@@ -1,10 +1,8 @@
+import { isAuthorizedCron } from "@/lib/auth/cron";
 import { refreshDueGeoContentGaps } from "@/lib/geo/content-gaps-refresh";
 
-export const maxDuration = 300;
-
 export async function GET(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!isAuthorizedCron(request)) {
     return new Response("Unauthorized", { status: 401 });
   }
 

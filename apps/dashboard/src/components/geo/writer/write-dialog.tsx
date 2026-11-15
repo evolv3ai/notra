@@ -2,13 +2,6 @@
 
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-/**
- * WriteDialog is the GEO write entry: a sidebar of sections that jump to
- * one scrolling form (prompt, content type, brand identity, competitors),
- * then Plan or Write. Gaps open this with `writeDialogStateFromGap`.
- * After plan, go to `geoContentPath`. Do not send users to
- * `/geo/write?brief=`.
- */
 import { GEO_WRITER_TOPIC_MIN_LENGTH } from "@notra/geo-core/constants/geo";
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
 import {
@@ -16,11 +9,13 @@ import {
   ResponsiveDialogDescription,
   ResponsiveDialogTitle,
 } from "@notra/ui/components/shared/responsive-dialog";
+import {
+  SplitModalContent,
+  SplitModalPane,
+} from "@notra/ui/components/shared/split-modal";
 import { Label } from "@notra/ui/components/ui/label";
 import { cn } from "@notra/ui/lib/utils";
 import { AnimatePresence, LazyMotion, m, useReducedMotion } from "motion/react";
-import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 import {
   type ComponentProps,
   type ReactNode,
@@ -29,13 +24,10 @@ import {
   useRef,
   useState,
 } from "react";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { useGeoProjectScope } from "@/components/providers/geo-project-provider";
-import {
-  SplitModalContent,
-  SplitModalPane,
-} from "@/components/shared/split-modal";
 import { GEO_WRITE_DIALOG_ENTRIES } from "@/constants/geo-analytics";
 import {
   GEO_WRITE_CONTENT_SUBTYPES,
@@ -48,6 +40,7 @@ import { useGeoWriterPlan } from "@/lib/hooks/use-geo-writer";
 import { useWriteSectionLabels } from "@/lib/hooks/use-write-section-labels";
 import { useWriterBrandSelection } from "@/lib/hooks/use-writer-brand-selection";
 import { useWriterPromptSelection } from "@/lib/hooks/use-writer-prompt-selection";
+import { useRouter } from "@/lib/navigation";
 import type {
   WriteAction,
   WriteDialogProps,
@@ -139,7 +132,7 @@ function WriteDialogForm({
     }
     openedRef.current = true;
     trackEvent(POSTHOG_EVENTS.GEO_WRITE_DIALOG_OPENED, {
-      entry: entry ?? GEO_WRITE_DIALOG_ENTRIES.WRITE_PAGE,
+      entry: entry ?? GEO_WRITE_DIALOG_ENTRIES.CONTENT_LIST,
       source_kind: initialSourceKind,
       has_topic: hasInitialTopic,
     });
@@ -197,7 +190,6 @@ function WriteDialogForm({
     enabled: open,
   });
 
-  // Until someone picks, the selection follows the loaded competitors.
   const selectedCompetitorIds = competitorsTouched
     ? competitorIds
     : defaultWriterCompetitorIds(competitors, mentionedCompetitors);
@@ -528,6 +520,7 @@ function WriteDialogFooter({
         </WriteActionButton>
         <WriteActionButton
           action="write"
+          data-dialog-confirm
           disabled={!canSubmit}
           onClick={() => onSubmit("write")}
           pendingAction={pendingAction}

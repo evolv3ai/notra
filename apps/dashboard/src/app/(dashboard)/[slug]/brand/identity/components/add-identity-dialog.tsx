@@ -9,9 +9,9 @@ import {
 } from "@notra/ui/components/shared/responsive-dialog";
 import { Input } from "@notra/ui/components/ui/input";
 import { Label } from "@notra/ui/components/ui/label";
-import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 // biome-ignore lint/performance/noNamespaceImport: Zod recommended way of importing
 import * as z from "zod";
 
@@ -160,6 +160,7 @@ export function AddIdentityDialog({
               className="w-full justify-center sm:w-auto"
               disabled={!name.trim() || !url.trim() || isSubmitting}
               type="submit"
+              data-dialog-confirm
             >
               {isSubmitting
                 ? tCommon("creating")

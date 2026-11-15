@@ -5,7 +5,7 @@ import {
 
 const WHITESPACE_RUN_REGEX = /\s+/g;
 
-export function normalizePromptTag(value: string): string {
+function normalizePromptTag(value: string): string {
   return value
     .trim()
     .replace(WHITESPACE_RUN_REGEX, " ")

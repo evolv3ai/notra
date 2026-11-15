@@ -1,8 +1,8 @@
 "use client";
 
 import { Skeleton } from "@notra/ui/components/ui/skeleton";
-import { useTranslations } from "next-intl";
 import { useId } from "react";
+import { useTranslations } from "use-intl";
 
 export function ContentDetailSkeleton() {
   const tContentShared = useTranslations("content.shared");
@@ -16,9 +16,6 @@ export function ContentDetailSkeleton() {
       >
         <div className="bg-secondary pointer-events-none absolute inset-x-0 top-full h-4">
           <div className="bg-background h-full rounded-t-2xl" />
-        </div>
-        <div className="flex items-center gap-3">
-          <Skeleton className="h-8 w-36" />
         </div>
         <div className="ml-auto flex items-center gap-2">
           <Skeleton className="h-7 w-36" />

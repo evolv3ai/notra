@@ -8,6 +8,7 @@ import {
   GEO_INGEST_MAX_EVENT_AGE_MS,
 } from "../constants/ingest";
 import type { GeoTrafficEventInput } from "../types/ingest";
+import { sanitizeGeoReferer } from "../utils/geo-referer";
 
 export function toCapturedDate(
   timestamp: string | undefined,
@@ -39,6 +40,7 @@ export function buildGeoTrafficEvent(
   const {
     organizationId,
     projectId,
+    siteId,
     payload,
     url,
     capturedAt,
@@ -49,6 +51,7 @@ export function buildGeoTrafficEvent(
   return {
     organization_id: organizationId,
     project_id: projectId ?? "",
+    site_id: siteId ?? "",
     captured_at: toClickHouseDateTime(capturedAt),
     visitor_type: classification.visitorType,
     source: classification.source,
@@ -58,8 +61,11 @@ export function buildGeoTrafficEvent(
     path: journey.path,
     host: url.hostname,
     method: payload.method.toUpperCase(),
-    referer: payload.referer ?? "",
-    ua: (payload.userAgent ?? "").slice(0, GEO_MAX_STORED_UA_LENGTH),
+    referer: sanitizeGeoReferer(payload.referer),
+    ua:
+      classification.visitorType === "ai_referral"
+        ? ""
+        : (payload.userAgent ?? "").slice(0, GEO_MAX_STORED_UA_LENGTH),
     country: payload.geo?.country ?? "",
     language: toLanguage(payload.acceptLanguage),
     request_id: payload.requestId ?? "",

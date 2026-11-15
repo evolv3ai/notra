@@ -36,7 +36,7 @@ export interface SentimentTheme {
     capturedAt: string;
   }[];
 }
-export interface SentimentAnalysisResult {
+interface SentimentAnalysisResult {
   fingerprint: string;
   generatedAt: string;
   sampled: number;

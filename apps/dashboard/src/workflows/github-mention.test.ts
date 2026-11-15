@@ -18,6 +18,7 @@ if (process.env.NOTRA_MENTION_WORKFLOW_TEST !== "1") {
   const context = {
     deliveryId: "delivery-1",
     organizationId: "org-1",
+    comment: { edited: false },
   } as never;
   const claim = mock(async () => true);
   const complete = mock(async () => undefined);
@@ -28,6 +29,7 @@ if (process.env.NOTRA_MENTION_WORKFLOW_TEST !== "1") {
   const writeLog = mock(async () => undefined);
   const startRun = mock(async () => ({ runId: "run-1" }));
 
+  mock.module("@/workflows/runtime", () => ({}));
   mock.module("@notra/ai/evlog", () => ({
     withEvlog: (handler: unknown) => handler,
     flushLogs: async () => undefined,
@@ -43,18 +45,26 @@ if (process.env.NOTRA_MENTION_WORKFLOW_TEST !== "1") {
     buildAcceptedMentionWebhookLog: () => ({ status: "pending" }),
     buildMentionResultWebhookLog: ({ result }: { result: unknown }) => result,
   }));
+  mock.module("@/lib/autopilot/mentions", () => ({
+    handleAutopilotMention: async () => null,
+  }));
+  mock.module("@/lib/autopilot/pull-request-events", () => ({
+    handleAutopilotPullRequestEvent: async () => undefined,
+  }));
   mock.module("@/lib/webhooks/github-mention-log", () => ({
     writeMentionWebhookLog: writeLog,
   }));
   mock.module("@/lib/workflows/start", () => ({
     startGitHubMentionRun: startRun,
+    startAutopilotPullRequestWorkflowRun: async () => undefined,
     startContentPublicationSyncRepair: async () => undefined,
   }));
   mock.module("workflow", () => ({
     getWorkflowMetadata: () => ({ workflowRunId: "run-1" }),
   }));
-  mock.module("next/server", () => ({ after: mock() }));
+  mock.module("@/lib/framework/server", () => ({ after: mock() }));
   mock.module("@notra/ai/utils/github-mention-ingest", () => ({
+    getGitHubAppWebhookSecret: () => null,
     ingestGitHubAppMentionWebhook: async () => ({
       httpStatus: 202,
       body: { message: "accepted" },
@@ -101,6 +111,19 @@ if (process.env.NOTRA_MENTION_WORKFLOW_TEST !== "1") {
     expect(claim).toHaveBeenLastCalledWith("delivery-1", "run-1");
     expect(processMention).toHaveBeenCalledTimes(1);
     expect(complete).toHaveBeenCalledWith("delivery-1", "run-1");
+  });
+
+  test("edited comments never fall through to the repository-writing agent", async () => {
+    const edited = {
+      deliveryId: "delivery-edited",
+      organizationId: "org-1",
+      comment: { edited: true },
+    } as never;
+    expect(await processGitHubMentionStep(edited)).toEqual({
+      status: "ignored",
+      reason: "edited_feedback_only",
+    });
+    expect(processMention).not.toHaveBeenCalled();
   });
 
   test("an interrupted processing attempt retains its claim and is not retried", async () => {

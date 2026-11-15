@@ -33,8 +33,6 @@ export function ChartSparkline({
       [SPARKLINE_SERIES_KEY]: {
         label: "",
         colors: seriesColors(color),
-        // Body-mounted tooltip is outside [data-chart], so CSS series vars
-        // would not resolve — paint the swatch with the series hex instead.
         indicatorHtml: tooltipColorSwatchHtml(color.light),
       },
     }),

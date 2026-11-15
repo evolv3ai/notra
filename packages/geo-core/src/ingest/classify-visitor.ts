@@ -44,7 +44,7 @@ function matchesHost(host: string, key: string): boolean {
   return host === key || host.endsWith(`.${key}`);
 }
 
-export function resolveAiReferrer(referer: string | undefined): string | null {
+function resolveAiReferrer(referer: string | undefined): string | null {
   if (!referer) {
     return null;
   }
@@ -209,11 +209,7 @@ export function classifyVisitor(
   const isKnownBot = GEO_NON_AI_BOT_PATTERNS.some((pattern) =>
     haystack.includes(pattern)
   );
-  const isBrowser = GEO_BROWSER_UA_PATTERNS.some((pattern) =>
-    haystack.includes(pattern)
-  );
-
-  if (isKnownBot || isBrowser) {
+  if (isKnownBot || looksLikeBrowser(haystack)) {
     return HUMAN_CLASSIFICATION;
   }
 

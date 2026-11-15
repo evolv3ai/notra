@@ -52,7 +52,9 @@ export interface NotraBlogPost {
   updatedAt: string;
   slug: string;
   excerpt: string;
+  image: string | null;
   authors: NotraBlogAuthor[];
+  hidden: boolean;
 }
 
 interface BlogPageHeaderProps {
@@ -145,16 +147,20 @@ export interface BlogPostTocProps {
   toc: TOCItemType[];
 }
 
-export interface TocPosition {
+interface TocEntry {
   id: string;
-  depth: number;
-  top: number;
-  height: number;
+  url: string;
+  title: ReactNode;
+}
+
+export interface TocSection extends TocEntry {
+  children: TocEntry[];
 }
 
 export interface BlogPostSidebarProps {
   authors: NotraBlogAuthor[];
   toc: TOCItemType[];
+  updatedAt: string;
 }
 
 export interface ResolvedSocialLink {

@@ -1,325 +1,145 @@
-import { beforeEach, expect, mock, test } from "bun:test";
+import { expect, mock, spyOn, test } from "bun:test";
 
-const copyAsFigma = mock(async () => undefined);
-const copyAsPaper = mock(async () => undefined);
-const loadFallbackFont = mock(async () => {
-  /* Inter payload is mocked as already loaded */
-});
-const toastSuccess = mock(() => undefined);
-const toastError = mock(() => undefined);
+import { toast } from "sonner";
 
-mock.module("@notra/kiwi", () => ({ copyAsFigma, loadFallbackFont }));
-mock.module("@notra/kiwi/paper", () => ({ copyAsPaper }));
-mock.module("sonner", () => ({
-  toast: {
-    success: toastSuccess,
-    error: toastError,
-  },
-}));
+import { copyDiagramScene } from "./image-export";
 
-const { toast } = await import("sonner");
-const {
-  copyImageAsFigma,
-  copyImageAsPaper,
-  isImageExportCopyReady,
-  preloadImageExportCopy,
-  resetImageExportCopyForTests,
-} = await import("./image-export");
-
-const exportElement = {} as HTMLElement;
-
-beforeEach(() => {
-  copyAsFigma.mockClear();
-  copyAsPaper.mockClear();
-  loadFallbackFont.mockClear();
-  toastError.mockClear();
-  toastSuccess.mockClear();
-});
-
-function withWindow<T>(run: () => T | Promise<T>): T | Promise<T> {
-  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
-  Object.defineProperty(globalThis, "window", {
-    configurable: true,
-    value: previousWindow?.value ?? {},
-  });
-  const restore = () => {
-    if (previousWindow) {
-      Object.defineProperty(globalThis, "window", previousWindow);
-    } else {
-      Reflect.deleteProperty(globalThis, "window");
-    }
+test("diagram copy keeps the native clipboard path and falls back without losing editable shapes", async () => {
+  const globals = [
+    "navigator",
+    "document",
+    "ClipboardItem",
+    "HTMLElement",
+    "fetch",
+  ];
+  const originals = globals.map((name) =>
+    Object.getOwnPropertyDescriptor(globalThis, name)
+  );
+  const success = spyOn(toast, "success").mockImplementation(() => "success");
+  const error = spyOn(toast, "error").mockImplementation(() => "error");
+  const logError = spyOn(console, "error").mockImplementation(() => {});
+  const scene = {
+    elements: [{ id: "node", type: "rectangle", x: 10, y: 20 }],
+    files: { image: { id: "image", dataURL: "data:image/png;base64,fixture" } },
   };
-  try {
-    const result = run();
-    if (result instanceof Promise) {
-      return result.finally(restore);
-    }
-    restore();
-    return result;
-  } catch (error) {
-    restore();
-    throw error;
-  }
-}
-
-test("preload with window warms the kiwi chunk without copying", async () => {
-  let paperImports = 0;
-  let figmaImports = 0;
-  copyAsPaper.mockClear();
-  copyAsFigma.mockClear();
-  resetImageExportCopyForTests({
-    paper: async () => {
-      paperImports += 1;
-      return (await import("@notra/kiwi/paper")).copyAsPaper;
-    },
-    figma: async () => {
-      figmaImports += 1;
-      return (await import("@notra/kiwi")).copyAsFigma;
-    },
-  });
-
-  try {
-    await withWindow(async () => {
-      expect(await preloadImageExportCopy("paper")).toBe(true);
-      expect(copyAsPaper).not.toHaveBeenCalled();
-      expect(copyAsFigma).not.toHaveBeenCalled();
-      expect(paperImports).toBe(1);
-      expect(figmaImports).toBe(0);
-
-      expect(await preloadImageExportCopy("paper")).toBe(true);
-      expect(paperImports).toBe(1);
-
-      await copyImageAsPaper(exportElement);
-      expect(copyAsPaper).toHaveBeenCalledTimes(1);
-      expect(paperImports).toBe(1);
-
-      expect(await preloadImageExportCopy("figma")).toBe(true);
-      expect(copyAsFigma).not.toHaveBeenCalled();
-      expect(figmaImports).toBe(1);
-    });
-  } finally {
-    resetImageExportCopyForTests();
-  }
-});
-
-test("preload with window swallows a failed paper import and click retries", async () => {
-  let paperImports = 0;
-  copyAsPaper.mockClear();
-  resetImageExportCopyForTests({
-    paper: async () => {
-      paperImports += 1;
-      if (paperImports === 1) {
-        throw new Error("paper chunk failed");
-      }
-      return (await import("@notra/kiwi/paper")).copyAsPaper;
-    },
-  });
-
-  try {
-    await withWindow(async () => {
-      expect(await preloadImageExportCopy("paper")).toBe(false);
-      expect(copyAsPaper).not.toHaveBeenCalled();
-      expect(paperImports).toBe(1);
-
-      await copyImageAsPaper(exportElement);
-      expect(copyAsPaper).toHaveBeenCalledTimes(1);
-      expect(toast.error).not.toHaveBeenCalled();
-      expect(paperImports).toBe(2);
-
-      await copyImageAsPaper(exportElement);
-      expect(copyAsPaper).toHaveBeenCalledTimes(2);
-      expect(paperImports).toBe(2);
-    });
-  } finally {
-    resetImageExportCopyForTests();
-  }
-});
-
-test("Paper and Figma copy call separate kiwi functions", async () => {
-  copyAsFigma.mockClear();
-  copyAsPaper.mockClear();
-  loadFallbackFont.mockClear();
-  resetImageExportCopyForTests();
-
-  await withWindow(async () => {
-    expect(await preloadImageExportCopy("paper")).toBe(true);
-    expect(await preloadImageExportCopy("figma")).toBe(true);
-    expect(loadFallbackFont).toHaveBeenCalledTimes(1);
-
-    await copyImageAsPaper(exportElement);
-    expect(copyAsPaper).toHaveBeenCalledWith(exportElement);
-    expect(copyAsFigma).not.toHaveBeenCalled();
-
-    await copyImageAsFigma(exportElement, "Card");
-    expect(copyAsFigma).toHaveBeenCalledTimes(1);
-    expect(copyAsFigma).toHaveBeenCalledWith(exportElement, {
-      label: "Card",
-      name: "Card",
-    });
-  });
-});
-
-test("Figma copy is not ready until the Inter font chunk loads", async () => {
-  let resolveFont: () => void = () => {
-    /* assigned when fontReady is constructed */
+  const payload = { type: "excalidraw/clipboard", ...scene };
+  const sceneUrl = "/api/organizations/fixture/content/fixture/excalidraw";
+  let copiedText = "";
+  const textarea = {
+    value: "",
+    readOnly: false,
+    tabIndex: 0,
+    style: {},
+    select: mock(),
+    remove: mock(),
   };
-  const fontReady = new Promise<void>((resolve) => {
-    resolveFont = resolve;
+  const focus = mock();
+  const nativeCopy = mock(() => {
+    copiedText = textarea.value;
+    return true;
   });
-  loadFallbackFont.mockImplementation(() => fontReady);
-  copyAsFigma.mockClear();
-  resetImageExportCopyForTests();
-
-  try {
-    await withWindow(async () => {
-      const pending = preloadImageExportCopy("figma");
-      await Promise.resolve();
-      await Promise.resolve();
-      expect(isImageExportCopyReady("figma")).toBe(false);
-      expect(copyAsFigma).not.toHaveBeenCalled();
-
-      resolveFont();
-      expect(await pending).toBe(true);
-      expect(isImageExportCopyReady("figma")).toBe(true);
-    });
-  } finally {
-    loadFallbackFont.mockImplementation(async () => {
-      /* Inter payload is mocked as already loaded */
-    });
-    resetImageExportCopyForTests();
-  }
-});
-
-test("copy waits for an in-flight Figma preload then pastes", async () => {
-  let resolveFont: () => void = () => {
-    /* assigned when fontReady is constructed */
-  };
-  const fontReady = new Promise<void>((resolve) => {
-    resolveFont = resolve;
+  const writeText = mock(async (text: string) => {
+    copiedText = text;
   });
-  loadFallbackFont.mockImplementation(() => fontReady);
-  copyAsFigma.mockClear();
-  resetImageExportCopyForTests();
-
-  try {
-    await withWindow(async () => {
-      const pending = preloadImageExportCopy("figma");
-      const copyPromise = copyImageAsFigma(exportElement, "Card");
-      await Promise.resolve();
-      await Promise.resolve();
-      expect(copyAsFigma).not.toHaveBeenCalled();
-      expect(toast.error).not.toHaveBeenCalled();
-
-      resolveFont();
-      await copyPromise;
-      expect(await pending).toBe(true);
-      expect(copyAsFigma).toHaveBeenCalledTimes(1);
-      expect(toast.success).toHaveBeenCalledWith(
-        expect.objectContaining({
-          props: {
-            namespace: "content.toasts.imageExport",
-            messageKey: "figmaCopied",
-          },
-        })
-      );
-    });
-  } finally {
-    loadFallbackFont.mockImplementation(async () => {
-      /* Inter payload is mocked as already loaded */
-    });
-    resetImageExportCopyForTests();
-  }
-});
-
-test("cold copy awaits the kiwi import then pastes", async () => {
-  resetImageExportCopyForTests();
-
-  await withWindow(async () => {
-    expect(isImageExportCopyReady("paper")).toBe(false);
-    expect(isImageExportCopyReady("figma")).toBe(false);
-
-    await copyImageAsPaper(exportElement);
-    expect(copyAsPaper).toHaveBeenCalledTimes(1);
-    expect(toast.error).not.toHaveBeenCalled();
-
-    await copyImageAsFigma(exportElement, "Card");
-    expect(copyAsFigma).toHaveBeenCalledTimes(1);
-    expect(loadFallbackFont).toHaveBeenCalledTimes(1);
-    expect(toast.error).not.toHaveBeenCalled();
+  const write = mock(async (items: [ClipboardItem]) => {
+    copiedText = await (await items[0].getType("text/plain")).text();
   });
-});
-
-test("preload is a no-op without window and does not copy", () => {
-  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
-  Reflect.deleteProperty(globalThis, "window");
-  copyAsPaper.mockClear();
-  copyAsFigma.mockClear();
-  try {
-    preloadImageExportCopy("paper");
-    preloadImageExportCopy("figma");
-    expect(copyAsPaper).not.toHaveBeenCalled();
-    expect(copyAsFigma).not.toHaveBeenCalled();
-  } finally {
-    if (previousWindow) {
-      Object.defineProperty(globalThis, "window", previousWindow);
-    }
-  }
-});
-
-async function expectNoUnhandledRejection(
-  run: () => Promise<void>
-): Promise<void> {
-  const unhandled: unknown[] = [];
-  const onUnhandled = (reason: unknown) => {
-    unhandled.push(reason);
-  };
-  process.on("unhandledRejection", onUnhandled);
-  try {
-    await run();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(unhandled).toEqual([]);
-  } finally {
-    process.off("unhandledRejection", onUnhandled);
-  }
-}
-
-test("a failed kiwi import during a skipped copy does not reject unhandled", async () => {
-  const errorLog = mock(() => undefined);
-  const previousError = console.error;
-  let figmaImports = 0;
-  let paperImports = 0;
-  console.error = errorLog;
-  resetImageExportCopyForTests({
-    figma: async () => {
-      figmaImports += 1;
-      throw new Error("figma chunk failed");
-    },
-    paper: async () => {
-      paperImports += 1;
-      throw new Error("paper chunk failed");
-    },
-  });
-
-  try {
-    await withWindow(async () => {
-      await expectNoUnhandledRejection(async () => {
-        await copyImageAsFigma(null);
-        await copyImageAsPaper(null);
-      });
-    });
-    expect(figmaImports).toBe(1);
-    expect(paperImports).toBe(1);
-    expect(toast.error).toHaveBeenCalledWith(
-      expect.objectContaining({
-        props: {
-          namespace: "content.toasts.imageExport",
-          messageKey: "copyLoading",
-        },
+  let resolveScene = (_response: Response) => {};
+  const fetchScene = mock(
+    () =>
+      new Promise<Response>((resolve) => {
+        resolveScene = resolve;
       })
+  );
+
+  try {
+    Object.defineProperties(globalThis, {
+      navigator: {
+        configurable: true,
+        value: { clipboard: { write, writeText } },
+      },
+      document: {
+        configurable: true,
+        value: {
+          activeElement: { focus },
+          createElement: mock(() => textarea),
+          body: { appendChild: mock() },
+          execCommand: nativeCopy,
+        },
+      },
+      HTMLElement: { configurable: true, value: Object },
+      ClipboardItem: {
+        configurable: true,
+        value: mock((data: Record<string, Promise<Blob>>) => ({
+          getType: (type: string) => data[type],
+        })),
+      },
+      fetch: { configurable: true, value: fetchScene },
+    });
+
+    const copying = copyDiagramScene(sceneUrl, "excalidraw");
+    // Safari requires clipboard.write to run before the download resolves.
+    expect(write).toHaveBeenCalledTimes(1);
+    resolveScene(Response.json(scene));
+    await copying;
+    expect(JSON.parse(copiedText)).toEqual(payload);
+    expect(writeText).not.toHaveBeenCalled();
+    expect(nativeCopy).not.toHaveBeenCalled();
+
+    fetchScene.mockImplementation(async () => Response.json(scene));
+    write.mockRejectedValue(new DOMException("Blocked", "NotAllowedError"));
+    await copyDiagramScene(sceneUrl, "tldraw");
+    expect(JSON.parse(copiedText)).toEqual(payload);
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(nativeCopy).not.toHaveBeenCalled();
+
+    writeText.mockRejectedValue(new DOMException("Blocked", "NotAllowedError"));
+    await copyDiagramScene(sceneUrl, "excalidraw");
+    expect(JSON.parse(copiedText)).toEqual(payload);
+    expect(nativeCopy).toHaveBeenCalledWith("copy");
+    expect(textarea.select).toHaveBeenCalledTimes(1);
+    expect(textarea.remove).toHaveBeenCalledTimes(1);
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: {},
+    });
+    await copyDiagramScene(sceneUrl, "tldraw");
+    expect(JSON.parse(copiedText)).toEqual(payload);
+    expect(textarea.remove).toHaveBeenCalledTimes(2);
+    expect(success).toHaveBeenCalledTimes(4);
+    expect(error).not.toHaveBeenCalled();
+    expect(fetchScene).toHaveBeenCalledTimes(4);
+
+    nativeCopy.mockReturnValue(false);
+    await copyDiagramScene(sceneUrl, "excalidraw");
+    expect(success).toHaveBeenCalledTimes(4);
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(textarea.remove).toHaveBeenCalledTimes(3);
+
+    fetchScene.mockImplementation(
+      async () => new Response(null, { status: 404 })
     );
+    await copyDiagramScene(sceneUrl, "excalidraw");
+    fetchScene.mockImplementation(async () =>
+      Response.json({ type: "excalidraw" })
+    );
+    await copyDiagramScene(sceneUrl, "excalidraw");
+    expect(success).toHaveBeenCalledTimes(4);
+    expect(error).toHaveBeenCalledTimes(3);
+    expect(nativeCopy).toHaveBeenCalledTimes(3);
   } finally {
-    console.error = previousError;
-    resetImageExportCopyForTests();
+    globals.forEach((name, index) => {
+      const original = originals[index];
+      if (original) {
+        Object.defineProperty(globalThis, name, original);
+      } else {
+        Reflect.deleteProperty(globalThis, name);
+      }
+    });
+    success.mockRestore();
+    error.mockRestore();
+    logError.mockRestore();
   }
 });

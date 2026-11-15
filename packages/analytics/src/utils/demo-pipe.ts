@@ -2,11 +2,6 @@ import type { QueryResult } from "@tinybirdco/sdk";
 
 export const DAY_MS = 86_400_000;
 
-/**
- * A provider the host app (dashboard or API) registers once at startup. It
- * lives on globalThis because Next bundles instrumentation (where it is
- * registered) separately from route handlers (where it is read).
- */
 export function demoProviderSlot<T>(name: string) {
   const key = Symbol.for(name);
   const holder = globalThis as Record<symbol, T | null | undefined>;

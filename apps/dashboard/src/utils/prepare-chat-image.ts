@@ -1,6 +1,5 @@
 import { MAX_CHAT_HEIC_INPUT_BYTES } from "@/constants/content-image";
 
-// Convert Apple photos before the chat upload so the attachment and AI model both receive JPEG.
 export async function prepareChatImage(file: File): Promise<File> {
   if (!/\.heic$/i.test(file.name) && file.type !== "image/heic") {
     return file;

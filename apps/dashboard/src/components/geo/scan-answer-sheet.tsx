@@ -7,8 +7,9 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@notra/ui/components/ui/sheet";
-import { useTranslations } from "next-intl";
+import { useRetainedValue } from "@notra/ui/hooks/use-retained-value";
 import { useState } from "react";
+import { useTranslations } from "use-intl";
 
 import { EngineIcon } from "@/components/geo/engine-icon";
 import { PromptAnswerContent } from "@/components/geo/prompt-answer-content";
@@ -21,7 +22,6 @@ import { PromptReceiptViewSwitch } from "@/components/geo/prompt-receipt-view-sw
 import { GEO_PROMPT_DEFAULT_FILTERS } from "@/constants/geo-prompts";
 import { useGeoPromptResultDetail } from "@/lib/hooks/use-geo";
 import { useGeoPromptsDb } from "@/lib/hooks/use-geo-db";
-import { useRetainedValue } from "@/lib/hooks/use-retained-value";
 import type { GeoScanAnswerProps } from "@/types/geo-scan-activity";
 import { formatEngineFamily } from "@/utils/geo-charts";
 import { geoPromptDetailState } from "@/utils/geo-prompt-detail";

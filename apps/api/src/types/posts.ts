@@ -1,5 +1,5 @@
 import type { ContentGenerationJob } from "@notra/content-generation/schemas";
-import type { posts } from "@notra/db/schema";
+import type { contentAuthors, posts } from "@notra/db/schema";
 import type {
   createPostGenerationRequestSchema,
   createPostRequestSchema,
@@ -13,11 +13,14 @@ import type {
   PostConcurrentModificationError,
   PostGenerationJobNotFoundError,
   PostGenerationQueueFailedError,
+  PostGenerationSourcesUnavailableError,
   PostGenerationTargetUnavailableError,
   PostInvalidMarkdownError,
+  PostMetadataNotSupportedError,
   PostNotFoundError,
   PostSlugDuplicateError,
   PostSlugNotSupportedError,
+  PostUnknownAuthorError,
 } from "../errors/posts";
 import type { DbClient } from "./db";
 
@@ -32,19 +35,51 @@ export type PostRow = Pick<
   | "recommendations"
   | "contentType"
   | "sourceMetadata"
+  | "coverImage"
+  | "tags"
+  | "excerpt"
+  | "authorIds"
+  | "featured"
+  | "noindex"
+  | "hidden"
+  | "displayDate"
   | "status"
   | "createdAt"
   | "updatedAt"
 >;
 
+export type PostAuthorSummary = Pick<
+  typeof contentAuthors.$inferSelect,
+  "id" | "slug" | "name" | "title" | "avatarUrl"
+>;
+
+export type PostAuthorsById = ReadonlyMap<string, PostAuthorSummary>;
+
+type ContentAuthorRow = Pick<
+  typeof contentAuthors.$inferSelect,
+  | "id"
+  | "slug"
+  | "name"
+  | "title"
+  | "bio"
+  | "avatarUrl"
+  | "url"
+  | "x"
+  | "linkedin"
+  | "github"
+>;
+
 export type PostDomainError =
   | PostNotFoundError
   | PostSlugNotSupportedError
+  | PostMetadataNotSupportedError
+  | PostUnknownAuthorError
   | PostInvalidMarkdownError
   | PostSlugDuplicateError
   | PostConcurrentModificationError
   | PostGenerationJobNotFoundError
   | PostGenerationQueueFailedError
+  | PostGenerationSourcesUnavailableError
   | PostGenerationTargetUnavailableError;
 
 interface PostProgramInput {
@@ -58,6 +93,7 @@ export interface ListPostsProgramInput extends PostProgramInput {
 
 export interface ListPostsProgramSuccess {
   posts: PostRow[];
+  authors: PostAuthorsById;
   pagination: {
     limit: number;
     currentPage: number;
@@ -74,6 +110,13 @@ export interface GetPostProgramInput extends PostProgramInput {
 
 export interface GetPostProgramSuccess {
   post: PostRow | null;
+  authors: PostAuthorsById;
+}
+
+export interface ListPostAuthorsProgramInput extends PostProgramInput {}
+
+export interface ListPostAuthorsProgramSuccess {
+  authors: ContentAuthorRow[];
 }
 
 export interface DeletePostProgramInput extends PostProgramInput {
@@ -115,6 +158,7 @@ export interface CommitPatchPostProgramInput extends PostProgramInput {
 
 export interface PatchPostProgramSuccess {
   post: PostRow;
+  authors: PostAuthorsById;
   previousStatus: "draft" | "published";
 }
 

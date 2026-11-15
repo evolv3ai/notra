@@ -1,6 +1,5 @@
 import type { PromptCalculatorFrequencyId } from "@/types/landing/prompt-calculator";
 
-/** Mirrors the query params, so `/pricing?prompts=120&models=chatgpt,claude&frequency=weekly` prefills the calculator. */
 export const PROMPT_CALCULATOR_PARAMS = {
   prompts: "prompts",
   models: "models",
@@ -9,10 +8,6 @@ export const PROMPT_CALCULATOR_PARAMS = {
 
 export const PROMPT_CALCULATOR_ANCHOR = "calculator";
 
-/**
- * Engine ids. The `models` query param takes these as shortcuts for each
- * engine's default model, so `?models=chatgpt,claude` works.
- */
 export const PROMPT_CALCULATOR_ENGINE_IDS = [
   "chatgpt",
   "claude",
@@ -21,12 +16,10 @@ export const PROMPT_CALCULATOR_ENGINE_IDS = [
   "grok",
   "kimi",
   "deepseek",
-  "mistral",
   "meta",
   "zai",
 ] as const;
 
-/** Scan cadences offered in the dashboard's GEO settings. */
 export const PROMPT_CALCULATOR_FREQUENCIES = [
   {
     id: "daily",
@@ -72,7 +65,6 @@ export const PROMPT_CALCULATOR_MIN_PROMPTS = 1;
 export const PROMPT_CALCULATOR_MAX_PROMPTS = 10_000;
 
 export const PROMPT_CALCULATOR_DEFAULT_PROMPTS = 10;
-/** The default models of ChatGPT, Claude and Gemini. */
 export const PROMPT_CALCULATOR_DEFAULT_MODELS: string[] = [
   "openai/gpt-5.6-sol",
   "anthropic/claude-opus-5.5",
@@ -81,15 +73,10 @@ export const PROMPT_CALCULATOR_DEFAULT_MODELS: string[] = [
 export const PROMPT_CALCULATOR_DEFAULT_FREQUENCY: PromptCalculatorFrequencyId =
   "daily";
 
-/** Every stop the prompt slider snaps to; typed amounts sit between two stops. */
 export const PROMPT_CALCULATOR_STOPS = [
   5, 10, 25, 50, 100, 150, 250, 500, 1000,
 ] as const;
 
-/**
- * Labeled stops under the slider. Each caption covers the prompt counts up to
- * its stop, so the in-between stops borrow the next one's caption.
- */
 export const PROMPT_CALCULATOR_MILESTONES = [
   {
     prompts: 5,

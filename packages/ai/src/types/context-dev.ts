@@ -3,19 +3,8 @@ export interface ContextDevErrorResponse {
   error_code?: string;
 }
 
-export interface ContextDevMarkdownOptions {
-  enabled?: boolean;
-  includeLinks?: boolean;
-  includeImages?: boolean;
-  shortenBase64Images?: boolean;
-  useMainContentOnly?: boolean;
-  includeFrames?: boolean;
-  maxAgeMs?: number;
-  waitForMs?: number;
-  timeoutMS?: number;
-}
-
 export interface ContextDevWebSearchInput {
+  abortSignal?: AbortSignal;
   query: string;
   limit?: number;
   includeDomains?: string[];
@@ -136,6 +125,11 @@ export interface ContextDevBrandSearchResponse {
   results: ContextDevBrandSearchResult[];
 }
 
+export interface ContextDevParseResponse {
+  markdown?: string | null;
+  type?: string;
+}
+
 export interface ContextDevStyleguideResponse {
   status: "ok";
   domain?: string;
@@ -212,3 +206,10 @@ export interface ContextDevWebSearchResponse {
 export type ContextDevScrapingResult =
   | { success: true; content: string }
   | { success: false; error: string; fatal: boolean };
+
+export interface ContextDevRequestInit {
+  method: "GET" | "POST";
+  body?: string | Uint8Array<ArrayBuffer>;
+  contentType?: string;
+  signal?: AbortSignal;
+}

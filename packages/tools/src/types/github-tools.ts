@@ -1,32 +1,5 @@
-export interface ErrorWithResponseStatus {
-  status?: number;
-  message?: string;
-  response?: {
-    headers?: Record<string, string | number | undefined>;
-  };
-}
+import type { z } from "zod";
 
-export interface GenerationCommitWindow {
-  since?: string;
-  until?: string;
-}
+import type { generationConfigSchema } from "../schemas/generation-config";
 
-export interface GenerationSelectionFilters {
-  allowedPullRequestNumbersByIntegrationId?: Record<string, number[]>;
-  allowedReleaseTagsByIntegrationId?: Record<string, string[]>;
-  allowedReleaseTagsGlobal?: string[];
-  allowedCommitShas?: string[];
-}
-
-export interface GenerationDataPointSettings {
-  includePullRequests?: boolean;
-  includeReleases?: boolean;
-  includeCommits?: boolean;
-  includeLinearData?: boolean;
-}
-
-export interface GenerationConfig {
-  selectionFilters?: GenerationSelectionFilters;
-  commitWindow?: GenerationCommitWindow;
-  dataPointSettings?: GenerationDataPointSettings;
-}
+export type GenerationConfig = z.infer<typeof generationConfigSchema>;

@@ -1,9 +1,14 @@
 import crypto from "node:crypto";
 
+import { scheduleDedupeHashes } from "@notra/ai/utils/trigger-hash";
 import {
+  AUTOMATION_RUN_STALE_AFTER_MS,
+  AUTOMATION_RUN_STALE_MESSAGE,
+} from "@notra/db/constants/automation-runs";
+import {
+  automationRuns,
   contentTriggerLookbackWindows,
   contentTriggers,
-  githubIntegrations,
 } from "@notra/db/schema";
 import { QstashError } from "@notra/schemas/api/qstash";
 import { scheduleSourceConfigSchema } from "@notra/schemas/api/schedules";
@@ -12,10 +17,12 @@ import { Effect } from "effect";
 
 import {
   ScheduleDatabaseError,
+  ScheduleDisabledError,
   ScheduleDuplicateError,
   ScheduleMissingTargetsError,
   ScheduleNotFoundError,
   ScheduleQstashError,
+  ScheduleRunStartError,
 } from "../errors/schedules";
 import {
   deleteQstashWithRetry,
@@ -29,12 +36,14 @@ import type {
   DeleteScheduleProgramInput,
   ListSchedulesProgramInput,
   PatchScheduleProgramInput,
+  RunScheduleProgramInput,
+  ScheduleRunsProgramInput,
 } from "../types/schedules";
 import { logError } from "../utils/logging";
 import { buildCronExpression, createQstashSchedule } from "../utils/qstash";
+import { startScheduleRun } from "../utils/schedule-run";
 import {
   DEFAULT_SCHEDULE_NAME,
-  ensureScheduleTargetsExist,
   filterSchedulesByRepositoryIds,
   hashSchedule,
   mapQstashError,
@@ -42,7 +51,11 @@ import {
   safeSerializeSchedule,
   serializeSchedule,
 } from "../utils/schedules";
-import { deleteQstashScheduleWithRetry } from "../utils/triggers";
+import {
+  deleteQstashScheduleWithRetry,
+  ensureTriggerTargetsExist,
+  getRepositoryLabels,
+} from "../utils/triggers";
 
 const DELETE_CONCURRENCY_ATTEMPTS = 5;
 
@@ -59,7 +72,7 @@ type ScheduleDeleteSnapshot = {
 
 type ScheduleDeleteCommitResult = "deleted" | "stale" | "gone";
 
-const scheduleDeleteScope = (organizationId: string, scheduleId: string) =>
+const cronScheduleScope = (organizationId: string, scheduleId: string) =>
   and(
     eq(contentTriggers.id, scheduleId),
     eq(contentTriggers.organizationId, organizationId),
@@ -78,7 +91,7 @@ async function lockScheduleDeleteSnapshot(
         updatedAt: contentTriggers.updatedAt,
       })
       .from(contentTriggers)
-      .where(scheduleDeleteScope(organizationId, scheduleId))
+      .where(cronScheduleScope(organizationId, scheduleId))
       .for("update");
 
     return row ?? null;
@@ -95,7 +108,7 @@ async function commitScheduleDeleteIfUnchanged(
     const [row] = await tx
       .select({ updatedAt: contentTriggers.updatedAt })
       .from(contentTriggers)
-      .where(scheduleDeleteScope(organizationId, scheduleId))
+      .where(cronScheduleScope(organizationId, scheduleId))
       .for("update");
 
     if (!row) {
@@ -108,10 +121,32 @@ async function commitScheduleDeleteIfUnchanged(
 
     await tx
       .delete(contentTriggers)
-      .where(scheduleDeleteScope(organizationId, scheduleId));
+      .where(cronScheduleScope(organizationId, scheduleId));
 
     return "deleted";
   });
+}
+
+async function restoreQstashSchedule(
+  env: QstashEnv,
+  scheduleId: string,
+  sourceConfig: unknown,
+  qstashScheduleId: string
+) {
+  const config = scheduleSourceConfigSchema.parse(sourceConfig);
+  const restoredId = await createQstashSchedule(env, {
+    triggerId: scheduleId,
+    cron: buildCronExpression(config.cron),
+    scheduleId: qstashScheduleId,
+  });
+
+  if (restoredId !== qstashScheduleId) {
+    await deleteQstashScheduleWithRetry(env, restoredId);
+    throw new QstashError({
+      kind: "decode",
+      message: "QStash returned an unexpected restoration ID",
+    });
+  }
 }
 
 async function ensureEnabledScheduleQstash(
@@ -124,27 +159,19 @@ async function ensureEnabledScheduleQstash(
     const [current] = await tx
       .select()
       .from(contentTriggers)
-      .where(scheduleDeleteScope(organizationId, scheduleId))
+      .where(cronScheduleScope(organizationId, scheduleId))
       .for("update");
 
     if (!current?.enabled || !current.qstashScheduleId) {
       return;
     }
 
-    const config = scheduleSourceConfigSchema.parse(current.sourceConfig);
-    const restoredId = await createQstashSchedule(env, {
-      triggerId: scheduleId,
-      cron: buildCronExpression(config.cron),
-      scheduleId: current.qstashScheduleId,
-    });
-
-    if (restoredId !== current.qstashScheduleId) {
-      await deleteQstashScheduleWithRetry(env, restoredId);
-      throw new QstashError({
-        kind: "decode",
-        message: "QStash returned an unexpected restoration ID",
-      });
-    }
+    await restoreQstashSchedule(
+      env,
+      scheduleId,
+      current.sourceConfig,
+      current.qstashScheduleId
+    );
   });
 }
 
@@ -220,11 +247,9 @@ function cleanupQstashSchedule(
   {
     failureMessage,
     failureMode,
-    operation,
   }: {
     failureMessage: string;
     failureMode: "log" | "fail";
-    operation: "create" | "update" | "delete";
   }
 ) {
   return deleteQstashWithRetry(qstashScheduleId).pipe(
@@ -235,16 +260,9 @@ function cleanupQstashSchedule(
         return Effect.void;
       }
 
-      return Effect.fail(scheduleQstashFailure(cleanupError, operation));
+      return Effect.fail(scheduleQstashFailure(cleanupError, "delete"));
     })
   );
-}
-
-function withQstashLayer<A, E>(
-  env: QstashEnv,
-  effect: Effect.Effect<A, E, QstashService>
-) {
-  return effect.pipe(Effect.provide(qstashLayer(env)));
 }
 
 async function executePatchSchedule({
@@ -255,7 +273,7 @@ async function executePatchSchedule({
   env,
 }: PatchScheduleProgramInput) {
   const normalized = normalizeSchedule(body);
-  const dedupeHash = hashSchedule(body);
+  const dedupeHash = hashSchedule(normalized);
   const affectedQstashIds = new Set<string>();
   let committed = false;
 
@@ -264,13 +282,7 @@ async function executePatchSchedule({
       const [existing] = await tx
         .select()
         .from(contentTriggers)
-        .where(
-          and(
-            eq(contentTriggers.id, scheduleId),
-            eq(contentTriggers.organizationId, organizationId),
-            eq(contentTriggers.sourceType, "cron")
-          )
-        )
+        .where(cronScheduleScope(organizationId, scheduleId))
         .for("update");
 
       if (!existing) {
@@ -353,34 +365,19 @@ async function executePatchSchedule({
           const [current] = await tx
             .select()
             .from(contentTriggers)
-            .where(
-              and(
-                eq(contentTriggers.id, scheduleId),
-                eq(contentTriggers.organizationId, organizationId),
-                eq(contentTriggers.sourceType, "cron")
-              )
-            )
+            .where(cronScheduleScope(organizationId, scheduleId))
             .for("update");
           const currentQstashId = current?.enabled
             ? current.qstashScheduleId
             : null;
 
           if (currentQstashId && current) {
-            const config = scheduleSourceConfigSchema.parse(
-              current.sourceConfig
+            await restoreQstashSchedule(
+              env,
+              scheduleId,
+              current.sourceConfig,
+              currentQstashId
             );
-            const restoredId = await createQstashSchedule(env, {
-              triggerId: scheduleId,
-              cron: buildCronExpression(config.cron),
-              scheduleId: currentQstashId,
-            });
-            if (restoredId !== currentQstashId) {
-              await deleteQstashScheduleWithRetry(env, restoredId);
-              throw new QstashError({
-                kind: "decode",
-                message: "QStash returned an unexpected restoration ID",
-              });
-            }
           }
 
           for (const affectedId of affectedQstashIds) {
@@ -447,30 +444,8 @@ export const listSchedules = Effect.fn("schedules.list")(function* ({
   const allRepositoryIds = [
     ...new Set(schedules.flatMap((schedule) => schedule.targets.repositoryIds)),
   ];
-  const repositories =
-    allRepositoryIds.length > 0
-      ? yield* database(() =>
-          db
-            .select({
-              id: githubIntegrations.id,
-              owner: githubIntegrations.owner,
-              repo: githubIntegrations.repo,
-              defaultBranch: githubIntegrations.defaultBranch,
-            })
-            .from(githubIntegrations)
-            .where(inArray(githubIntegrations.id, allRepositoryIds))
-        )
-      : [];
-
-  const repositoryMap = Object.fromEntries(
-    repositories
-      .filter((repository) => repository.owner && repository.repo)
-      .map((repository) => [
-        repository.id,
-        repository.defaultBranch?.trim()
-          ? `${repository.owner}/${repository.repo} · ${repository.defaultBranch.trim()}`
-          : `${repository.owner}/${repository.repo}`,
-      ])
+  const repositoryMap = yield* database(() =>
+    getRepositoryLabels(db, allRepositoryIds)
   );
 
   return { schedules, repositoryMap };
@@ -483,13 +458,13 @@ export const createSchedule = Effect.fn("schedules.create")(function* ({
   env,
 }: CreateScheduleProgramInput) {
   const normalized = normalizeSchedule(body);
-  const dedupeHash = hashSchedule(body);
+  const dedupeHash = hashSchedule(normalized);
 
   const existing = yield* database(() =>
     db.query.contentTriggers.findFirst({
       where: and(
         eq(contentTriggers.organizationId, organizationId),
-        eq(contentTriggers.dedupeHash, dedupeHash)
+        inArray(contentTriggers.dedupeHash, scheduleDedupeHashes(normalized))
       ),
     })
   );
@@ -500,7 +475,7 @@ export const createSchedule = Effect.fn("schedules.create")(function* ({
 
   if (body.enabled) {
     const missingTargets = yield* database(() =>
-      ensureScheduleTargetsExist(
+      ensureTriggerTargetsExist(
         db,
         organizationId,
         normalized.targets.repositoryIds,
@@ -520,19 +495,19 @@ export const createSchedule = Effect.fn("schedules.create")(function* ({
   let qstashScheduleId: string | null = null;
 
   if (body.enabled) {
-    qstashScheduleId = yield* withQstashLayer(
-      env,
-      Effect.gen(function* () {
-        const service = yield* QstashService;
-        return yield* service.create({
-          triggerId,
-          cron: buildCronExpression(normalized.sourceConfig.cron),
-        });
-      })
-    ).pipe(Effect.mapError((error) => scheduleQstashFailure(error, "create")));
+    qstashScheduleId = yield* Effect.gen(function* () {
+      const service = yield* QstashService;
+      return yield* service.create({
+        triggerId,
+        cron: buildCronExpression(normalized.sourceConfig.cron),
+      });
+    }).pipe(
+      Effect.provide(qstashLayer(env)),
+      Effect.mapError((error) => scheduleQstashFailure(error, "create"))
+    );
   }
 
-  const schedule = yield* database(() =>
+  return yield* database(() =>
     db.transaction(async (tx) => {
       const [createdTrigger] = await tx
         .insert(contentTriggers)
@@ -573,7 +548,6 @@ export const createSchedule = Effect.fn("schedules.create")(function* ({
           yield* cleanupQstashSchedule(env, qstashScheduleId, {
             failureMessage: `Failed to clean up replacement QStash schedule ${qstashScheduleId} for new schedule ${triggerId}`,
             failureMode: "log",
-            operation: "create",
           });
         }
 
@@ -581,8 +555,6 @@ export const createSchedule = Effect.fn("schedules.create")(function* ({
       })
     )
   );
-
-  return schedule;
 });
 
 export const deleteSchedule = Effect.fn("schedules.delete")(function* ({
@@ -610,7 +582,6 @@ export const deleteSchedule = Effect.fn("schedules.delete")(function* ({
       yield* cleanupQstashSchedule(env, snapshot.qstashScheduleId, {
         failureMessage: `Failed to delete QStash schedule ${snapshot.qstashScheduleId} for schedule ${scheduleId}`,
         failureMode: "fail",
-        operation: "delete",
       });
     }
 
@@ -664,13 +635,11 @@ export const patchSchedule = Effect.fn("schedules.patch")(function* ({
   env,
 }: PatchScheduleProgramInput) {
   const normalized = normalizeSchedule(body);
-  const dedupeHash = hashSchedule(body);
-
   const duplicate = yield* database(() =>
     db.query.contentTriggers.findFirst({
       where: and(
         eq(contentTriggers.organizationId, organizationId),
-        eq(contentTriggers.dedupeHash, dedupeHash),
+        inArray(contentTriggers.dedupeHash, scheduleDedupeHashes(normalized)),
         ne(contentTriggers.id, scheduleId)
       ),
     })
@@ -682,7 +651,7 @@ export const patchSchedule = Effect.fn("schedules.patch")(function* ({
 
   if (body.enabled) {
     const missingTargets = yield* database(() =>
-      ensureScheduleTargetsExist(
+      ensureTriggerTargetsExist(
         db,
         organizationId,
         normalized.targets.repositoryIds,
@@ -718,5 +687,82 @@ export const patchSchedule = Effect.fn("schedules.patch")(function* ({
 
       return new ScheduleDatabaseError({ cause });
     },
+  });
+});
+
+const findSchedule = Effect.fn("schedules.find")(function* (
+  db: DbClient,
+  organizationId: string,
+  scheduleId: string
+) {
+  const schedule = yield* database(() =>
+    db.query.contentTriggers.findFirst({
+      columns: { id: true, enabled: true },
+      where: and(
+        eq(contentTriggers.id, scheduleId),
+        eq(contentTriggers.organizationId, organizationId),
+        eq(contentTriggers.sourceType, "cron")
+      ),
+    })
+  );
+  if (!schedule) {
+    return yield* new ScheduleNotFoundError();
+  }
+  return schedule;
+});
+
+export const runSchedule = Effect.fn("schedules.run")(function* ({
+  db,
+  organizationId,
+  scheduleId,
+  actorId,
+  env,
+}: RunScheduleProgramInput) {
+  const schedule = yield* findSchedule(db, organizationId, scheduleId);
+  if (!schedule.enabled) {
+    return yield* new ScheduleDisabledError();
+  }
+  const { runId } = yield* Effect.tryPromise({
+    try: () => startScheduleRun(env, organizationId, scheduleId, actorId),
+    catch: (cause) => new ScheduleRunStartError({ cause }),
+  });
+  return runId;
+});
+
+export const listScheduleRuns = Effect.fn("schedules.runs")(function* ({
+  db,
+  organizationId,
+  scheduleId,
+  limit,
+}: ScheduleRunsProgramInput) {
+  yield* findSchedule(db, organizationId, scheduleId);
+  const rows = yield* database(() =>
+    db
+      .select()
+      .from(automationRuns)
+      .where(
+        and(
+          eq(automationRuns.organizationId, organizationId),
+          eq(automationRuns.automationId, scheduleId)
+        )
+      )
+      .orderBy(desc(automationRuns.startedAt), desc(automationRuns.id))
+      .limit(limit)
+  );
+
+  // Matches the dashboard's run history: a run that never reported back failed.
+  const staleBefore = new Date(Date.now() - AUTOMATION_RUN_STALE_AFTER_MS);
+  return rows.map((row) => {
+    const stale = row.status === "running" && row.startedAt < staleBefore;
+    return {
+      id: row.id,
+      status: stale ? "failed" : row.status,
+      title: row.title,
+      postId: row.postId,
+      errorMessage: stale ? AUTOMATION_RUN_STALE_MESSAGE : row.errorMessage,
+      manual: row.manual,
+      startedAt: row.startedAt.toISOString(),
+      finishedAt: row.finishedAt?.toISOString() ?? null,
+    };
   });
 });

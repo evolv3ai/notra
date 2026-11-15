@@ -1,0 +1,38 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
+  "entry": [
+    "src/start.ts",
+    "src/client.tsx",
+    "src/router.tsx",
+    "src/lib/framework/runtime.ts",
+    "src/routes/**/*.{ts,tsx}",
+    "src/app/**/route.ts",
+    "scripts/*.ts",
+    "tests/fixtures/*.fixture.{ts,tsx}",
+    "src/**/*.test.{ts,tsx}",
+    "tests/**/*.test.{ts,tsx}",
+    "browser-tests/**/*.test.ts",
+    "browser-tests/fixtures/*.tsx",
+  ],
+  "ignoreFiles": ["public/embed.js"],
+  "paths": {
+    "@/*": ["./src/*"],
+  },
+  "ignoreDependencies": [
+    "@ai-sdk/code-mode",
+    "@ai-sdk/devtools",
+    "@cursor/sdk",
+    "@resvg/resvg-js",
+    "satori",
+    "wawoff2",
+    "tailwindcss",
+  ],
+  "ignoreIssues": {
+    // Vendored registry components: keep their full export surface so upstream syncs stay clean.
+    "src/components/charts/**/*.{ts,tsx}": ["exports", "types"],
+    // Vendored registry components: keep their full export surface so upstream syncs stay clean.
+    "src/components/evilcharts/**/*.{ts,tsx}": ["exports", "types"],
+    // Vendored registry components: keep their full export surface so upstream syncs stay clean.
+    "src/components/motion/**/*.{ts,tsx}": ["exports", "types"],
+  },
+}

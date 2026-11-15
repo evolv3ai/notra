@@ -25,6 +25,7 @@ export async function invalidateGeoTrafficQueries(
   await Promise.all(
     [
       dashboardOrpc.geo.aiTraffic.key({ input }),
+      dashboardOrpc.geo.aiTrafficSources.key({ input }),
       dashboardOrpc.geo.trafficLog.key({ input }),
       dashboardOrpc.geo.trafficPages.key({ input }),
       dashboardOrpc.geo.trafficJourneys.key({ input }),

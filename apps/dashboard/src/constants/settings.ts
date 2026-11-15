@@ -7,6 +7,7 @@ import {
   CorporateIcon,
   CreditCardIcon,
   Globe02Icon,
+  Key01Icon,
   Notification01Icon,
   PaintBoardIcon,
   PlugIcon,
@@ -25,6 +26,7 @@ import type {
 export const SETTINGS_SECTION_IDS = [
   "account",
   "appearance",
+  "account-api-keys",
   "general",
   "members",
   "notifications",
@@ -86,6 +88,21 @@ export const SETTINGS_NAV_GROUPS: readonly SettingsNavGroupConfig[] = [
           "dark",
           "system",
           "color scheme",
+        ],
+      },
+      {
+        id: "account-api-keys",
+        icon: Key01Icon,
+        keywords: [
+          "api",
+          "keys",
+          "tokens",
+          "personal",
+          "account",
+          "credentials",
+          "mcp",
+          "sdk",
+          "cli",
         ],
       },
     ],
@@ -298,3 +315,5 @@ export const LOGS_SETTINGS_SEARCH_KEYS = [
 ] as const;
 
 export const LEGACY_BILLING_TAB_VALUES = ["billing", "usage"] as const;
+
+export const SETTINGS_TABLE_EMPTY_HEIGHT = 280;

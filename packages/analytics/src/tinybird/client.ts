@@ -10,6 +10,10 @@ import {
 import { bumpAnalyticsVersions, cachedQuery } from "../cache/query-cache";
 import type { AnalyticsCacheScope } from "../types/cache";
 import type {
+  WebPageEngagementRow,
+  WebPageViewRow,
+} from "../types/tinybird-datasources";
+import type {
   AccountLeaderboardParams,
   AccountLeaderboardRow,
   EngagementTimeseriesParams,
@@ -26,6 +30,8 @@ import type {
   GeoTrafficPagesParams,
   GeoTrafficPagesRow,
   GeoTrafficTimeseriesRow,
+  GeoTrafficTrendsDailyRow,
+  GeoTrafficTrendsProjectsRow,
   NotraAdoptionRow,
   PostingPerformanceParams,
   PostingPerformanceRow,
@@ -34,10 +40,35 @@ import type {
   SocialOverviewRow,
   TopPostsParams,
   TopPostsRow,
+  WebOverviewRow,
+  WebTimeseriesRow,
+  WebPagesRow,
+  WebSourcesRow,
+  WebAudienceRow,
+  WebHostsRow,
+  WebAiOutcomesRow,
+  WebEngagementRow,
+  McpClientsRow,
+  McpLogRow,
+  McpOverviewRow,
+  McpTimeseriesRow,
+  McpToolsRow,
+  McpToolNeighborsRow,
+  McpToolFailuresRow,
+  McpIntentsRow,
+  McpUiRendersRow,
+  McpUsersRow,
+  McpSessionsRow,
+  McpSessionEventsRow,
+  McpCatalogRow,
+  McpElicitationsRow,
+  McpModelsRow,
 } from "../types/tinybird-endpoints";
 import {
   type GeoTrafficEventRow,
   geoTrafficEvents,
+  type McpEventRow,
+  mcpEvents,
   type SocialAccountRow,
   type SocialAccountStatsRow,
   type SocialPostRow,
@@ -48,6 +79,8 @@ import {
   socialPostSources,
   socialPostStats,
   socialPosts,
+  webPageEngagement,
+  webPageViews,
 } from "./datasources";
 import { queryDemoPipe } from "./demo-geo-traffic";
 import { isDemoSocialPipe, queryDemoSocialPipe } from "./demo-social";
@@ -62,6 +95,27 @@ import {
   geoTrafficTimeseries,
 } from "./pipes/geo-traffic";
 import {
+  geoTrafficTrendsDaily,
+  geoTrafficTrendsProjects,
+} from "./pipes/geo-traffic-trends";
+import {
+  mcpCatalog,
+  mcpClients,
+  mcpElicitations,
+  mcpIntents,
+  mcpLog,
+  mcpModels,
+  mcpOverview,
+  mcpSessionEvents,
+  mcpSessions,
+  mcpTimeseries,
+  mcpToolFailures,
+  mcpToolNeighbors,
+  mcpTools,
+  mcpUiRenders,
+  mcpUsers,
+} from "./pipes/mcp";
+import {
   accountLeaderboard,
   engagementTimeseries,
   followerGrowth,
@@ -71,11 +125,17 @@ import {
   socialOverview,
   topPosts,
 } from "./pipes/social";
+import {
+  webAiOutcomes,
+  webAudience,
+  webEngagement,
+  webHosts,
+  webOverview,
+  webPages,
+  webSources,
+  webTimeseries,
+} from "./pipes/web";
 
-/**
- * Analytics queries sit on the request path, so a stalled Tinybird must fail
- * instead of holding the request open. The SDK's own default is 30s.
- */
 const TINYBIRD_REQUEST_TIMEOUT_MS = 10_000;
 
 function hasTinybirdToken(): boolean {
@@ -90,14 +150,19 @@ export function isTinybirdConfigured(): boolean {
   return hasTinybirdToken() || isDemoMode();
 }
 
+function tinybirdBaseUrl(): string {
+  return (
+    process.env.TINYBIRD_BASE_URL ??
+    process.env.TINYBIRD_URL ??
+    "https://api.tinybird.co"
+  );
+}
+
 function createTinybirdClient(fetch?: typeof globalThis.fetch) {
   return new Tinybird({
     fetch,
     token: process.env.TINYBIRD_TOKEN,
-    baseUrl:
-      process.env.TINYBIRD_BASE_URL ??
-      process.env.TINYBIRD_URL ??
-      "https://api.tinybird.co",
+    baseUrl: tinybirdBaseUrl(),
     devMode: false,
     datasources: {
       socialAccounts,
@@ -106,6 +171,9 @@ function createTinybirdClient(fetch?: typeof globalThis.fetch) {
       socialPostStats,
       socialPostSources,
       geoTrafficEvents,
+      webPageViews,
+      webPageEngagement,
+      mcpEvents,
     },
     pipes: {
       socialOverview,
@@ -124,6 +192,31 @@ function createTinybirdClient(fetch?: typeof globalThis.fetch) {
       geoJourneySources,
       geoJourneyPages,
       geoJourneyDetail,
+      geoTrafficTrendsDaily,
+      geoTrafficTrendsProjects,
+      webOverview,
+      webTimeseries,
+      webPages,
+      webSources,
+      webAudience,
+      webHosts,
+      webAiOutcomes,
+      webEngagement,
+      mcpOverview,
+      mcpTimeseries,
+      mcpTools,
+      mcpClients,
+      mcpLog,
+      mcpToolNeighbors,
+      mcpToolFailures,
+      mcpIntents,
+      mcpUsers,
+      mcpSessions,
+      mcpSessionEvents,
+      mcpCatalog,
+      mcpModels,
+      mcpElicitations,
+      mcpUiRenders,
     },
   });
 }
@@ -180,7 +273,6 @@ function cachedPipeQuery<TParams extends Record<string, unknown>, TRow>(
     client: NonNullable<ReturnType<typeof getTinybirdQueryClient>>
   ) => Promise<QueryResult<TRow>>
 ): Promise<QueryResult<TRow> | null> {
-  // The public demo has no Tinybird; its analytics are generated at read time.
   if (isDemoMode()) {
     return isDemoSocialPipe(pipe)
       ? queryDemoSocialPipe<TRow>(pipe, params)
@@ -467,5 +559,370 @@ export function queryGeoJourneyDetail(
     params,
     params.organization_id,
     (client) => client.geoJourneyDetail.query(params)
+  );
+}
+
+/**
+ * Queries an endpoint with its params in a POST body. The SDK sends them in
+ * the URL, which a long id list pushes past the server's limit (HTTP 414).
+ */
+async function postPipeQuery<TRow>(
+  pipe: string,
+  params: Record<string, unknown>
+): Promise<QueryResult<TRow>> {
+  const response = await createTimeoutFetch(TINYBIRD_REQUEST_TIMEOUT_MS)(
+    new URL(`/v0/pipes/${pipe}.json`, tinybirdBaseUrl()),
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.TINYBIRD_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(params),
+    }
+  );
+  if (!response.ok) {
+    throw new Error(`Tinybird ${pipe} query failed (${response.status})`);
+  }
+  return (await response.json()) as QueryResult<TRow>;
+}
+
+/** Cross-organization AI traffic for the admin console, cached globally. */
+export function queryGeoTrafficTrendsDaily(
+  params: InferParams<typeof geoTrafficTrendsDaily>
+): Promise<QueryResult<GeoTrafficTrendsDailyRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "geo_traffic_trends_daily",
+    params,
+    null,
+    // Every sample, demo and deleted project id rides along to be excluded.
+    () =>
+      postPipeQuery<GeoTrafficTrendsDailyRow>(
+        "geo_traffic_trends_daily",
+        params
+      )
+  );
+}
+
+export function queryGeoTrafficTrendsProjects(
+  params: InferParams<typeof geoTrafficTrendsProjects>
+): Promise<QueryResult<GeoTrafficTrendsProjectsRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "geo_traffic_trends_projects",
+    params,
+    null,
+    (client) => client.geoTrafficTrendsProjects.query(params)
+  );
+}
+
+export function ingestWebPageViews(
+  rows: WebPageViewRow[]
+): Promise<IngestResult | null> {
+  return ingestRows(
+    rows,
+    "geo",
+    rows.map((row) => row.organization_id),
+    (client, batch) => client.webPageViews.ingestBatch(batch, { wait: false })
+  );
+}
+
+export function ingestWebPageEngagement(
+  rows: WebPageEngagementRow[]
+): Promise<IngestResult | null> {
+  return ingestRows(
+    rows,
+    "geo",
+    rows.map((row) => row.organization_id),
+    (client, batch) =>
+      client.webPageEngagement.ingestBatch(batch, { wait: false })
+  );
+}
+
+export function queryWebEngagement(
+  params: InferParams<typeof webEngagement>
+): Promise<QueryResult<WebEngagementRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "web_engagement",
+    params,
+    params.organization_id,
+    (client) => client.webEngagement.query(params)
+  );
+}
+
+export function queryWebOverview(
+  params: InferParams<typeof webOverview>
+): Promise<QueryResult<WebOverviewRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "web_overview",
+    params,
+    params.organization_id,
+    (client) => client.webOverview.query(params)
+  );
+}
+
+export function queryWebTimeseries(
+  params: InferParams<typeof webTimeseries>
+): Promise<QueryResult<WebTimeseriesRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "web_timeseries",
+    params,
+    params.organization_id,
+    (client) => client.webTimeseries.query(params)
+  );
+}
+
+export function queryWebPages(
+  params: InferParams<typeof webPages>
+): Promise<QueryResult<WebPagesRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "web_pages",
+    params,
+    params.organization_id,
+    (client) => client.webPages.query(params)
+  );
+}
+
+export function queryWebSources(
+  params: InferParams<typeof webSources>
+): Promise<QueryResult<WebSourcesRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "web_sources",
+    params,
+    params.organization_id,
+    (client) => client.webSources.query(params)
+  );
+}
+
+export function queryWebAudience(
+  params: InferParams<typeof webAudience>
+): Promise<QueryResult<WebAudienceRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "web_audience",
+    params,
+    params.organization_id,
+    (client) => client.webAudience.query(params)
+  );
+}
+
+export function queryWebHosts(
+  params: InferParams<typeof webHosts>
+): Promise<QueryResult<WebHostsRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "web_hosts",
+    params,
+    params.organization_id,
+    (client) => client.webHosts.query(params)
+  );
+}
+
+export function queryWebAiOutcomes(
+  params: InferParams<typeof webAiOutcomes>
+): Promise<QueryResult<WebAiOutcomesRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "web_ai_outcomes",
+    params,
+    params.organization_id,
+    (client) => client.webAiOutcomes.query(params)
+  );
+}
+
+export function ingestMcpEvents(
+  rows: McpEventRow[]
+): Promise<IngestResult | null> {
+  return ingestRows(
+    rows,
+    "geo",
+    rows.map((row) => row.organization_id),
+    (client, batch) => client.mcpEvents.ingestBatch(batch, { wait: false })
+  );
+}
+
+export function queryMcpOverview(
+  params: InferParams<typeof mcpOverview>
+): Promise<QueryResult<McpOverviewRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "mcp_overview",
+    params,
+    params.organization_id,
+    (client) => client.mcpOverview.query(params)
+  );
+}
+
+export function queryMcpTimeseries(
+  params: InferParams<typeof mcpTimeseries>
+): Promise<QueryResult<McpTimeseriesRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "mcp_timeseries",
+    params,
+    params.organization_id,
+    (client) => client.mcpTimeseries.query(params)
+  );
+}
+
+export function queryMcpTools(
+  params: InferParams<typeof mcpTools>
+): Promise<QueryResult<McpToolsRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "mcp_tools",
+    params,
+    params.organization_id,
+    (client) => client.mcpTools.query(params)
+  );
+}
+
+export function queryMcpClients(
+  params: InferParams<typeof mcpClients>
+): Promise<QueryResult<McpClientsRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "mcp_clients",
+    params,
+    params.organization_id,
+    (client) => client.mcpClients.query(params)
+  );
+}
+
+export function queryMcpLog(
+  params: InferParams<typeof mcpLog>
+): Promise<QueryResult<McpLogRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "mcp_log",
+    params,
+    params.organization_id,
+    (client) => client.mcpLog.query(params)
+  );
+}
+
+export function queryMcpToolNeighbors(
+  params: InferParams<typeof mcpToolNeighbors>
+): Promise<QueryResult<McpToolNeighborsRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "mcp_tool_neighbors",
+    params,
+    params.organization_id,
+    (client) => client.mcpToolNeighbors.query(params)
+  );
+}
+
+export function queryMcpToolFailures(
+  params: InferParams<typeof mcpToolFailures>
+): Promise<QueryResult<McpToolFailuresRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "mcp_tool_failures",
+    params,
+    params.organization_id,
+    (client) => client.mcpToolFailures.query(params)
+  );
+}
+
+export function queryMcpIntents(
+  params: InferParams<typeof mcpIntents>
+): Promise<QueryResult<McpIntentsRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "mcp_intents",
+    params,
+    params.organization_id,
+    (client) => client.mcpIntents.query(params)
+  );
+}
+
+export function queryMcpUsers(
+  params: InferParams<typeof mcpUsers>
+): Promise<QueryResult<McpUsersRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "mcp_users",
+    params,
+    params.organization_id,
+    (client) => client.mcpUsers.query(params)
+  );
+}
+
+export function queryMcpSessions(
+  params: InferParams<typeof mcpSessions>
+): Promise<QueryResult<McpSessionsRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "mcp_sessions",
+    params,
+    params.organization_id,
+    (client) => client.mcpSessions.query(params)
+  );
+}
+
+export function queryMcpSessionEvents(
+  params: InferParams<typeof mcpSessionEvents>
+): Promise<QueryResult<McpSessionEventsRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "mcp_session_events",
+    params,
+    params.organization_id,
+    (client) => client.mcpSessionEvents.query(params)
+  );
+}
+
+export function queryMcpCatalog(
+  params: InferParams<typeof mcpCatalog>
+): Promise<QueryResult<McpCatalogRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "mcp_catalog",
+    params,
+    params.organization_id,
+    (client) => client.mcpCatalog.query(params)
+  );
+}
+
+export function queryMcpModels(
+  params: InferParams<typeof mcpModels>
+): Promise<QueryResult<McpModelsRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "mcp_models",
+    params,
+    params.organization_id,
+    (client) => client.mcpModels.query(params)
+  );
+}
+
+export function queryMcpElicitations(
+  params: InferParams<typeof mcpElicitations>
+): Promise<QueryResult<McpElicitationsRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "mcp_elicitations",
+    params,
+    params.organization_id,
+    (client) => client.mcpElicitations.query(params)
+  );
+}
+
+export function queryMcpUiRenders(
+  params: InferParams<typeof mcpUiRenders>
+): Promise<QueryResult<McpUiRendersRow> | null> {
+  return cachedPipeQuery(
+    "geo",
+    "mcp_ui_renders",
+    params,
+    params.organization_id,
+    (client) => client.mcpUiRenders.query(params)
   );
 }

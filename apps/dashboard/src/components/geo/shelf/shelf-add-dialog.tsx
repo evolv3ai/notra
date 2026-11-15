@@ -28,8 +28,8 @@ import {
 } from "@notra/ui/components/ui/select";
 import { useForm, useStore } from "@tanstack/react-form";
 import { useDebouncedValue } from "@tanstack/react-pacer";
-import { useTranslations } from "next-intl";
 import { useEffect, useId, useRef } from "react";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { ShelfPresenceFields } from "@/components/geo/shelf/shelf-presence-fields";
@@ -56,7 +56,6 @@ function toKind(value: string): GeoShelfSourceKind {
   return GEO_SHELF_SOURCE_KINDS.find((kind) => kind === value) ?? "other";
 }
 
-/** Stored rows may predate canonicalization, so compare both sides canonical. */
 function canonicalizeShelfUrlSafe(raw: string): string {
   return isAllowedShelfUrl(raw) ? canonicalizeShelfUrl(raw) : raw;
 }
@@ -174,7 +173,6 @@ export function ShelfAddDialog({
       : null;
   const preview = useGeoShelfPreview(organizationId, previewUrl);
   const previewTitle = preview.data?.title ?? null;
-  // `existingUrls` only covers loaded rows; the server knows the whole shelf.
   const urlCheck = useGeoShelfUrlCheck(organizationId, previewUrl);
   const isServerDuplicate =
     urlCheck.data?.onShelf === true && urlValue.trim() === debouncedUrl.trim();
@@ -384,6 +382,7 @@ export function ShelfAddDialog({
                     !(canSubmit && isAllowedShelfUrl(url)) || isServerDuplicate
                   }
                   type="submit"
+                  data-dialog-confirm
                 >
                   {tGeoShared("addShelf")}
                 </Button>

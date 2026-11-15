@@ -22,6 +22,15 @@ export interface SlackChannelOption {
   memberCount: number | null;
 }
 
+export interface CreateAutopilotSlackChannelProps {
+  organizationId: string;
+  integrationId: string;
+  authorizeUrl: string;
+  onCreated: (channel: SlackChannelOption) => void;
+  onCancel: () => void;
+  returnFocus: React.RefObject<HTMLButtonElement | null>;
+}
+
 export interface SlackIntegrationCardProps {
   integration: SlackIntegration;
   organizationId: string;

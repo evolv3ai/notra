@@ -1,10 +1,6 @@
 import { cn } from "@notra/ui/lib/utils";
 import type { OpencodeMessageProps } from "@notra/ui/types/opencode-skin";
 
-/**
- * Colors markdown inside a reply the way the TUI does: headings and strong
- * text in bold orange, inline code in green.
- */
 const REPLY_MARKUP_CLASS =
   "[&_:is(h1,h2,h3,h4)]:font-bold [&_:is(h1,h2,h3,h4)]:text-opencode-tui-orange [&_code]:text-opencode-tui-green [&_li::marker]:text-opencode-tui-orange [&_strong]:font-bold [&_strong]:text-opencode-tui-orange";
 

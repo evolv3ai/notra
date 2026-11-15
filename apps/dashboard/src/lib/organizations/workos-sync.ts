@@ -1,7 +1,7 @@
 import { db } from "@notra/db/drizzle";
 import { members, organizations, users } from "@notra/db/schema";
 import { isDemoMode } from "@notra/utils/demo-mode";
-import { getWorkOS } from "@workos-inc/authkit-nextjs";
+import { getWorkOS } from "@workos/authkit-session";
 import { eq } from "drizzle-orm";
 import { Effect } from "effect";
 
@@ -14,11 +14,31 @@ const logSyncFailure = (context: Record<string, unknown>) =>
     )
   );
 
-// The public demo has no WorkOS; memberships only live in the database.
 const skipInDemo = <A, E, R>(
   effect: Effect.Effect<A, E, R>
 ): Effect.Effect<A | void, E, R> =>
   Effect.suspend(() => (isDemoMode() ? Effect.void : effect));
+
+async function findWorkOSIds(organizationId: string, userId: string) {
+  const [organization, user] = await Promise.all([
+    db.query.organizations.findFirst({
+      where: eq(organizations.id, organizationId),
+      columns: { workosOrgId: true },
+    }),
+    db.query.users.findFirst({
+      where: eq(users.id, userId),
+      columns: { workosUserId: true },
+    }),
+  ]);
+
+  if (!(organization?.workosOrgId && user?.workosUserId)) {
+    return null;
+  }
+  return {
+    workosOrgId: organization.workosOrgId,
+    workosUserId: user.workosUserId,
+  };
+}
 
 const ensureWorkOSOrganization = Effect.fn(
   "organizations.sync.ensureWorkOSOrganization"
@@ -128,32 +148,22 @@ const createWorkOSMembership = Effect.fn(
 )(function* (organizationId: string, userId: string, roleSlug?: string) {
   yield* Effect.tryPromise({
     try: async () => {
-      const [organization, user] = await Promise.all([
-        db.query.organizations.findFirst({
-          where: eq(organizations.id, organizationId),
-          columns: { workosOrgId: true },
-        }),
-        db.query.users.findFirst({
-          where: eq(users.id, userId),
-          columns: { workosUserId: true },
-        }),
-      ]);
-
-      if (!(organization?.workosOrgId && user?.workosUserId)) {
+      const ids = await findWorkOSIds(organizationId, userId);
+      if (!ids) {
         return;
       }
 
       try {
         await getWorkOS().userManagement.createOrganizationMembership({
-          organizationId: organization.workosOrgId,
-          userId: user.workosUserId,
+          organizationId: ids.workosOrgId,
+          userId: ids.workosUserId,
           roleSlug,
         });
       } catch (createError) {
         const existing =
           await getWorkOS().userManagement.listOrganizationMemberships({
-            organizationId: organization.workosOrgId,
-            userId: user.workosUserId,
+            organizationId: ids.workosOrgId,
+            userId: ids.workosUserId,
           });
 
         if (existing.data.length === 0) {
@@ -169,30 +179,21 @@ const createWorkOSMembership = Effect.fn(
   });
 });
 
-export const updateMembershipRoleInWorkOS = Effect.fn(
-  "organizations.sync.updateWorkOSMembershipRole"
+/** Fails instead of logging; see removeMembershipFromWorkOSStrict. */
+export const updateMembershipRoleInWorkOSStrict = Effect.fn(
+  "organizations.sync.updateWorkOSMembershipRoleStrict"
 )(function* (organizationId: string, userId: string, roleSlug: string) {
   yield* Effect.tryPromise({
     try: async () => {
-      const [organization, user] = await Promise.all([
-        db.query.organizations.findFirst({
-          where: eq(organizations.id, organizationId),
-          columns: { workosOrgId: true },
-        }),
-        db.query.users.findFirst({
-          where: eq(users.id, userId),
-          columns: { workosUserId: true },
-        }),
-      ]);
-
-      if (!(organization?.workosOrgId && user?.workosUserId)) {
+      const ids = await findWorkOSIds(organizationId, userId);
+      if (!ids) {
         return;
       }
 
       const memberships =
         await getWorkOS().userManagement.listOrganizationMemberships({
-          organizationId: organization.workosOrgId,
-          userId: user.workosUserId,
+          organizationId: ids.workosOrgId,
+          userId: ids.workosUserId,
         });
 
       const membership = memberships.data[0];
@@ -206,8 +207,8 @@ export const updateMembershipRoleInWorkOS = Effect.fn(
       }
 
       await getWorkOS().userManagement.createOrganizationMembership({
-        organizationId: organization.workosOrgId,
-        userId: user.workosUserId,
+        organizationId: ids.workosOrgId,
+        userId: ids.workosUserId,
         roleSlug,
       });
     },
@@ -216,7 +217,17 @@ export const updateMembershipRoleInWorkOS = Effect.fn(
         message: "Failed to update WorkOS membership role",
         cause,
       }),
-  }).pipe(logSyncFailure({ organizationId, userId }), skipInDemo);
+  }).pipe(skipInDemo);
+});
+
+export const updateMembershipRoleInWorkOS = Effect.fn(
+  "organizations.sync.updateWorkOSMembershipRole"
+)(function* (organizationId: string, userId: string, roleSlug: string) {
+  yield* updateMembershipRoleInWorkOSStrict(
+    organizationId,
+    userId,
+    roleSlug
+  ).pipe(logSyncFailure({ organizationId, userId }));
 });
 
 export const deleteOrganizationFromWorkOS = Effect.fn(
@@ -236,30 +247,24 @@ export const deleteOrganizationFromWorkOS = Effect.fn(
   }).pipe(logSyncFailure({ workosOrgId }), skipInDemo);
 });
 
-export const removeMembershipFromWorkOS = Effect.fn(
-  "organizations.sync.removeWorkOSMembership"
+/**
+ * Fails instead of logging so access revocations can run remote-first: a local
+ * removal that WorkOS never saw would be restored by the next login sync.
+ */
+export const removeMembershipFromWorkOSStrict = Effect.fn(
+  "organizations.sync.removeWorkOSMembershipStrict"
 )(function* (organizationId: string, userId: string) {
   yield* Effect.tryPromise({
     try: async () => {
-      const [organization, user] = await Promise.all([
-        db.query.organizations.findFirst({
-          where: eq(organizations.id, organizationId),
-          columns: { workosOrgId: true },
-        }),
-        db.query.users.findFirst({
-          where: eq(users.id, userId),
-          columns: { workosUserId: true },
-        }),
-      ]);
-
-      if (!(organization?.workosOrgId && user?.workosUserId)) {
+      const ids = await findWorkOSIds(organizationId, userId);
+      if (!ids) {
         return;
       }
 
       const memberships =
         await getWorkOS().userManagement.listOrganizationMemberships({
-          organizationId: organization.workosOrgId,
-          userId: user.workosUserId,
+          organizationId: ids.workosOrgId,
+          userId: ids.workosUserId,
         });
 
       await Promise.all(
@@ -273,5 +278,13 @@ export const removeMembershipFromWorkOS = Effect.fn(
         message: "Failed to remove WorkOS membership",
         cause,
       }),
-  }).pipe(logSyncFailure({ organizationId, userId }), skipInDemo);
+  }).pipe(skipInDemo);
+});
+
+export const removeMembershipFromWorkOS = Effect.fn(
+  "organizations.sync.removeWorkOSMembership"
+)(function* (organizationId: string, userId: string) {
+  yield* removeMembershipFromWorkOSStrict(organizationId, userId).pipe(
+    logSyncFailure({ organizationId, userId })
+  );
 });

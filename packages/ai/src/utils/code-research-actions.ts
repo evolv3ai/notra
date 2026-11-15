@@ -178,7 +178,7 @@ export async function searchRepository(
     matches: parsed.matches,
     ...(parsed.hiddenPaths > 0
       ? {
-          note: `${String(parsed.hiddenPaths)} secret-bearing files were hidden.`,
+          note: `${parsed.hiddenPaths} secret-bearing files were hidden.`,
         }
       : {}),
   };

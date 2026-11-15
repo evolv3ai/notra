@@ -1,14 +1,12 @@
 "use client";
 
 import { useReducedMotion } from "motion/react";
-import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
 import { AUTH_SPLIT_PANEL_MIN_WIDTH } from "@/constants/auth-split-panel";
+import dynamic from "@/utils/lazy-component";
 import { isWebGLAvailable } from "@/utils/webgl";
 
-// three.js + postprocessing (~128 kB gz) for a decorative background: client-only
-// and never on the critical path of the auth forms.
 const PixelBlast = dynamic(() => import("@/components/PixelBlast"), {
   ssr: false,
 });

@@ -7,7 +7,11 @@ import {
   enforceGlobalRenderLimit,
   enforceStarVideoRateLimit,
 } from "@/lib/star-video/ratelimit";
-import { renderStarVideo } from "@/lib/star-video/render";
+import {
+  RenderBusy,
+  renderStarVideo,
+  StarVideoRenderFailed,
+} from "@/lib/star-video/render";
 import { starVideoInputSchema } from "@/schemas/star-video";
 
 async function POST(request: Request) {
@@ -43,7 +47,9 @@ async function POST(request: Request) {
       const video = yield* Effect.tryPromise({
         try: () => renderStarVideo(parsed.data),
         catch: (cause) =>
-          cause instanceof Error ? cause : new Error("Failed to render video"),
+          cause instanceof RenderBusy
+            ? cause
+            : new StarVideoRenderFailed({ cause }),
       });
 
       return new Response(new Uint8Array(video), {
@@ -55,21 +61,26 @@ async function POST(request: Request) {
     }).pipe(
       Effect.match({
         onFailure: (error) => {
-          if (
-            "_tag" in error &&
-            (error._tag === "StarVideoRateLimitExceeded" ||
-              error._tag === "RenderBusy")
-          ) {
-            return Response.json(
-              { error: "Too many render requests. Please try again shortly." },
-              { status: 429 }
-            );
+          switch (error._tag) {
+            case "StarVideoRateLimitExceeded":
+            case "RenderBusy":
+              return Response.json(
+                {
+                  error: "Too many render requests. Please try again shortly.",
+                },
+                { status: 429 }
+              );
+            case "StarVideoRenderFailed":
+              console.error("Failed to render star video", error.cause);
+              return Response.json(
+                { error: "Failed to render the video. Please try again." },
+                { status: 500 }
+              );
+            default: {
+              const _exhaustive: never = error;
+              return _exhaustive;
+            }
           }
-          console.error("Failed to render star video", error);
-          return Response.json(
-            { error: "Failed to render the video. Please try again." },
-            { status: 500 }
-          );
         },
         onSuccess: (response) => response,
       })

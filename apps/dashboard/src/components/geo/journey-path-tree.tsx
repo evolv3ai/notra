@@ -1,4 +1,4 @@
-import { useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import { JourneyPathPill } from "@/components/geo/journey-path-pill";
 import { cn } from "@/lib/utils";
@@ -26,10 +26,6 @@ function JourneyTreeRow({ node }: { node: GeoJourneyTreeNode }) {
   );
 }
 
-/**
- * A single next page continues straight down; only a real branch (the agent
- * went back and took another route) indents, so long crawls stay readable.
- */
 function JourneyTreeBranch({ node }: { node: GeoJourneyTreeNode }) {
   const [onlyChild] = node.children;
 

@@ -11,16 +11,16 @@ import {
   SheetTitle,
 } from "@notra/ui/components/ui/sheet";
 import { Skeleton } from "@notra/ui/components/ui/skeleton";
+import { useRetainedValue } from "@notra/ui/hooks/use-retained-value";
 import { useReducedMotion } from "motion/react";
-import { useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { ConversationReplayThread } from "@/components/geo/conversation-replay-thread";
 import { PromptEngineSwitcher } from "@/components/geo/prompt-engine-switcher";
 import { useAnswerReplay } from "@/lib/hooks/use-answer-replay";
 import { useGeoSequenceResults } from "@/lib/hooks/use-geo";
-import { useRetainedValue } from "@/lib/hooks/use-retained-value";
 import type {
   ConversationResultsDialogProps,
   GeoSequenceEngineThread,
@@ -44,14 +44,22 @@ function latestCheckAt(threads: GeoSequenceEngineThread[]): string | null {
 function RunConversationButton({
   onRun,
   isRunning,
+  disabled,
   label,
 }: {
   onRun: () => void;
   isRunning: boolean;
+  disabled: boolean;
   label: string;
 }) {
   return (
-    <Button loading={isRunning} onClick={onRun} size="sm">
+    <Button
+      disabled={disabled}
+      focusableWhenDisabled
+      loading={isRunning}
+      onClick={onRun}
+      size="sm"
+    >
       <HugeiconsIcon icon={PlayIcon} size={14} />
       {label}
     </Button>
@@ -65,6 +73,7 @@ export function ConversationResultsDialog({
   sequence: selectedSequence,
   onRun,
   isRunning,
+  runDisabled,
 }: ConversationResultsDialogProps) {
   const [sequence, releaseSequence] = useRetainedValue(selectedSequence);
   const { data, isLoading } = useGeoSequenceResults(
@@ -180,6 +189,7 @@ export function ConversationResultsDialog({
                 {t("empty")}
               </p>
               <RunConversationButton
+                disabled={runDisabled}
                 isRunning={isRunning}
                 label={t("runNow")}
                 onRun={onRun}

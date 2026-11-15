@@ -15,10 +15,7 @@ const handler = realtime
         });
 
         if (!(session && user)) {
-          return new Response(JSON.stringify({ error: "Unauthorized" }), {
-            status: 401,
-            headers: { "Content-Type": "application/json" },
-          });
+          return Response.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         const denied = await authorizeRealtimeChannels({
@@ -27,7 +24,6 @@ const handler = realtime
           user,
         });
         if (!denied) {
-          // Ingest only publishes traffic updates while someone watches.
           await markGeoLiveWatched(geoLiveChannelOrganizations(channels));
         }
         return denied;
@@ -37,10 +33,7 @@ const handler = realtime
 
 export async function GET(request: Request) {
   if (!handler) {
-    return new Response(JSON.stringify({ error: "Realtime not configured" }), {
-      status: 503,
-      headers: { "Content-Type": "application/json" },
-    });
+    return Response.json({ error: "Realtime not configured" }, { status: 503 });
   }
   return handler(request);
 }

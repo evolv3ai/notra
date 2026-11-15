@@ -1,8 +1,10 @@
+import type { WebhookConfig } from "@notra/ai/types/integrations";
 import type { createOctokit } from "@notra/ai/utils/octokit";
-import type { redis } from "@notra/ai/utils/redis";
 import { Data } from "effect";
-import type { useTranslations } from "next-intl";
 import type React from "react";
+import type { useTranslations } from "use-intl";
+
+import type { useGitHubWebhookActions } from "@/hooks/use-github-webhook-actions";
 
 import type messages from "../../../messages/en.json";
 import type { GitHubIntegration, GitHubRepository } from "../integrations";
@@ -18,8 +20,7 @@ export interface GitHubRepositoryRowProps {
 export interface GitHubRepositoryActionsProps {
   onMigrate: () => void;
   isMigrating: boolean;
-  onToggleWebhooks: () => void;
-  webhooksOpen: boolean;
+  webhook: GitHubWebhookActions | null;
   integration: GitHubIntegration;
   organizationId: string;
   onManageRepositories: () => void;
@@ -34,14 +35,29 @@ export interface GitHubRepositoryMenuProps extends GitHubRepositoryActionsProps 
   onDialog: (dialog: GitHubRepositoryDialog) => void;
 }
 
-export interface GitHubLegacyPageProps {
-  params: Promise<{ slug: string; id: string }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+export type GitHubWebhookAction = "setup" | "repair" | "rotate";
+
+export interface UseGitHubWebhookActionsOptions {
+  organizationId: string;
+  repository: GitHubRepository | undefined;
 }
+
+type GitHubWebhookActions = ReturnType<typeof useGitHubWebhookActions>;
 
 export interface GitHubWebhookSettingsProps {
   repository: GitHubRepository;
-  organizationId: string;
+  webhook: GitHubWebhookActions;
+}
+
+export interface GitHubSettingRowProps {
+  title: React.ReactNode;
+  description?: React.ReactNode;
+  htmlFor?: string;
+  children?: React.ReactNode;
+}
+
+export interface GitHubWebhookCredentialsProps {
+  webhook: Pick<WebhookConfig, "webhookUrl" | "webhookSecret">;
 }
 
 export interface GitHubWebhookRotationDialogProps {
@@ -49,6 +65,15 @@ export interface GitHubWebhookRotationDialogProps {
   onOpenChange: (open: boolean) => void;
   onConfirm: () => void;
   isPending: boolean;
+}
+
+export interface GitHubWebhookRepairDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+  isPending: boolean;
+  disabled: boolean;
+  error: Error | null;
 }
 
 export type GitHubClient = ReturnType<typeof createOctokit>;
@@ -68,7 +93,7 @@ export class GitHubAccountConnectionIncompleteError extends Data.TaggedError(
 
 export type GitHubAccountType = "User" | "Organization";
 
-export interface GitHubAppAccount {
+interface GitHubAppAccount {
   id: string;
   installationId: string;
   login: string;
@@ -88,19 +113,7 @@ export interface GitHubAppRepository {
   defaultBranch: string;
 }
 
-export interface GitHubAccountsSectionProps {
-  accounts: GitHubAppAccount[];
-  repositories: GitHubAppRepository[];
-  selectedRepositoryIds: string[];
-  isLoading: boolean;
-  isError: boolean;
-  onConnect: () => void;
-  onRetry: () => void;
-  onOpenRepositories: (accountId: string) => void;
-  onDisconnect: (accountId: string) => void;
-}
-
-export type GitHubInstallFailureReason =
+type GitHubInstallFailureReason =
   | "account-connection-incomplete"
   | "install-start-failed";
 
@@ -170,10 +183,19 @@ export interface GitHubAccountCardProps {
   onDisconnect: () => void;
 }
 
+export interface GitHubPublishingEditor {
+  repositoryId: string;
+  contentType: GitHubPublishContentType;
+}
+
 export interface GitHubPublishingSettingsProps {
   organizationId: string;
   repository: GitHubRepository;
   disabled?: boolean;
+  openEditor: GitHubPublishingEditor | null;
+  onOpenEditorChange: React.Dispatch<
+    React.SetStateAction<GitHubPublishingEditor | null>
+  >;
 }
 
 export interface GitHubBranchPickerProps {
@@ -224,12 +246,13 @@ export interface GitHubContentPathMutationVariables {
 }
 
 export interface GitHubPublishingPathFieldsProps {
-  contentType: GitHubPublishContentType;
   contentPath: string | null;
   directory: string;
   disabled?: boolean;
   imagePath: string | null;
   isSaving?: boolean;
+  onCancel: () => void;
+  onDirtyChange: (dirty: boolean) => void;
   onSave: (paths: {
     contentPath: string | null;
     imagePath: string | null;
@@ -367,6 +390,7 @@ export interface PrepareGitHubContentAssetsParams {
   imagePathTemplate: string;
   markdown: string;
   organizationId: string;
+  publicDirectory?: string;
   publicUrl: string | null;
   slug: string;
   loadImage: (key: string, maxBytes: number) => Promise<GitHubSourceImageAsset>;
@@ -383,8 +407,13 @@ export interface GitHubPublishPullRequestResult {
   branchName: string;
   operation: GitHubPullRequestOperation;
   path: string;
-  pullRequestNumber: number;
-  pullRequestUrl: string;
+  pullRequestNumber: number | null;
+  pullRequestUrl: string | null;
+  headSha: string;
+  assetPaths?: string[];
+  direct?: boolean;
+  fallbackReason?: "protected" | "draft" | "changed";
+  skipped?: boolean;
 }
 
 export interface GitHubCreateCommitOnBranchResult {
@@ -399,6 +428,11 @@ export interface OpenInNotraBadgeUrls {
 }
 
 export interface PublishContentDraftPullRequestParams {
+  direct?: boolean;
+  ownedPaths?: string[];
+  writtenBlobs?: Record<string, string>;
+  previousHeadSha?: string | null;
+  deletions?: string[];
   contentId: string;
   contentType: GitHubPublishContentType;
   owner: string;
@@ -468,16 +502,6 @@ export interface ClearGitHubPublishFailuresParams {
   repositoryId: string;
 }
 
-export type GitHubPublishFailureRedis = Pick<
-  NonNullable<typeof redis>,
-  "del" | "eval"
->;
-
-export interface GitHubPublishFailureDependencies {
-  pauseOutput?: (params: GitHubPublishOutputTarget) => Promise<boolean>;
-  redisClient: GitHubPublishFailureRedis | null;
-}
-
 export type GitHubPublishRecovery = (
   | { code: "github_authentication_required" }
   | { code: "github_repository_connection_required" }
@@ -505,3 +529,27 @@ export type GitHubFormsTranslator = ReturnType<
 
 export type GitHubCallbackErrorMessageKey =
   keyof (typeof messages)["integrations"]["github"]["callbackErrors"];
+
+export interface ContentPullRequestRef {
+  owner: string;
+  repo: string;
+  pullNumber: number;
+}
+
+export type ContentPullRequestState =
+  | { status: "merged"; mergedAt: Date | null }
+  | { status: "closed" }
+  | { status: "open"; draft: boolean; nodeId: string };
+
+export interface GitHubReviewProcessProps extends Pick<
+  GitHubContentPublishingSettingsProps,
+  "organizationId" | "repository" | "contentType" | "disabled"
+> {
+  config: import("@/types/content/git-publishing").ContentPublishingConfig;
+}
+
+export interface GitHubReviewProcessUpdate {
+  reviewProcess?: "pull_request" | "direct";
+  siteId?: string;
+}
+export type GitHubMergeMethod = "squash" | "merge" | "rebase";

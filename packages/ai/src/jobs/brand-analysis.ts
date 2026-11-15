@@ -5,7 +5,7 @@ import * as z from "zod";
 
 const JOB_TTL_SECONDS = 60 * 60 * 24;
 
-export const brandAnalysisJobStatusSchema = z.enum([
+const brandAnalysisJobStatusSchema = z.enum([
   "queued",
   "running",
   "completed",
@@ -27,9 +27,7 @@ export const brandAnalysisJobSchema = z.object({
   completedAt: z.string().nullable(),
 });
 
-export type BrandAnalysisJobStatus = z.infer<
-  typeof brandAnalysisJobStatusSchema
->;
+type BrandAnalysisJobStatus = z.infer<typeof brandAnalysisJobStatusSchema>;
 export type BrandAnalysisJob = z.infer<typeof brandAnalysisJobSchema>;
 
 function getJobKey(jobId: string) {

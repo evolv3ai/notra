@@ -1,16 +1,11 @@
 "use client";
 
+import { sleep } from "@notra/utils/sleep";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { GeminiStoryMessage } from "@/types/design-system-gemini";
 
 const TOKEN_SPLIT = /(\s+)/;
-
-function wait(ms: number) {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}
 
 export function useGeminiPlayback(
   script: readonly GeminiStoryMessage[],
@@ -47,7 +42,8 @@ export function useGeminiPlayback(
       message: GeminiStoryMessage,
       alive: () => boolean
     ): Promise<void> => {
-      const delay = (ms: number) => wait(reducedMotion ? Math.min(ms, 70) : ms);
+      const delay = (ms: number) =>
+        sleep(reducedMotion ? Math.min(ms, 70) : ms);
 
       if (message.from === "user") {
         setMessages((current) => [...current, message]);

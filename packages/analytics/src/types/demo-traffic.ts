@@ -11,6 +11,7 @@ export type DemoTrafficProvider = (scope: {
 export interface DemoTrafficParams {
   organization_id: string;
   project_id?: string;
+  site_id?: string;
   include_unassigned?: number;
   excluded_sources?: string;
   days?: number;
@@ -20,6 +21,7 @@ export interface DemoTrafficParams {
   visitor_type?: string;
   category?: string;
   host?: string;
+  path?: string;
   journey_id?: string;
   limit?: number;
 }

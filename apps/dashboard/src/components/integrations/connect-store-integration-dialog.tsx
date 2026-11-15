@@ -8,7 +8,7 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@notra/ui/components/shared/responsive-dialog";
-import { useTranslations } from "next-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { StoreIntegrationLogo } from "@/components/integrations/store-integration-logo";
@@ -63,7 +63,7 @@ export function ConnectStoreIntegrationDialog({
           >
             {tCommon("actions.cancel")}
           </Button>
-          <Button disabled={connecting} onClick={onConnect}>
+          <Button data-dialog-confirm disabled={connecting} onClick={onConnect}>
             {connecting ? t("connecting") : tCommon("actions.connect")}
           </Button>
         </ResponsiveDialogFooter>

@@ -9,6 +9,12 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type * as React from "react";
+import { buttonVariants } from "@notra/ui/components/ui/button";
+import {
+  DROPDOWN_ITEM_CLASS_NAME,
+  DROPDOWN_POPUP_CLASS_NAME,
+  SELECT_COLLISION_AVOIDANCE,
+} from "@notra/ui/constants/dropdown";
 import { cn } from "@notra/ui/lib/utils";
 
 const Select = SelectPrimitive.Root;
@@ -16,7 +22,7 @@ const Select = SelectPrimitive.Root;
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
     <SelectPrimitive.Group
-      className={cn("scroll-my-1 p-1", className)}
+      className={cn("scroll-my-1", className)}
       data-slot="select-group"
       {...props}
     />
@@ -35,7 +41,7 @@ function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
 
 function SelectTrigger({
   className,
-  size = "default",
+  size = "sm",
   variant = "default",
   children,
   ...props
@@ -47,9 +53,11 @@ function SelectTrigger({
   return (
     <SelectPrimitive.Trigger
       className={cn(
-        "flex w-fit select-none items-center justify-between gap-1.5 whitespace-nowrap rounded-lg border border-input bg-transparent py-2 pr-2 pl-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-[3px] aria-invalid:ring-destructive/20 data-[size=default]:h-8 data-[size=sm]:h-7 data-[size=sm]:rounded-[min(var(--radius-md),10px)] data-[placeholder]:text-muted-foreground *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 dark:hover:bg-input/50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
-        variant === "ghost" &&
-          "border-transparent hover:bg-muted aria-expanded:bg-muted dark:bg-transparent dark:hover:bg-muted/50",
+        buttonVariants({
+          variant: variant === "ghost" ? "ghost" : "secondary",
+          size: size === "sm" ? "sm" : "default",
+        }),
+        "w-fit justify-between font-normal transition-[background-color,border-color,box-shadow,filter] active:scale-100 data-[placeholder]:text-muted-foreground *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 motion-reduce:transition-none",
         className
       )}
       data-size={size}
@@ -76,37 +84,53 @@ function SelectContent({
   children,
   side = "bottom",
   sideOffset = 4,
-  align = "center",
+  align = "start",
   alignOffset = 0,
-  alignItemWithTrigger = true,
+  alignItemWithTrigger = false,
+  aside,
   ...props
 }: SelectPrimitive.Popup.Props &
   Pick<
     SelectPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset" | "alignItemWithTrigger"
-  >) {
+  > & {
+    /** Panel rendered beside the popup, e.g. a preview of the highlighted item. */
+    aside?: React.ReactNode;
+  }) {
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Positioner
         align={align}
         alignItemWithTrigger={alignItemWithTrigger}
         alignOffset={alignOffset}
-        className="isolate z-50"
+        className={cn(
+          "group/select-positioner isolate z-50",
+          aside &&
+            "flex flex-row-reverse items-start gap-2 data-[side=top]:items-end"
+        )}
+        collisionAvoidance={SELECT_COLLISION_AVOIDANCE}
         side={side}
         sideOffset={sideOffset}
       >
         <SelectPrimitive.Popup
           className={cn(
-            "data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 relative isolate z-50 max-h-(--available-height) w-(--anchor-width) min-w-36 origin-(--transform-origin) overflow-y-auto overflow-x-hidden rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-instant data-closed:animate-out data-open:animate-in",
+            DROPDOWN_POPUP_CLASS_NAME,
+            "relative isolate w-(--anchor-width) min-w-36",
             className
           )}
           data-slot="select-content"
           {...props}
         >
           <SelectScrollUpButton />
-          <SelectPrimitive.List>{children}</SelectPrimitive.List>
+          <SelectPrimitive.List className="p-1">{children}</SelectPrimitive.List>
           <SelectScrollDownButton />
         </SelectPrimitive.Popup>
+        {aside ? (
+          // Enters and leaves with the popup instead of popping in ahead of it.
+          <div className="origin-top-right group-data-[side=top]/select-positioner:origin-bottom-right transition-[opacity,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] starting:opacity-0 group-data-closed/select-positioner:opacity-0 group-data-closed/select-positioner:duration-100 motion-safe:starting:scale-[0.97] motion-safe:group-data-closed/select-positioner:scale-[0.97] motion-reduce:transition-none">
+            {aside}
+          </div>
+        ) : null}
       </SelectPrimitive.Positioner>
     </SelectPrimitive.Portal>
   );
@@ -118,7 +142,10 @@ function SelectLabel({
 }: SelectPrimitive.GroupLabel.Props) {
   return (
     <SelectPrimitive.GroupLabel
-      className={cn("px-1.5 py-1 text-muted-foreground text-xs", className)}
+      className={cn(
+        "px-2.5 py-1.5 font-medium text-muted-foreground text-xs",
+        className
+      )}
       data-slot="select-label"
       {...props}
     />
@@ -133,7 +160,8 @@ function SelectItem({
   return (
     <SelectPrimitive.Item
       className={cn(
-        "relative flex w-full cursor-default select-none items-center gap-1.5 rounded-md py-1 pr-8 pl-1.5 text-sm outline-hidden focus:bg-accent focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
+        DROPDOWN_ITEM_CLASS_NAME,
+        "w-full pr-8 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
         className
       )}
       data-slot="select-item"
@@ -144,7 +172,7 @@ function SelectItem({
       </SelectPrimitive.ItemText>
       <SelectPrimitive.ItemIndicator
         render={
-          <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center" />
+          <span className="pointer-events-none absolute right-2.5 flex size-4 items-center justify-center" />
         }
       >
         <HugeiconsIcon
@@ -163,7 +191,7 @@ function SelectSeparator({
 }: SelectPrimitive.Separator.Props) {
   return (
     <SelectPrimitive.Separator
-      className={cn("-mx-1 pointer-events-none my-1 h-px bg-border", className)}
+      className={cn("pointer-events-none mx-2 my-1 h-px bg-border", className)}
       data-slot="select-separator"
       {...props}
     />

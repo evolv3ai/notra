@@ -29,7 +29,7 @@ import { SITE_URL } from "@/utils/urls";
 
 const title = "Marketing Assets";
 const description =
-  "Notra turns merged PRs into marketing visuals in your brand. Real layers, real text, ready to paste into Paper or Figma.";
+  "Notra turns merged PRs into on-brand marketing visuals with editable layers and text, ready to paste into Paper or Figma.";
 const url = `${SITE_URL}/features/marketing/assets`;
 
 const metadata: Metadata = {
@@ -97,12 +97,10 @@ function MarketingAssetsPage() {
   return (
     <div className="flex w-full flex-col items-center justify-start antialiased [font-synthesis:none]">
       <script
-        // biome-ignore lint/security/noDangerouslySetInnerHtml: server-built JSON-LD
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(assetsJsonLd) }}
         type="application/ld+json"
       />
       <script
-        // biome-ignore lint/security/noDangerouslySetInnerHtml: server-built JSON-LD
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbJsonLd) }}
         type="application/ld+json"
       />

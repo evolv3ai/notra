@@ -1,4 +1,11 @@
 import {
+  DIAGRAM_CHECK_SCRIPT,
+  DIAGRAM_CHECK_SCRIPT_PATH,
+  DIAGRAM_SKILL_CONTENT,
+  DIAGRAM_SKILL_DIR,
+  DIAGRAM_SKILL_PATH,
+} from "@notra/ai/constants/excalidraw-diagram";
+import {
   ASSET_KIND_FILENAME_PREFIX,
   BRAND_IDENTITY_ASSET_DIR,
   BRAND_IDENTITY_GUIDELINES_PATH,
@@ -15,6 +22,7 @@ import {
   SCREENSHOT_FILENAME_PREFIX,
   URL_QUERY_OR_HASH_REGEX,
 } from "@notra/ai/constants/repo-image-skills";
+import { ensureSystemSkillRegistry } from "@notra/ai/skills/registry";
 import { db } from "@notra/db/drizzle";
 import {
   brandGuidelineAssets,
@@ -31,7 +39,9 @@ import type { Box } from "@upstash/box";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { Data, Effect } from "effect";
 
+import { formatBrandGuidelineSourceInstructions } from "./brand-guideline-source";
 import { withBoxRetry } from "./repo-image-box";
+import { shellQuote } from "./shell";
 
 type RepoImageBox = Awaited<ReturnType<typeof Box.create>>;
 
@@ -62,6 +72,27 @@ export async function injectHumanizerSkill(params: {
   await Effect.runPromise(injectHumanizerSkillEffect(params));
 }
 
+export async function injectExcalidrawDiagramSkill(params: {
+  box: RepoImageBox;
+}) {
+  await Effect.runPromise(
+    Effect.all([
+      writeSandboxTextFileEffect({
+        box: params.box,
+        dir: DIAGRAM_SKILL_DIR,
+        path: DIAGRAM_SKILL_PATH,
+        content: DIAGRAM_SKILL_CONTENT,
+      }),
+      writeSandboxTextFileEffect({
+        box: params.box,
+        dir: DIAGRAM_SKILL_DIR,
+        path: DIAGRAM_CHECK_SCRIPT_PATH,
+        content: DIAGRAM_CHECK_SCRIPT,
+      }),
+    ])
+  );
+}
+
 const injectBrandIdentitySkillEffect = Effect.fn("injectBrandIdentitySkill")(
   function* (params: {
     box: RepoImageBox;
@@ -81,7 +112,7 @@ const injectBrandIdentitySkillEffect = Effect.fn("injectBrandIdentitySkill")(
       return null;
     }
 
-    yield* writeSandboxSkillEffect({
+    yield* writeSandboxTextFileEffect({
       box: params.box,
       dir: BRAND_IDENTITY_SKILL_DIR,
       path: BRAND_IDENTITY_SKILL_PATH,
@@ -104,6 +135,10 @@ const injectBrandIdentitySkillEffect = Effect.fn("injectBrandIdentitySkill")(
 
 const injectHumanizerSkillEffect = Effect.fn("injectHumanizerSkill")(
   function* (params: { box: RepoImageBox; organizationId: string }) {
+    yield* Effect.tryPromise({
+      try: () => ensureSystemSkillRegistry(),
+      catch: toSkillInjectionError("prepare system skills"),
+    });
     const skill = yield* Effect.tryPromise({
       try: () =>
         db.query.skills.findFirst({
@@ -119,7 +154,7 @@ const injectHumanizerSkillEffect = Effect.fn("injectHumanizerSkill")(
       return;
     }
 
-    yield* writeSandboxSkillEffect({
+    yield* writeSandboxTextFileEffect({
       box: params.box,
       dir: HUMANIZER_SKILL_DIR,
       path: HUMANIZER_SKILL_PATH,
@@ -127,15 +162,6 @@ const injectHumanizerSkillEffect = Effect.fn("injectHumanizerSkill")(
     });
   }
 );
-
-function writeSandboxSkillEffect(params: {
-  box: RepoImageBox;
-  dir: string;
-  path: string;
-  content: string;
-}) {
-  return writeSandboxTextFileEffect(params);
-}
 
 function writeSandboxTextFileEffect(params: {
   box: RepoImageBox;
@@ -415,6 +441,10 @@ function renderGuidelineSection(
       "No spacing, radius, shadow, or component tokens were detected."
     ),
     "",
+    "### Uploaded Guideline Document",
+    formatBrandGuidelineSourceInstructions(guideline.sourcePdfText) ||
+      "No brand guideline PDF has been uploaded.",
+    "",
     "### Downloaded Assets",
     renderList(
       assetDownloads.map((asset) => `${asset.label}: \`${asset.path}\``),
@@ -459,8 +489,4 @@ function extensionFromAssetUrl(url: string) {
       .match(PATH_EXTENSION_REGEX)?.[1]
       ?.toLowerCase();
   }
-}
-
-function shellQuote(value: string) {
-  return `'${value.replaceAll("'", "'\\''")}'`;
 }

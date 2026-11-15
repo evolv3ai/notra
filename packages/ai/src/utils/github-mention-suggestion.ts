@@ -33,7 +33,6 @@ function commonSuffixLength(
   return length;
 }
 
-/** Longest common subsequence table of the two middles, filled from the end. */
 function lcsTable(a: readonly string[], b: readonly string[]) {
   const width = b.length + 1;
   const table = new Uint32Array((a.length + 1) * width);
@@ -59,7 +58,6 @@ function diffLines(previous: readonly string[], next: readonly string[]) {
   if (a.length === 0 && b.length === 0) {
     return [];
   }
-  // A full rewrite is one hunk anyway, and the table would only cost memory.
   if (a.length * b.length > GITHUB_MENTION_SUGGESTION.diffCellLimit) {
     return [{ oldStart: prefix + 1, oldCount: a.length, newLines: b }];
   }
@@ -243,7 +241,6 @@ export function isGitHubMentionSuggestionCommentable(
   return true;
 }
 
-/** One backtick longer than any fence inside, so code samples stay intact. */
 function fenceFor(lines: readonly string[]) {
   let longest = 2;
   for (const line of lines) {

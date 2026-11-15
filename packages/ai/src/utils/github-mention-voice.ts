@@ -24,6 +24,7 @@ export async function loadGitHubMentionVoice(params: {
   const voiceId = (post?.sourceMetadata as PostSourceMetadata | null)
     ?.brandVoiceId;
   const columns = {
+    id: true,
     name: true,
     companyName: true,
     companyDescription: true,

@@ -1,6 +1,6 @@
 import matter from "gray-matter";
 
-export interface ParsedSkillFrontmatter {
+interface ParsedSkillFrontmatter {
   name?: string;
   description?: string;
   body: string;

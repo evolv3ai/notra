@@ -6,11 +6,11 @@ export const AGENT_RUN_HARD_LIMIT_MS =
 export const AGENT_RUN_LEASE_MARGIN_MS = 10 * 60 * 1000;
 export const AGENT_RUN_REFETCH_INTERVAL_MS = 10_000;
 export const AGENT_RUN_IDLE_REFETCH_INTERVAL_MS = 30_000;
+export const ONBOARDING_STATUS_REFETCH_INTERVAL_MS = 30_000;
 export const AGENT_RUN_STALE_TIME_MS = 60_000;
 export const SUGGESTIONS_STALE_TIME_MS = 300_000;
 export const WEBSITE_REACHABILITY_TIMEOUT_MS = 5000;
 export const WEBSITE_REACHABILITY_MAX_REDIRECTS = 5;
-export const EVE_ACCENT_COLOR = "#9333EA";
 export const EVE_SETUP_PROS = [
   "brandColors",
   "writingSkills",

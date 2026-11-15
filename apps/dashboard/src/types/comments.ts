@@ -1,9 +1,19 @@
+import type { Database } from "@notra/db/types/database";
+import type { DiscussionCommentAnchor } from "@notra/db/types/discussion-comments";
 import type { RefObject } from "react";
 import type { z } from "zod";
 
-import type { commentTargetSchema } from "@/schemas/comments";
+import type {
+  commentTargetSchema,
+  createCommentSchema,
+} from "@/schemas/comments";
 
 export type CommentTarget = z.infer<typeof commentTargetSchema>;
+export type CreateCommentInput = z.infer<typeof createCommentSchema>;
+export interface CommentResolutionState {
+  parentId: string | null;
+  deletedAt: Date | null;
+}
 export interface DiscussionComment {
   id: string;
   parentId: string | null;
@@ -17,6 +27,9 @@ export interface DiscussionComment {
   image: string | null;
   reactions: { emoji: string; userId: string }[];
   pending?: boolean;
+  resolvedAt?: string | null;
+  resolvedByUserId?: string | null;
+  anchor?: DiscussionCommentAnchor | null;
 }
 export interface CommentItemProps {
   comment: DiscussionComment;
@@ -27,6 +40,7 @@ export interface CommentItemProps {
   onEdit: (id: string, body: string) => Promise<boolean>;
   onDelete: (id: string) => Promise<void>;
   onReact: (id: string, emoji: string, active: boolean) => void;
+  onResolve?: (id: string, resolved: boolean) => void;
 }
 
 export type CommentActionsProps = Pick<
@@ -36,6 +50,7 @@ export type CommentActionsProps = Pick<
 
 export interface CommentBodyProps {
   body: string;
+  className?: string;
 }
 
 export interface CommentTimestampProps {
@@ -106,3 +121,6 @@ export interface DiscussionComposerProps {
   /** Pins the composer to the bottom of the scroll container. */
   sticky?: boolean;
 }
+export type CommentTransaction = Parameters<
+  Parameters<Database["transaction"]>[0]
+>[0];

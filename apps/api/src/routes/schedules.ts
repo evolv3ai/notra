@@ -1,11 +1,13 @@
 import { createRoute } from "@hono/zod-openapi";
-import type { createDb } from "@notra/db/drizzle";
 import {
   createScheduleRequestSchema,
   deleteScheduleResponseSchema,
   getSchedulesQuerySchema,
   getSchedulesResponseSchema,
+  listScheduleRunsQuerySchema,
+  listScheduleRunsResponseSchema,
   patchScheduleRequestSchema,
+  runScheduleResponseSchema,
   scheduleParamsSchema,
   scheduleResponseSchema,
 } from "@notra/schemas/api/schedules";
@@ -13,112 +15,41 @@ import {
 import {
   createSchedule,
   deleteSchedule,
+  listScheduleRuns,
   listSchedules,
   patchSchedule,
+  runSchedule,
 } from "../programs/schedules";
-import { getOrganizationId } from "../utils/auth";
+import { isOAuthAuth } from "../types/auth";
 import { createOpenApiApp } from "../utils/openapi-app";
 import { errorResponse } from "../utils/openapi-responses";
-import { getOrganizationResponse } from "../utils/organizations";
+import { resolveRequestOrganization } from "../utils/organizations";
 import {
   ORGANIZATION_SCHEDULE_PATH_REGEX,
   ORGANIZATION_SCHEDULES_PATH_REGEX,
 } from "../utils/regex";
 import { runScheduleProgram } from "../utils/schedules";
+import { redirectLegacyOrganizationPath } from "./legacy-redirects";
 
 export const schedulesRoutes = createOpenApiApp();
 
-type DbClient = ReturnType<typeof createDb>;
-
-schedulesRoutes.get("/:organizationId/schedules", async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
-  }
-
-  const pathOrg = c.req.param("organizationId");
-  if (orgId !== pathOrg) {
-    return c.json({ error: "Forbidden: organization access denied" }, 403);
-  }
-
-  const url = new URL(c.req.url);
-  const canonicalPath = url.pathname.replace(
+schedulesRoutes.on(
+  ["GET", "POST"],
+  "/:organizationId/schedules",
+  redirectLegacyOrganizationPath(
     ORGANIZATION_SCHEDULES_PATH_REGEX,
-    "/schedules"
-  );
-  return c.redirect(`${canonicalPath}${url.search}`, 308);
-});
+    () => "/schedules"
+  )
+);
 
-schedulesRoutes.post("/:organizationId/schedules", async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
-  }
-
-  const pathOrg = c.req.param("organizationId");
-  if (orgId !== pathOrg) {
-    return c.json({ error: "Forbidden: organization access denied" }, 403);
-  }
-
-  const url = new URL(c.req.url);
-  const canonicalPath = url.pathname.replace(
-    ORGANIZATION_SCHEDULES_PATH_REGEX,
-    "/schedules"
-  );
-  return c.redirect(`${canonicalPath}${url.search}`, 308);
-});
-
-schedulesRoutes.patch("/:organizationId/schedules/:scheduleId", async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
-  }
-
-  const pathOrg = c.req.param("organizationId");
-  if (orgId !== pathOrg) {
-    return c.json({ error: "Forbidden: organization access denied" }, 403);
-  }
-
-  const scheduleId = c.req.param("scheduleId");
-  const url = new URL(c.req.url);
-  const canonicalPath = url.pathname.replace(
+schedulesRoutes.on(
+  ["PATCH", "DELETE"],
+  "/:organizationId/schedules/:scheduleId",
+  redirectLegacyOrganizationPath(
     ORGANIZATION_SCHEDULE_PATH_REGEX,
-    `/schedules/${scheduleId}`
-  );
-  return c.redirect(`${canonicalPath}${url.search}`, 308);
-});
-
-schedulesRoutes.delete("/:organizationId/schedules/:scheduleId", async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
-  }
-
-  const pathOrg = c.req.param("organizationId");
-  if (orgId !== pathOrg) {
-    return c.json({ error: "Forbidden: organization access denied" }, 403);
-  }
-
-  const scheduleId = c.req.param("scheduleId");
-  const url = new URL(c.req.url);
-  const canonicalPath = url.pathname.replace(
-    ORGANIZATION_SCHEDULE_PATH_REGEX,
-    `/schedules/${scheduleId}`
-  );
-  return c.redirect(`${canonicalPath}${url.search}`, 308);
-});
+    (param) => `/schedules/${param("scheduleId")}`
+  )
+);
 
 const getSchedulesRoute = createRoute({
   method: "get",
@@ -253,21 +184,73 @@ const deleteScheduleRoute = createRoute({
   },
 });
 
+const runScheduleRoute = createRoute({
+  method: "post",
+  path: "/schedules/{scheduleId}/run",
+  tags: ["Schedules"],
+  operationId: "runSchedule",
+  summary: "Run a schedule now",
+  description:
+    "Starts one run of an enabled schedule right away, outside its cron timing, as the dashboard's Run now does. Returns 202 with the run's ID; follow it with `GET /v1/schedules/{scheduleId}/runs` until its status leaves `running`. Disabled schedules return 400.",
+  request: {
+    params: scheduleParamsSchema,
+  },
+  responses: {
+    202: {
+      description: "Schedule run started",
+      content: {
+        "application/json": {
+          schema: runScheduleResponseSchema,
+        },
+      },
+    },
+    400: errorResponse("Schedule is disabled"),
+    401: errorResponse("Missing or invalid API key"),
+    403: errorResponse("Forbidden"),
+    404: errorResponse("Schedule not found"),
+    500: errorResponse("Internal server error"),
+    502: errorResponse("Failed to start the schedule run"),
+    503: errorResponse("Authentication service unavailable"),
+  },
+});
+
+const listScheduleRunsRoute = createRoute({
+  method: "get",
+  path: "/schedules/{scheduleId}/runs",
+  tags: ["Schedules"],
+  operationId: "listScheduleRuns",
+  summary: "List a schedule's runs",
+  description:
+    "Returns the schedule's most recent runs, newest first, with their status and the draft post each run created.",
+  request: {
+    params: scheduleParamsSchema,
+    query: listScheduleRunsQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "Schedule runs fetched successfully",
+      content: {
+        "application/json": {
+          schema: listScheduleRunsResponseSchema,
+        },
+      },
+    },
+    400: errorResponse("Invalid query params"),
+    401: errorResponse("Missing or invalid API key"),
+    403: errorResponse("Forbidden"),
+    404: errorResponse("Schedule not found"),
+    500: errorResponse("Failed to list schedule runs"),
+    503: errorResponse("Authentication service unavailable"),
+  },
+});
+
 schedulesRoutes.openapi(getSchedulesRoute, async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
   }
-
-  const db = c.get("db") as DbClient;
-  const organization = await getOrganizationResponse(db, orgId);
-
-  if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
+  const { orgId, organization } = scope;
+  const db = c.get("db");
 
   const { repositoryIds } = c.req.valid("query");
   const result = await runScheduleProgram(
@@ -282,20 +265,12 @@ schedulesRoutes.openapi(getSchedulesRoute, async (c) => {
 });
 
 schedulesRoutes.openapi(createScheduleRoute, async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
   }
-
-  const db = c.get("db") as DbClient;
-  const organization = await getOrganizationResponse(db, orgId);
-
-  if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
+  const { orgId, organization } = scope;
+  const db = c.get("db");
 
   const body = c.req.valid("json");
   const env = (c.env ?? {}) as {
@@ -324,20 +299,12 @@ schedulesRoutes.openapi(createScheduleRoute, async (c) => {
 });
 
 schedulesRoutes.openapi(patchScheduleRoute, async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
   }
-
-  const db = c.get("db") as DbClient;
-  const organization = await getOrganizationResponse(db, orgId);
-
-  if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
+  const { orgId, organization } = scope;
+  const db = c.get("db");
 
   const { scheduleId } = c.req.valid("param");
   const body = c.req.valid("json");
@@ -377,20 +344,12 @@ schedulesRoutes.openapi(patchScheduleRoute, async (c) => {
 });
 
 schedulesRoutes.openapi(deleteScheduleRoute, async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
   }
-
-  const db = c.get("db") as DbClient;
-  const organization = await getOrganizationResponse(db, orgId);
-
-  if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
+  const { orgId, organization } = scope;
+  const db = c.get("db");
 
   const { scheduleId } = c.req.valid("param");
   const env = (c.env ?? {}) as {
@@ -413,4 +372,66 @@ schedulesRoutes.openapi(deleteScheduleRoute, async (c) => {
   }
 
   return c.json({ id: result.success, organization }, 200);
+});
+
+schedulesRoutes.openapi(runScheduleRoute, async (c) => {
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
+  }
+  const { orgId, organization } = scope;
+  const { scheduleId } = c.req.valid("param");
+  const auth = c.get("auth");
+
+  const result = await runScheduleProgram(
+    runSchedule({
+      db: c.get("db"),
+      organizationId: orgId,
+      scheduleId,
+      actorId: isOAuthAuth(auth) ? auth.userId : `api-key:${auth.keyId}`,
+      env: c.env ?? {},
+    })
+  );
+
+  if (result._tag === "Failure") {
+    const failure = result.failure;
+    if (failure._tag === "ScheduleNotFoundError") {
+      return c.json({ error: "Schedule not found" }, 404);
+    }
+    if (failure._tag === "ScheduleDisabledError") {
+      return c.json({ error: "Cannot run a disabled schedule" }, 400);
+    }
+    c.get("log").error(
+      failure.cause instanceof Error ? failure.cause : String(failure.cause),
+      { errorCode: "schedule_run_start_failed", scheduleId }
+    );
+    return c.json({ error: "Failed to start the schedule run" }, 502);
+  }
+
+  return c.json({ runId: result.success, organization }, 202);
+});
+
+schedulesRoutes.openapi(listScheduleRunsRoute, async (c) => {
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
+  }
+  const { orgId, organization } = scope;
+  const { scheduleId } = c.req.valid("param");
+  const { limit } = c.req.valid("query");
+
+  const result = await runScheduleProgram(
+    listScheduleRuns({
+      db: c.get("db"),
+      organizationId: orgId,
+      scheduleId,
+      limit,
+    })
+  );
+
+  if (result._tag === "Failure") {
+    return c.json({ error: "Schedule not found" }, 404);
+  }
+
+  return c.json({ runs: result.success, organization }, 200);
 });

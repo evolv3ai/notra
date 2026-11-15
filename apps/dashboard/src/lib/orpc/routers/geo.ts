@@ -18,6 +18,7 @@ import {
   GscIntegrationLockLostError,
   withGscIntegrationLock,
 } from "@notra/ai/utils/gsc-integration-lock";
+import { logError } from "@notra/ai/utils/server-log";
 import { db } from "@notra/db/drizzle";
 import { geoAgentReadinessReports, projects } from "@notra/db/schema";
 import { GEO_SAMPLE_DATA_ENABLED } from "@notra/geo-core/constants/geo";
@@ -45,6 +46,11 @@ import {
   issueGeoIngestSetupResponse,
   rotateGeoIngestSetupResponse,
 } from "@notra/geo-core/geo/ingest";
+import {
+  loadMcpAnalytics,
+  loadMcpSession,
+  loadMcpToolDetail,
+} from "@notra/geo-core/geo/mcp-analytics";
 import { loadGeoModelCatalog } from "@notra/geo-core/geo/model-catalog";
 import {
   saveGeoOnboardingBrand,
@@ -66,13 +72,17 @@ import {
   addGeoTrackedLanguage,
   createGeoPrompt,
   deleteGeoCompetitor,
+  fillGeoCompetitorDomains,
+  setGeoCompetitorIgnored,
   deleteGeoPrompt,
   importGeoCompetitors,
   importGeoPrompts,
   listGeoPrompts,
   loadAiTraffic,
+  loadAiTrafficSources,
   loadGeoChanges,
   loadGeoCompetitorDetail,
+  loadGeoCompetitorEngineMatrix,
   loadGeoCompetitorShare,
   loadGeoCompetitors,
   loadGeoJourneyDetail,
@@ -143,8 +153,10 @@ import {
   acceptSuggestion,
   acceptAllSuggestions,
   dismissSuggestion,
+  listAutopilotPromptSuggestions,
   listSuggestions,
 } from "@notra/geo-core/geo/suggestions";
+import { loadWebAnalytics } from "@notra/geo-core/geo/web-analytics";
 import { geoWindow } from "@notra/geo-core/geo/window";
 import {
   approveAndStartGeoWriter,
@@ -161,6 +173,8 @@ import {
   aiTrafficInputSchema,
   geoBrandSearchInputSchema,
   geoCompetitorDeleteInputSchema,
+  geoCompetitorDomainFillInputSchema,
+  geoCompetitorIgnoreInputSchema,
   geoCompetitorShareInputSchema,
   geoCompetitorsImportInputSchema,
   geoCompetitorDetailInputSchema,
@@ -174,7 +188,6 @@ import {
   geoPromptTranslationSelectInputSchema,
   geoPromptTranslationTargetInputSchema,
   geoPromptTranslationUpdateInputSchema,
-  geoOrganizationInputSchema,
   geoProjectCreateInputSchema,
   geoProjectDeleteInputSchema,
   geoProjectUpdateInputSchema,
@@ -203,6 +216,10 @@ import {
   geoTrafficJourneysInputSchema,
   geoTrafficLogInputSchema,
   geoTrafficPagesInputSchema,
+  webAnalyticsInputSchema,
+  mcpAnalyticsInputSchema,
+  mcpSessionInputSchema,
+  mcpToolDetailInputSchema,
   geoWriterBriefIdInputSchema,
   geoWriterPlanInputSchema,
   geoWriterUpdateInputSchema,
@@ -219,6 +236,7 @@ import {
   geoScanRunInputSchema,
   geoScanRunsInputSchema,
 } from "@notra/geo-core/schemas/geo-scan-history";
+import { geoOrganizationInputSchema } from "@notra/geo-core/schemas/geo-scope";
 import { geoSentimentEvidenceInputSchema } from "@notra/geo-core/schemas/geo-sentiment";
 import { gscSelectSiteInputSchema } from "@notra/geo-core/schemas/google-search-console";
 import { GeoSearchConsoleError } from "@notra/geo-core/schemas/search-console-errors";
@@ -237,6 +255,7 @@ import type {
   GscSitesResponse,
   GscSyncResult,
 } from "@notra/geo-core/types/google-search-console";
+import { webHostFilter } from "@notra/geo-core/utils/geo-project-domains";
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
 import { geoScanStartInputSchema } from "@notra/schemas/dashboard/geo-analytics";
 import {
@@ -254,8 +273,6 @@ import {
 import { QstashError } from "@upstash/qstash";
 import { and, eq } from "drizzle-orm";
 import { Effect } from "effect";
-import { getTranslations } from "next-intl/server";
-import { after } from "next/server";
 
 import {
   GEO_COMPETITOR_SOURCES,
@@ -278,10 +295,13 @@ import {
 } from "@/lib/analytics/geo-server-events";
 import { identifyProjectGroup } from "@/lib/analytics/posthog-server";
 import { assertOrganizationAccess } from "@/lib/auth/organization";
+import { isAutopilotEnabledForOrganization } from "@/lib/autopilot/flag";
 import {
   assertActiveSubscription,
   assertGeoEntitlement,
+  resolveGeoEntitlement,
 } from "@/lib/billing/subscription";
+import { afterResponse } from "@/lib/framework/after-response";
 import {
   collectGeoShelfMemberIds,
   findCurrentGeoShelfMemberId,
@@ -292,19 +312,24 @@ import {
 import { previewGeoShelfUrl } from "@/lib/geo-shelf/preview";
 import {
   createGeoShelfSource,
+  scheduleGeoShelfCitationSync,
+  updateGeoShelfSource,
+} from "@/lib/geo-shelf/request-service";
+import {
   isGeoShelfUrlOnShelf,
   listGeoShelfSourcePage,
   loadGeoShelfContext,
   resolveGeoShelfSearch,
-  scheduleGeoShelfCitationSync,
-  updateGeoShelfSource,
 } from "@/lib/geo-shelf/service";
 import { assertGeoAccess } from "@/lib/geo/access";
+import { hasGeoData } from "@/lib/geo/access-level.server";
 import { geoCoreDashboardLayer } from "@/lib/geo/configure";
+import { startFreeGeoScan } from "@/lib/geo/free-scan";
 import {
   getPersonaGeneration,
   startPersonaGeneration,
 } from "@/lib/geo/persona-generation";
+import { getTranslations } from "@/lib/i18n/server";
 import { authorizedProcedure } from "@/lib/orpc/base";
 import { runOrpcEffect } from "@/lib/orpc/effect";
 import {
@@ -320,6 +345,7 @@ import type { AuthenticatedUser } from "@/types/auth/organization";
 import type {
   GeoBrandSearchHandlerInput,
   GeoCompetitorSuggestionsHandlerInput,
+  GeoProjectCreateHandlerInput,
   GeoPromptSuggestionsResponse,
 } from "@/types/geo";
 import type { GeoDashboardRuntime } from "@/types/geo-runtime";
@@ -331,59 +357,43 @@ interface GeoHandlerOptions<TInput> {
   input: TInput;
 }
 
-function geoOpenHandler<
-  TInput extends { organizationId: string },
-  TOutput,
-  TError extends GeoRouterError,
->(
-  run: (input: TInput) => Effect.Effect<TOutput, TError, GeoDashboardRuntime>,
-  track?: GeoHandlerTracker<TInput, TOutput>
-) {
-  return async ({
-    context,
-    input,
-  }: GeoHandlerOptions<TInput>): Promise<TOutput> => {
-    await assertOrganizationAccess({
-      headers: context.headers,
-      organizationId: input.organizationId,
-      user: context.user,
-    });
-
-    const output = await runOrpcEffect(
-      run(input).pipe(Effect.provide(geoCoreDashboardLayer)),
-      toGeoOrpcError
-    );
-    await track?.({ context, input, output });
-    return output;
+function accessParams({
+  context,
+  input,
+}: GeoHandlerOptions<{ organizationId: string }>) {
+  return {
+    headers: context.headers,
+    organizationId: input.organizationId,
+    user: context.user,
   };
 }
 
-function geoHandler<
-  TInput extends { organizationId: string },
-  TOutput,
-  TError extends GeoRouterError,
->(
-  run: (input: TInput) => Effect.Effect<TOutput, TError, GeoDashboardRuntime>,
-  track?: GeoHandlerTracker<TInput, TOutput>
+function createGeoHandler(
+  assertAccess: (params: ReturnType<typeof accessParams>) => Promise<unknown>
 ) {
-  return async ({
-    context,
-    input,
-  }: GeoHandlerOptions<TInput>): Promise<TOutput> => {
-    await assertGeoAccess({
-      headers: context.headers,
-      organizationId: input.organizationId,
-      user: context.user,
-    });
+  return <
+    TInput extends { organizationId: string },
+    TOutput,
+    TError extends GeoRouterError,
+  >(
+    run: (input: TInput) => Effect.Effect<TOutput, TError, GeoDashboardRuntime>,
+    track?: GeoHandlerTracker<TInput, TOutput>
+  ) =>
+    async ({ context, input }: GeoHandlerOptions<TInput>): Promise<TOutput> => {
+      await assertAccess(accessParams({ context, input }));
 
-    const output = await runOrpcEffect(
-      run(input).pipe(Effect.provide(geoCoreDashboardLayer)),
-      toGeoOrpcError
-    );
-    await track?.({ context, input, output });
-    return output;
-  };
+      const output = await runOrpcEffect(
+        run(input).pipe(Effect.provide(geoCoreDashboardLayer)),
+        toGeoOrpcError
+      );
+      await track?.({ context, input, output });
+      return output;
+    };
 }
+
+/** Membership only: reads stay open without a GEO plan, writes do not. */
+const geoOpenHandler = createGeoHandler(assertOrganizationAccess);
+const geoHandler = createGeoHandler(assertGeoAccess);
 
 async function toGscErrorMessage(
   error: unknown,
@@ -468,17 +478,23 @@ async function withGscIntegrationLockOrServiceUnavailable<T>(
   }
 }
 
-async function assertGscDisconnectNotInProgress(
-  integration: GscIntegrationRow
-): Promise<void> {
+async function requireConnectedGscIntegration(
+  organizationId: string
+): Promise<GscIntegrationRow> {
+  const integration = await getGscIntegration(organizationId);
+  if (!integration) {
+    throw notFound("Google Search Console is not connected");
+  }
   if (integration.disconnectingAt) {
     const tErrors = await getTranslations("errors.geo");
     throw serviceUnavailable(tErrors("gscDisconnecting"));
   }
+  return integration;
 }
 
-function getGscScheduleId(integrationId: string): string {
-  return `${GSC_SCHEDULE_ID_PREFIX}${integrationId}`;
+/** Ids are scoped to the integration; older schedules used the organization id. */
+function getGscScheduleId(ownerId: string): string {
+  return `${GSC_SCHEDULE_ID_PREFIX}${ownerId}`;
 }
 
 async function removeStaleGscScheduleAfterLeaseLoss(
@@ -497,10 +513,7 @@ async function removeStaleGscScheduleAfterLeaseLoss(
     }
     await removeGscSchedule(scheduleId);
   } catch (error) {
-    console.error(
-      "[GSC] Failed to clean up stale weekly sync schedule:",
-      error
-    );
+    logError("[GSC] Failed to clean up stale weekly sync schedule", error);
   }
 }
 
@@ -525,18 +538,17 @@ async function ensureGscSchedule(
       }
 
       const scheduleId = getGscScheduleId(currentIntegration.id);
-      const legacyScheduleId = `${GSC_SCHEDULE_ID_PREFIX}${currentIntegration.organizationId}`;
+      const legacyScheduleId = getGscScheduleId(
+        currentIntegration.organizationId
+      );
       try {
-        // Older releases used an organization-scoped custom ID. Remove an
-        // unrecorded legacy schedule before creating this generation's ID so
-        // an interrupted migration cannot leave two weekly jobs running.
         await assertLockOwned();
         await deleteGscScheduleIfPresent(legacyScheduleId);
         await assertLockOwned();
       } catch (error) {
         signal.throwIfAborted();
-        console.error(
-          "[GSC] Failed to reconcile legacy weekly sync schedule:",
+        logError(
+          "[GSC] Failed to reconcile legacy weekly sync schedule",
           error
         );
         return null;
@@ -568,10 +580,7 @@ async function ensureGscSchedule(
         throw error;
       }
       if (creationError) {
-        console.error(
-          "[GSC] Failed to create weekly sync schedule:",
-          creationError
-        );
+        logError("[GSC] Failed to create weekly sync schedule", creationError);
         return null;
       }
 
@@ -585,13 +594,11 @@ async function ensureGscSchedule(
         );
       } catch (error) {
         signal.throwIfAborted();
-        console.error(
-          "[GSC] Failed to record weekly sync schedule; retrying:",
+        logError(
+          "[GSC] Failed to record weekly sync schedule; retrying",
           error
         );
         try {
-          // The first write may have committed before surfacing an error. This
-          // idempotent retry confirms that exact id without relying on stale fields.
           claimed = await claimOrConfirmGscSchedule(
             currentIntegration,
             scheduleId,
@@ -600,10 +607,7 @@ async function ensureGscSchedule(
           );
         } catch (retryError) {
           signal.throwIfAborted();
-          console.error(
-            "[GSC] Failed to record weekly sync schedule:",
-            retryError
-          );
+          logError("[GSC] Failed to record weekly sync schedule", retryError);
         }
       }
       signal.throwIfAborted();
@@ -620,16 +624,12 @@ async function ensureGscSchedule(
         if (refreshedIntegration?.qstashScheduleId === scheduleId) {
           return scheduleId;
         }
-        // Reconnect, disconnect, and schedule creation all take the same lock,
-        // so no newer integration can claim this candidate before it is removed.
         await removeGscSchedule(scheduleId);
         signal.throwIfAborted();
         return refreshedIntegration?.qstashScheduleId ?? null;
       } catch (error) {
         signal.throwIfAborted();
-        // The deterministic id remains recoverable: the next ensure attempt
-        // overwrites the same QStash schedule instead of creating a duplicate.
-        console.error("[GSC] Failed to reconcile weekly sync schedule:", error);
+        logError("[GSC] Failed to reconcile weekly sync schedule", error);
         return null;
       }
     }
@@ -654,7 +654,7 @@ async function removeGscSchedule(scheduleId: string | null) {
   try {
     await deleteGscScheduleIfPresent(scheduleId);
   } catch (error) {
-    console.error("[GSC] Failed to delete QStash schedule:", error);
+    logError("[GSC] Failed to delete QStash schedule", error);
   }
 }
 
@@ -666,7 +666,7 @@ function getGscScheduleIdsForDisconnect(
       [
         integration.qstashScheduleId,
         getGscScheduleId(integration.id),
-        `${GSC_SCHEDULE_ID_PREFIX}${integration.organizationId}`,
+        getGscScheduleId(integration.organizationId),
       ].filter((scheduleId): scheduleId is string => scheduleId !== null)
     ),
   ];
@@ -677,11 +677,7 @@ async function loadGeoShelfSeed(
   input: { organizationId: string; projectId?: string },
   options: { withMembers: boolean }
 ) {
-  await assertGeoAccess({
-    headers: context.headers,
-    organizationId: input.organizationId,
-    user: context.user,
-  });
+  await assertOrganizationAccess(accessParams({ context, input }));
   const [shelfContext, members] = await Promise.all([
     runOrpcEffect(
       loadGeoShelfContext(input).pipe(Effect.provide(geoCoreDashboardLayer)),
@@ -694,7 +690,6 @@ async function loadGeoShelfSeed(
   return { ...shelfContext, members };
 }
 
-/** Members are only needed to strip ids of people who left the organization. */
 async function resolveGeoShelfReadMembers(
   organizationId: string,
   loadedMembers: GeoShelfMember[],
@@ -715,7 +710,6 @@ export const geoRouter = {
     .input(geoShelfListInputSchema)
     .handler(async ({ context, input }) => {
       const seed = await loadGeoShelfSeed(context, input, {
-        // Member names only matter to resolve "mine" and name searches.
         withMembers:
           GEO_SAMPLE_DATA_ENABLED ||
           input.ticket === "mine" ||
@@ -767,11 +761,7 @@ export const geoRouter = {
   shelfMembers: authorizedProcedure
     .input(geoShelfMembersInputSchema)
     .handler(async ({ context, input }) => {
-      await assertGeoAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
+      await assertOrganizationAccess(accessParams({ context, input }));
       const members = await listGeoShelfMembers(
         input.organizationId,
         context.headers
@@ -869,11 +859,7 @@ export const geoRouter = {
   shelfPreview: authorizedProcedure
     .input(geoShelfPreviewInputSchema)
     .handler(async ({ context, input }) => {
-      await assertGeoAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
+      await assertOrganizationAccess(accessParams({ context, input }));
       const rate = await ratelimit.geoShelfPreview.limit(
         `${input.organizationId}:${GEO_SHELF_PREVIEW_RATE_LIMIT_SCOPE}`
       );
@@ -905,13 +891,22 @@ export const geoRouter = {
     }),
   modelCatalog: authorizedProcedure
     .input(geoModelCatalogInputSchema)
-    .handler(({ input }) =>
-      Effect.runPromise(
+    .handler(async ({ context, input }) => {
+      await assertOrganizationAccess(accessParams({ context, input }));
+      return Effect.runPromise(
         loadGeoModelCatalog(input.organizationId).pipe(
           Effect.provide(geoCoreDashboardLayer)
         )
-      )
-    ),
+      );
+    }),
+  dataStatus: authorizedProcedure
+    .input(geoOrganizationInputSchema)
+    .handler(async ({ context, input }) => {
+      await assertOrganizationAccess(accessParams({ context, input }));
+      return {
+        hasData: await Effect.runPromise(hasGeoData(input.organizationId)),
+      };
+    }),
   settings: authorizedProcedure
     .input(geoOrganizationInputSchema)
     .handler(geoOpenHandler((input) => loadGeoSettings(input))),
@@ -951,18 +946,24 @@ export const geoRouter = {
   languageShare: authorizedProcedure
     .input(geoTimeseriesInputSchema)
     .handler(
-      geoHandler((input) => loadGeoLanguageShare(input, geoWindow(input)))
+      geoOpenHandler((input) => loadGeoLanguageShare(input, geoWindow(input)))
     ),
   overview: authorizedProcedure
     .input(geoTimeseriesInputSchema)
-    .handler(geoHandler((input) => loadGeoOverview(input, geoWindow(input)))),
+    .handler(
+      geoOpenHandler((input) => loadGeoOverview(input, geoWindow(input)))
+    ),
   sentiment: authorizedProcedure
     .input(sentimentPeriodInputSchema)
-    .handler(geoHandler((input) => loadGeoSentiment(input, geoWindow(input)))),
+    .handler(
+      geoOpenHandler((input) => loadGeoSentiment(input, geoWindow(input)))
+    ),
   sentimentAnalysis: authorizedProcedure
     .input(sentimentPeriodInputSchema)
     .handler(
-      geoHandler((input) => loadGeoSentimentAnalysis(input, geoWindow(input)))
+      geoOpenHandler((input) =>
+        loadGeoSentimentAnalysis(input, geoWindow(input))
+      )
     ),
   analyzeSentiment: authorizedProcedure
     .route({ method: "POST" })
@@ -970,11 +971,11 @@ export const geoRouter = {
     .handler(
       geoHandler((input) =>
         loadGeoSentimentAnalysis(input, geoWindow(input), true, (task) =>
-          after(async () => {
+          afterResponse(async () => {
             try {
               await task();
             } catch (error) {
-              console.error("Could not analyze GEO sentiment", { error });
+              logError("Could not analyze GEO sentiment", error);
             }
           })
         )
@@ -983,32 +984,43 @@ export const geoRouter = {
   sentimentEvidence: authorizedProcedure
     .input(geoSentimentEvidenceInputSchema)
     .handler(
-      geoHandler((input) => loadGeoSentimentEvidence(input, geoWindow(input)))
+      geoOpenHandler((input) =>
+        loadGeoSentimentEvidence(input, geoWindow(input))
+      )
     ),
   timeseries: authorizedProcedure
     .input(geoTimeseriesInputSchema)
-    .handler(geoHandler((input) => loadGeoTimeseries(input, geoWindow(input)))),
+    .handler(
+      geoOpenHandler((input) => loadGeoTimeseries(input, geoWindow(input)))
+    ),
   promptResultSummaries: authorizedProcedure
     .input(geoTimeseriesInputSchema)
     .handler(
-      geoHandler((input) =>
+      geoOpenHandler((input) =>
         loadGeoPromptResultSummaries(input, geoWindow(input))
       )
     ),
   promptResultDetail: authorizedProcedure
     .input(geoPromptResultDetailInputSchema)
-    .handler(geoHandler((input) => loadGeoPromptResultDetail(input))),
+    .handler(geoOpenHandler((input) => loadGeoPromptResultDetail(input))),
   changes: authorizedProcedure
     .input(geoOrganizationInputSchema)
-    .handler(geoHandler((input) => loadGeoChanges(input))),
+    .handler(geoOpenHandler((input) => loadGeoChanges(input))),
   promptHistory: authorizedProcedure
     .input(geoPromptHistoryInputSchema)
-    .handler(geoHandler((input) => loadGeoPromptHistory(input))),
+    .handler(geoOpenHandler((input) => loadGeoPromptHistory(input))),
   competitorShare: authorizedProcedure
     .input(geoCompetitorShareInputSchema)
     .handler(
       geoOpenHandler((input) =>
         loadGeoCompetitorShare(input, geoWindow(input), input.summaryOnly)
+      )
+    ),
+  competitorEngineMatrix: authorizedProcedure
+    .input(geoTimeseriesInputSchema)
+    .handler(
+      geoOpenHandler((input) =>
+        loadGeoCompetitorEngineMatrix(input, geoWindow(input))
       )
     ),
   competitors: authorizedProcedure
@@ -1058,6 +1070,24 @@ export const geoRouter = {
         }
       )
     ),
+  competitorDomainsFill: authorizedProcedure
+    .input(geoCompetitorDomainFillInputSchema)
+    .handler(geoOpenHandler((input) => fillGeoCompetitorDomains(input))),
+  competitorIgnore: authorizedProcedure
+    .input(geoCompetitorIgnoreInputSchema)
+    .handler(
+      geoOpenHandler(
+        (input) => setGeoCompetitorIgnored(input),
+        ({ context, input }) => {
+          trackGeoRouterEvent({
+            context,
+            input,
+            event: POSTHOG_EVENTS.GEO_COMPETITOR_SUGGESTION_IGNORED,
+            properties: { ignored: input.ignored },
+          });
+        }
+      )
+    ),
   competitorsImport: authorizedProcedure
     .input(geoCompetitorsImportInputSchema)
     .handler(
@@ -1085,7 +1115,7 @@ export const geoRouter = {
   competitorDetail: authorizedProcedure
     .input(geoCompetitorDetailInputSchema)
     .handler(
-      geoHandler((input) =>
+      geoOpenHandler((input) =>
         loadGeoCompetitorDetail(
           input,
           input.brand,
@@ -1097,11 +1127,7 @@ export const geoRouter = {
   agentReadiness: authorizedProcedure
     .input(geoOrganizationInputSchema)
     .handler(async ({ context, input }): Promise<AgentReadinessResponse> => {
-      await assertGeoAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
+      await assertOrganizationAccess(accessParams({ context, input }));
       const scope = await runOrpcEffect(
         requireGeoProject(input),
         toGeoOrpcError
@@ -1114,11 +1140,7 @@ export const geoRouter = {
     .input(geoOrganizationInputSchema)
     .handler(
       async ({ context, input }): Promise<AgentReadinessScanResponse> => {
-        await assertGeoAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-          user: context.user,
-        });
+        await assertGeoAccess(accessParams({ context, input }));
         const scope = await runOrpcEffect(
           requireGeoProject(input),
           toGeoOrpcError
@@ -1148,7 +1170,7 @@ export const geoRouter = {
           projectId: scope.projectId,
           properties: {
             report_id: response.reportId,
-            is_rescan: previousReport !== undefined && previousReport !== null,
+            is_rescan: Boolean(previousReport),
             already_running: response.alreadyRunning,
           },
         });
@@ -1157,60 +1179,132 @@ export const geoRouter = {
     ),
   aiTraffic: authorizedProcedure
     .input(aiTrafficInputSchema)
-    .handler(geoHandler((input) => loadAiTraffic(input, geoWindow(input)))),
+    .handler(
+      geoOpenHandler((input) =>
+        loadAiTraffic(
+          input,
+          geoWindow(input),
+          webHostFilter(input.host),
+          "",
+          input.path,
+          input.sites,
+          false
+        )
+      )
+    ),
+  aiTrafficSources: authorizedProcedure
+    .input(aiTrafficInputSchema)
+    .handler(
+      geoOpenHandler((input) =>
+        loadAiTrafficSources(
+          input,
+          geoWindow(input),
+          webHostFilter(input.host),
+          input.path,
+          input.sites
+        )
+      )
+    ),
+  webAnalytics: authorizedProcedure
+    .input(webAnalyticsInputSchema)
+    .handler(
+      geoOpenHandler((input) =>
+        loadWebAnalytics(
+          input,
+          geoWindow(input),
+          input.host,
+          input.path,
+          input.sites,
+          "summary"
+        )
+      )
+    ),
+  webAnalyticsBreakdowns: authorizedProcedure
+    .input(webAnalyticsInputSchema)
+    .handler(
+      geoOpenHandler((input) =>
+        loadWebAnalytics(
+          input,
+          geoWindow(input),
+          input.host,
+          input.path,
+          input.sites,
+          "breakdowns"
+        )
+      )
+    ),
+  mcpAnalytics: authorizedProcedure
+    .input(mcpAnalyticsInputSchema)
+    .handler(
+      geoOpenHandler((input) => loadMcpAnalytics(input, geoWindow(input)))
+    ),
+  mcpToolDetail: authorizedProcedure
+    .input(mcpToolDetailInputSchema)
+    .handler(
+      geoOpenHandler((input) =>
+        loadMcpToolDetail(input, geoWindow(input), input.tool)
+      )
+    ),
+  mcpSession: authorizedProcedure
+    .input(mcpSessionInputSchema)
+    .handler(
+      geoOpenHandler((input) =>
+        loadMcpSession(input, geoWindow(input), input.sessionId)
+      )
+    ),
   trafficLog: authorizedProcedure
     .input(geoTrafficLogInputSchema)
     .handler(
-      geoHandler((input) =>
+      geoOpenHandler((input) =>
         loadGeoTrafficLog(
           input,
           input.limit,
           input.visitorTypes,
           input.categories,
-          input.host
+          input.host,
+          input.path,
+          input.sites
         )
       )
     ),
   trafficJourneys: authorizedProcedure
     .input(geoTrafficJourneysInputSchema)
     .handler(
-      geoHandler((input) =>
+      geoOpenHandler((input) =>
         loadGeoTrafficJourneys(input, geoWindow(input), input.limit)
       )
     ),
   journeyStats: authorizedProcedure
     .input(geoJourneyStatsInputSchema)
     .handler(
-      geoHandler((input) => loadGeoJourneyStats(input, geoWindow(input)))
+      geoOpenHandler((input) => loadGeoJourneyStats(input, geoWindow(input)))
     ),
   journeyDetail: authorizedProcedure
     .input(geoJourneyDetailInputSchema)
     .handler(
-      geoHandler((input) =>
+      geoOpenHandler((input) =>
         loadGeoJourneyDetail(input, input.journeyId, geoWindow(input))
       )
     ),
   trafficPages: authorizedProcedure
     .input(geoTrafficPagesInputSchema)
     .handler(
-      geoHandler((input) =>
+      geoOpenHandler((input) =>
         loadGeoTrafficPages(
           input,
           geoWindow(input),
           input.limit,
           input.visitorType,
-          input.host
+          input.host,
+          input.path,
+          input.sites
         )
       )
     ),
   ingestSetup: authorizedProcedure
     .input(geoOrganizationInputSchema)
     .handler(async ({ context, input }): Promise<GeoIngestSetupResponse> => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
+      await assertOrganizationAccess(accessParams({ context, input }));
 
       const setup = await runOrpcEffect(
         issueGeoIngestSetupResponse(input).pipe(
@@ -1226,11 +1320,7 @@ export const geoRouter = {
   ingestTokenRotate: authorizedProcedure
     .input(geoOrganizationInputSchema)
     .handler(async ({ context, input }): Promise<GeoIngestSetupResponse> => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
+      await assertOrganizationAccess(accessParams({ context, input }));
 
       const setup = await runOrpcEffect(
         rotateGeoIngestSetupResponse(input).pipe(
@@ -1250,7 +1340,7 @@ export const geoRouter = {
     }),
   promptsList: authorizedProcedure
     .input(geoOrganizationInputSchema)
-    .handler(geoHandler((input) => listGeoPrompts(input))),
+    .handler(geoOpenHandler((input) => listGeoPrompts(input))),
   promptsCreate: authorizedProcedure.input(geoPromptCreateInputSchema).handler(
     geoHandler(
       (input) =>
@@ -1356,7 +1446,7 @@ export const geoRouter = {
   ),
   sequencesList: authorizedProcedure
     .input(geoOrganizationInputSchema)
-    .handler(geoHandler((input) => listGeoSequences(input))),
+    .handler(geoOpenHandler((input) => listGeoSequences(input))),
   sequencesCreate: authorizedProcedure
     .input(geoSequenceCreateInputSchema)
     .handler(
@@ -1375,13 +1465,7 @@ export const geoRouter = {
   sequencesGenerate: authorizedProcedure
     .input(geoOrganizationInputSchema)
     .handler(async (options) => {
-      // Membership first: the limiter is keyed by organization, so without this
-      // any signed-in user could drain another organization's generation budget.
-      await assertOrganizationAccess({
-        headers: options.context.headers,
-        organizationId: options.input.organizationId,
-        user: options.context.user,
-      });
+      await assertOrganizationAccess(accessParams(options));
       const rate = await ratelimit.geoSequencesGenerate.limit(
         options.input.organizationId
       );
@@ -1438,16 +1522,12 @@ export const geoRouter = {
   sequenceResults: authorizedProcedure
     .input(geoSequenceResultsInputSchema)
     .handler(
-      geoHandler((input) => loadGeoSequenceResults(input, input.sequenceId))
+      geoOpenHandler((input) => loadGeoSequenceResults(input, input.sequenceId))
     ),
   sequenceRun: authorizedProcedure
     .input(geoSequenceRunInputSchema)
     .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
+      await assertOrganizationAccess(accessParams({ context, input }));
       const [, , rate] = await Promise.all([
         assertGeoEntitlement(input.organizationId, context.headers),
         assertActiveSubscription(input.organizationId),
@@ -1503,19 +1583,15 @@ export const geoRouter = {
     }),
   personasList: authorizedProcedure
     .input(geoOrganizationInputSchema)
-    .handler(geoHandler((input) => listGeoPersonas(input))),
+    .handler(geoOpenHandler((input) => listGeoPersonas(input))),
   personasActivity: authorizedProcedure
     .input(geoTimeseriesInputSchema)
-    .handler(geoHandler((input) => loadGeoPersonaActivity(input))),
+    .handler(geoOpenHandler((input) => loadGeoPersonaActivity(input))),
   personasGenerate: authorizedProcedure
     .input(geoPersonasGenerateInputSchema)
     .handler(async ({ context, input }) => {
-      await assertGeoAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
-      const { scope, rate } = await Promise.all([
+      await assertGeoAccess(accessParams({ context, input }));
+      const [, scope] = await Promise.all([
         assertActiveSubscription(input.organizationId),
         runOrpcEffect(
           requireGeoPersonaGenerationCapacity(
@@ -1525,10 +1601,9 @@ export const geoRouter = {
           ).pipe(Effect.provide(geoCoreDashboardLayer)),
           toGeoOrpcError
         ),
-      ]).then(([, scope]) =>
-        ratelimit.geoPersonasGenerate
-          .limit(input.organizationId)
-          .then((rate) => ({ scope, rate }))
+      ]);
+      const rate = await ratelimit.geoPersonasGenerate.limit(
+        input.organizationId
       );
       if (!rate.success) {
         const tErrors = await getTranslations("errors.geo");
@@ -1545,11 +1620,7 @@ export const geoRouter = {
   personasGenerationStatus: authorizedProcedure
     .input(geoOrganizationInputSchema)
     .handler(async ({ context, input }) => {
-      await assertGeoAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
+      await assertOrganizationAccess(accessParams({ context, input }));
       const scope = await runOrpcEffect(
         requireGeoProject(input).pipe(Effect.provide(geoCoreDashboardLayer)),
         toGeoOrpcError
@@ -1603,18 +1674,14 @@ export const geoRouter = {
   personaResults: authorizedProcedure
     .input(geoPersonaResultsInputSchema)
     .handler(
-      geoHandler((input) =>
+      geoOpenHandler((input) =>
         loadGeoPersonaResults(input, input.personaId, input.scanId)
       )
     ),
   personaRun: authorizedProcedure
     .input(geoPersonaRunInputSchema)
     .handler(async ({ context, input }) => {
-      await assertGeoAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
+      await assertGeoAccess(accessParams({ context, input }));
       await assertActiveSubscription(input.organizationId);
       const rate = await ratelimit.geoPersonaRun.limit(input.organizationId);
       trackGeoRouterEvent({
@@ -1667,9 +1734,15 @@ export const geoRouter = {
     .handler(geoOpenHandler((input) => listGeoProjects(input.organizationId))),
   projectsCreate: authorizedProcedure
     .input(geoProjectCreateInputSchema)
-    .handler(
-      geoHandler(
-        (input) =>
+    .handler(async (options) => {
+      await assertOrganizationAccess(accessParams(options));
+      const scanEnabled =
+        (await resolveGeoEntitlement(
+          options.input.organizationId,
+          options.context.headers
+        )) !== "denied";
+      return geoOpenHandler(
+        (input: GeoProjectCreateHandlerInput) =>
           requireBrandIdentity(
             input.organizationId,
             input.brandSettingsId
@@ -1680,6 +1753,7 @@ export const geoRouter = {
                 input.name,
                 input.brandSettingsId,
                 identity.websiteUrl,
+                scanEnabled,
                 input.languages
               )
             )
@@ -1707,8 +1781,8 @@ export const geoRouter = {
             properties: { is_sample: false, project_count: projectCount },
           });
         }
-      )
-    ),
+      )(options);
+    }),
   projectsUpdate: authorizedProcedure
     .input(geoProjectUpdateInputSchema)
     .handler(
@@ -1763,11 +1837,7 @@ export const geoRouter = {
   competitorSuggestions: authorizedProcedure
     .input(geoCompetitorSuggestionsInputSchema)
     .handler(async (options) => {
-      await assertOrganizationAccess({
-        headers: options.context.headers,
-        organizationId: options.input.organizationId,
-        user: options.context.user,
-      });
+      await assertOrganizationAccess(accessParams(options));
       const rate = await ratelimit.geoCompetitorSuggestions.limit(
         options.input.organizationId
       );
@@ -1782,11 +1852,7 @@ export const geoRouter = {
   brandSearch: authorizedProcedure
     .input(geoBrandSearchInputSchema)
     .handler(async (options) => {
-      await assertOrganizationAccess({
-        headers: options.context.headers,
-        organizationId: options.input.organizationId,
-        user: options.context.user,
-      });
+      await assertOrganizationAccess(accessParams(options));
       const rate = await ratelimit.geoBrandSearch.limit(
         options.input.organizationId
       );
@@ -1821,21 +1887,32 @@ export const geoRouter = {
       }
     )
   ),
+  startFreeScan: authorizedProcedure
+    .input(geoOrganizationInputSchema)
+    .handler(async ({ context, input }) => {
+      await assertOrganizationAccess(accessParams({ context, input }));
+      return runOrpcEffect(
+        startFreeGeoScan(input, context.user).pipe(
+          Effect.provide(geoCoreDashboardLayer)
+        ),
+        toGeoOrpcError
+      );
+    }),
   rescanPrompt: authorizedProcedure
     .input(geoPromptRescanInputSchema)
     .handler(geoHandler((input) => startGeoPromptRescan(input))),
   scanStatus: authorizedProcedure
     .input(geoScanStatusInputSchema)
-    .handler(geoHandler((input) => loadGeoScanStatus(input, input.scanId))),
+    .handler(geoOpenHandler((input) => loadGeoScanStatus(input, input.scanId))),
   scanRuns: authorizedProcedure
     .input(geoScanRunsInputSchema)
-    .handler(geoHandler((input) => loadGeoScanRuns(input))),
+    .handler(geoOpenHandler((input) => loadGeoScanRuns(input))),
   scanRun: authorizedProcedure
     .input(geoScanRunInputSchema)
-    .handler(geoHandler((input) => loadGeoScanRun(input))),
+    .handler(geoOpenHandler((input) => loadGeoScanRun(input))),
   writerGaps: authorizedProcedure
     .input(geoOrganizationInputSchema)
-    .handler(geoHandler((input) => loadGeoContentGaps(input))),
+    .handler(geoOpenHandler((input) => loadGeoContentGaps(input))),
   writerGapIgnore: authorizedProcedure
     .input(geoPromptGapIgnoreInputSchema)
     .handler(
@@ -1856,18 +1933,16 @@ export const geoRouter = {
     ),
   writerBriefsList: authorizedProcedure
     .input(geoOrganizationInputSchema)
-    .handler(geoHandler((input) => listGeoContentBriefs(input))),
+    .handler(geoOpenHandler((input) => listGeoContentBriefs(input))),
   writerBrief: authorizedProcedure
     .input(geoWriterBriefIdInputSchema)
-    .handler(geoHandler((input) => getGeoContentBrief(input, input.briefId))),
+    .handler(
+      geoOpenHandler((input) => getGeoContentBrief(input, input.briefId))
+    ),
   writerPlan: authorizedProcedure
     .input(geoWriterPlanInputSchema)
     .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
+      await assertOrganizationAccess(accessParams({ context, input }));
       const [, , rate] = await Promise.all([
         assertGeoEntitlement(input.organizationId, context.headers),
         assertActiveSubscription(input.organizationId),
@@ -1919,11 +1994,7 @@ export const geoRouter = {
   writerStart: authorizedProcedure
     .input(geoWriterBriefIdInputSchema)
     .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
+      await assertOrganizationAccess(accessParams({ context, input }));
       await Promise.all([
         assertGeoEntitlement(input.organizationId, context.headers),
         assertActiveSubscription(input.organizationId),
@@ -1950,11 +2021,7 @@ export const geoRouter = {
   writerUpdate: authorizedProcedure
     .input(geoWriterUpdateInputSchema)
     .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
+      await assertOrganizationAccess(accessParams({ context, input }));
       await Promise.all([
         assertGeoEntitlement(input.organizationId, context.headers),
         assertActiveSubscription(input.organizationId),
@@ -1978,7 +2045,6 @@ export const geoRouter = {
       if (!GEO_SAMPLE_DATA_ENABLED) {
         throw notFound();
       }
-      // The demo is already sample data; reseeding would wipe the sandbox.
       assertNotDemo();
       return geoHandler((input) => seedGeoSampleData(input))(options);
     }),
@@ -1988,18 +2054,13 @@ export const geoRouter = {
       if (!GEO_SAMPLE_DATA_ENABLED) {
         throw notFound();
       }
-      // The demo is already sample data; reseeding would wipe the sandbox.
       assertNotDemo();
       return geoHandler((input) => clearGeoSampleData(input))(options);
     }),
   searchConsoleStatus: authorizedProcedure
     .input(geoOrganizationInputSchema)
     .handler(async ({ context, input }): Promise<GeoSearchConsoleStatus> => {
-      await assertGeoAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
+      await assertOrganizationAccess(accessParams({ context, input }));
 
       const configured = getGscOAuthCredentials() !== null;
       const [integration, scope] = await Promise.all([
@@ -2041,11 +2102,9 @@ export const geoRouter = {
         try {
           sites = await listGscSites(integration);
         } catch (error) {
-          console.error("[GSC] Failed to list sites:", error);
+          logError("[GSC] Failed to list sites", error);
           lastError = await toGscErrorMessage(error, "properties");
         }
-        // Listing may have refreshed the access token or flipped the row to
-        // reauth_required, so re-read only on that path.
         refreshed =
           (await getGscIntegration(input.organizationId)) ?? integration;
       }
@@ -2065,11 +2124,7 @@ export const geoRouter = {
   searchConsoleKeywords: authorizedProcedure
     .input(geoOrganizationInputSchema)
     .handler(async ({ context, input }): Promise<GscKeywordsResponse> => {
-      await assertGeoAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
+      await assertGeoAccess(accessParams({ context, input }));
 
       const [integration, scope] = await Promise.all([
         getGscIntegration(input.organizationId),
@@ -2081,8 +2136,6 @@ export const geoRouter = {
             where: eq(projects.id, scope.projectId),
           })
         : null;
-      // A disconnect in flight may still fail its revocation; do not keep
-      // highlighting keywords from an integration that is on its way out.
       return {
         keywords:
           integration && !integration.disconnectingAt
@@ -2093,45 +2146,33 @@ export const geoRouter = {
   searchConsoleSites: authorizedProcedure
     .input(geoOrganizationInputSchema)
     .handler(async ({ context, input }): Promise<GscSitesResponse> => {
-      await assertGeoAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
+      await assertGeoAccess(accessParams({ context, input }));
 
-      const integration = await getGscIntegration(input.organizationId);
-      if (!integration) {
-        throw notFound("Google Search Console is not connected");
-      }
-      await assertGscDisconnectNotInProgress(integration);
+      const integration = await requireConnectedGscIntegration(
+        input.organizationId
+      );
 
       try {
         return { sites: await listGscSites(integration) };
       } catch (error) {
-        console.error("[GSC] Failed to list sites:", error);
+        logError("[GSC] Failed to list sites", error);
         throw badRequest(await toGscErrorMessage(error, "properties"));
       }
     }),
   searchConsoleSelectSite: authorizedProcedure
     .input(gscSelectSiteInputSchema)
     .handler(async ({ context, input }): Promise<GscSyncResult> => {
-      await assertGeoAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
+      await assertGeoAccess(accessParams({ context, input }));
 
-      const integration = await getGscIntegration(input.organizationId);
-      if (!integration) {
-        throw notFound("Google Search Console is not connected");
-      }
-      await assertGscDisconnectNotInProgress(integration);
+      const integration = await requireConnectedGscIntegration(
+        input.organizationId
+      );
 
       let sites: Awaited<ReturnType<typeof listGscSites>>;
       try {
         sites = await listGscSites(integration);
       } catch (error) {
-        console.error("[GSC] Failed to verify property:", error);
+        logError("[GSC] Failed to verify property", error);
         throw badRequest(await toGscErrorMessage(error, "properties"));
       }
       if (!sites.some((site) => site.siteUrl === input.siteUrl)) {
@@ -2153,10 +2194,7 @@ export const geoRouter = {
           ).pipe(Effect.provide(geoCoreDashboardLayer))
         );
       } catch (error) {
-        console.error(
-          "[GSC] Initial sync failed after selecting property:",
-          error
-        );
+        logError("[GSC] Initial sync failed after selecting property", error);
         throw badRequest(await toGscErrorMessage(error, "sync"));
       }
       if (synced.status !== "completed") {
@@ -2170,14 +2208,12 @@ export const geoRouter = {
 
       const selectedIntegration = await getGscIntegration(input.organizationId);
       let scheduleId = selectedIntegration?.qstashScheduleId ?? null;
-      if (selectedIntegration && synced.status === "completed") {
+      if (selectedIntegration) {
         try {
           scheduleId = await ensureGscSchedule(selectedIntegration);
         } catch (error) {
-          // The property and its first sync are already committed. Scheduling
-          // remains best-effort and is backfilled by the next manual sync.
-          console.error(
-            "[GSC] Failed to schedule weekly sync after selecting property:",
+          logError(
+            "[GSC] Failed to schedule weekly sync after selecting property",
             error
           );
         }
@@ -2199,11 +2235,7 @@ export const geoRouter = {
   searchConsoleSync: authorizedProcedure
     .input(geoOrganizationInputSchema)
     .handler(async ({ context, input }): Promise<GscSyncResult> => {
-      await assertGeoAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
+      await assertGeoAccess(accessParams({ context, input }));
 
       const { success: withinLimit } = await ratelimit.gscSync.limit(
         input.organizationId
@@ -2219,11 +2251,9 @@ export const geoRouter = {
         throw badRequest(tErrors("tooManySyncs"));
       }
 
-      const integration = await getGscIntegration(input.organizationId);
-      if (!integration) {
-        throw notFound("Google Search Console is not connected");
-      }
-      await assertGscDisconnectNotInProgress(integration);
+      const integration = await requireConnectedGscIntegration(
+        input.organizationId
+      );
       const { projectId } = await runOrpcEffect(
         requireGeoProject(input),
         toGeoOrpcError
@@ -2238,7 +2268,6 @@ export const geoRouter = {
       }
 
       if (!integration.qstashScheduleId) {
-        // Backfill the weekly schedule if it could not be created earlier.
         await ensureGscSchedule(integration);
       }
 
@@ -2247,11 +2276,7 @@ export const geoRouter = {
   searchConsoleDisconnect: authorizedProcedure
     .input(geoOrganizationInputSchema)
     .handler(async ({ context, input }): Promise<{ disconnected: boolean }> => {
-      await assertGeoAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
+      await assertGeoAccess(accessParams({ context, input }));
 
       const integration = await withGscIntegrationLockOrServiceUnavailable(
         input.organizationId,
@@ -2266,9 +2291,6 @@ export const geoRouter = {
             return null;
           }
 
-          // Keep the durable row until Google confirms the grant is revoked.
-          // This request is bounded independently and must finish even if the
-          // Redis lease is lost, so a retry still has the exact token to revoke.
           await assertLockOwned();
           if (!(await revokeGscToken(disconnecting))) {
             const tErrors = await getTranslations("errors.geo");
@@ -2280,10 +2302,7 @@ export const geoRouter = {
           try {
             await Promise.all(scheduleIds.map(deleteGscScheduleIfPresent));
           } catch (error) {
-            console.error(
-              "[GSC] Failed to remove schedules on disconnect:",
-              error
-            );
+            logError("[GSC] Failed to remove schedules on disconnect", error);
             const tErrors = await getTranslations("errors.geo");
             throw serviceUnavailable(tErrors("gscDisconnectFailed"));
           }
@@ -2299,8 +2318,6 @@ export const geoRouter = {
             throw serviceUnavailable(tErrors("gscChangedDuringDisconnect"));
           }
 
-          // Catch a schedule create that settled between the first cleanup and
-          // the conditional row deletion. These ids are generation-specific.
           await Promise.all(scheduleIds.map(removeGscSchedule));
           return deleted;
         }
@@ -2338,23 +2355,28 @@ export const geoRouter = {
     .input(geoOrganizationInputSchema)
     .handler(
       async ({ context, input }): Promise<GeoPromptSuggestionsResponse> => {
-        await assertGeoAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-          user: context.user,
-        });
+        await assertOrganizationAccess(accessParams({ context, input }));
 
         return await runOrpcEffect(listSuggestions(input), toGeoOrpcError);
       }
     ),
+  autopilotPromptSuggestionsList: authorizedProcedure
+    .input(geoOrganizationInputSchema)
+    .handler(async ({ context, input }) => {
+      await assertOrganizationAccess(accessParams({ context, input }));
+      const result = await runOrpcEffect(
+        listAutopilotPromptSuggestions(input),
+        toGeoOrpcError
+      );
+      // Behind the Autopilot flag, like everything else Autopilot made.
+      return (await isAutopilotEnabledForOrganization(input.organizationId))
+        ? result
+        : { ...result, suggestions: [] };
+    }),
   suggestionAccept: authorizedProcedure
     .input(geoSuggestionIdInputSchema)
     .handler(async ({ context, input }): Promise<GeoTrackedPrompt> => {
-      await assertGeoAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
+      await assertGeoAccess(accessParams({ context, input }));
 
       const {
         projectId,
@@ -2365,6 +2387,21 @@ export const geoRouter = {
         refreshGeoContentGapsBestEffort(input),
         toGeoOrpcError
       );
+      if (suggestion.action === "pause") {
+        trackGeoRouterEvent({
+          context,
+          input,
+          event: POSTHOG_EVENTS.GEO_SUGGESTION_ACCEPTED,
+          projectId,
+          properties: {
+            count: 1,
+            suggestion_id: suggestion.id,
+            source: suggestion.source,
+            action: suggestion.action,
+          },
+        });
+        return accepted;
+      }
       const keywordSummary = summarizeSuggestionKeywords(
         suggestion.sourceKeywords
       );
@@ -2396,11 +2433,7 @@ export const geoRouter = {
   suggestionsAcceptAll: authorizedProcedure
     .input(geoOrganizationInputSchema)
     .handler(async ({ context, input }): Promise<{ accepted: number }> => {
-      await assertGeoAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
+      await assertGeoAccess(accessParams({ context, input }));
 
       const { projectId, suggestions: rows } = await runOrpcEffect(
         acceptAllSuggestions(input),
@@ -2434,11 +2467,7 @@ export const geoRouter = {
   suggestionDismiss: authorizedProcedure
     .input(geoSuggestionIdInputSchema)
     .handler(async ({ context, input }): Promise<{ dismissed: boolean }> => {
-      await assertGeoAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
+      await assertGeoAccess(accessParams({ context, input }));
 
       const result = await runOrpcEffect(
         dismissSuggestion(input),

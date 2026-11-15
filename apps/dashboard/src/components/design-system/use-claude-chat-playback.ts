@@ -1,17 +1,12 @@
 "use client";
 
 import { claudeChatSearchDuration } from "@notra/ui/components/ai-skins/claude-chat/claude-chat-search-timing";
+import { sleep } from "@notra/utils/sleep";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ClaudeChatStoryMessage } from "@/types/design-system-claude-chat";
 
 const TOKEN_SPLIT = /(\s+)/;
-
-function wait(ms: number) {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}
 
 export function useClaudeChatPlayback(
   script: readonly ClaudeChatStoryMessage[],
@@ -46,7 +41,8 @@ export function useClaudeChatPlayback(
       message: ClaudeChatStoryMessage,
       alive: () => boolean
     ): Promise<void> => {
-      const delay = (ms: number) => wait(reducedMotion ? Math.min(ms, 70) : ms);
+      const delay = (ms: number) =>
+        sleep(reducedMotion ? Math.min(ms, 70) : ms);
 
       if (message.from === "user") {
         setMessages((current) => [...current, message]);

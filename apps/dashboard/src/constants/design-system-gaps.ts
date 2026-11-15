@@ -68,7 +68,7 @@ export const DESIGN_SYSTEM_PROMPT_GAP: GeoPromptGapRow = {
 
 export const DESIGN_SYSTEM_SEARCH_GAPS: GeoSearchGapRow[] = [];
 
-export const DESIGN_SYSTEM_SEARCH_GAP: GeoSearchGapRow = {
+const DESIGN_SYSTEM_SEARCH_GAP: GeoSearchGapRow = {
   id: "demo-search-gap",
   prompt:
     "Where can I find the Neon database changelog and latest release notes?",
@@ -161,7 +161,6 @@ const DEMO_SOURCES = [
   },
 ];
 
-/** One mocked answer per scanned engine, so the prototypes can be clicked through. */
 export const DESIGN_SYSTEM_GAP_RESULTS: GeoPromptResult[] = [
   ...DEMO_MENTIONED_ENGINES,
   ...DEMO_MISSING_ENGINES,

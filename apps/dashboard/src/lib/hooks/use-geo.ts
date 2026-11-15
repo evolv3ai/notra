@@ -14,9 +14,11 @@ import {
 import type { AgentReadinessResponse } from "@notra/geo-core/types/agent-readiness";
 import type {
   AiTrafficResponse,
+  WebAnalyticsResponse,
   GeoBrandSearchResponse,
   GeoChangesResponse,
   GeoCompetitorDetailResponse,
+  GeoCompetitorEngineMatrixResponse,
   GeoCompetitorShareResponse,
   GeoCompetitorSuggestionsResponse,
   GeoDiscoverWebsiteResult,
@@ -38,6 +40,8 @@ import type {
   GeoTrafficLogFilters,
   GeoTrafficLogResponse,
   GeoTrafficPagesResponse,
+  GeoTrafficSitesMode,
+  AiTrafficSourcesResponse,
 } from "@notra/geo-core/types/geo";
 import type {
   GeoCompetitorImportRow,
@@ -50,40 +54,52 @@ import type {
   GscSitesResponse,
   GscSyncResult,
 } from "@notra/geo-core/types/google-search-console";
+import { isGeoOlostepEngine } from "@notra/geo-core/utils/geo-olostep";
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
 import type { QueryClient } from "@tanstack/react-query";
 import {
   keepPreviousData,
-  skipToken,
   useIsMutating,
   useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { useGeoLive } from "@/components/providers/geo-live-provider";
 import { useGeoProjectScope } from "@/components/providers/geo-project-provider";
+import { GEO_COMPETITOR_DETAIL_QUERY_KEY } from "@/constants/geo-competitors";
+import {
+  trackFirstScanCompleted,
+  trackFirstScanStarted,
+} from "@/lib/analytics/first-scan";
 import { trackEvent } from "@/lib/analytics/posthog-client";
+import { emitAutumnRefresh } from "@/lib/billing/autumn-refresh";
 import { geoDbOrgQueryKey, geoDbQueryKey } from "@/lib/db/geo-collections";
+import { usePathname, useRouter, useSearchParams } from "@/lib/navigation";
 import type { GeoScanTrigger } from "@/types/analytics/geo-events";
 import type {
   GeoGenerateFromWebsiteInput,
   GeoPromptSuggestionsResponse,
+  GeoPromptTableRow,
   GeoRangeQuery,
   GeoSettingsUpsertOptions,
   GeoSuggestionIdInput,
   GeoTrafficLogQueryOptions,
   GscSyncResultMessage,
 } from "@/types/geo";
+import { loadCompetitorDetailView } from "@/utils/competitor-detail-chunk";
 import { toErrorMessage } from "@/utils/error-message";
-import { geoCompetitorDetailPath } from "@/utils/geo-competitors";
 import { describeGeoImportResult } from "@/utils/geo-import";
 import { withGeoProject } from "@/utils/geo-paths";
 import {
+  latestPromptResults,
+  withoutSupersededNoSearchResults,
+} from "@/utils/geo-prompt-history";
+import {
+  geoHostQueryInput,
   geoOverviewQueryInput,
   geoSettingsQueryInput,
   geoTrafficJourneysQueryInput,
@@ -96,6 +112,7 @@ import {
   refreshSettingsAfterScanStart,
 } from "@/utils/geo-scan-results";
 import { formatGscSiteUrl } from "@/utils/gsc-site-url";
+import { loadGeoPromptAnswerThread } from "@/utils/prompt-answer-thread-chunk";
 
 import { dashboardOrpc } from "../orpc/query";
 import { useScopedPreviousData } from "./use-scoped-previous-data";
@@ -180,6 +197,7 @@ export function useGeoSettings(organizationId: string) {
   const queryClient = useQueryClient();
   const live = useGeoLive();
   const wasScanningRef = useRef<boolean | null>(null);
+  const firstScanRunningRef = useRef(false);
   const scanPollInterval = live
     ? GEO_LIVE_SCAN_FALLBACK_INTERVAL_MS
     : GEO_SCAN_POLL_INTERVAL_MS;
@@ -196,17 +214,25 @@ export function useGeoSettings(organizationId: string) {
   });
 
   const isScanning = query.data?.settings?.isScanning ?? false;
+  const lastScanAt = query.data?.settings?.lastScanAt ?? null;
 
   useEffect(() => {
     const wasScanning = wasScanningRef.current;
     wasScanningRef.current = isScanning;
+    if (isScanning && lastScanAt === null) {
+      firstScanRunningRef.current = true;
+    }
     if (wasScanning === true && !isScanning) {
       invalidateGeoScanResultQueries(queryClient, {
         organizationId,
         projectId,
       }).catch(() => undefined);
+      if (firstScanRunningRef.current && lastScanAt !== null) {
+        trackFirstScanCompleted(projectId ?? organizationId);
+      }
+      firstScanRunningRef.current = false;
     }
-  }, [isScanning, organizationId, projectId, queryClient]);
+  }, [isScanning, lastScanAt, organizationId, projectId, queryClient]);
 
   return query;
 }
@@ -235,6 +261,54 @@ export function useGeoSettingsUpsert(
       trackEvent(POSTHOG_EVENTS.GEO_SETTINGS_SAVE_FAILED);
       toast.error(toErrorMessage(error, tToast("saveSettingsFailed")));
     },
+  });
+}
+
+/**
+ * Dismisses a suggested competitor (or restores it). The settings cache is
+ * patched first so the suggestion leaves the list on click.
+ */
+export function useGeoCompetitorIgnore(organizationId: string) {
+  const tToast = useTranslations("geo.toasts");
+  const { projectId } = useGeoProjectScope();
+  const queryClient = useQueryClient();
+  const settingsKey = dashboardOrpc.geo.settings.queryKey({
+    input: geoSettingsQueryInput({ organizationId, projectId }),
+  });
+  return useMutation({
+    mutationFn: (input: { name: string; ignored: boolean }) =>
+      dashboardOrpc.geo.competitorIgnore.call({
+        ...input,
+        organizationId,
+        projectId,
+      }),
+    onMutate: async ({ name, ignored }) => {
+      await queryClient.cancelQueries({ queryKey: settingsKey });
+      const previous =
+        queryClient.getQueryData<GeoSettingsResponse>(settingsKey);
+      const settings = previous?.settings;
+      if (settings) {
+        const key = name.trim().toLowerCase();
+        const rest = settings.ignoredCompetitors.filter(
+          (entry) => entry !== key
+        );
+        queryClient.setQueryData<GeoSettingsResponse>(settingsKey, {
+          ...previous,
+          settings: {
+            ...settings,
+            ignoredCompetitors: ignored ? [...rest, key] : rest,
+          },
+        });
+      }
+      return { previous };
+    },
+    onError: (error, _input, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(settingsKey, context.previous);
+      }
+      toast.error(toErrorMessage(error, tToast("updateCompetitorFailed")));
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: settingsKey }),
   });
 }
 
@@ -329,22 +403,71 @@ export function useGeoPromptResults(
   });
 }
 
+function geoPromptResultDetailQueryOptions(input: {
+  organizationId: string;
+  checkId: string;
+}) {
+  return {
+    ...dashboardOrpc.geo.promptResultDetail.queryOptions({ input }),
+    staleTime: Number.POSITIVE_INFINITY,
+    queryFn: () => dashboardOrpc.geo.promptResultDetail.call(input),
+  };
+}
+
 export function useGeoPromptResultDetail(
   organizationId: string,
   checkId: string | null
 ) {
-  const input = { organizationId, checkId: checkId ?? "" };
   return useQuery({
-    ...dashboardOrpc.geo.promptResultDetail.queryOptions({
-      input: organizationId && checkId ? input : skipToken,
+    ...geoPromptResultDetailQueryOptions({
+      organizationId,
+      checkId: checkId ?? "",
     }),
     enabled: Boolean(organizationId && checkId),
-    staleTime: Number.POSITIVE_INFINITY,
-    // Keep a selected answer loading when users switch models. Consuming the
-    // generated AbortSignal would otherwise surface normal switches as failed
-    // requests and throw away work that is useful when they switch back.
-    queryFn: () => dashboardOrpc.geo.promptResultDetail.call(input),
   });
+}
+
+/**
+ * Warms a stored answer before it is shown. Shares the query key with
+ * `useGeoPromptResultDetail`, so the switch reads from cache.
+ */
+export function usePrefetchGeoPromptResultDetail(organizationId: string) {
+  const queryClient = useQueryClient();
+  return (checkId: string | null | undefined) => {
+    if (!organizationId || !checkId) {
+      return;
+    }
+    void queryClient.prefetchQuery(
+      geoPromptResultDetailQueryOptions({ organizationId, checkId })
+    );
+  };
+}
+
+/**
+ * Warms what the prompt sheet needs first: its history and the answer it
+ * opens on. Meant for pointer/focus intent on a prompt row.
+ */
+export function usePrefetchGeoPromptAnswer(organizationId: string) {
+  const queryClient = useQueryClient();
+  const { projectId } = useGeoProjectScope();
+  const prefetchDetail = usePrefetchGeoPromptResultDetail(organizationId);
+  return (row: GeoPromptTableRow) => {
+    if (!organizationId) {
+      return;
+    }
+    const promptId = row.results[0]?.promptId ?? row.id;
+    void queryClient.prefetchQuery(
+      dashboardOrpc.geo.promptHistory.queryOptions({
+        input: { organizationId, projectId, promptId },
+      })
+    );
+    prefetchDetail(
+      withoutSupersededNoSearchResults(
+        latestPromptResults(row.results, [], promptId, row.prompt)
+      )[0]?.checkId
+    );
+    loadGeoPromptAnswerThread().catch(() => undefined);
+  };
 }
 
 export function useGeoPromptHistory(
@@ -404,6 +527,53 @@ export function useGeoCompetitorShare(
   });
 }
 
+function competitorEngineMatrixOptions(
+  organizationId: string,
+  projectId: string | undefined,
+  range?: GeoRangeQuery
+) {
+  return dashboardOrpc.geo.competitorEngineMatrix.queryOptions({
+    input: { organizationId, projectId, ...toGeoWindowInput(range) },
+  });
+}
+
+export function useGeoCompetitorEngineMatrix(
+  organizationId: string,
+  range?: GeoRangeQuery
+) {
+  const tToast = useTranslations("geo.toasts");
+  const { projectId } = useGeoProjectScope();
+  return useQuery<GeoCompetitorEngineMatrixResponse>({
+    ...competitorEngineMatrixOptions(organizationId, projectId, range),
+    enabled: !!organizationId,
+    placeholderData: keepPreviousData,
+    meta: { errorMessage: tToast("loadCompetitorShareFailed") },
+  });
+}
+
+/** Starts the matrix query with the page instead of when its card mounts. */
+export function usePrefetchGeoCompetitorEngineMatrix(
+  organizationId: string,
+  range?: GeoRangeQuery
+) {
+  const queryClient = useQueryClient();
+  const { projectId } = useGeoProjectScope();
+  const options = competitorEngineMatrixOptions(
+    organizationId,
+    projectId,
+    range
+  );
+  const key = JSON.stringify(options.queryKey);
+  const prefetch = useEffectEvent(() => {
+    void queryClient.prefetchQuery(options);
+  });
+  useEffect(() => {
+    if (organizationId) {
+      prefetch();
+    }
+  }, [organizationId, key]);
+}
+
 export function useGeoCompetitorDetail(
   organizationId: string,
   brand: string | null,
@@ -447,7 +617,7 @@ export function useGeoCompetitorPromptSummary(
   });
 }
 
-export function usePrefetchGeoCompetitorDetail(organizationId: string) {
+function usePrefetchGeoCompetitorDetail(organizationId: string) {
   const queryClient = useQueryClient();
   const { projectId } = useGeoProjectScope();
 
@@ -468,53 +638,48 @@ export function usePrefetchGeoCompetitorDetail(organizationId: string) {
   };
 }
 
-function geoCompetitorRowHref(
-  organizationSlug: string,
-  brand: string,
-  projectId?: string,
-  aggregate = false
-): string {
-  if (aggregate) {
-    return withGeoProject(`/${organizationSlug}/geo/competitors`, projectId);
-  }
-  return withGeoProject(
-    geoCompetitorDetailPath(organizationSlug, brand),
-    projectId
-  );
-}
-
 /**
  * Row navigation for competitor lists/charts. The aggregated "Other" slice
- * routes to the competitors index; every other brand opens its detail page
- * (and prefetches its detail query on hover).
+ * routes to the competitors index; every other brand opens the detail sheet
+ * over the current page via `?competitor=` (and prefetches its detail query
+ * on hover).
  */
 export function useGeoCompetitorRowNavigation(
   organizationSlug: string | undefined,
   organizationId: string | undefined
 ) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { projectId } = useGeoProjectScope();
   const prefetchDetail = usePrefetchGeoCompetitorDetail(organizationId ?? "");
+  const indexHref = organizationSlug
+    ? withGeoProject(`/${organizationSlug}/geo/competitors`, projectId)
+    : null;
 
   const openRow = (brand: string, aggregate = false) => {
-    if (!organizationSlug) {
+    if (!indexHref) {
       return;
     }
-    router.push(
-      geoCompetitorRowHref(organizationSlug, brand, projectId, aggregate)
-    );
+    if (aggregate) {
+      router.push(indexHref);
+      return;
+    }
+    const next = new URLSearchParams(searchParams);
+    next.set(GEO_COMPETITOR_DETAIL_QUERY_KEY, brand);
+    router.push(`${pathname}?${next.toString()}`, { scroll: false });
   };
 
   const prefetchRow = (brand: string, aggregate = false) => {
-    if (!organizationSlug) {
+    if (!indexHref) {
       return;
     }
-    router.prefetch(
-      geoCompetitorRowHref(organizationSlug, brand, projectId, aggregate)
-    );
-    if (!aggregate) {
-      prefetchDetail(brand);
+    if (aggregate) {
+      router.prefetch(indexHref);
+      return;
     }
+    prefetchDetail(brand);
+    loadCompetitorDetailView().catch(() => undefined);
   };
 
   return { openRow, prefetchRow };
@@ -700,7 +865,24 @@ export function useGeoStartScan(organizationId: string) {
         engines: payload.engines,
       });
     },
-    onSuccess: async () => {
+    onMutate: (input) => {
+      const trigger = typeof input === "string" ? input : input?.trigger;
+      const cached = queryClient.getQueryData<GeoSettingsResponse>(
+        dashboardOrpc.geo.settings.queryKey({
+          input: geoSettingsQueryInput({ organizationId, projectId }),
+        })
+      );
+      return {
+        trigger,
+        firstScan:
+          trigger === "onboarding" ||
+          (cached !== undefined && !cached.settings?.lastScanAt),
+      };
+    },
+    onSuccess: async (_output, _input, context) => {
+      if (context?.firstScan) {
+        trackFirstScanStarted(context.trigger);
+      }
       await queryClient.invalidateQueries({
         queryKey: dashboardOrpc.geo.scanRun.key({
           input: { organizationId, projectId },
@@ -714,6 +896,28 @@ export function useGeoStartScan(organizationId: string) {
     },
     onError: (error) => {
       toast.error(toErrorMessage(error, tToast("startScanFailed")));
+    },
+  });
+}
+
+export function useGeoStartFreeScan(organizationId: string) {
+  const { projectId } = useGeoProjectScope();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: geoStartScanMutationKey(organizationId, projectId),
+    mutationFn: () =>
+      dashboardOrpc.geo.startFreeScan.call({ organizationId, projectId }),
+    onSuccess: async (result) => {
+      if (!result.started) {
+        return;
+      }
+      trackFirstScanStarted("onboarding");
+      emitAutumnRefresh();
+      await refreshSettingsAfterScanStart(
+        queryClient,
+        organizationId,
+        projectId
+      );
     },
   });
 }
@@ -762,6 +966,18 @@ export function useIsGeoScanning(organizationId: string) {
   return pendingCount > 0 || Boolean(data?.settings?.isScanning);
 }
 
+/**
+ * Manual conversation and persona runs hand tracked consumer apps to a scan,
+ * and a project runs one scan at a time. While one is in flight, another run
+ * would be refused or would quietly skip its consumer apps, so the run
+ * controls wait for it.
+ */
+export function useIsGeoConsumerRunBlocked(organizationId: string) {
+  const { data } = useGeoSettings(organizationId);
+  const isScanning = useIsGeoScanning(organizationId);
+  return isScanning && (data?.settings?.engines ?? []).some(isGeoOlostepEngine);
+}
+
 export function useAgentReadiness(organizationId: string) {
   const tToast = useTranslations("geo.toasts");
   const { projectId } = useGeoProjectScope();
@@ -805,19 +1021,117 @@ function useGeoTrafficPollInterval(): number {
     : GEO_TRAFFIC_LIVE_INTERVAL_MS;
 }
 
-export function useAiTraffic(organizationId: string, range?: GeoRangeQuery) {
+export function useAiTraffic(
+  organizationId: string,
+  range?: GeoRangeQuery,
+  host?: string,
+  path?: string,
+  sites?: GeoTrafficSitesMode
+) {
   const tToast = useTranslations("geo.toasts");
   const { projectId } = useGeoProjectScope();
   const trafficPollInterval = useGeoTrafficPollInterval();
   return useQuery<AiTrafficResponse>({
     ...dashboardOrpc.geo.aiTraffic.queryOptions({
-      input: geoOverviewQueryInput({ organizationId, projectId }, range),
+      input: geoHostQueryInput(
+        { organizationId, projectId },
+        range,
+        host,
+        path,
+        sites
+      ),
     }),
     enabled: !!organizationId,
     placeholderData: useScopedPreviousData<AiTrafficResponse>(projectId),
     refetchInterval: trafficPollInterval,
     refetchIntervalInBackground: false,
     meta: { errorMessage: tToast("loadAITrafficFailed") },
+  });
+}
+
+/** Per-source page counts; slower than useAiTraffic, so the table fills them in. */
+export function useAiTrafficSources(
+  organizationId: string,
+  range?: GeoRangeQuery,
+  host?: string,
+  path?: string,
+  sites?: GeoTrafficSitesMode
+) {
+  const tToast = useTranslations("geo.toasts");
+  const { projectId } = useGeoProjectScope();
+  const trafficPollInterval = useGeoTrafficPollInterval();
+  return useQuery<AiTrafficSourcesResponse>({
+    ...dashboardOrpc.geo.aiTrafficSources.queryOptions({
+      input: geoHostQueryInput(
+        { organizationId, projectId },
+        range,
+        host,
+        path,
+        sites
+      ),
+    }),
+    enabled: !!organizationId,
+    placeholderData: useScopedPreviousData<AiTrafficSourcesResponse>(projectId),
+    refetchInterval: trafficPollInterval,
+    refetchIntervalInBackground: false,
+    meta: { errorMessage: tToast("loadAITrafficFailed") },
+  });
+}
+
+export function useWebAnalytics(
+  organizationId: string,
+  range?: GeoRangeQuery,
+  host?: string,
+  path?: string,
+  sites?: GeoTrafficSitesMode
+) {
+  const tToast = useTranslations("geo.toasts");
+  const { projectId } = useGeoProjectScope();
+  const trafficPollInterval = useGeoTrafficPollInterval();
+  return useQuery<WebAnalyticsResponse>({
+    ...dashboardOrpc.geo.webAnalytics.queryOptions({
+      input: geoHostQueryInput(
+        { organizationId, projectId },
+        range,
+        host,
+        path,
+        sites
+      ),
+    }),
+    enabled: !!organizationId,
+    placeholderData: useScopedPreviousData<WebAnalyticsResponse>(projectId),
+    refetchInterval: trafficPollInterval,
+    refetchIntervalInBackground: false,
+    meta: { errorMessage: tToast("loadVisitorsFailed") },
+  });
+}
+
+/** Breakdown tables for useWebAnalytics; slower, so they fill in after the summary. */
+export function useWebAnalyticsBreakdowns(
+  organizationId: string,
+  range?: GeoRangeQuery,
+  host?: string,
+  path?: string,
+  sites?: GeoTrafficSitesMode
+) {
+  const tToast = useTranslations("geo.toasts");
+  const { projectId } = useGeoProjectScope();
+  const trafficPollInterval = useGeoTrafficPollInterval();
+  return useQuery<WebAnalyticsResponse>({
+    ...dashboardOrpc.geo.webAnalyticsBreakdowns.queryOptions({
+      input: geoHostQueryInput(
+        { organizationId, projectId },
+        range,
+        host,
+        path,
+        sites
+      ),
+    }),
+    enabled: !!organizationId,
+    placeholderData: useScopedPreviousData<WebAnalyticsResponse>(projectId),
+    refetchInterval: trafficPollInterval,
+    refetchIntervalInBackground: false,
+    meta: { errorMessage: tToast("loadVisitorsFailed") },
   });
 }
 
@@ -834,7 +1148,9 @@ export function useGeoTrafficLog(
       input: geoTrafficLogQueryInput(
         { organizationId, projectId },
         filters,
-        options?.host
+        options?.host,
+        options?.path,
+        options?.sites
       ),
     }),
     enabled: !!organizationId,
@@ -848,7 +1164,9 @@ export function useGeoTrafficLog(
 export function useGeoTrafficPages(
   organizationId: string,
   range?: GeoRangeQuery,
-  host?: string
+  host?: string,
+  path?: string,
+  sites?: GeoTrafficSitesMode
 ) {
   const tToast = useTranslations("geo.toasts");
   const { projectId } = useGeoProjectScope();
@@ -858,7 +1176,9 @@ export function useGeoTrafficPages(
       input: geoTrafficPagesQueryInput(
         { organizationId, projectId },
         range,
-        host
+        host,
+        path,
+        sites
       ),
     }),
     enabled: !!organizationId,
@@ -991,7 +1311,10 @@ export function useGeoRunSequence(organizationId: string) {
   const tToast = useTranslations("geo.toasts");
   const { projectId } = useGeoProjectScope();
   const queryClient = useQueryClient();
-  return useMutation({
+  // isPending only disables the run controls after a re-render, so two clicks
+  // in the same frame would both fire. Claim the run synchronously instead.
+  const inFlight = useRef(false);
+  const mutation = useMutation({
     mutationFn: (sequenceId: string) =>
       dashboardOrpc.geo.sequenceRun.call({
         organizationId,
@@ -1003,12 +1326,33 @@ export function useGeoRunSequence(organizationId: string) {
         queryKey: dashboardOrpc.geo.sequenceResults.key(),
       });
       const engineCount = result.engines.length;
-      toast.success(tToast("conversationPlayed", { count: engineCount }));
+      if (engineCount > 0) {
+        toast.success(tToast("conversationPlayed", { count: engineCount }));
+      }
+      if (result.queuedScanId) {
+        toast.success(tToast("consumerAppsQueued"));
+        await refreshSettingsAfterScanStart(
+          queryClient,
+          organizationId,
+          projectId
+        );
+      }
     },
     onError: (error) => {
       toast.error(toErrorMessage(error, tToast("runConversationFailed")));
     },
+    onSettled: () => {
+      inFlight.current = false;
+    },
   });
+  const mutate: typeof mutation.mutate = (sequenceId, options) => {
+    if (inFlight.current) {
+      return;
+    }
+    inFlight.current = true;
+    mutation.mutate(sequenceId, options);
+  };
+  return { ...mutation, mutate };
 }
 
 export function useGeoSequenceResults(
@@ -1114,7 +1458,6 @@ export function useGscSelectSite(organizationId: string) {
   const tToast = useTranslations("geo.toasts");
   const { projectId } = useGeoProjectScope();
   const invalidate = useInvalidateGscQueries(organizationId, projectId);
-  // Scoped so a slow sync in one project isn't overwritten by another.
   const toastId = `gsc-select-site:${organizationId}:${projectId ?? "default"}`;
   return useMutation({
     mutationKey: gscAnalyzeMutationKey(organizationId, projectId),
@@ -1124,8 +1467,6 @@ export function useGscSelectSite(organizationId: string) {
         organizationId,
         projectId,
       }),
-    // The first sync can take a while, so progress lives in a toast and the
-    // caller can close its dialog right away.
     onMutate: (input) => {
       toast.loading(
         tToast("connectingProperty", {
@@ -1324,6 +1665,70 @@ export function useGeoSuggestionsAcceptAll(
     },
     onError: (error) => {
       toast.error(toErrorMessage(error, tToast("addPromptsFailed")));
+    },
+  });
+}
+
+export function useGeoAutopilotPromptSuggestions(organizationId: string) {
+  const { projectId } = useGeoProjectScope();
+  return useQuery({
+    ...dashboardOrpc.geo.autopilotPromptSuggestionsList.queryOptions({
+      input: { organizationId, projectId },
+    }),
+    enabled: !!organizationId,
+  });
+}
+
+/** Accepting pauses the prompt; dismissing keeps it and stops the suggestion. */
+export function useGeoAutopilotPromptSuggestionAction(organizationId: string) {
+  const t = useTranslations("geo.autopilotPromptSuggestions");
+  const { projectId } = useGeoProjectScope();
+  const queryClient = useQueryClient();
+  const invalidate = () =>
+    Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: dashboardOrpc.geo.autopilotPromptSuggestionsList.queryKey({
+          input: { organizationId, projectId },
+        }),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: dashboardOrpc.geo.promptsList.queryKey({
+          input: { organizationId, projectId },
+        }),
+      }),
+      // The prompts table reads the geo-db collection, not the oRPC list.
+      queryClient.invalidateQueries({
+        queryKey: geoDbOrgQueryKey("prompts", organizationId),
+      }),
+    ]);
+  return useMutation({
+    mutationFn: async ({
+      suggestionId,
+      action,
+    }: {
+      suggestionId: string;
+      action: "pause" | "keep";
+    }) => {
+      const input = { suggestionId, organizationId, projectId };
+      if (action === "pause") {
+        await dashboardOrpc.geo.suggestionAccept.call(input);
+      } else {
+        await dashboardOrpc.geo.suggestionDismiss.call(input);
+      }
+    },
+    onSuccess: async (_, { action }) => {
+      await invalidate();
+      if (action === "pause") {
+        toast.success(t("paused"));
+      }
+    },
+    onError: (error, { action }) => {
+      toast.error(
+        toErrorMessage(
+          error,
+          action === "pause" ? t("pauseFailed") : t("keepFailed")
+        )
+      );
     },
   });
 }

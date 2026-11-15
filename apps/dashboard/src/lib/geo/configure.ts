@@ -1,37 +1,34 @@
 import { checkContentBilling } from "@notra/ai/billing/content-billing";
 import { FEATURES } from "@notra/ai/billing/features";
 import {
-  GEO_CURSOR_FLAG_KEY,
-  GEO_OPENCODE_FLAG_KEY,
-} from "@notra/geo-core/constants/geo";
-import {
   GeoContentBillingService,
   GeoEntitlementService,
-  GeoFeatureFlagService,
   GeoGenerationService,
   GeoWorkflowService,
 } from "@notra/geo-core/deps";
-import { GeoFlagEvaluationError } from "@notra/geo-core/geo/errors";
 import {
   agentReadinessNetworkLayer,
   geoModelLayer,
+  geoCodingAgentAccessLayer,
 } from "@notra/geo-core/geo/host-layers";
 import { geoSearchConsoleLive } from "@notra/geo-core/geo/search-console-live";
+import {
+  GeoBillingError,
+  GeoGenerationTrackingError,
+  GeoWorkflowStartError,
+} from "@notra/geo-core/schemas/host-service-errors";
 import { Effect, Layer } from "effect";
 
-import { resolveZdrEntitlement } from "@/lib/billing/subscription";
 import { addActiveGeneration, generateRunId } from "@/lib/generations/tracking";
-import { resolveGeoFlagState } from "@/lib/geo/flag";
+import { resolveZdrEntitlement } from "@/utils/resolve-zdr-entitlement";
 
 const workflowLayer = Layer.succeed(GeoWorkflowService, {
-  // Lazy imports keep the workflow modules from closing a module cycle through
-  // their GEO step implementations.
   startGeoScanRun: Effect.fn("GeoDashboardWorkflow.startGeoScanRun")(
     (payload) =>
       Effect.tryPromise({
         try: async () =>
           (await import("@/lib/workflows/start")).startGeoScanRun(payload),
-        catch: (cause) => cause,
+        catch: (cause) => new GeoWorkflowStartError({ cause }),
       })
   ),
   startGeoWriterRun: Effect.fn("GeoDashboardWorkflow.startGeoWriterRun")(
@@ -39,7 +36,7 @@ const workflowLayer = Layer.succeed(GeoWorkflowService, {
       Effect.tryPromise({
         try: async () =>
           (await import("@/lib/workflows/start")).startGeoWriterRun(payload),
-        catch: (cause) => cause,
+        catch: (cause) => new GeoWorkflowStartError({ cause }),
       })
   ),
   startAgentReadinessRun: Effect.fn(
@@ -48,7 +45,7 @@ const workflowLayer = Layer.succeed(GeoWorkflowService, {
     Effect.tryPromise({
       try: async () =>
         (await import("@/lib/workflows/start")).startAgentReadinessRun(payload),
-      catch: (cause) => cause,
+      catch: (cause) => new GeoWorkflowStartError({ cause }),
     })
   ),
 });
@@ -60,7 +57,7 @@ const billingLayer = Layer.succeed(GeoContentBillingService, {
         (
           await import("@/workflows/steps/content-generation-steps")
         ).gateContentBilling(input),
-      catch: (cause) => cause,
+      catch: (cause) => new GeoBillingError({ cause }),
     })
   ),
   finalizeContentBilling: Effect.fn("GeoDashboardBilling.finalize")((input) =>
@@ -69,7 +66,7 @@ const billingLayer = Layer.succeed(GeoContentBillingService, {
         (
           await import("@/workflows/steps/content-generation-steps")
         ).finalizeContentBilling(input),
-      catch: (cause) => cause,
+      catch: (cause) => new GeoBillingError({ cause }),
     })
   ),
 });
@@ -88,40 +85,8 @@ const entitlementLayer = Layer.succeed(GeoEntitlementService, {
             outputType: null,
             quotaFeatureId: FEATURES.AI_ANSWERS,
           }),
-        catch: (cause) => cause,
+        catch: (cause) => new GeoBillingError({ cause }),
       })
-  ),
-});
-
-function geoEngineFlagEnabled(
-  flagKey: string,
-  organizationId: string
-): Effect.Effect<boolean, GeoFlagEvaluationError> {
-  return resolveGeoFlagState(flagKey, organizationId).pipe(
-    Effect.flatMap((state) => {
-      if (state === "unavailable") {
-        return Effect.fail(
-          new GeoFlagEvaluationError({
-            message: `GEO feature flag "${flagKey}" is unavailable`,
-            cause: null,
-          })
-        );
-      }
-      return Effect.succeed(state === "enabled");
-    })
-  );
-}
-
-const featureFlagLayer = Layer.succeed(GeoFeatureFlagService, {
-  isCursorEngineEnabledForOrganization: Effect.fn(
-    "GeoDashboardFeatureFlags.isCursorEnabled"
-  )((organizationId) =>
-    geoEngineFlagEnabled(GEO_CURSOR_FLAG_KEY, organizationId)
-  ),
-  isOpenCodeEngineEnabledForOrganization: Effect.fn(
-    "GeoDashboardFeatureFlags.isOpenCodeEnabled"
-  )((organizationId) =>
-    geoEngineFlagEnabled(GEO_OPENCODE_FLAG_KEY, organizationId)
   ),
 });
 
@@ -130,7 +95,7 @@ const generationLayer = Layer.succeed(GeoGenerationService, {
     (organizationId, generation) =>
       Effect.tryPromise({
         try: () => addActiveGeneration(organizationId, generation),
-        catch: (cause) => cause,
+        catch: (cause) => new GeoGenerationTrackingError({ cause }),
       })
   ),
   generateRunId: Effect.fn("GeoDashboardGeneration.generateRunId")(
@@ -138,7 +103,6 @@ const generationLayer = Layer.succeed(GeoGenerationService, {
   ),
 });
 
-/** Complete dashboard runtime for GEO programs. */
 export const geoCoreDashboardLayer = Layer.mergeAll(
   agentReadinessNetworkLayer,
   geoModelLayer,
@@ -146,6 +110,6 @@ export const geoCoreDashboardLayer = Layer.mergeAll(
   workflowLayer,
   billingLayer,
   entitlementLayer,
-  featureFlagLayer,
+  geoCodingAgentAccessLayer,
   generationLayer
 );

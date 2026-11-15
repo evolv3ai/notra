@@ -3,7 +3,7 @@
 import { CheckmarkCircle02Icon, CircleIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@notra/ui/components/ui/button";
-import { useTranslations } from "next-intl";
+import { useTranslations } from "use-intl";
 
 import { DEMO_MISSION_IDS } from "@/constants/demo-missions";
 import type { DemoSandboxInfo } from "@/types/demo";
@@ -13,10 +13,6 @@ interface DemoMissionsProps {
   onOpenConsole: () => void;
 }
 
-/**
- * Guided walkthrough. Progress comes from what actually happened in the
- * sandbox, so doing a step any way (UI, console, curl, MCP) checks it off.
- */
 export function DemoMissions({ sandbox, onOpenConsole }: DemoMissionsProps) {
   const t = useTranslations("demo.missions");
   if (!sandbox) {

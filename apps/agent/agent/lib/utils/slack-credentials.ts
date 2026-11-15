@@ -14,7 +14,7 @@ function requireEnv(name: string, purpose: string): string {
 
 export function createSlackAgentCredentials(): SlackChannelCredentials {
   return {
-    botToken: () => resolveSlackOutboundBotToken(),
+    botToken: ({ teamId }) => resolveSlackOutboundBotToken(teamId),
     get signingSecret(): string {
       return requireEnv(
         "SLACK_AGENT_SIGNING_SECRET",

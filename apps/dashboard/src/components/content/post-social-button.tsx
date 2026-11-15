@@ -1,5 +1,6 @@
 "use client";
 
+import type { SocialVideoAttachment as SocialVideoDraft } from "@notra/schemas/types/dashboard/content";
 import {
   ResponsiveDialog,
   ResponsiveDialogClose,
@@ -11,16 +12,16 @@ import {
 } from "@notra/ui/components/shared/responsive-dialog";
 import { Linkedin } from "@notra/ui/components/ui/svgs/linkedin";
 import { XTwitter } from "@notra/ui/components/ui/svgs/twitter";
-import { useTranslations } from "next-intl";
-import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { Button, buttonVariants } from "@/components/button";
 import { Confetti } from "@/components/confetti";
 import { AddReferenceControl } from "@/components/content/add-reference-control";
 import { PostSocialErrorNotice } from "@/components/content/post-social-error-notice";
 import { PostSocialIntentButton } from "@/components/content/post-social-intent-button";
+import { SocialVideoAttachment } from "@/components/content/social-video-attachment";
 import { LinkedInPost } from "@/components/linkedin-post";
 import { TwitterPost } from "@/components/twitter-post";
 import { LINKEDIN_BRAND_PRIMARY } from "@/constants/linkedin";
@@ -29,7 +30,9 @@ import { SOCIAL_PLATFORM_LABELS } from "@/constants/social-connect";
 import { useBrandSettings } from "@/lib/hooks/use-brand-analysis";
 import { useCreateReferenceForVoice } from "@/lib/hooks/use-brand-references";
 import { usePublishSocialPost } from "@/lib/hooks/use-connected-accounts";
+import { useSaveSocialVideo } from "@/lib/hooks/use-content";
 import { useSelectedSocialAccount } from "@/lib/hooks/use-selected-social-account";
+import { useParams, useRouter } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 import type { PostSocialButtonProps } from "@/types/content/post-social";
 import { linkedInAuthorFromAccount } from "@/utils/linkedin";
@@ -52,6 +55,9 @@ export function PostSocialButton({
   onContentChange,
   onPublished,
   from,
+  contentId,
+  initialVideo,
+  onUploadingChange,
 }: PostSocialButtonProps) {
   const t = useTranslations("content.postSocial");
   const tCommon2 = useTranslations("common");
@@ -70,8 +76,19 @@ export function PostSocialButton({
   const [open, setOpen] = useState(false);
   const [localDraft, setLocalDraft] = useState(content);
   const [publishedContent, setPublishedContent] = useState<string | null>(null);
+  const [video, setVideo] = useState<SocialVideoDraft | null>(
+    initialVideo ?? null
+  );
+  const [videoUploading, setVideoUploading] = useState(false);
+  const saveVideo = useSaveSocialVideo(organizationId, contentId ?? "");
+  const videoPending = videoUploading || saveVideo.isPending;
   const draft = onContentChange ? content : localDraft;
   const handleDraftChange = onContentChange ?? setLocalDraft;
+
+  const handleUploadingChange = (uploading: boolean) => {
+    setVideoUploading(uploading);
+    onUploadingChange?.(uploading);
+  };
 
   const label = SOCIAL_PLATFORM_LABELS[platform];
   const isTwitter = platform === "twitter";
@@ -81,6 +98,9 @@ export function PostSocialButton({
     setOpen(nextOpen);
     if (nextOpen) {
       setLocalDraft(content);
+      if (!saveVideo.isPending) {
+        setVideo(initialVideo ?? null);
+      }
       return;
     }
     publishMutation.reset();
@@ -89,14 +109,33 @@ export function PostSocialButton({
     setLocalDraft(content);
   };
 
+  const handleVideoChange = (next: SocialVideoDraft | null) => {
+    const previous = video;
+    setVideo(next);
+    if (!contentId) {
+      return;
+    }
+    saveVideo.mutate(next, {
+      onError: () => {
+        setVideo(previous);
+        toast.error(t("attachmentSaveFailed"));
+      },
+    });
+  };
+
   const handlePublish = () => {
-    if (!(selectedAccount && draft.trim()) || isOverCharLimit) {
+    if (!(selectedAccount && draft.trim()) || isOverCharLimit || videoPending) {
       return;
     }
     const contentToPublish = draft;
     setPublishedContent(contentToPublish);
     publishMutation.mutate(
-      { accountId: selectedAccount.id, content: contentToPublish, from },
+      {
+        accountId: selectedAccount.id,
+        content: contentToPublish,
+        from,
+        mediaUrls: video ? [video.url] : undefined,
+      },
       {
         onError: () => {
           setPublishedContent(null);
@@ -258,6 +297,15 @@ export function PostSocialButton({
             />
           )}
         </div>
+        {!published && (
+          <SocialVideoAttachment
+            contentId={contentId}
+            disabled={isLocked || videoPending}
+            onChange={handleVideoChange}
+            onUploadingChange={handleUploadingChange}
+            value={video}
+          />
+        )}
         {!published && charLimit !== null && isOverCharLimit && (
           <p className="text-warning text-sm">
             {t("overLimit", {
@@ -303,9 +351,10 @@ export function PostSocialButton({
                 render={<Button variant="outline">{tCommon("cancel")}</Button>}
               />
               <Button
-                disabled={!draft.trim() || isOverCharLimit}
+                disabled={!draft.trim() || isOverCharLimit || videoPending}
                 loading={publishMutation.isPending}
                 onClick={handlePublish}
+                data-dialog-confirm
               >
                 {t("postAs", { username: selectedAccount.username })}
               </Button>

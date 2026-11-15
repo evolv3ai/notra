@@ -7,11 +7,6 @@ import {
 } from "@/components/evilcharts/ui/echarts-chart";
 import type { ChartConfig } from "@/types/charts";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Legend overlay (React) — replicates ChartLegendContent + its 7 indicators.
-// The legend is HTML inside `[data-chart={id}]`, so it uses the injected
-// `--color-*` vars directly. Shared by every ECharts chart.
-// ─────────────────────────────────────────────────────────────────────────────
 
 export type LegendVariant =
   | "square"
@@ -30,8 +25,6 @@ export function legendFillStyle(
   return { background: indicatorBackground(key, colorsCount) };
 }
 
-// Punches out the centre with a mask-composite so only the "border" shows —
-// works with gradients and border-radius, unlike plain border-color.
 export function legendOutlineStyle(
   key: string,
   colorsCount: number
@@ -87,13 +80,6 @@ export function LegendIndicator({
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LegendOverlay — the positioned HTML legend row. The chart computes the
-// absolute-positioned `style` (it owns the brush/verticalAlign layout math) and
-// passes it in; this renders the entries, their indicators, and the
-// selection/hover dim. `verticalAlign` is carried on the props for parity with
-// the chart's LegendSlot even though positioning arrives fully via `style`.
-// ─────────────────────────────────────────────────────────────────────────────
 
 type LegendOverlayProps = {
   seriesKeys: string[];
@@ -137,17 +123,16 @@ export function LegendOverlay({
         const isSelected =
           (selectedKey === null || selectedKey === key) &&
           (hoveredKey === null || hoveredKey === key);
+        const Entry = isClickable ? "button" : "div";
         return (
-          // No entrance here — the Recharts legend appears instantly, and a
-          // fade-in reads as disconnected from the canvas draw-in.
-          <div
+          <Entry
+            aria-pressed={isClickable ? selectedKey === key : undefined}
             className={`flex items-center gap-1.5 transition-opacity ${
               isSelected ? "" : "opacity-30"
             } ${isClickable ? "cursor-pointer" : ""}`}
             key={key}
-            onClick={() => {
-              if (isClickable) onToggle(key);
-            }}
+            onClick={isClickable ? () => onToggle(key) : undefined}
+            type={isClickable ? "button" : undefined}
           >
             <LegendIndicator
               colorsCount={colorsCount}
@@ -155,7 +140,7 @@ export function LegendOverlay({
               variant={variant}
             />
             {item?.label}
-          </div>
+          </Entry>
         );
       })}
     </div>

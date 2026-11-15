@@ -47,7 +47,7 @@ export function projectWebsiteUrl(value: string): string | null {
   return parsed.success ? new URL(parsed.data).href : null;
 }
 
-export function projectWebsiteHost(value: string): string | null {
+function projectWebsiteHost(value: string): string | null {
   const url = projectWebsiteUrl(value);
   return url ? new URL(url).hostname.replace(/^www\./, "") : null;
 }

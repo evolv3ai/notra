@@ -1,19 +1,30 @@
-import { GEO_DIRECT_GROUNDED_PROVIDERS } from "../constants/geo";
-import { GEO_MODEL_REPLACED_IDS } from "../constants/geo-model-catalog";
+import {
+  GEO_DIRECT_GROUNDED_PROVIDERS,
+  GEO_OPENCODE_ENGINE_ID,
+  GEO_PAID_CODING_AGENT_ENGINE_IDS,
+} from "../constants/geo";
+import {
+  GEO_MODEL_BATCH_SUFFIX,
+  GEO_MODEL_REPLACED_IDS,
+} from "../constants/geo-model-catalog";
 import type {
   GeoGroundedEngine,
   GeoModelCatalog,
   GeoModelGateway,
+  GeoResolvedModelCatalog,
   GeoScanSkipReason,
   GeoZdrMode,
   GeoZdrPolicy,
 } from "../types/geo";
+import { isGeoBoxCodingAgent } from "./geo-coding-agents";
+import { isGeoContextEngine } from "./geo-context";
 import { engineModelOf } from "./geo-engine-family";
 import {
   geoDefaultEngines,
   getGeoModelCatalogEntry,
   isGeoEngineZdrCapable,
 } from "./geo-model-catalog";
+import { isGeoOlostepEngine } from "./geo-olostep";
 
 /** Known catalog ids, in catalog order. Unknown ids are dropped. */
 export function sortKnownEngines(
@@ -26,12 +37,15 @@ export function sortKnownEngines(
     .map((model) => model.id);
 }
 
-/** Swap retired catalog ids for the engine that replaced them. */
+/** Canonicalize saved batch variants and replace retired catalog ids. */
 export function remapRetiredGeoEngineIds(ids: Iterable<string>): string[] {
   const seen = new Set<string>();
   const next: string[] = [];
   for (const id of ids) {
-    const mapped = GEO_MODEL_REPLACED_IDS[id] ?? id;
+    const base = id.endsWith(GEO_MODEL_BATCH_SUFFIX)
+      ? id.slice(0, -GEO_MODEL_BATCH_SUFFIX.length)
+      : id;
+    const mapped = GEO_MODEL_REPLACED_IDS[base] ?? base;
     if (seen.has(mapped)) {
       continue;
     }
@@ -44,7 +58,8 @@ export function remapRetiredGeoEngineIds(ids: Iterable<string>): string[] {
 /**
  * Resolve a this-run engine selection. `undefined` keeps the full tracked set.
  * An explicit selection may include catalog models the project does not track,
- * so a one-off scan can try a model before tracking it. Unknown ids are dropped.
+ * so a one-off scan can try a model before tracking it. Unknown ids and
+ * untracked legacy models are dropped.
  */
 export function scopeGeoScanEngines(
   catalog: GeoModelCatalog,
@@ -54,7 +69,15 @@ export function scopeGeoScanEngines(
   if (!requested) {
     return [...tracked];
   }
-  return sortKnownEngines(catalog, remapRetiredGeoEngineIds(requested));
+  const trackedIds = new Set(remapRetiredGeoEngineIds(tracked));
+  return sortKnownEngines(
+    catalog,
+    remapRetiredGeoEngineIds(requested).filter(
+      (engine) =>
+        trackedIds.has(engine) ||
+        !getGeoModelCatalogEntry(catalog, engine)?.hidden
+    )
+  );
 }
 
 /**
@@ -73,33 +96,59 @@ export function isPartialGeoScanEngineScope(
 }
 
 /**
- * Bare catalog calls that still search the web: Google AI Overview (SerpApi)
- * and Box coding agents. Cursor is excluded — it runs with no tools.
+ * Bare catalog calls that still search the web: consumer apps and Google AI
+ * Overview scraped through Context or Olostep, and Box coding agents. Cursor is
+ * excluded — it runs with no tools.
  */
 export function isGeoNativeSearchEngine(
   catalog: GeoModelCatalog,
   engine: string
 ): boolean {
   const gateway = resolveGeoEngineGateway(catalog, engine);
-  return gateway === "serpapi" || gateway === "box";
+  return gateway === "box" || gateway === "olostep" || gateway === "context";
+}
+
+/** Whether a catalog model runs with web search: grounded route or native search. */
+export function isGeoWebSearchEngine(
+  catalog: GeoResolvedModelCatalog,
+  engine: string
+): boolean {
+  return (
+    catalog.models.some(
+      (model) => model.id === engine && model.supportsGroundedChecks
+    ) || isGeoNativeSearchEngine(catalog, engine)
+  );
+}
+
+/** Whether a stored check's engine id answered with web search. */
+export function geoEngineUsedWebSearch(engine: string): boolean {
+  return (
+    engineModelOf(engine) !== engine ||
+    isGeoOlostepEngine(engine) ||
+    isGeoContextEngine(engine) ||
+    engine === GEO_OPENCODE_ENGINE_ID ||
+    isGeoBoxCodingAgent(GEO_MODEL_REPLACED_IDS[engine] ?? engine)
+  );
 }
 
 /**
  * Empty engine scope must not become a successful zero-check scan. A requested
- * selection with no catalog model left, a set that ZDR rejects in full, or a
- * set with no web-search route is a skip — not a completed pollable run.
+ * selection with no catalog model left, or a set that ZDR rejects in full, is
+ * a skip — not a completed pollable run.
  */
 export function geoScanEmptyEngineSkipReason(
   scanEngines: readonly string[],
   runnableEngineCount: number,
-  requestedEngines?: readonly string[],
-  zdrPassedCount = 0
+  requestedEngines?: readonly string[]
 ): GeoScanSkipReason | null {
-  if (requestedEngines !== undefined && scanEngines.length === 0) {
+  if (
+    scanEngines.length === 0 &&
+    (requestedEngines !== undefined || runnableEngineCount === 0)
+  ) {
     return "scoped_engines_missing";
   }
   if (scanEngines.length > 0 && runnableEngineCount === 0) {
-    return zdrPassedCount > 0 ? "no_search_engines" : "zdr";
+    return "zdr";
   }
   return null;
 }
@@ -113,11 +162,17 @@ export function resolveTrackedEngines(
   catalog: GeoModelCatalog,
   stored: readonly string[] | null | undefined
 ): string[] {
-  const selected = sortKnownEngines(
-    catalog,
-    remapRetiredGeoEngineIds(stored ?? [])
-  );
-  return selected.length === 0 ? geoDefaultEngines(catalog) : selected;
+  const configured = remapRetiredGeoEngineIds(stored ?? []);
+  const selected = sortKnownEngines(catalog, configured);
+  if (
+    selected.length > 0 ||
+    configured.some((engine) =>
+      GEO_PAID_CODING_AGENT_ENGINE_IDS.includes(engine)
+    )
+  ) {
+    return selected;
+  }
+  return geoDefaultEngines(catalog);
 }
 
 /**
@@ -153,6 +208,12 @@ export function resolveGeoGroundedZdrMode(
   engine: GeoGroundedEngine,
   policy: GeoZdrPolicy
 ): GeoZdrMode | null {
+  if (engine.provider === "gateway-meta") {
+    return !policy.enforceZdr ||
+      policy.nonZdrApprovedEngines.includes(engineModelOf(engine.key))
+      ? "none"
+      : null;
+  }
   if (!policy.enforceZdr) {
     return policy.nonEnforcedMode ?? "preferred";
   }

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Notra Sites E2E · GitHub App setup</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+      }
+      body {
+        max-width: 640px;
+        margin: 64px auto;
+        padding: 0 24px;
+        line-height: 1.6;
+      }
+      h1 {
+        line-height: 1.2;
+      }
+      button {
+        background: #167341;
+        color: white;
+        border: 0;
+        border-radius: 8px;
+        padding: 14px 20px;
+        font: inherit;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.55;
+        cursor: default;
+      }
+      button:focus-visible {
+        outline: 3px solid #4097eb;
+        outline-offset: 4px;
+      }
+      aside {
+        border-left: 4px solid #bc8430;
+        padding: 4px 20px;
+        margin: 28px 0;
+      }
+      #status {
+        min-height: 3em;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p>Notra · Local test tooling</p>
+      <h1>Create a Sites E2E GitHub App</h1>
+      <p>
+        This opens GitHub’s preconfigured registration form. You own the private
+        test app and must confirm its creation yourself.
+      </p>
+      <aside>
+        <strong>Test repository only.</strong>
+        <p>
+          After creation, the operator loads the saved credentials into the test
+          dashboard. Connect the app from that dashboard, select
+          <strong>Only select repositories</strong>, and choose only the
+          disposable Sites E2E repository. Never grant access to all
+          repositories.
+        </p>
+      </aside>
+      <p>
+        Permissions: contents, pull requests, and checks (write); metadata
+        (read). Events: push, pull request, check run. No organization
+        permissions or OAuth access are requested.
+      </p>
+      <p>
+        The callback saves credentials server-side into the operator’s new
+        private file (0600). No private key, client secret, webhook secret, or
+        temporary code is displayed.
+      </p>
+      <button id="create" type="button" disabled>Continue to GitHub</button>
+      <p id="status" role="status" aria-live="polite">
+        Open the private launch link printed by the local helper.
+      </p>
+      <form id="manifest-form" method="post" hidden>
+        <input id="manifest" name="manifest" type="hidden" />
+      </form>
+    </main>
+    <script>
+      const token = location.hash.slice(1);
+      history.replaceState(null, "", "/");
+      const button = document.getElementById("create");
+      const status = document.getElementById("status");
+      if (/^[a-f0-9]{64}$/.test(token)) {
+        button.disabled = false;
+        status.textContent = "Ready. GitHub will ask you to confirm creation.";
+      }
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        status.textContent = "Preparing the registration form…";
+        try {
+          const response = await fetch("/bootstrap", {
+            method: "POST",
+            headers: { "X-Setup-Token": token },
+          });
+          if (!response.ok) throw new Error("Setup unavailable");
+          const setup = await response.json();
+          document.getElementById("manifest").value = JSON.stringify(
+            setup.manifest
+          );
+          const form = document.getElementById("manifest-form");
+          form.action = setup.action;
+          form.submit();
+        } catch {
+          status.textContent =
+            "Setup expired or unavailable. Ask the operator to restart the local helper and open its new private launch link.";
+        }
+      });
+    </script>
+  </body>
+</html>

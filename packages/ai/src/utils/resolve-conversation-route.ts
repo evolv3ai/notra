@@ -1,15 +1,20 @@
 import { conversationSelectionSchema } from "@notra/ai/schemas/chat";
-import type { RoutingResult } from "@notra/ai/types/orchestration";
+import type {
+  AutoThinkingLevel,
+  RoutingResult,
+} from "@notra/ai/types/orchestration";
 import type { UIMessage } from "ai";
 
 export async function resolveConversationRoute(
   messages: UIMessage[],
   requestedModel: string | undefined,
-  route: () => Promise<RoutingResult>
+  route: () => Promise<RoutingResult>,
+  thinkingLevel?: AutoThinkingLevel
 ): Promise<RoutingResult> {
   if (requestedModel && requestedModel !== "auto") {
     return {
       model: requestedModel,
+      thinkingLevel,
       complexity: "complex",
       requiresTools: true,
       reasoning: "User selected model explicitly",
@@ -20,6 +25,7 @@ export async function resolveConversationRoute(
   if (selection) {
     return {
       ...selection,
+      thinkingLevel: thinkingLevel ?? selection.thinkingLevel,
       complexity:
         selection.thinkingLevel === "high" ||
         selection.thinkingLevel === "medium"
@@ -30,7 +36,11 @@ export async function resolveConversationRoute(
     };
   }
 
-  return route();
+  const decision = await route();
+  return {
+    ...decision,
+    thinkingLevel: thinkingLevel ?? decision.thinkingLevel,
+  };
 }
 
 function getConversationSelection(messages: UIMessage[]) {
@@ -58,8 +68,6 @@ function getConversationSelection(messages: UIMessage[]) {
   return saved.success ? saved.data : undefined;
 }
 
-// Keep a server-saved selection when retry/edit truncates the assistant history.
-// The first message survives truncation, including a retry of the first turn.
 export function preserveConversationSelection(
   messages: UIMessage[],
   savedMessages: UIMessage[]

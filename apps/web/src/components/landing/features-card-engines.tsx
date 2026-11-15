@@ -1,5 +1,8 @@
-import { EngineIcon } from "@notra/ui/components/geo/engine-icon";
 import { GeoBar } from "@notra/ui/components/geo/geo-bar";
+import { cn } from "@notra/ui/lib/utils";
+
+import { LandingEngineIcon } from "@/components/landing/landing-engine-icon";
+import { MockFrame } from "@/components/landing/mock-frame";
 import {
   Table,
   TableBody,
@@ -7,10 +10,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@notra/ui/components/ui/table";
-import { cn } from "@notra/ui/lib/utils";
-
-import { MockFrame } from "@/components/landing/mock-frame";
+} from "@/components/marketing-table";
 import {
   FEATURES_ENGINE_HEADERS,
   FEATURES_ENGINE_ROWS,
@@ -65,7 +65,7 @@ export function FeaturesCardEngines() {
             <TableRow key={row.id}>
               <TableCell className="min-w-0 overflow-hidden py-3">
                 <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
-                  <EngineIcon className="shrink-0" engine={row.id} />
+                  <LandingEngineIcon className="shrink-0" engine={row.id} />
                   <span className="truncate">{GEO_ENGINE_NAMES[row.id]}</span>
                 </span>
               </TableCell>

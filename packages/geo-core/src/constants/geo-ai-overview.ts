@@ -1,16 +1,5 @@
 import type { GeoAiOverviewLocale } from "../types/geo-ai-overview";
 
-export const GEO_SERPAPI_BASE_URL = "https://serpapi.com/search.json";
-export const GEO_SERPAPI_GOOGLE_ENGINE = "google";
-export const GEO_SERPAPI_AI_OVERVIEW_ENGINE = "google_ai_overview";
-/**
- * Restrict the payload to the overview, errors, and enough envelope to tell a
- * real miss from a malformed response. Never request organic results.
- */
-export const GEO_SERPAPI_JSON_RESTRICTOR = "ai_overview,error,search_metadata";
-/** Opt-in live SerpApi checks. The unit suite stays offline without this. */
-export const GEO_SERPAPI_LIVE_ENV = "GEO_SERPAPI_LIVE";
-
 export const GEO_AI_OVERVIEW_INVALID_ENVELOPE =
   "Unrecognized SerpApi Google response";
 export const GEO_AI_OVERVIEW_INVALID_OVERVIEW = "Malformed AI Overview payload";
@@ -22,12 +11,10 @@ export const GEO_AI_OVERVIEW_ABSENT_ANSWER =
 const DEFAULT_LOCALE: GeoAiOverviewLocale = { hl: "en", gl: "us" };
 
 /**
- * GEO stores languages as English names. SerpApi wants Google `hl`/`gl` codes.
+ * GEO stores languages as English names. Google wants `hl`/`gl` codes.
  * Unknown names fall back to English/US rather than guessing a country.
  */
-export const GEO_AI_OVERVIEW_LOCALES: Readonly<
-  Record<string, GeoAiOverviewLocale>
-> = {
+const GEO_AI_OVERVIEW_LOCALES: Readonly<Record<string, GeoAiOverviewLocale>> = {
   English: DEFAULT_LOCALE,
   Spanish: { hl: "es", gl: "es" },
   French: { hl: "fr", gl: "fr" },

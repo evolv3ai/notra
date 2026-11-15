@@ -10,6 +10,16 @@ export class PostSlugNotSupportedError extends Schema.TaggedError<PostSlugNotSup
   {}
 ) {}
 
+export class PostMetadataNotSupportedError extends Schema.TaggedError<PostMetadataNotSupportedError>()(
+  "PostMetadataNotSupportedError",
+  {}
+) {}
+
+export class PostUnknownAuthorError extends Schema.TaggedError<PostUnknownAuthorError>()(
+  "PostUnknownAuthorError",
+  {}
+) {}
+
 export class PostInvalidMarkdownError extends Schema.TaggedError<PostInvalidMarkdownError>()(
   "PostInvalidMarkdownError",
   {}
@@ -35,10 +45,14 @@ export class PostGenerationQueueFailedError extends Schema.TaggedError<PostGener
   { jobId: Schema.optional(Schema.String) }
 ) {}
 
-/** A requested repository, Linear integration or brand voice is not usable by this organization. */
 export class PostGenerationTargetUnavailableError extends Schema.TaggedError<PostGenerationTargetUnavailableError>()(
   "PostGenerationTargetUnavailableError",
   { message: Schema.String }
+) {}
+
+export class PostGenerationSourcesUnavailableError extends Schema.TaggedError<PostGenerationSourcesUnavailableError>()(
+  "PostGenerationSourcesUnavailableError",
+  { message: Schema.String, code: Schema.String }
 ) {}
 
 export class PostDatabaseError extends Schema.TaggedError<PostDatabaseError>()(

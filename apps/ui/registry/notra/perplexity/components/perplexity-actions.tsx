@@ -16,15 +16,6 @@ import type { ComponentProps, ReactElement, ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -36,6 +27,15 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "../../dropdown-menu/components/dropdown-menu";
 import {
   PERPLEXITY_COPIED_RESET_MS,
   PERPLEXITY_TOOLTIP_DELAY_MS,
@@ -49,7 +49,6 @@ const ICON_STROKE = 1.75;
 interface ActionButtonProps extends ComponentProps<typeof Button> {
   children: ReactNode;
   label: string;
-  /** Wraps the button in another trigger, like a popover or menu trigger. */
   trigger?: (button: ReactElement) => ReactElement;
 }
 

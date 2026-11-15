@@ -56,6 +56,7 @@ export interface ClaudeStepTool {
   count?: number;
   detail?: ReactNode;
   label: ReactNode;
+  logo?: ReactNode;
   results?: ClaudeSearchResult[];
   tool?: string;
   type: "tool";
@@ -103,6 +104,7 @@ export interface ClaudeSearchProps extends Omit<
 > {
   groups?: readonly ClaudeSearchGroup[];
   items?: readonly ClaudeStepItem[];
+  logo?: ReactNode;
   queryLabel?: ReactNode;
   reducedMotion?: boolean;
   resultsLabel?: (count: number) => ReactNode;

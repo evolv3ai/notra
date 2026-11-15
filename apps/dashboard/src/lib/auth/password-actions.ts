@@ -1,4 +1,39 @@
-"use server";
+import { createServerFn } from "@tanstack/react-start";
+
+const signInWithPasswordServerFn = createServerFn({ method: "POST" })
+  .validator((data: Parameters<typeof signInWithPasswordActionImpl>) => data)
+  .handler(({ data }) => signInWithPasswordActionImpl(...data));
+export const signInWithPasswordAction = (
+  ...data: Parameters<typeof signInWithPasswordActionImpl>
+) => signInWithPasswordServerFn({ data });
+
+const signUpWithPasswordServerFn = createServerFn({ method: "POST" })
+  .validator((data: Parameters<typeof signUpWithPasswordActionImpl>) => data)
+  .handler(({ data }) => signUpWithPasswordActionImpl(...data));
+export const signUpWithPasswordAction = (
+  ...data: Parameters<typeof signUpWithPasswordActionImpl>
+) => signUpWithPasswordServerFn({ data });
+
+const verifyEmailCodeServerFn = createServerFn({ method: "POST" })
+  .validator((data: Parameters<typeof verifyEmailCodeActionImpl>) => data)
+  .handler(({ data }) => verifyEmailCodeActionImpl(...data));
+export const verifyEmailCodeAction = (
+  ...data: Parameters<typeof verifyEmailCodeActionImpl>
+) => verifyEmailCodeServerFn({ data });
+
+const forgotPasswordServerFn = createServerFn({ method: "POST" })
+  .validator((data: Parameters<typeof forgotPasswordActionImpl>) => data)
+  .handler(({ data }) => forgotPasswordActionImpl(...data));
+export const forgotPasswordAction = (
+  ...data: Parameters<typeof forgotPasswordActionImpl>
+) => forgotPasswordServerFn({ data });
+
+const resetPasswordServerFn = createServerFn({ method: "POST" })
+  .validator((data: Parameters<typeof resetPasswordActionImpl>) => data)
+  .handler(({ data }) => resetPasswordActionImpl(...data));
+export const resetPasswordAction = (
+  ...data: Parameters<typeof resetPasswordActionImpl>
+) => resetPasswordServerFn({ data });
 
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
 import {
@@ -16,7 +51,7 @@ import type {
   SignUpWithPasswordInput,
   VerifyEmailCodeInput,
 } from "@notra/schemas/types/dashboard/auth";
-import { getWorkOS } from "@workos-inc/authkit-nextjs";
+import { getWorkOS } from "@workos/authkit-session";
 import { Effect } from "effect";
 
 import { PASSWORD_RESET_OUTCOMES } from "@/constants/analytics-events";
@@ -30,15 +65,31 @@ import {
   runAuthFlow,
   signedIn,
   trackAuthEvent,
-  tryWorkOSAuth,
 } from "@/lib/auth/auth-flow";
+import { tryWorkOSAuth } from "@/lib/auth/errors";
 import { authenticateResolvingOrgSelection } from "@/lib/auth/org-selection";
 import { readWorkOSError } from "@/lib/auth/workos-error";
 import { isRateLimited, ratelimit } from "@/utils/ratelimit";
 
 const NAME_SPLIT_REGEX = /\s+/;
 
-export async function signInWithPasswordAction(
+const signInWithPassword = Effect.fnUntraced(function* (input: {
+  email: string;
+  password: string;
+  returnTo?: string | null;
+}) {
+  const response = yield* authenticateResolvingOrgSelection(() =>
+    getWorkOS().userManagement.authenticateWithPassword({
+      clientId: getWorkOSClientId(),
+      email: input.email,
+      password: input.password,
+    })
+  );
+
+  return signedIn(yield* completeAuthentication(response, input.returnTo));
+});
+
+async function signInWithPasswordActionImpl(
   rawInput: SignInWithPasswordInput
 ): Promise<AuthFlowResult> {
   const parsed = signInWithPasswordInputSchema.safeParse(rawInput);
@@ -57,22 +108,12 @@ export async function signInWithPasswordAction(
   return runAuthFlow(
     parsed.data.email,
     Effect.gen(function* () {
-      const response = yield* authenticateResolvingOrgSelection(() =>
-        getWorkOS().userManagement.authenticateWithPassword({
-          clientId: getWorkOSClientId(),
-          email: parsed.data.email,
-          password: parsed.data.password,
-        })
-      );
-
-      return signedIn(
-        yield* completeAuthentication(response, parsed.data.returnTo)
-      );
+      return yield* signInWithPassword(parsed.data);
     })
   );
 }
 
-export async function signUpWithPasswordAction(
+async function signUpWithPasswordActionImpl(
   rawInput: SignUpWithPasswordInput
 ): Promise<AuthFlowResult> {
   const parsed = signUpWithPasswordInputSchema.safeParse(rawInput);
@@ -104,22 +145,12 @@ export async function signUpWithPasswordAction(
         })
       );
 
-      const response = yield* authenticateResolvingOrgSelection(() =>
-        getWorkOS().userManagement.authenticateWithPassword({
-          clientId: getWorkOSClientId(),
-          email: parsed.data.email,
-          password: parsed.data.password,
-        })
-      );
-
-      return signedIn(
-        yield* completeAuthentication(response, parsed.data.returnTo)
-      );
+      return yield* signInWithPassword(parsed.data);
     })
   );
 }
 
-export async function verifyEmailCodeAction(
+async function verifyEmailCodeActionImpl(
   rawInput: VerifyEmailCodeInput
 ): Promise<AuthFlowResult> {
   const parsed = verifyEmailCodeInputSchema.safeParse(rawInput);
@@ -153,7 +184,7 @@ export async function verifyEmailCodeAction(
   );
 }
 
-export async function forgotPasswordAction(
+async function forgotPasswordActionImpl(
   rawInput: ForgotPasswordInput
 ): Promise<{ sent: boolean }> {
   const parsed = forgotPasswordInputSchema.safeParse(rawInput);
@@ -205,7 +236,7 @@ export async function forgotPasswordAction(
   );
 }
 
-export async function resetPasswordAction(
+async function resetPasswordActionImpl(
   rawInput: ResetPasswordInput
 ): Promise<AuthFlowResult> {
   const parsed = resetPasswordInputSchema.safeParse(rawInput);

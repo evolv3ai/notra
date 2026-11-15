@@ -9,7 +9,6 @@ export async function writeMentionWebhookLog(
   log: GitHubMentionWebhookLog,
   deliveryId: string | null
 ) {
-  // Logs are secondary and must never replay a GitHub write.
   try {
     const retentionDays = await checkLogRetention(log.organizationId);
     await appendWebhookLog({

@@ -111,9 +111,6 @@ export function latestPromptResults(
   return [...latest.values()];
 }
 
-// Scans only run with web search now. Older no-search answers stay readable
-// for models that never got a search answer, but don't sit next to one. An
-// answer the user explicitly opened stays so the dialog shows what they clicked.
 export function withoutSupersededNoSearchResults(
   results: readonly GeoPromptResultSummary[],
   keepEngine?: string | null

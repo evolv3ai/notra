@@ -1,10 +1,11 @@
 import { POST_SLUG_MAX_LENGTH, POST_SLUG_REGEX } from "@notra/ai/schemas/post";
+import { generatedPostMetadataShape } from "@notra/ai/schemas/post-metadata";
 import { editOperationSchema } from "@notra/ai/schemas/tools";
 import { z } from "zod";
 
 const POST_TITLE_MAX_LENGTH = 120;
 
-const postSlugSchema = z
+export const postSlugSchema = z
   .string()
   .trim()
   .min(1)
@@ -14,7 +15,7 @@ const postSlugSchema = z
     "Slug must contain lowercase letters, numbers, and hyphens only"
   );
 
-const createPostBaseShape = {
+export const createPostBaseShape = {
   title: z
     .string()
     .max(POST_TITLE_MAX_LENGTH)
@@ -37,6 +38,7 @@ export const createPostInputSchema = z.object(createPostBaseShape);
 
 export const createPostWithSlugInputSchema = z.object({
   ...createPostBaseShape,
+  ...generatedPostMetadataShape,
   slug: postSlugSchema
     .nullable()
     .optional()

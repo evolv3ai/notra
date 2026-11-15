@@ -17,6 +17,9 @@ export interface CreatePostRecordParams {
   autoPublish?: boolean;
   sourceMetadata?: PostSourceMetadata | null;
   postId?: string;
+  /** Site metadata the writer picked; blog posts and changelogs only. */
+  tags?: string[];
+  excerpt?: string | null;
 }
 
 export interface CreatePostRecordResult {
@@ -32,6 +35,8 @@ export interface UpdatePostRecordParams {
   markdown?: string;
   recommendations?: string | null;
   contentSubtype?: BlogPostSubtype | null;
+  /** Only update while the stored markdown still equals this value. */
+  expectedMarkdown?: string | null;
 }
 
 export interface UpdatePostRecordResult {
@@ -42,4 +47,11 @@ export interface EnsureChatPostCollectionParams {
   organizationId: string;
   chatId?: string | null;
   contentType: ContentType;
+}
+
+export interface UpdatePostSiteMetadataParams {
+  organizationId: string;
+  postId: string;
+  tags?: string[];
+  excerpt?: string | null;
 }

@@ -8,7 +8,8 @@ export type AssistantActivityStep =
   | "waitingForApproval"
   | "searchingWeb"
   | "executingTools"
-  | "runningTool";
+  | "runningTool"
+  | "writingDraft";
 
 export interface ChatActivityStatusProps {
   children?: ReactNode;
@@ -19,6 +20,8 @@ export interface ChatActivityStatusProps {
 
 export interface ChatActivityGroupProps {
   children: ReactNode;
+  /** Starts open and stays open until the reader folds it. */
+  defaultOpen?: boolean;
   durationMs?: number;
   elapsedSeconds?: number;
   forceOpen?: boolean;
@@ -44,6 +47,8 @@ export interface ChatAssistantPartsProps {
   elapsedSeconds?: number;
   isLoading: boolean;
   isStandaloneTool?: (part: UIMessage["parts"][number]) => boolean;
+  /** Identifies effect-only tool elements that mount without splitting activity. */
+  isStandalonePartVisible?: (content: ReactNode) => boolean;
   messageId: string;
   parts: UIMessage["parts"];
   renderStandalone: (

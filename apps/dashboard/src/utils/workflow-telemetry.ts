@@ -12,6 +12,8 @@ export function logWorkflowTelemetry(event: WorkflowTelemetryEvent): void {
     };
     if (event.outcome === "error") {
       log.error(fields);
+    } else if (event.outcome === "warning") {
+      log.warn(fields);
     } else {
       log.info(fields);
     }

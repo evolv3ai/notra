@@ -17,9 +17,9 @@ import {
   SelectValue,
 } from "@notra/ui/components/ui/select";
 import { Switch } from "@notra/ui/components/ui/switch";
-import { useTranslations } from "next-intl";
 import { useReducer } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { SCREENSHOT_KIND_OPTIONS } from "@/constants/brand-guideline-ui";
@@ -140,7 +140,11 @@ export function GuidelinesScreenshotEditDialog({
           >
             {tCommon("cancel")}
           </Button>
-          <Button disabled={update.isPending} onClick={handleSave}>
+          <Button
+            data-dialog-confirm
+            disabled={update.isPending}
+            onClick={handleSave}
+          >
             {update.isPending ? tCommon("saving") : tCommon("save")}
           </Button>
         </ResponsiveDialogFooter>

@@ -10,10 +10,6 @@ import {
   getGenerationConfig,
 } from "../utils/generation-config";
 
-// A run limited to selected items may only open those items' code. Each
-// kind of target needs its own allowlist, so a run limited to pull requests
-// cannot open arbitrary commits and the other way around. A release
-// selection does not limit code, since a release has no single code target.
 function assertTargetAllowed(
   config: GenerationConfig,
   input: {

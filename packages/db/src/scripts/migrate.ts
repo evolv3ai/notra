@@ -1,7 +1,3 @@
-// Applies pending migrations without drizzle-kit, for self-hosted images that
-// only ship runtime dependencies. Uses the same journal table as
-// `drizzle-kit migrate`, so both can run against one database.
-//   node migrate.mjs <migrations-folder>
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 

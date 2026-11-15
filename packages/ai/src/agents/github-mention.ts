@@ -72,9 +72,6 @@ export async function runGitHubMentionAgent(params: {
       : null,
   });
 
-  // Thread, voice, and skills are best effort: the mention still works
-  // without them. Notra's own replies often sit in review threads, so both
-  // comment kinds are merged.
   const location = {
     octokit: params.octokit,
     owner: params.context.owner,
@@ -102,9 +99,7 @@ export async function runGitHubMentionAgent(params: {
     ]);
 
   const agent = new ToolLoopAgent({
-    model: createModel(params.context.organizationId, AGENT_DEFAULT_MODEL, {
-      disableMemory: true,
-    }),
+    model: createModel(params.context.organizationId, AGENT_DEFAULT_MODEL),
     providerOptions: withRouterDefaults(
       {
         gateway: { tags: ["github-mention"] },
@@ -118,6 +113,7 @@ export async function runGitHubMentionAgent(params: {
       octokit: params.octokit,
       context: params.context,
       state,
+      brandIdentityId: voice?.id,
       scheduleRepair: params.scheduleRepair,
     }),
     instructions: getGitHubMentionInstructions({
@@ -156,8 +152,6 @@ export async function runGitHubMentionAgent(params: {
     review: params.context.comment.review,
   });
 
-  // A run that dies after its commit still reports the commit. Throwing here
-  // would mark the mention as failed and let a redelivery commit it again.
   let reply = "";
   let declined = false;
   try {
@@ -191,7 +185,6 @@ export async function runGitHubMentionAgent(params: {
     committed: state.committed,
     commitSha: state.commitSha,
     pullRequestUrl: state.pullRequestUrl,
-    // A commit moved the head, so suggestions made before it point nowhere.
     proposals: state.committed ? [] : state.proposals,
     permissionDenied: state.permissionDenied,
     usage: usage.get(),

@@ -2,19 +2,14 @@
 
 import { LogoStack } from "@notra/ui/components/geo/logo-stack";
 import { useState } from "react";
+import { DataTable, type TableColumn } from "ui/table";
 
 import { Button } from "@/components/button";
 import { SearchGapDetailSheet } from "@/components/geo/search-gap-detail";
-import { Table, type TableColumn } from "@/components/motion/table";
 import { DESIGN_SYSTEM_SEARCH_GAPS } from "@/constants/design-system-gaps";
 
 import { PrototypeAnswerSheet } from "./prototype-answer-sheet";
 
-/**
- * Mocked previews of the two content-gap surfaces: the prompt gap sheet and
- * the search gap sheet. The shipped components read live scan data, so
- * this page mirrors their layout with fixtures.
- */
 const SEARCH_COLUMNS: TableColumn<
   (typeof DESIGN_SYSTEM_SEARCH_GAPS)[number]
 >[] = [
@@ -91,8 +86,7 @@ export default function GeoGapsSheetDemoPage() {
 
       <section className="space-y-3">
         <h2 className="text-sm font-medium">Search gaps · side drawer</h2>
-        <Table
-          className="rounded-2xl"
+        <DataTable
           columns={SEARCH_COLUMNS}
           data={DESIGN_SYSTEM_SEARCH_GAPS}
           getRowId={(row) => row.id}

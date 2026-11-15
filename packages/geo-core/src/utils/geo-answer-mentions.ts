@@ -1,3 +1,5 @@
+import { escapeRegExp } from "@notra/utils/escape";
+
 import { competitorKey } from "../geo/domain";
 import type {
   GeoAnswerMentionInput,
@@ -7,12 +9,7 @@ import type {
 } from "../types/geo";
 
 const MIN_MENTION_PHRASE_LENGTH = 2;
-const REGEXP_ESCAPE_REGEX = /[.*+?^${}()|[\]\\]/g;
 const MENTION_WORD_CHAR = "[\\p{L}\\p{N}\\p{M}_]";
-
-function escapeRegExp(value: string): string {
-  return value.replace(REGEXP_ESCAPE_REGEX, "\\$&");
-}
 
 const MENTION_PATTERN_CACHE_MAX_ENTRIES = 2000;
 const FOLDED_CACHE_MAX_ENTRIES = 5000;
@@ -129,8 +126,6 @@ export function geoAnswerMentionSpans(
 
   const occupied = new Array<boolean>(text.length).fill(false);
   const spans: GeoAnswerMentionSpan[] = [];
-  // With hundreds of tracked competitors most terms never occur, so a
-  // substring check skips the regex for them.
   const foldedText = foldCase(text);
   const byLength = terms
     .filter((term) => foldedText.includes(foldPhrase(term.phrase)))

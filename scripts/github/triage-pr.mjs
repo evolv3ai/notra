@@ -13,7 +13,6 @@ const areas = [
   "packages/content-generation",
   "packages/db",
   "packages/email",
-  "packages/geo",
   "packages/geo-core",
   "packages/kiwi",
   "packages/posthog",

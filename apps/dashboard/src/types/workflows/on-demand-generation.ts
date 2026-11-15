@@ -1,6 +1,9 @@
 import type { ContentGenerationWorkflowPayload } from "@notra/content-generation/schemas";
 
-import type { WorkflowLifecycleFields } from "@/types/analytics/workflow-events";
+import type {
+  WorkflowFailureDetail,
+  WorkflowLifecycleFields,
+} from "@/types/analytics/workflow-events";
 import type {
   ScheduleBrandSettingsData,
   ScheduleRepositoryData,
@@ -17,18 +20,21 @@ export interface OnDemandJobEventInput {
     | "skipped";
 }
 
-export interface FinishOnDemandInput extends WorkflowLifecycleFields {
+export interface FinishOnDemandInput
+  extends WorkflowLifecycleFields, WorkflowFailureDetail {
   organizationId: string;
   runId: string;
   contentType: string;
   status: "success" | "failed" | "skipped";
-  reason?: string;
   title?: string;
   source: "api" | "dashboard";
   jobId?: string;
   primaryPostId?: string;
   postCount?: number;
 }
+
+export type OnDemandSourceFailure = WorkflowFailureDetail &
+  Required<Pick<WorkflowFailureDetail, "reason" | "errorCode">>;
 
 export interface OnDemandGenerationStepInput {
   payload: ContentGenerationWorkflowPayload;

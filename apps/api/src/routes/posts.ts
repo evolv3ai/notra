@@ -14,6 +14,7 @@ import {
   getPostsOpenApiQuerySchema,
   getPostsParamsSchema,
   getPostsResponseSchema,
+  listPostAuthorsResponseSchema,
   patchPostRequestSchema,
   patchPostResponseSchema,
 } from "@notra/schemas/api/content";
@@ -24,6 +25,7 @@ import {
 import { rateLimitResponseSchema } from "@notra/schemas/api/responses";
 import { Effect } from "effect";
 
+import { ORGANIZATION_SCOPED_API_KEY_ERROR } from "../constants/skills";
 import {
   createPost,
   createPostGeneration,
@@ -31,24 +33,28 @@ import {
   deletePost,
   getPost,
   getPostGeneration,
+  listPostAuthors,
   listPosts,
   preparePatchPost,
 } from "../programs/posts";
 import { runGeoEffect } from "../runtime/geo";
 import { isOAuthAuth } from "../types/auth";
-import type { DbClient } from "../types/db";
 import { getOrganizationId } from "../utils/auth";
 import {
   getContentGenerationUnavailableReason,
-  isContentGenerationConfigured,
   resolveRequestedBrandVoiceId,
+  assertContentGenerationSourcesAvailable,
   resolveRequestedLinearIntegrationIds,
   resolveRequestedRepositoryIds,
 } from "../utils/content-generation";
 import { createOpenApiApp } from "../utils/openapi-app";
 import { errorResponse, rateLimitResponse } from "../utils/openapi-responses";
-import { getOrganizationResponse } from "../utils/organizations";
 import {
+  getOrganizationResponse,
+  resolveRequestOrganization,
+} from "../utils/organizations";
+import {
+  postPatchLogFields,
   respondToPostFailure,
   runPostProgram,
   serializePost,
@@ -71,7 +77,7 @@ const getPostsRoute = createRoute({
   operationId: "listPosts",
   summary: "List posts",
   description:
-    "Returns posts for the organization the API key belongs to, newest first by default. Only published posts are included unless you pass status=draft,published.",
+    "Returns posts for the organization the API key belongs to, newest first by default. Only published posts are included unless you pass status=draft,published. Blog posts and changelogs include a metadata object with cover image, tags, excerpt, authors, featured, noindex, hidden and displayDate; it is null for other content types.",
   request: {
     params: getPostsParamsSchema,
     query: getPostsOpenApiQuerySchema,
@@ -100,7 +106,7 @@ const getPostRoute = createRoute({
   operationId: "getPost",
   summary: "Get a single post",
   description:
-    "Returns the post. When no post with this ID exists in your organization, the response is still 200 with post set to null.",
+    "Returns the post. When no post with this ID exists in your organization, the response is still 200 with post set to null. Blog posts and changelogs include a metadata object with cover image, tags, excerpt, authors, featured, noindex, hidden and displayDate; it is null for other content types.",
   request: {
     params: getPostParamsSchema,
   },
@@ -114,6 +120,30 @@ const getPostRoute = createRoute({
       },
     },
     400: errorResponse("Invalid path params"),
+    401: errorResponse("Missing or invalid API key"),
+    403: errorResponse("Forbidden"),
+    404: errorResponse("Organization not found"),
+    503: errorResponse("Authentication service unavailable"),
+  },
+});
+
+const listPostAuthorsRoute = createRoute({
+  method: "get",
+  path: "/posts/authors",
+  tags: ["Content"],
+  operationId: "listPostAuthors",
+  summary: "List post authors",
+  description:
+    "Returns the organization's authors, sorted by name. Authors are created in the dashboard; pass their IDs in metadata.authorIds when updating a blog post or changelog.",
+  responses: {
+    200: {
+      description: "Authors fetched successfully",
+      content: {
+        "application/json": {
+          schema: listPostAuthorsResponseSchema,
+        },
+      },
+    },
     401: errorResponse("Missing or invalid API key"),
     403: errorResponse("Forbidden"),
     404: errorResponse("Organization not found"),
@@ -154,7 +184,7 @@ const patchPostRoute = createRoute({
   operationId: "updatePost",
   summary: "Update a single post",
   description:
-    "Updates any combination of title, slug, markdown, and status. Sending markdown re-renders the stored HTML, and when title is omitted it is taken from the first heading in the markdown, keeping the existing title when the markdown has no heading. Slugs are only accepted for blog posts and changelogs. Title, slug, or markdown updates also sync an existing linked GitHub pull request; no new pull request is created. GitHub sync errors occur after saving the post: 429 includes Retry-After, 502 indicates a sync error, and 504 indicates an unknown sync outcome. Check the PR before retrying an unconfirmed sync.",
+    "Updates any combination of title, slug, markdown, status, and metadata. Sending markdown re-renders the stored HTML, and when title is omitted it is taken from the first heading in the markdown, keeping the existing title when the markdown has no heading. Slugs and metadata are only accepted for blog posts and changelogs. Inside metadata, send only the fields you want to change; tags and authorIds replace the stored list, and authorIds must come from GET /v1/posts/authors. Title, slug, markdown, or metadata updates also sync a post linked to GitHub: an open pull request gets a new commit, and a repository set to publish directly gets a direct commit when its live branch allows one (unprotected, file unchanged on GitHub). Otherwise, including closed or merged pull requests, GitHub is left as is and no new pull request is opened; the post is still saved. GitHub sync errors occur after saving the post: 429 includes Retry-After, 502 indicates a sync error, and 504 indicates an unknown sync outcome. Check the PR before retrying an unconfirmed sync.",
   request: {
     params: getPostParamsSchema,
     body: {
@@ -175,7 +205,9 @@ const patchPostRoute = createRoute({
         },
       },
     },
-    400: errorResponse("Invalid path params or request body"),
+    400: errorResponse(
+      "Invalid path params or request body, slug or metadata sent for an unsupported content type, or an unknown author ID"
+    ),
     401: errorResponse("Missing or invalid API key"),
     403: errorResponse("Forbidden"),
     404: errorResponse("Post not found"),
@@ -247,7 +279,7 @@ const createPostGenerationRoute = createRoute({
   operationId: "createPostGeneration",
   summary: "Queue async post generation",
   description:
-    "Queues a generation job for one content type and returns 202 with the job. Select sources with integrations.github, integrations.linear, or github.repositories; when no selector is given at all, every connected GitHub integration is used. Poll GET /v1/posts/generate/{jobId} until job.status is completed, failed, or skipped. Subscribe to post.generation.completed, post.generation.failed, or post.generation.skipped using /v1/webhooks for completion notifications.",
+    "Queues a generation job for one content type and returns 202 with the job. Select sources with integrations.github, integrations.linear, or github.repositories; when no selector is given at all, every connected GitHub integration is used. Requests with every dataPoints flag false, or with no usable source, are rejected with 400 and code NO_ACTIVITY_TYPES_SELECTED or NO_AVAILABLE_SOURCES before a job is created. Poll GET /v1/posts/generate/{jobId} until job.status is completed, failed, or skipped. Subscribe to post.generation.completed, post.generation.failed, or post.generation.skipped using /v1/webhooks for completion notifications.",
   request: {
     body: {
       content: {
@@ -315,29 +347,12 @@ const getPostGenerationRoute = createRoute({
   },
 });
 
-async function requireOrganization(
-  c: {
-    get: (key: "db") => DbClient;
-  },
-  orgId: string
-) {
-  const organization = await getOrganizationResponse(c.get("db"), orgId);
-  return organization ?? null;
-}
-
 postsRoutes.openapi(getPostsRoute, async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
   }
-
-  const organization = await requireOrganization(c, orgId);
-  if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
+  const { orgId, organization } = scope;
 
   const result = await runPostProgram(
     listPosts({
@@ -351,9 +366,11 @@ postsRoutes.openapi(getPostsRoute, async (c) => {
     throw result.failure;
   }
 
+  const { authors } = result.success;
+
   return c.json(
     {
-      posts: result.success.posts.map(serializePost),
+      posts: result.success.posts.map((post) => serializePost(post, authors)),
       pagination: result.success.pagination,
       organization,
     },
@@ -361,19 +378,30 @@ postsRoutes.openapi(getPostsRoute, async (c) => {
   );
 });
 
-postsRoutes.openapi(getPostRoute, async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+postsRoutes.openapi(listPostAuthorsRoute, async (c) => {
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
+  }
+  const { orgId, organization } = scope;
+
+  const result = await runPostProgram(
+    listPostAuthors({ db: c.get("db"), organizationId: orgId })
+  );
+
+  if (result._tag === "Failure") {
+    throw result.failure;
   }
 
-  const organization = await requireOrganization(c, orgId);
-  if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
+  return c.json({ authors: result.success.authors, organization }, 200);
+});
+
+postsRoutes.openapi(getPostRoute, async (c) => {
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
   }
+  const { orgId, organization } = scope;
 
   const result = await runPostProgram(
     getPost({
@@ -389,7 +417,9 @@ postsRoutes.openapi(getPostRoute, async (c) => {
 
   return c.json(
     {
-      post: result.success.post ? serializePost(result.success.post) : null,
+      post: result.success.post
+        ? serializePost(result.success.post, result.success.authors)
+        : null,
       organization,
     },
     200
@@ -397,18 +427,11 @@ postsRoutes.openapi(getPostRoute, async (c) => {
 });
 
 postsRoutes.openapi(deletePostRoute, async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
   }
-
-  const organization = await requireOrganization(c, orgId);
-  if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
+  const { orgId, organization } = scope;
 
   const result = await runPostProgram(
     deletePost({
@@ -429,21 +452,14 @@ postsRoutes.openapi(deletePostRoute, async (c) => {
 });
 
 postsRoutes.openapi(patchPostRoute, async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
   }
+  const { orgId, organization } = scope;
 
   const { postId } = c.req.valid("param");
   const body = c.req.valid("json");
-  const organization = await requireOrganization(c, orgId);
-
-  if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
 
   const preparedResult = await runPostProgram(
     preparePatchPost({
@@ -455,15 +471,9 @@ postsRoutes.openapi(patchPostRoute, async (c) => {
   );
 
   if (preparedResult._tag === "Failure") {
-    const response = respondToPostFailure(c, preparedResult.failure);
-    if (response) {
-      return response;
-    }
-    throw preparedResult.failure;
+    return respondToPostFailure(c, preparedResult.failure);
   }
 
-  // Charged immediately before the write: the 404s and 400s above must not
-  // spend the caller's update budget.
   const rateLimited = await enforceRatelimit(c, ratelimit.postUpdate);
   if (rateLimited) {
     return rateLimited;
@@ -479,14 +489,11 @@ postsRoutes.openapi(patchPostRoute, async (c) => {
   );
 
   if (result._tag === "Failure") {
-    const response = respondToPostFailure(c, result.failure);
-    if (response) {
-      return response;
-    }
-    throw result.failure;
+    return respondToPostFailure(c, result.failure);
   }
 
-  const { post, previousStatus } = result.success;
+  const { post, authors, previousStatus } = result.success;
+  c.get("log").set(postPatchLogFields(body, post));
 
   if (post.status === "published" && previousStatus !== "published") {
     void runGeoEffect(
@@ -500,7 +507,8 @@ postsRoutes.openapi(patchPostRoute, async (c) => {
     (post.contentType === "blog_post" || post.contentType === "changelog") &&
     (body.title !== undefined ||
       body.slug !== undefined ||
-      body.markdown !== undefined)
+      body.markdown !== undefined ||
+      body.metadata !== undefined)
   ) {
     try {
       const auth = c.get("auth");
@@ -511,9 +519,9 @@ postsRoutes.openapi(patchPostRoute, async (c) => {
         isOAuthAuth(auth) ? auth.userId : `api-key:${auth.keyId}`
       );
     } catch (error) {
-      console.error("Failed to sync saved post to GitHub", {
+      c.get("log").error(error instanceof Error ? error : String(error), {
+        errorCode: "post_github_sync_failed",
         postId: post.id,
-        error,
       });
       if (
         error instanceof InternalDashboardTimeoutError ||
@@ -553,22 +561,15 @@ postsRoutes.openapi(patchPostRoute, async (c) => {
     }
   }
 
-  return c.json({ post: serializePost(post), organization }, 200);
+  return c.json({ post: serializePost(post, authors), organization }, 200);
 });
 
 postsRoutes.openapi(createPostRoute, async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
   }
-
-  const organization = await requireOrganization(c, orgId);
-  if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
+  const { orgId, organization } = scope;
 
   const body = c.req.valid("json");
 
@@ -586,11 +587,7 @@ postsRoutes.openapi(createPostRoute, async (c) => {
   );
 
   if (result._tag === "Failure") {
-    const response = respondToPostFailure(c, result.failure);
-    if (response) {
-      return response;
-    }
-    throw result.failure;
+    return respondToPostFailure(c, result.failure);
   }
 
   const { post } = result.success;
@@ -608,20 +605,13 @@ postsRoutes.openapi(createPostRoute, async (c) => {
 postsRoutes.openapi(createPostGenerationRoute, async (c) => {
   const orgId = getOrganizationId(c);
   if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+    return c.json({ error: ORGANIZATION_SCOPED_API_KEY_ERROR }, 403);
   }
 
   const runtimeEnv = c.env ?? {};
   const redis = getRedis(runtimeEnv);
   const unavailableReason = getContentGenerationUnavailableReason(runtimeEnv);
-  if (
-    !redis ||
-    !isContentGenerationConfigured(runtimeEnv) ||
-    unavailableReason
-  ) {
+  if (!redis || unavailableReason) {
     return c.json(
       { error: unavailableReason ?? "Content generation is unavailable" },
       503
@@ -629,7 +619,7 @@ postsRoutes.openapi(createPostGenerationRoute, async (c) => {
   }
 
   const body = c.req.valid("json");
-  const organization = await requireOrganization(c, orgId);
+  const organization = await getOrganizationResponse(c.get("db"), orgId);
 
   if (!organization) {
     return c.json({ error: "Organization not found" }, 404);
@@ -666,8 +656,21 @@ postsRoutes.openapi(createPostGenerationRoute, async (c) => {
   const { repositoryIds, linearIntegrationIds, resolvedBrandVoiceId } =
     targets.success;
 
-  // Charged immediately before the billable generation is queued: the 503, 404
-  // and 400 responses above must not spend the caller's budget.
+  const sources = await runPostProgram(
+    assertContentGenerationSourcesAvailable(c.get("db"), orgId, {
+      dataPoints: body.dataPoints,
+      repositoryIds,
+      linearIntegrationIds,
+    })
+  );
+
+  if (sources._tag === "Failure") {
+    return c.json(
+      { error: sources.failure.message, code: sources.failure.code },
+      400
+    );
+  }
+
   const rateLimited = await enforceRatelimit(c, ratelimit.postGeneration);
   if (rateLimited) {
     return rateLimited;
@@ -705,10 +708,7 @@ postsRoutes.openapi(createPostGenerationRoute, async (c) => {
 postsRoutes.openapi(getPostGenerationRoute, async (c) => {
   const orgId = getOrganizationId(c);
   if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+    return c.json({ error: ORGANIZATION_SCOPED_API_KEY_ERROR }, 403);
   }
 
   const redis = getRedis(c.env ?? {});

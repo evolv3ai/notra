@@ -1,15 +1,6 @@
 import "zod/compile";
 import { z } from "zod";
 
-export const agentCreateSessionResponseSchema = z.object({
-  ok: z.literal(true),
-  sessionId: z.string().min(1),
-});
-
-export const agentFollowUpResponseSchema = z.looseObject({
-  ok: z.literal(true),
-});
-
 export const agentStreamEventSchema = z.looseObject({
   type: z.string(),
   data: z.record(z.string(), z.unknown()).optional(),

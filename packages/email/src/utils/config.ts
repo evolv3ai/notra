@@ -5,52 +5,24 @@ function normalizeUrl(url: string): string {
 }
 
 export const EMAIL_CONFIG = {
-  /**
-   * Site URL for marketing site (logo, assets, etc.)
-   * Falls back to production URL if not set
-   */
   getSiteUrl(): string {
     return normalizeUrl(
       process.env.NEXT_PUBLIC_SITE_URL || "https://usenotra.com"
     );
   },
 
-  /**
-   * App/Dashboard URL for the Dashboard application
-   * Falls back to production URL if not set
-   */
   getAppUrl(): string {
     return normalizeUrl(
       process.env.NEXT_PUBLIC_APP_URL || "https://app.usenotra.com"
     );
   },
 
-  /**
-   * Get the email-safe PNG icon URL (uses site URL)
-   */
   getLogoUrl(): string {
     const siteUrl = this.getSiteUrl();
     return `${siteUrl}/web-app-manifest-192x192.png`;
   },
 
-  /**
-   * Horizontal mark + “Notra” lockup. PNG so email clients can render it.
-   */
-  getWordmarkUrl(): string {
-    const siteUrl = this.getSiteUrl();
-    return `${siteUrl}/brand/notra-wordmark.png`;
-  },
-
-  /**
-   * Reply-to email address
-   */
   replyTo: "support@usenotra.com",
-
-  /**
-   * From email address for automated notification emails.
-   * Use a subdomain sender so notification mail does not share the apex domain.
-   */
-  from: "Notra <notifications@notifications.usenotra.com>",
 
   /**
    * Physical mailing address (matches Legal Notice / CAN-SPAM).

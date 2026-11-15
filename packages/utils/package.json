@@ -4,30 +4,50 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./auth-redirect": "./src/auth-redirect.ts",
+    "./format-compact-number": "./src/format-compact-number.ts",
+    "./format-relative": "./src/format-relative.ts",
     "./api-scopes": "./src/api-scopes.ts",
     "./oauth-consent": "./src/oauth-consent.ts",
     "./constants/oauth-consent": "./src/constants/oauth-consent.ts",
+    "./constants/agent-feedback-prompt": "./src/constants/agent-feedback-prompt.ts",
     "./url": "./src/url.ts",
+    "./website-url": "./src/website-url.ts",
     "./logo-link": "./src/logo-link.ts",
+    "./escape": "./src/escape.ts",
     "./google-favicon": "./src/google-favicon.ts",
     "./callback-url": "./src/callback-url.ts",
     "./oauth-popup": "./src/oauth-popup.ts",
+    "./sleep": "./src/sleep.ts",
     "./slugify": "./src/slugify.ts",
+    "./unknown-record": "./src/unknown-record.ts",
     "./timeout-fetch": "./src/timeout-fetch.ts",
     "./color": "./src/color.ts",
     "./ingest-token": "./src/ingest-token.ts",
     "./require-api-key": "./src/require-api-key.ts",
+    "./retry-after": "./src/retry-after.ts",
     "./types/*": "./src/types/*.ts",
     "./demo-mode": "./src/demo-mode.ts",
     "./demo-clock": "./src/demo-clock.ts",
-    "./constants/demo": "./src/constants/demo.ts"
+    "./client-ip": "./src/client-ip.ts",
+    "./constants/demo": "./src/constants/demo.ts",
+    "./constants/escape": "./src/constants/escape.ts",
+    "./constants/favicon": "./src/constants/favicon.ts",
+    "./account-api-key": "./src/account-api-key.ts",
+    "./constants/account-api-key": "./src/constants/account-api-key.ts",
+    "./ratelimit": "./src/ratelimit.ts"
   },
   "scripts": {
-    "check-types": "tsc --noEmit --incremental --tsBuildInfoFile .cache/typecheck.tsbuildinfo"
+    "check-types": "tsc --noEmit --incremental --tsBuildInfoFile .cache/typecheck.tsbuildinfo",
+    "test": "bun test tests"
+  },
+  "dependencies": {
+    "@upstash/ratelimit": "catalog:",
+    "@upstash/redis": "catalog:"
   },
   "devDependencies": {
     "@notra/typescript-config": "workspace:*",
-    "@types/node": "^22.15.3",
-    "typescript": "7.0.2"
+    "@types/node": "^22.20.5",
+    "typescript": "catalog:"
   }
 }

@@ -10,12 +10,13 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
+
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "../../tooltip/components/tooltip";
 
 const TOOLTIP_OPEN_DELAY_MS = 400;
 

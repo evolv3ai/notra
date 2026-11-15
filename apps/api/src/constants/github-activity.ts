@@ -1,0 +1,2 @@
+export const GITHUB_ACTIVITY_PER_PAGE = 50;
+export const GITHUB_ACTIVITY_DEFAULT_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;

@@ -127,6 +127,8 @@ export function buildChangelogPrompt(options: ChangelogPromptOptions): string {
     - title: plain text, max 120 characters, no markdown
     - markdown: the full changelog content body as markdown/MDX, without the title heading
     - recommendations: optional markdown string with concise, actionable publishing recommendations. Pass null when there is nothing genuinely useful to suggest.
+    - tags: optional, 1-4 short Title Case topic tags (for example "Editor", "Integrations"); leave them out when none fit
+    - excerpt: optional one-sentence plain-text summary for previews, under 160 characters
 
     The markdown must:
     - Start with the Summary paragraph (target 120-180 words)

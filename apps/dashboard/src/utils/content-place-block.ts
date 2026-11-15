@@ -13,7 +13,6 @@ import {
 
 import type { ContentDropPoint } from "@/types/content/media";
 
-// Restore a file drop's captured caret after upload, including positions before blocks and within text.
 export function placeContentBlock(
   editor: LexicalEditor,
   afterKey: string | null,

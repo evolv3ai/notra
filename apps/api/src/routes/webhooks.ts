@@ -29,9 +29,15 @@ import { ConfigProvider, Effect, Schema } from "effect";
 import { WEBHOOK_ERROR_RESPONSES } from "../constants/webhooks";
 import { webhookRuntime } from "../runtime/webhooks";
 import { createOpenApiApp } from "../utils/openapi-app";
-import { decodeOrganizationId, runWebhookApi } from "../utils/webhooks";
+import {
+  decodeOrganizationId,
+  requireWebhookManager,
+  runWebhookApi,
+} from "../utils/webhooks";
 
 export const webhooksRoutes = createOpenApiApp();
+
+webhooksRoutes.use("/webhooks/*", requireWebhookManager);
 
 webhooksRoutes.openapi(
   createRoute({

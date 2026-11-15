@@ -1,6 +1,5 @@
-import "server-only";
-import libheif from "libheif-js/wasm-bundle";
-import sharp from "sharp";
+import "@tanstack/react-start/server-only";
+import type { Metadata } from "sharp";
 
 import {
   CONTENT_IMAGE_FALLBACK_MAX_EDGE,
@@ -26,7 +25,6 @@ const FORMAT_MIME = {
   webp: "image/webp",
 } as const satisfies Record<string, ContentImageMimeType>;
 
-// Recognize HEIC by its container signature rather than trusting a browser-supplied filename or MIME type.
 export function isHeic(bytes: Uint8Array) {
   return (
     bytes.byteLength >= 16 &&
@@ -46,11 +44,16 @@ function mimeFromFormat(
   return FORMAT_MIME[format as keyof typeof FORMAT_MIME] ?? null;
 }
 
+const loadSharp = () => import("sharp").then((module) => module.default);
+const loadLibheif = () =>
+  import("libheif-js/wasm-bundle").then((module) => module.default);
+
 async function encode(
   bytes: Uint8Array,
   mimeType: ContentImageMimeType,
   maxEdge: number | null
 ) {
+  const sharp = await loadSharp();
   let image = sharp(bytes, {
     limitInputPixels: MAX_CONTENT_IMAGE_PIXELS,
   }).rotate();
@@ -69,16 +72,15 @@ async function encode(
   if (mimeType === "image/png") {
     return image.png({ compressionLevel: 9, effort: 10 }).toBuffer();
   }
-  // WebP stays lossless until the GitHub size cap forces a smaller encode.
   if (maxEdge) {
     return image.webp({ effort: 4, quality: 90 }).toBuffer();
   }
   return image.webp({ effort: 6, lossless: true }).toBuffer();
 }
 
-// Decode the primary image, including grids, using an Embind pointer and a squared-width pixel cap before releasing native state.
 async function decodeContentHeic(bytes: Uint8Array): Promise<Buffer> {
   validateHeicCodedPixels(bytes);
+  const [libheif, sharp] = await Promise.all([loadLibheif(), loadSharp()]);
   const context = libheif.heif_context_alloc();
   if (!context) {
     throw new Error("Could not open HEIC image");
@@ -142,9 +144,8 @@ export async function compressContentImage(bytes: Uint8Array): Promise<{
     source = await decodeContentHeic(bytes);
   }
 
-  let metadata: Awaited<
-    ReturnType<ReturnType<typeof sharp>["metadata"]>
-  > | null = null;
+  const sharp = await loadSharp();
+  let metadata: Metadata | null = null;
   try {
     metadata = await sharp(source, {
       limitInputPixels: MAX_CONTENT_IMAGE_PIXELS,
@@ -173,7 +174,6 @@ export async function compressContentImage(bytes: Uint8Array): Promise<{
   }
 
   const encoded = await encode(source, mimeType, null);
-  // ponytail: keep the smaller file. A larger recompress can still hold EXIF.
   let chosen =
     encoded.byteLength < source.byteLength ? encoded : Buffer.from(source);
   if (chosen.byteLength <= GITHUB_CONTENT_MAX_SINGLE_ASSET_BYTES) {

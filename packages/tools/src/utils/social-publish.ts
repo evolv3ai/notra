@@ -1,7 +1,7 @@
 import { db } from "@notra/db/drizzle";
 import { connectedSocialAccounts } from "@notra/db/schema";
 import { and, eq } from "drizzle-orm";
-import { Effect } from "effect";
+import { Effect, Schedule } from "effect";
 import PostForMe from "post-for-me";
 import type { SocialPostResult } from "post-for-me/resources/social-post-results";
 
@@ -100,23 +100,28 @@ export function publishTwitterPost(
         new SocialPublishError({ cause, message: "Failed to publish post" }),
     });
 
-    let postResult: SocialPostResult | null = null;
-    for (let attempt = 0; attempt < SOCIAL_PUBLISH_POLL_ATTEMPTS; attempt++) {
-      yield* Effect.sleep(SOCIAL_PUBLISH_POLL_DELAY);
-      const results = yield* Effect.tryPromise({
-        try: () => client.socialPostResults.list({ post_id: [post.id] }),
-        catch: (cause) =>
-          new SocialPublishError({
-            cause,
-            message: "Failed to load the published post",
-          }),
-      }).pipe(Effect.catch(() => Effect.succeed(null)));
+    // A failed read counts as "no result yet": the post is already
+    // published, so only the reported URL is at stake.
+    const loadPostResult = Effect.tryPromise({
+      try: () => client.socialPostResults.list({ post_id: [post.id] }),
+      catch: (cause) =>
+        new SocialPublishError({
+          cause,
+          message: "Failed to load the published post",
+        }),
+    }).pipe(
+      Effect.map((results) => results.data.at(0) ?? null),
+      Effect.catch(() => Effect.succeed(null))
+    );
 
-      postResult = results?.data.at(0) ?? null;
-      if (postResult) {
-        break;
-      }
-    }
+    yield* Effect.sleep(SOCIAL_PUBLISH_POLL_DELAY);
+    const postResult: SocialPostResult | null = yield* loadPostResult.pipe(
+      Effect.repeat({
+        schedule: Schedule.spaced(SOCIAL_PUBLISH_POLL_DELAY),
+        times: SOCIAL_PUBLISH_POLL_ATTEMPTS - 1,
+        until: (result) => result !== null,
+      })
+    );
 
     if (postResult && !postResult.success) {
       return yield* Effect.fail(

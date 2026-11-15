@@ -20,7 +20,6 @@ export const CHATGPT_MEDIUM_EFFORT: ChatgptEffortOption = {
   label: "Medium",
 };
 
-/** Ordered like the slider stops, from the left. */
 export const CHATGPT_EFFORTS: readonly ChatgptEffortOption[] = [
   { id: "instant", label: "Instant" },
   CHATGPT_MEDIUM_EFFORT,

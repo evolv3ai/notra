@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 
+import { GITHUB_API_VERSION_HEADERS } from "@notra/ai/constants/github";
 import { createOctokit } from "@notra/ai/utils/octokit";
-import type { createDb } from "@notra/db/drizzle";
 import { githubIntegrations, members } from "@notra/db/schema";
 import {
   decodeIntegrationEncryptionKey,
@@ -14,8 +14,7 @@ import {
   GitHubAccessError,
   IntegrationUnavailableError,
 } from "../errors/integrations";
-
-type DbClient = ReturnType<typeof createDb>;
+import type { DbClient } from "../types/db";
 
 export const encryptGitHubIntegrationSecret = (
   secret: string,
@@ -85,9 +84,7 @@ export const validateGitHubRepositoryAccess = Effect.fn(
       octokit.request("GET /repos/{owner}/{repo}", {
         owner: input.owner,
         repo: input.repo,
-        headers: {
-          "X-GitHub-Api-Version": "2022-11-28",
-        },
+        headers: GITHUB_API_VERSION_HEADERS,
         request: { signal },
       }),
     catch: () =>

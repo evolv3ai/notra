@@ -1,0 +1,8 @@
+export const DIAGRAM_REVISION_HEADER = "x-diagram-revision";
+
+export const MAX_DIAGRAM_SCENE_BYTES = 2_000_000;
+
+export const MAX_DIAGRAM_SCENE_ELEMENTS = 400;
+
+export const DIAGRAM_EDITOR_FONT_TIMEOUT_MS = 1500;
+export const DIAGRAM_EDITOR_VIEWPORT_ZOOM = 0.85;

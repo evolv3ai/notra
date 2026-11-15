@@ -16,7 +16,6 @@ import {
 
 type ChatToolIcon = typeof File01Icon;
 
-// Icons follow the thing a tool touches, matching the sidebar where one exists.
 export const CHAT_TOOL_ICONS: Record<string, ChatToolIcon> = {
   editMarkdown: SourceCodeIcon,
   getMarkdown: File01Icon,

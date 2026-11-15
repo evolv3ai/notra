@@ -7,7 +7,7 @@ import {
   AlertDialogFooter,
   AlertDialogCancel,
 } from "@notra/ui/components/ui/alert-dialog";
-import { useTranslations } from "next-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import type { GitHubWebhookRotationDialogProps } from "@/types/integrations/github";
@@ -33,14 +33,8 @@ export function GitHubWebhookRotationDialog({
           <AlertDialogCancel disabled={isPending}>
             {tCommon("actions.cancel")}
           </AlertDialogCancel>
-          <Button
-            variant="destructive"
-            disabled={isPending}
-            onClick={onConfirm}
-          >
-            {isPending
-              ? tCommon("labels.regenerating")
-              : tIntegrationsShared("regenerateSecret")}
+          <Button variant="destructive" loading={isPending} onClick={onConfirm}>
+            {tIntegrationsShared("regenerateSecret")}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

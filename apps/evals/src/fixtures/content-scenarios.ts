@@ -1,8 +1,3 @@
-/**
- * Source data for the content harness suites. Each scenario is what the
- * GitHub tools would return for one repository and lookback window.
- */
-
 export interface FixtureCommit {
   sha: string;
   message: string;
@@ -66,14 +61,8 @@ export interface ContentScenario {
   releases: FixtureRelease[];
   expected: {
     decision: ContentDecision;
-    /** User-facing facts a good post mentions. */
     keyFacts: string[];
-    /** Internal details that should not show up in the post. */
     avoid: string[];
-    /**
-     * Facts every long-form post must state (breaking changes, required
-     * actions), checked by pattern. Tweets are exempt because of their length.
-     */
     mustMention?: readonly MustMention[];
   };
 }

@@ -2,8 +2,9 @@
 
 import { PlusSignIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { PageHeading } from "@notra/ui/components/shared/page-heading";
 import { Kbd } from "@notra/ui/components/ui/kbd";
-import { useTranslations } from "next-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { ConnectGitHubDialog } from "@/components/integrations/github/connect-github-dialog";
@@ -19,6 +20,7 @@ export default function PageClient({
   organizationSlug,
 }: GitHubSettingsPageProps) {
   const t = useTranslations("integrations.github.page");
+  const tApp = useTranslations("integrations.github.appSection");
   const tIntegrationsShared = useTranslations("integrations.shared");
   const settings = useGitHubSettings(organizationSlug);
   const {
@@ -30,20 +32,19 @@ export default function PageClient({
     isLoading,
     isLoadingLegacyIntegrations,
   } = settings;
+  const actionsDisabled = isLoading || isLoadingLegacyIntegrations;
   const showGitHubAppSection =
-    isLoading ||
-    isLoadingLegacyIntegrations ||
+    actionsDisabled ||
     isConnected ||
     githubIntegrations.length > 0 ||
     (githubAppQuery.isError && !githubAppQuery.data);
   return (
     <PageContainer className="flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
-      <div className="w-full space-y-10 px-4 lg:px-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <h1 className="text-3xl font-bold tracking-tight">GitHub</h1>
-          {githubIntegrations.length > 0 ? (
+      <div className="w-full space-y-6 px-4 lg:px-6">
+        <PageHeading description={t("description")} title="GitHub">
+          <div className="flex max-w-full flex-wrap items-center gap-2">
             <Button
-              className="gap-1.5"
+              disabled={actionsDisabled}
               onClick={
                 isConnected ? () => handleOpenRepositories() : handleOpenConnect
               }
@@ -54,10 +55,19 @@ export default function PageClient({
                 : tIntegrationsShared("connectGithub")}
               <Kbd className="ml-1 hidden sm:inline-flex">C</Kbd>
             </Button>
-          ) : null}
-        </div>
-        <GitHubRepositoriesSection {...settings} />
+            {showGitHubAppSection ? null : (
+              <Button
+                disabled={actionsDisabled}
+                onClick={() => settings.setLegacyOpen(true)}
+                variant="outline"
+              >
+                {tApp("connectWithToken")}
+              </Button>
+            )}
+          </div>
+        </PageHeading>
         {showGitHubAppSection ? <GitHubAppSection {...settings} /> : null}
+        <GitHubRepositoriesSection {...settings} />
       </div>
       <ConnectGitHubDialog
         isConnecting={false}

@@ -1,14 +1,12 @@
 import { extractDemoAffected } from "@notra/ai/utils/demo-affected";
 import { recordDemoRequest } from "@notra/ai/utils/demo-request-log";
 import { isDemoMode } from "@notra/utils/demo-mode";
-import { after } from "next/server";
+import { isRecord } from "@notra/utils/unknown-record";
 
 import { DEMO_UI_ACTIONS } from "@/constants/demo-ui-actions";
+import { afterResponse } from "@/lib/framework/after-response";
 
 const PLACEHOLDER = /\{(\w+)\}/g;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 function fillPath(template: string, input: Record<string, unknown>): string {
   return template.replace(PLACEHOLDER, (match, key: string) => {
@@ -61,7 +59,7 @@ export function logDemoUiAction(input: {
   const { organizationId: _organizationId, ...body } = args;
   const responseBody = stringify(input.output);
 
-  after(() =>
+  afterResponse(() =>
     recordDemoRequest({
       organizationId,
       source: "ui",

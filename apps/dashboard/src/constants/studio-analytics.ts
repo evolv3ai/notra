@@ -36,17 +36,6 @@ export const CHAT_CONTEXT_KIND_PREFIXES: Record<
   granola: "granola",
   mcp: "mcp",
 };
-
-export const CHAT_TRANSPORTS = ["direct", "workflow"] as const;
-
-export const CHAT_GENERATION_BLOCKED_CODES = [
-  "USAGE_LIMIT_REACHED",
-  "CHAT_READ_ONLY",
-  "ALREADY_GENERATING",
-  "BILLING_ERROR",
-  "BILLING_UNAVAILABLE",
-] as const;
-
 export const CHAT_DRAFT_ACTIONS = [
   "approve",
   "deny",
@@ -59,9 +48,6 @@ export const CHAT_DRAFT_ACTIONS = [
 export const CHAT_TOOL_APPROVAL_DECISIONS = ["approved", "denied"] as const;
 
 export const COMMAND_PALETTE_OPEN_SOURCES = ["hotkey", "button"] as const;
-
-export const COMMAND_PALETTE_RESULT_KINDS = ["route", "entity", "ai"] as const;
-
 export const COMMAND_PALETTE_AI_ERROR_ACTION = "error";
 
 export const IMAGE_EXPORT_DOWNLOAD_TARGET = "download";
@@ -69,9 +55,6 @@ export const IMAGE_EXPORT_DOWNLOAD_TARGET = "download";
 export const AI_CREDITS_SOURCE_STANDALONE_CHAT = "standalone_chat";
 
 export const AI_CREDITS_SOURCE_CONTENT_CHAT = "chat";
-
-export const AI_CREDITS_SOURCE_DASHBOARD_AGENT_CHAT = "dashboard_agent_chat";
-
 export const DEFAULT_SIDEBAR_ENTRY_MODE = "studio";
 
 export const CHAT_MODEL_AUTO = "auto";

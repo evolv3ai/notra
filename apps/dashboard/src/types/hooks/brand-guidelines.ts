@@ -34,6 +34,9 @@ export interface BrandGuideline {
   contextDevMeta: unknown;
   lastGeneratedAt: string | null;
   lastGenerationError: string | null;
+  sourcePdfFilename: string | null;
+  sourcePdfUrl: string | null;
+  sourcePdfUploadedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -111,4 +114,9 @@ export interface BrandGuidelinesResponse {
   fonts: BrandGuidelineFont[];
   screenshots: BrandGuidelineScreenshot[];
   tokens: BrandGuidelineToken[];
+}
+
+export interface AttachGuidelineSourcePdfInput {
+  filename: string;
+  key: string;
 }

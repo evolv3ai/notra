@@ -1,18 +1,13 @@
 import { createHash } from "node:crypto";
 
-import { Ratelimit } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis";
+import { createLimiter } from "@notra/utils/ratelimit";
+import type { Limiter, RateLimitResult } from "@notra/utils/types/ratelimit";
 import { Data, Effect } from "effect";
 
 import { CONTACT_RATE_LIMITS } from "@/constants/contact";
+import { getClientIpHash } from "@/utils/client-ip";
 
 type LimiterKind = keyof typeof CONTACT_RATE_LIMITS;
-
-interface RateLimitResult {
-  readonly limit: number;
-  readonly remaining: number;
-  readonly reset: number;
-}
 
 class ContactMessageRateLimitExceeded extends Data.TaggedError(
   "ContactMessageRateLimitExceeded"
@@ -29,60 +24,19 @@ class ContactMessageRateLimitError extends Data.TaggedError(
   readonly cause: unknown;
 }> {}
 
-const limiters: Partial<Record<LimiterKind, Ratelimit | null>> = {};
-
-function getLimiter(kind: LimiterKind): Ratelimit | null {
-  if (limiters[kind] !== undefined) {
-    return limiters[kind] ?? null;
-  }
-
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-
-  if (!(url && token)) {
-    limiters[kind] = null;
-    return null;
-  }
-
-  const config = CONTACT_RATE_LIMITS[kind];
-  const prefix =
-    kind === "ipHourly"
-      ? "ratelimit:web:contact-message"
-      : `ratelimit:web:contact-message-${kind}`;
-
-  limiters[kind] = new Ratelimit({
-    redis: new Redis({ url, token }),
-    prefix,
-    limiter: Ratelimit.slidingWindow(config.requests, config.window),
-  });
-
-  return limiters[kind] ?? null;
-}
-
-function getClientIp(request: Request): string {
-  const vercelForwardedFor = request.headers
-    .get("x-vercel-forwarded-for")
-    ?.split(",")[0]
-    ?.trim();
-
-  if (vercelForwardedFor) {
-    return vercelForwardedFor;
-  }
-
-  if (process.env.VERCEL) {
-    return "unknown";
-  }
-
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip")?.trim() ||
-    "unknown"
-  );
-}
-
-function getIpRateLimitKey(request: Request): string {
-  return createHash("sha256").update(getClientIp(request)).digest("hex");
-}
+const limiters = Object.fromEntries(
+  Object.entries(CONTACT_RATE_LIMITS).map(([kind, { requests, window }]) => [
+    kind,
+    createLimiter({
+      prefix:
+        kind === "ipHourly"
+          ? "ratelimit:web:contact-message"
+          : `ratelimit:web:contact-message-${kind}`,
+      requests,
+      window,
+    }),
+  ])
+) as Record<LimiterKind, Limiter>;
 
 function getEmailRateLimitKey(email: string): string {
   return createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
@@ -99,59 +53,12 @@ function getMoreBindingRateLimit(
   return candidate.reset > current.reset ? candidate : current;
 }
 
-export function getContactRateLimitHeaders(
-  result: RateLimitResult,
-  includeRetryAfter = false
-): Headers {
-  const resetSeconds = Math.max(
-    0,
-    Math.ceil((result.reset - Date.now()) / 1000)
-  );
-
-  const headers = new Headers({
-    "RateLimit-Limit": String(result.limit),
-    "RateLimit-Remaining": String(Math.max(0, result.remaining)),
-    "RateLimit-Reset": String(resetSeconds),
-    "X-RateLimit-Limit": String(result.limit),
-    "X-RateLimit-Remaining": String(Math.max(0, result.remaining)),
-    "X-RateLimit-Reset": String(Math.ceil(result.reset / 1000)),
-  });
-
-  if (includeRetryAfter) {
-    headers.set("Retry-After", String(resetSeconds));
-  }
-
-  return headers;
-}
-
 const enforceLimit = Effect.fn("enforceContactMessageLimit")(function* (
   kind: LimiterKind,
   key: string
 ) {
-  const ratelimit = getLimiter(kind);
-  const config = CONTACT_RATE_LIMITS[kind];
-
-  if (!ratelimit) {
-    if (process.env.NODE_ENV === "production") {
-      return yield* Effect.fail(
-        new ContactMessageRateLimitError({
-          message: "Rate limit service is not configured",
-          cause: new Error(
-            "UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN is not set"
-          ),
-        })
-      );
-    }
-
-    return {
-      limit: config.requests,
-      remaining: config.requests,
-      reset: Date.now() + config.windowMs,
-    };
-  }
-
   const result = yield* Effect.tryPromise({
-    try: () => ratelimit.limit(key),
+    try: () => limiters[kind].limit(key),
     catch: (cause) =>
       new ContactMessageRateLimitError({
         message: `Failed to enforce ${kind} contact message rate limit`,
@@ -188,14 +95,14 @@ const enforceLimit = Effect.fn("enforceContactMessageLimit")(function* (
 export const enforceContactVerificationRateLimit = Effect.fn(
   "enforceContactVerificationRateLimit"
 )(function* (request: Request) {
-  yield* enforceLimit("verificationIpMinute", getIpRateLimitKey(request));
+  yield* enforceLimit("verificationIpMinute", getClientIpHash(request));
   yield* enforceLimit("verificationGlobalMinute", "global");
 });
 
 export const enforceContactMessageRateLimit = Effect.fn(
   "enforceContactMessageRateLimit"
 )(function* (request: Request, email: string) {
-  const ipKey = getIpRateLimitKey(request);
+  const ipKey = getClientIpHash(request);
   const hourlyResult = yield* enforceLimit("ipHourly", ipKey);
   const dailyResult = yield* enforceLimit("ipDaily", ipKey);
   const emailResult = yield* enforceLimit(

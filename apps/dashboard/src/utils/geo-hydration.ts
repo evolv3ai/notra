@@ -2,17 +2,19 @@ import {
   GEO_DEFAULT_RANGE,
   GEO_DEFAULT_TAB,
   GEO_TRAFFIC_HOST_PARAM,
+  GEO_TRAFFIC_SITES_PARAM,
 } from "@notra/geo-core/constants/geo";
 
+import { TRAFFIC_PATH_PARAM } from "@/constants/traffic-path";
 import {
+  geoHostQueryInput,
   geoOverviewQueryInput,
   geoSettingsQueryInput,
   geoTrafficJourneysQueryInput,
-  geoTrafficLogQueryInput,
-  geoTrafficPagesQueryInput,
 } from "@/utils/geo-query-input";
 import { parseGeoRangeParam } from "@/utils/geo-range";
 import { toGeoTab } from "@/utils/geo-tabs";
+import { toTrafficSitesMode } from "@/utils/traffic-sites";
 
 function firstSearchParam(
   value: string | string[] | undefined
@@ -58,11 +60,13 @@ export function geoProjectRepairPath(
   return `/${encodeURIComponent(slug)}${basePath}${suffix ? `?${suffix}` : ""}`;
 }
 
+const PROJECT_ID = /^[\w-]+$/;
+
 export function normalizeGeoProjectId(
   projectId: string | null | undefined
 ): string | undefined {
   const trimmed = projectId?.trim();
-  return trimmed ? trimmed : undefined;
+  return trimmed && PROJECT_ID.test(trimmed) ? trimmed : undefined;
 }
 
 /**
@@ -88,7 +92,6 @@ export function geoHydrationInputs(
     activeTab,
     settings: geoSettingsQueryInput(scope),
     overview: windowed,
-    // Same shape as `overview`; kept separate so the query keys stay explicit.
     timeseries: windowed,
     promptResultSummaries: windowed,
     competitorShare: windowed,
@@ -116,16 +119,15 @@ export function geoTrafficHydrationInputs(
   );
   const window = { from: range.dateFrom, to: range.dateTo };
   const host = firstSearchParam(search[GEO_TRAFFIC_HOST_PARAM]);
+  const path = firstSearchParam(search[TRAFFIC_PATH_PARAM]);
+  const sites = toTrafficSitesMode(
+    firstSearchParam(search[GEO_TRAFFIC_SITES_PARAM])
+  );
 
   return {
     settings: geoSettingsQueryInput(scope),
-    aiTraffic: geoOverviewQueryInput(scope, window),
-    trafficPages: geoTrafficPagesQueryInput(scope, window, host),
-    trafficLog: geoTrafficLogQueryInput(
-      scope,
-      { visitorTypes: [], categories: [] },
-      host
-    ),
+    aiTraffic: geoHostQueryInput(scope, window, host, path, sites),
+    webAnalytics: geoHostQueryInput(scope, window, host, path, sites),
     ingestSetup: geoSettingsQueryInput(scope),
   };
 }

@@ -9,8 +9,6 @@ import { DESIGN_SYSTEM_TRAFFIC_RESPONSE } from "@/constants/design-system-traffi
 
 export default function GeoTrafficDesignSystemClientPage() {
   const [addedVisits, setAddedVisits] = useState(0);
-  // Only the hero totals move: the source rows stay byte-identical so the demo
-  // shows the number transition without the tables re-sorting underneath it.
   const traffic = useMemo(
     () => ({
       ...DESIGN_SYSTEM_TRAFFIC_RESPONSE,

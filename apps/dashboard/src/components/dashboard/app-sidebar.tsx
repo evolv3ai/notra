@@ -11,29 +11,27 @@ import {
   SidebarMenuButton,
   useSidebar,
 } from "@notra/ui/components/ui/sidebar";
-import { Skeleton } from "@notra/ui/components/ui/skeleton";
 import { cn } from "@notra/ui/lib/utils";
-import { useTranslations } from "next-intl";
-import dynamic from "next/dynamic";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "use-intl";
 
 import { useOrganizationsContext } from "@/components/providers/organization-provider";
+import { usePathname, useRouter, useSearchParams } from "@/lib/navigation";
 import type { DashboardSidebarProps } from "@/types/components/sidebar-resize-handle";
+import dynamic from "@/utils/lazy-component";
 import { isNavigation } from "@/utils/sidebar-navigation";
 
-import {
-  DeferredSidebarStatus,
-  DeferredSidebarUpgrade,
-} from "./deferred-sidebar-status";
-import { NavBrandIdentity } from "./nav-brand-identity";
-import { NavMain } from "./nav-main";
-import { NavUtility } from "./nav-utility";
-import { OrgSelector } from "./org-selector";
+import { ChatHistoryNavLoading } from "./chat-history-nav-loading";
+import { DeferredSidebarStatus } from "./deferred-sidebar-status";
+import { NavFooter } from "./nav-footer";
+import { NavJobs } from "./nav-jobs";
 import { SidebarLabel } from "./sidebar-label";
 import { SidebarProjectSwitcher } from "./sidebar-project-switcher";
+import { SidebarTopQuickActions } from "./sidebar-quick-actions";
 import { SidebarResizeHandle } from "./sidebar-resize-handle";
 import { SidebarSwap } from "./sidebar-swap";
+import { SidebarToggle } from "./sidebar-toggle";
+import { SidebarUserMenu } from "./sidebar-user-menu";
 
 const ChatHistoryNav = dynamic(
   () => import("./chat-history-nav").then((module) => module.ChatHistoryNav),
@@ -41,21 +39,6 @@ const ChatHistoryNav = dynamic(
     loading: () => <ChatHistoryNavLoading />,
   }
 );
-
-function ChatHistoryNavLoading() {
-  const t = useTranslations("nav.sidebar");
-  return (
-    <div
-      aria-label={t("loadingChatHistory")}
-      className="space-y-2 p-3"
-      role="status"
-    >
-      <Skeleton className="h-5 w-24" />
-      <Skeleton className="h-8 w-full" />
-      <Skeleton className="h-8 w-4/5" />
-    </div>
-  );
-}
 
 function SidebarBackButton({ onBack }: { onBack: () => void }) {
   const t = useTranslations("common.actions");
@@ -71,6 +54,28 @@ function SidebarBackButton({ onBack }: { onBack: () => void }) {
           <SidebarLabel>{t("back")}</SidebarLabel>
         </SidebarMenuButton>
       </SidebarMenu>
+    </div>
+  );
+}
+
+/**
+ * The toggle sits beside the switcher when expanded and below it when
+ * collapsed. It is positioned absolutely so both spots can be animated along
+ * with the sidebar width instead of reflowing the header in one frame.
+ */
+function SidebarHeaderRow() {
+  const { isMobile } = useSidebar();
+  // The mobile sheet closes through the topbar toggle instead.
+  if (isMobile) {
+    return <SidebarProjectSwitcher />;
+  }
+
+  return (
+    <div className="relative pr-8 transition-[padding] duration-(--sidebar-duration) ease-(--sidebar-ease) group-data-[collapsible=icon]:pr-0 group-data-[collapsible=icon]:pb-8 motion-reduce:transition-none">
+      <SidebarProjectSwitcher />
+      <div className="absolute top-2.5 left-[calc(100%-1.75rem)] flex transition-[left,top] duration-(--sidebar-duration) ease-(--sidebar-ease) group-data-[collapsible=icon]:top-13 group-data-[collapsible=icon]:left-0.75 motion-reduce:transition-none">
+        <SidebarToggle />
+      </div>
     </div>
   );
 }
@@ -94,7 +99,7 @@ export function DashboardSidebar({
   const slug = pathnameSegments[0] ?? activeOrganization?.slug ?? "";
 
   const section = pathnameSegments[1];
-  const panelId = section === "chat" || section === "brand" ? section : "main";
+  const panelId = section === "chat" ? section : "main";
   const isSubpage = panelId !== "main";
 
   const [hasMoreNavigation, setHasMoreNavigation] = useState(false);
@@ -153,9 +158,10 @@ export function DashboardSidebar({
         className
       )}
     >
-      <SidebarHeader>
-        <SidebarProjectSwitcher />
+      <SidebarHeader className="pt-px pb-0.5">
+        <SidebarHeaderRow />
       </SidebarHeader>
+      <SidebarTopQuickActions />
       <SidebarContent>
         <SidebarSwap
           activeId={panelId}
@@ -164,7 +170,7 @@ export function DashboardSidebar({
             {
               id: "main",
               side: "left",
-              children: <NavMain />,
+              children: <NavJobs />,
             },
             {
               id: "chat",
@@ -176,20 +182,10 @@ export function DashboardSidebar({
                 </>
               ),
             },
-            {
-              id: "brand",
-              side: "right",
-              children: (
-                <>
-                  <SidebarBackButton onBack={handleBack} />
-                  <NavBrandIdentity slug={slug} />
-                </>
-              ),
-            },
           ]}
         />
         <div className="mt-auto">
-          <NavUtility slug={slug} />
+          <NavFooter slug={slug} />
           <DeferredSidebarStatus />
         </div>
         <div aria-hidden className="h-px shrink-0" ref={scrollEndRef} />
@@ -202,10 +198,9 @@ export function DashboardSidebar({
             data-sidebar="scroll-fade"
           />
         )}
-        <DeferredSidebarUpgrade />
       </div>
-      <SidebarFooter>
-        <OrgSelector />
+      <SidebarFooter className="pt-1.75">
+        <SidebarUserMenu />
       </SidebarFooter>
       <SidebarResizeHandle
         onWidthChange={onWidthChange}

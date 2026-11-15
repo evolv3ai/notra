@@ -3,7 +3,7 @@ import { getReferenceDomain } from "./reference-display";
 
 const CITED_SOURCE_MARKDOWN_AFFIX_PATTERN = /\)\*+$/u;
 
-export interface GeoStoredAnswerSource {
+interface GeoStoredAnswerSource {
   url: string;
   title: string | null;
 }

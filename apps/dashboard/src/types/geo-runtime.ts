@@ -1,7 +1,7 @@
 import type {
   GeoContentBillingService,
   GeoEntitlementService,
-  GeoFeatureFlagService,
+  GeoCodingAgentAccessService,
   GeoGenerationService,
   GeoWorkflowService,
   AgentReadinessNetwork,
@@ -15,6 +15,6 @@ export type GeoDashboardRuntime =
   | GeoSearchConsoleService
   | GeoContentBillingService
   | GeoEntitlementService
-  | GeoFeatureFlagService
+  | GeoCodingAgentAccessService
   | GeoGenerationService
   | GeoWorkflowService;

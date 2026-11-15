@@ -27,13 +27,6 @@ export function AnimatedNumber({
   const labels = useUiLabels();
   const reduceMotion = useReducedMotion();
   const previousValue = useRef(value);
-  /*
-   * New slots (99 → 100) should roll in, but not on the first paint. This has
-   * to be state, not a ref: a ref mutated in an effect and read during render
-   * makes the output depend on a value React never committed. The extra render
-   * it costs emits identical markup — the flag only decides whether slots
-   * mounting *later* animate.
-   */
   const [hasMounted, setHasMounted] = useState(false);
   const direction = value >= previousValue.current ? 1 : -1;
   const formattedValue = new Intl.NumberFormat(

@@ -13,23 +13,13 @@ import {
 import { cn } from "@notra/ui/lib/utils";
 import { keepPreviousData } from "@tanstack/react-query";
 import { useAggregateEvents } from "autumn-js/react";
-import { useFormatter, useLocale, useTranslations } from "next-intl";
-import dynamic from "next/dynamic";
 import type { CSSProperties, ReactNode } from "react";
 import { useState } from "react";
+import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { CreditTopupModal } from "@/components/billing/credit-topup-modal";
 import { Button } from "@/components/button";
-import {
-  IntegrationCardDither,
-  useIntegrationCardDither,
-} from "@/components/integrations/integration-card-dither";
-import {
-  USAGE_ANSWERS_ACCENT,
-  USAGE_FEATURE_SKELETON_KEYS,
-  USAGE_METRIC_SKELETON_KEYS,
-  USAGE_PULL_REQUEST_CREDITS_ACCENT,
-} from "@/constants/billing";
+import { USAGE_FEATURE_SKELETON_KEYS } from "@/constants/billing";
 import { useAutumnRefreshListener } from "@/lib/hooks/use-autumn-refresh-listener";
 import { useBillingCustomer } from "@/lib/hooks/use-billing-customer";
 import { useUsageFeatureName } from "@/lib/hooks/use-usage-feature-name";
@@ -42,11 +32,8 @@ import type {
 import {
   creditsValue,
   featuresFromBalances,
-  isRetentionFeature,
-  limitedUsageFeatures,
-  unlimitedUsageFeatures,
+  meteredUsageFeatures,
   usageBreakdownPoints,
-  usageRetentionDays,
 } from "@/utils/billing-usage";
 import {
   formatCount,
@@ -54,6 +41,7 @@ import {
   remainingBarColor,
   remainingPercent,
 } from "@/utils/format";
+import dynamic from "@/utils/lazy-component";
 
 const UsageBreakdownChart = dynamic(
   () =>
@@ -83,13 +71,13 @@ function RemainingBar({
       aria-valuemax={100}
       aria-valuemin={0}
       aria-valuenow={Math.round(remaining)}
-      className="bg-muted h-2 w-full overflow-hidden rounded-full"
+      className="bg-muted h-1.5 w-full overflow-hidden rounded-full"
       role="progressbar"
     >
       <div
         className={cn(
           "duration-slower transition-width h-full w-(--remaining) rounded-full",
-          remainingBarColor(remaining)
+          remaining < 30 ? remainingBarColor(remaining) : "bg-foreground/80"
         )}
         style={{ "--remaining": `${remaining}%` } as CSSProperties}
       />
@@ -97,193 +85,92 @@ function RemainingBar({
   );
 }
 
-function BalanceCard({
-  title,
+function UsageRow({
+  name,
   value,
-  hint,
-  footer,
-  remaining,
+  info,
   action,
-  accentColor,
+  remaining,
 }: {
-  title: string;
+  name: string;
   value: string;
-  hint?: string;
-  footer?: string;
-  remaining?: number | null;
+  info?: string;
   action?: ReactNode;
-  accentColor: string;
+  remaining?: number | null;
 }) {
-  const dither = useIntegrationCardDither();
-
-  return (
-    <TitleCard
-      {...dither.interactionProps}
-      accentColor={accentColor}
-      action={action}
-      className="h-full min-w-0"
-      footer={
-        footer ? (
-          <p className="text-muted-foreground text-xs text-pretty">{footer}</p>
-        ) : undefined
-      }
-      footerClassName="border-t-0 pt-0"
-      heading={title}
-      hoverBackground={
-        <IntegrationCardDither active={dither.active} color={accentColor} />
-      }
-    >
-      <div className="space-y-3">
-        <div className="space-y-1">
-          <p
-            className="min-w-0 truncate text-3xl font-bold tracking-tight tabular-nums"
-            title={value}
-          >
-            {value}
-          </p>
-          {hint ? (
-            <p className="text-muted-foreground text-sm text-pretty">{hint}</p>
-          ) : null}
-        </div>
-        {remaining != null ? (
-          <RemainingBar label={title} remaining={remaining} />
-        ) : null}
-      </div>
-    </TitleCard>
-  );
-}
-
-function UsageSectionSkeleton() {
-  return (
-    <div className="space-y-8">
-      <div className="space-y-4">
-        <div className="space-y-1">
-          <Skeleton className="h-6 w-24" />
-          <Skeleton className="h-4 w-64" />
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {USAGE_METRIC_SKELETON_KEYS.map((key) => (
-            <TitleCard
-              headingAs="div"
-              heading={<Skeleton className="h-5 w-32" />}
-              key={key}
-            >
-              <Skeleton className="h-8 w-28" />
-            </TitleCard>
-          ))}
-        </div>
-      </div>
-      <div className="space-y-4">
-        <Skeleton className="h-6 w-32" />
-        <div className="divide-y rounded-xl border">
-          {USAGE_FEATURE_SKELETON_KEYS.map((key) => (
-            <div className="flex flex-col gap-3 p-4" key={key}>
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-32" />
-                <Skeleton className="h-4 w-48" />
-              </div>
-              <Skeleton className="h-2 w-full rounded-full" />
-            </div>
-          ))}
-        </div>
-      </div>
-      <Skeleton className="h-[280px] rounded-xl" />
-    </div>
-  );
-}
-
-function UsageLimitedFeatureRow({ feature }: UsageLimitedFeatureRowProps) {
   const t = useTranslations("billing.usage");
-  const locale = useLocale();
-  const featureName = useUsageFeatureName()(feature);
-  const remaining = remainingPercent(feature.balance, feature.included);
-  const used =
-    feature.included !== null && feature.balance !== null
-      ? Math.max(feature.included - feature.balance, 0)
-      : null;
-
   return (
-    <div className="flex flex-col gap-3 p-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <p
-              className="min-w-0 truncate text-sm font-medium"
-              title={featureName}
-            >
-              {featureName}
-            </p>
+    <div className="space-y-2.5 px-4 py-3">
+      <div className="flex min-h-6 items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-0.5">
+          <p className="min-w-0 truncate text-sm font-medium" title={name}>
+            {name}
+          </p>
+          {info ? (
             <Tooltip>
               <TooltipTrigger
-                aria-label={t("about", { name: featureName })}
-                className="text-muted-foreground inline-flex size-6 items-center justify-center"
+                aria-label={t("about", { name })}
+                className="text-muted-foreground hover:text-foreground inline-flex size-6 shrink-0 items-center justify-center"
               >
                 <HugeiconsIcon
                   className="size-3.5"
                   icon={InformationCircleIcon}
                 />
               </TooltipTrigger>
-              <TooltipContent>
-                {used !== null
-                  ? t("usedOfCycle", {
-                      used: formatCount(used, locale),
-                      included: formatCount(feature.included ?? 0, locale),
-                    })
-                  : t("includedCycle", {
-                      included: formatCount(feature.included ?? 0, locale),
-                    })}
-              </TooltipContent>
+              <TooltipContent>{info}</TooltipContent>
             </Tooltip>
-          </div>
-          <p className="text-muted-foreground mt-1 text-sm tabular-nums">
-            {feature.balance !== null
-              ? t("remainingOf", {
-                  balance: formatCount(feature.balance, locale),
-                  included: formatCount(feature.included ?? 0, locale),
-                })
-              : t("remainingOfUnknown", {
-                  included: formatCount(feature.included ?? 0, locale),
-                })}
-          </p>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <p className="text-sm tabular-nums">{value}</p>
+          {action}
         </div>
       </div>
-      {remaining !== null ? (
-        <RemainingBar label={featureName} remaining={remaining} />
+      {remaining != null ? (
+        <RemainingBar label={name} remaining={remaining} />
       ) : null}
     </div>
   );
 }
 
-function UsageRetentionRow({ retentionDays }: { retentionDays: number }) {
-  const t = useTranslations("billing.usage");
+function UsageSectionSkeleton() {
   return (
-    <div className="flex items-center justify-between gap-4 p-4">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{t("logRetention")}</p>
-        <p className="text-muted-foreground mt-1 text-sm">
-          {t("logRetentionDescription", { days: retentionDays })}
-        </p>
-      </div>
-      <div className="border-border bg-muted shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium">
-        {t("days", { days: retentionDays })}
-      </div>
+    <div className="space-y-6">
+      <TitleCard
+        contentClassName="p-0"
+        headingAs="div"
+        heading={<Skeleton className="h-5 w-40" />}
+      >
+        <div className="divide-y">
+          {USAGE_FEATURE_SKELETON_KEYS.map((key) => (
+            <div className="space-y-2.5 px-4 py-3" key={key}>
+              <div className="flex justify-between">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-20" />
+              </div>
+              <Skeleton className="h-1.5 w-full rounded-full" />
+            </div>
+          ))}
+        </div>
+      </TitleCard>
+      <Skeleton className="h-[300px] rounded-2xl" />
     </div>
   );
 }
 
-function UsageUnlimitedFeatureRow({ feature }: { feature: FeatureData }) {
-  const t = useTranslations("billing.usage");
+function limitValue(feature: FeatureData, locale: string) {
+  return `${feature.balance !== null ? formatCount(feature.balance, locale) : "-"} / ${formatCount(feature.included ?? 0, locale)}`;
+}
+
+function UsageMeteredFeatureRow({ feature }: UsageLimitedFeatureRowProps) {
+  const locale = useLocale();
   const featureName = useUsageFeatureName()(feature);
   return (
-    <div className="flex items-center justify-between gap-4 p-4">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{featureName}</p>
-        <p className="text-muted-foreground mt-1 text-sm">{t("noCap")}</p>
-      </div>
-      <div className="border-border bg-muted shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium">
-        {t("unlimited")}
-      </div>
-    </div>
+    <UsageRow
+      name={featureName}
+      remaining={remainingPercent(feature.balance, feature.included)}
+      value={limitValue(feature, locale)}
+    />
   );
 }
 
@@ -340,8 +227,7 @@ export function UsageSection() {
         chartData={chartData}
         chartLoading={usageLoading && chartData.length === 0}
         hasAiAnswers={hasAiAnswers}
-        hasRetentionFeature={features.some(isRetentionFeature)}
-        limitedFeatures={limitedUsageFeatures(features)}
+        meteredFeatures={meteredUsageFeatures(features)}
         onOpenTopup={() => {
           setTopupSuccess(false);
           setTopupOpen(true);
@@ -349,8 +235,6 @@ export function UsageSection() {
         onRangeChange={setRange}
         pullRequestCreditsFeature={pullRequestCreditsFeature}
         range={range}
-        retentionDays={usageRetentionDays(features)}
-        unlimitedFeatures={unlimitedUsageFeatures(features)}
       />
       <CreditTopupModal
         onOpenChange={(open) => {
@@ -370,203 +254,107 @@ export function UsageSection() {
   );
 }
 
-function UsageBalanceSection({
+function UsageLimitsCard({
   aiAnswersFeature,
   aiAnswersRemaining,
   aiCreditsFeature,
+  meteredFeatures,
   onOpenTopup,
   pullRequestCreditsFeature,
-}: Pick<
+}: Omit<
   UsageSectionBodyProps,
-  | "aiAnswersFeature"
-  | "aiAnswersRemaining"
-  | "aiCreditsFeature"
-  | "onOpenTopup"
-  | "pullRequestCreditsFeature"
+  "chartData" | "chartLoading" | "hasAiAnswers" | "onRangeChange" | "range"
 >) {
   const t = useTranslations("billing.usage");
   const tCommon = useTranslations("common");
   const tBillingShared = useTranslations("billing.shared");
   const locale = useLocale();
   const format = useFormatter();
-  const formatResetDate = (timestamp: number) =>
-    format.dateTime(new Date(timestamp), {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  const aiAnswersFooter = (feature: FeatureData, remaining: number | null) => {
-    if (feature.unlimited) {
-      return t("noCap");
-    }
-    if (remaining === null) {
-      return feature.nextResetAt === null
-        ? undefined
-        : t("resets", { date: formatResetDate(feature.nextResetAt) });
-    }
-    if (feature.nextResetAt === null) {
-      return t("remainingPercent", {
-        percent: formatPercent(remaining, locale),
-      });
-    }
-    return t("remainingPercentResets", {
-      percent: formatPercent(remaining, locale),
-      date: formatResetDate(feature.nextResetAt),
-    });
-  };
-  const aiAnswersValue = (feature: FeatureData) => {
-    if (feature.unlimited) {
-      return t("unlimited");
-    }
-    return feature.balance !== null
-      ? formatCount(feature.balance, locale)
-      : "-";
-  };
-  const aiAnswersHint = (feature: FeatureData) =>
-    feature.unlimited || feature.included === null
-      ? undefined
-      : t("ofThisCycle", { included: formatCount(feature.included, locale) });
-  const cardCount = [
-    aiAnswersFeature,
-    aiCreditsFeature,
-    pullRequestCreditsFeature,
-  ].filter(Boolean).length;
-  if (cardCount === 0) {
-    return null;
-  }
-
-  return (
-    <section className="space-y-4">
-      <div className="space-y-1">
-        <h2 className="text-lg font-semibold tracking-tight">
-          {t("balanceTitle")}
-        </h2>
-        <p className="text-muted-foreground max-w-prose text-sm text-pretty">
-          {t("balanceDescription")}
-        </p>
-      </div>
-      <div
-        className={cn(
-          "grid items-stretch gap-4 sm:grid-cols-2",
-          cardCount > 2 && "lg:grid-cols-3"
-        )}
-      >
-        {aiAnswersFeature ? (
-          <BalanceCard
-            accentColor={USAGE_ANSWERS_ACCENT}
-            footer={aiAnswersFooter(aiAnswersFeature, aiAnswersRemaining)}
-            hint={aiAnswersHint(aiAnswersFeature)}
-            remaining={aiAnswersFeature.unlimited ? null : aiAnswersRemaining}
-            title={t("aiAnswersRemaining")}
-            value={aiAnswersValue(aiAnswersFeature)}
-          />
-        ) : null}
-        {aiCreditsFeature ? (
-          <BalanceCard
-            accentColor="#8b5cf6"
-            action={
-              <Button
-                aria-label={tCommon("labels.topUpCredits")}
-                onClick={onOpenTopup}
-                size="icon-sm"
-                variant="outline"
-              >
-                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
-              </Button>
-            }
-            footer={t("creditsFooter")}
-            title={t("creditsRemaining")}
-            value={creditsValue(aiCreditsFeature, locale)}
-          />
-        ) : null}
-        {pullRequestCreditsFeature ? (
-          <BalanceCard
-            accentColor={USAGE_PULL_REQUEST_CREDITS_ACCENT}
-            footer={t("pullRequestFooter")}
-            title={tBillingShared("pullRequestCredits")}
-            value={creditsValue(pullRequestCreditsFeature, locale)}
-          />
-        ) : null}
-      </div>
-    </section>
-  );
-}
-
-function UsageFeatureLimitsSection({
-  aiAnswersFeature,
-  hasRetentionFeature,
-  limitedFeatures,
-  retentionDays,
-  unlimitedFeatures,
-}: Pick<
-  UsageSectionBodyProps,
-  | "aiAnswersFeature"
-  | "hasRetentionFeature"
-  | "limitedFeatures"
-  | "retentionDays"
-  | "unlimitedFeatures"
->) {
-  const t = useTranslations("billing.usage");
+  const resetAt = [aiAnswersFeature, ...meteredFeatures].find(
+    (feature) => feature?.nextResetAt != null
+  )?.nextResetAt;
   if (
-    limitedFeatures.length === 0 &&
-    !hasRetentionFeature &&
-    unlimitedFeatures.length === 0
+    !aiAnswersFeature &&
+    !aiCreditsFeature &&
+    !pullRequestCreditsFeature &&
+    meteredFeatures.length === 0
   ) {
     return null;
   }
 
   return (
-    <section className="space-y-4">
-      <div className="space-y-1">
-        <h2 className="text-lg font-semibold tracking-tight">
-          {t("featureLimits")}
-        </h2>
-        <p className="text-muted-foreground max-w-prose text-sm text-pretty">
-          {aiAnswersFeature ? t("otherQuotas") : t("quotas")}
-        </p>
-      </div>
-      <div className="divide-y rounded-xl border">
-        {limitedFeatures.map((feature) => (
-          <UsageLimitedFeatureRow feature={feature} key={feature.id} />
-        ))}
-        {hasRetentionFeature ? (
-          <UsageRetentionRow retentionDays={retentionDays} />
+    <TitleCard
+      action={
+        resetAt != null ? (
+          <p className="text-muted-foreground text-sm">
+            {t("resets", {
+              date: format.dateTime(new Date(resetAt), {
+                month: "short",
+                day: "numeric",
+              }),
+            })}
+          </p>
+        ) : null
+      }
+      contentClassName="p-0"
+      heading={t("thisCycle")}
+      headingAs="h2"
+    >
+      <div className="divide-y">
+        {aiAnswersFeature ? (
+          <UsageRow
+            name={tBillingShared("aiAnswers")}
+            remaining={aiAnswersFeature.unlimited ? null : aiAnswersRemaining}
+            value={
+              aiAnswersFeature.unlimited
+                ? t("unlimited")
+                : limitValue(aiAnswersFeature, locale)
+            }
+          />
         ) : null}
-        {unlimitedFeatures.map((feature) => (
-          <UsageUnlimitedFeatureRow feature={feature} key={feature.id} />
+        {pullRequestCreditsFeature ? (
+          <UsageRow
+            info={t("pullRequestFooter")}
+            name={tBillingShared("pullRequestCredits")}
+            value={creditsValue(pullRequestCreditsFeature, locale)}
+          />
+        ) : null}
+        {aiCreditsFeature ? (
+          <UsageRow
+            action={
+              <Button
+                aria-label={tCommon("labels.topUpCredits")}
+                onClick={onOpenTopup}
+                size="icon-xs"
+                variant="outline"
+              >
+                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} />
+              </Button>
+            }
+            info={t("creditsFooter")}
+            name={t("aiCredits")}
+            value={creditsValue(aiCreditsFeature, locale)}
+          />
+        ) : null}
+        {meteredFeatures.map((feature) => (
+          <UsageMeteredFeatureRow feature={feature} key={feature.id} />
         ))}
       </div>
-    </section>
+    </TitleCard>
   );
 }
 
 function UsageSectionBody({
-  aiAnswersFeature,
-  aiAnswersRemaining,
-  aiCreditsFeature,
   chartData,
   chartLoading,
   hasAiAnswers,
-  hasRetentionFeature,
-  limitedFeatures,
-  onOpenTopup,
   onRangeChange,
-  pullRequestCreditsFeature,
   range,
-  retentionDays,
-  unlimitedFeatures,
+  ...limits
 }: UsageSectionBodyProps) {
   return (
-    <div className="space-y-8">
-      <UsageBalanceSection
-        aiAnswersFeature={aiAnswersFeature}
-        aiAnswersRemaining={aiAnswersRemaining}
-        aiCreditsFeature={aiCreditsFeature}
-        onOpenTopup={onOpenTopup}
-        pullRequestCreditsFeature={pullRequestCreditsFeature}
-      />
+    <div className="space-y-6">
+      <UsageLimitsCard {...limits} />
       {hasAiAnswers ? (
         <UsageBreakdownChart
           data={chartData}
@@ -575,13 +363,6 @@ function UsageSectionBody({
           range={range}
         />
       ) : null}
-      <UsageFeatureLimitsSection
-        aiAnswersFeature={aiAnswersFeature}
-        hasRetentionFeature={hasRetentionFeature}
-        limitedFeatures={limitedFeatures}
-        retentionDays={retentionDays}
-        unlimitedFeatures={unlimitedFeatures}
-      />
     </div>
   );
 }

@@ -23,7 +23,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@notra/ui/components/ui/sheet";
-import { useLocale, useTranslations } from "next-intl";
+import { useRetainedValue } from "@notra/ui/hooks/use-retained-value";
+import { InstrumentSection } from "ui/card";
+import { DataTable, type TableColumn } from "ui/table";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { EChartsAreaChart } from "@/components/evilcharts/charts/echarts-area-chart";
@@ -34,8 +37,6 @@ import { ProjectLogo } from "@/components/geo/project-logo";
 import { PromptDetailDialog } from "@/components/geo/prompt-detail-dialog";
 import { PromptOutcomeIcon } from "@/components/geo/prompt-outcome-icon";
 import { WriteDialog } from "@/components/geo/writer/write-dialog";
-import { InstrumentSection } from "@/components/instrument/instrument-module";
-import { Table, type TableColumn } from "@/components/motion/table";
 import { CHART_PERCENT_SCALE, CHART_PRIMARY_COLOR } from "@/constants/charts";
 import {
   GEO_PROMPT_DETAIL_SURFACES,
@@ -43,7 +44,6 @@ import {
 } from "@/constants/geo-analytics";
 import { TABLE_ROW_HEIGHT } from "@/constants/table";
 import { useEngineFamilySheet } from "@/lib/hooks/use-engine-family-sheet";
-import { useRetainedValue } from "@/lib/hooks/use-retained-value";
 import { cn } from "@/lib/utils";
 import type { ChartConfig } from "@/types/charts";
 import type {
@@ -51,6 +51,7 @@ import type {
   EngineFamilyBrandScope,
   EngineFamilyPromptHit,
   EngineFamilySheetProps,
+  GeoPromptCoverage,
 } from "@/types/geo";
 import { formatFullDayLabel } from "@/utils/analytics-charts";
 import { geoModeFillClass, seriesColors } from "@/utils/chart-colors";
@@ -66,7 +67,6 @@ import {
 } from "@/utils/geo-charts";
 import { tableHeightFor } from "@/utils/table";
 
-// Matches the visibility activity card's headline series.
 const FAMILY_TOTAL_STROKE_WIDTH = 2;
 const FAMILY_CHART_HEIGHT_CLASS = "h-52 w-full cursor-crosshair";
 const FAMILY_SHEET_CONTENT_CLASS =
@@ -90,17 +90,18 @@ function Stat({
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <p className="text-muted-foreground text-xs">{label}</p>
-      <p className="text-2xl leading-none font-semibold tracking-tight tabular-nums">
-        {value}
-      </p>
-      {/* Fixed height so a stat without a delta keeps the row aligned. */}
-      <div className="flex h-5 items-center">
-        <GeoStatDelta
-          delta={delta}
-          hint={tGeoShared2("vsFirstHalfOfThis")}
-          kind={kind}
-          label={label}
-        />
+      <div className="flex items-end gap-2">
+        <p className="text-2xl leading-none font-semibold tracking-tight tabular-nums">
+          {value}
+        </p>
+        <span className="mb-0.5 inline-flex">
+          <GeoStatDelta
+            delta={delta}
+            hint={tGeoShared2("vsFirstHalfOfThis")}
+            kind={kind}
+            label={label}
+          />
+        </span>
       </div>
     </div>
   );
@@ -109,15 +110,17 @@ function Stat({
 function FamilyStats({
   family,
   points,
+  promptCoverage,
 }: {
   family: GeoEngineFamily;
   points: readonly GeoTimeseriesPoint[];
+  promptCoverage: GeoPromptCoverage | null;
 }) {
   const totals = engineFamilyTotals(family);
   const position = engineFamilyAvgPosition(family);
   const trends = engineFamilyStatTrends(points, family.family);
+  const t = useTranslations("geo.engineFamilySheet");
   const tGeoShared = useTranslations("geo.shared");
-  const tCommon = useTranslations("common");
 
   return (
     <div className="@container/stats">
@@ -129,10 +132,14 @@ function FamilyStats({
           value={totals ? formatMentionRate(totals.rate) : "—"}
         />
         <Stat
-          delta={trends.visibilityDelta}
+          delta={null}
           kind="mentions"
-          label={tCommon("labels.visibility")}
-          value={totals ? `${totals.visible}/${totals.checks}` : "—"}
+          label={t("visiblePrompts")}
+          value={
+            promptCoverage
+              ? `${promptCoverage.mentioned}/${promptCoverage.total}`
+              : "—"
+          }
         />
         <Stat
           delta={trends.positionDelta}
@@ -349,8 +356,6 @@ function PromptHits({
   };
   const missed = hits.filter((hit) => !(hit.mentioned || hit.ownedSourceCited));
   const found = hits.filter((hit) => hit.mentioned || hit.ownedSourceCited);
-  // The count lives in the first column header, so each table carries its
-  // own title and lines up with its rows.
   const promptColumn = (
     header: string
   ): TableColumn<EngineFamilyPromptHit> => ({
@@ -386,7 +391,6 @@ function PromptHits({
     {
       key: "result",
       header: t("resultHeader"),
-      // Fits "Mentioned and cited" plus the outcome icon and cell padding.
       width: "13rem",
       sortable: true,
       cell: (row) => {
@@ -401,7 +405,6 @@ function PromptHits({
           </span>
         );
       },
-      // Ranked answers first, then unranked mentions, then citation-only.
       sortValue: (row) => {
         if (row.mentioned) {
           return row.position ?? Number.MAX_SAFE_INTEGER - 1;
@@ -414,8 +417,7 @@ function PromptHits({
   return (
     <>
       {missed.length > 0 ? (
-        <Table
-          className="rounded-2xl"
+        <DataTable
           columns={missedColumns}
           data={missed}
           emptyState={t("emptyPrompts")}
@@ -426,8 +428,7 @@ function PromptHits({
         />
       ) : null}
       {found.length > 0 ? (
-        <Table
-          className="rounded-2xl"
+        <DataTable
           columns={foundColumns}
           data={found}
           defaultSort={{ key: "result", direction: "asc" }}
@@ -465,6 +466,7 @@ function EngineFamilySheetSession({
     selectedRow,
     selectedEngine,
     promptHits,
+    promptCoverage,
     brandScope,
     brandRows,
     writeOpen,
@@ -500,7 +502,11 @@ function EngineFamilySheetSession({
             </div>
           </SheetHeader>
           <div className="min-h-0 flex-1 space-y-8 overflow-y-auto px-4 pt-2 pb-6">
-            <FamilyStats family={family} points={points} />
+            <FamilyStats
+              family={family}
+              points={points}
+              promptCoverage={promptCoverage}
+            />
             <FamilyTrend family={family} points={points} />
             <FamilyBrands
               answers={promptHits.length}
@@ -553,8 +559,6 @@ export function EngineFamilySheet({
   onOpenChange,
 }: EngineFamilySheetProps) {
   const [family, releaseFamily] = useRetainedValue(familyProp);
-  // A stand-in sheet here would mount, then get replaced once `family` arrives,
-  // replaying the slide. The real sheet mounts once, when there is something to show.
   if (!family) {
     return null;
   }

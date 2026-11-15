@@ -2,7 +2,7 @@
 title: Privacy Policy
 ---
 
-**Last updated: September 25, 2026**
+**Last updated: November 3, 2026**
 
 ## 1. Privacy Statement
 
@@ -20,19 +20,29 @@ If you are a resident of the European Economic Area (EEA) or the United Kingdom,
 - Request portability of your personal data
 - Withdraw consent at any time where we rely on consent to process your data
 
-To exercise any of these rights, please contact us at dominik@usenotra.com. We will respond to your request within 30 days.
+To exercise any of these rights, please contact us at support@usenotra.com. We will respond to your request within 30 days.
 
 ## 3. Age Limit
 
 The Service is not intended for individuals under the age of 13. If you are under 13, you may not use the Service. If you are a resident of the European Union, you must be at least 16 years old to consent to the processing of your personal data. If we become aware that we have collected personal data from a child under the applicable age limit, we will take steps to delete that information.
 
-## 4. Cookie Usage
+## 4. Cookies, Analytics, and Session Replay
 
-We use only functional and session cookies that are strictly necessary for the operation of the Service. These cookies enable core functionality such as authentication and session management.
+We use functional and session cookies for authentication and session management. Analytics tools may also use cookies or browser storage to recognize a browser or session and associate usage events.
 
-For analytics, we use [databuddy](https://databuddy.cc), a cookie-free, GDPR-compliant analytics service. databuddy does not use cookies. For general website analytics, we do not send direct identifiers such as your name or email address. To measure signup conversion and onboarding performance, we may send limited pseudonymous event data such as internal user ID, organization ID, signup method, selected plan, and experiment variant. We do not use databuddy for advertising profiles or third-party ad targeting. Because no cookies are used for analytics, no cookie consent banner or opt-out mechanism is required.
+For analytics, we use [databuddy](https://databuddy.cc), a cookie-free, GDPR-compliant analytics service. databuddy does not use cookies. For general website analytics through databuddy, we do not send direct identifiers such as your name or email address. To measure signup conversion and onboarding performance, we may send limited pseudonymous event data such as internal user ID, organization ID, signup method, selected plan and experiment variant.
 
-We do not use any tracking cookies, advertising cookies, or third-party marketing cookies.
+**A/B testing and revenue attribution:** We sometimes show different versions of our website to different visitors to learn which one works better. databuddy assigns each browser a random pseudonymous visitor ID, stored in your browser's local storage, and uses it to keep showing you the same version. When you follow a signup link from our website to the Notra app, we pass this visitor ID and the version you saw in the link so we can connect the visit to a signup. When you start a paid subscription, we attach the visitor ID, session ID and version to the subscription record in Stripe. Stripe then shares the payment amount, currency, plan and refund status with databuddy so we can measure which version of our website leads to paid subscriptions. databuddy does not receive your card details, name or email address for this purpose.
+
+We do not use databuddy for advertising profiles or third-party ad targeting. This cookie-free description applies to databuddy, not to every analytics tool used by Notra.
+
+**PostHog analytics:** We use [PostHog](https://posthog.com/privacy) for product analytics, page views, feature and workflow usage, error tracking, and troubleshooting. Data can include browser and device information, page paths, interaction and error events, timestamps, session identifiers, and internal user, workspace, and project identifiers. Server-side usage events can also include AI model identifiers, token counts, credit usage, and costs. Events can be associated with your signed-in account. The dashboard identifies signed-in users by internal user ID. It also sends your name and email to PostHog when your Hide Personal Data setting is turned off. PostHog may use cookies and browser storage to maintain analytics identifiers.
+
+**Session replay:** Session recording is disabled in the Notra dashboard, so the dashboard does not currently collect PostHog session replays. Product analytics and error tracking remain enabled separately. Notra-hosted sites can separately use PostHog session replay with the site owner's PostHog project to record page structure and interactions such as navigation, clicks, and scrolling. What is captured depends on that site's recording and masking configuration; those recordings are available to that project’s authorized users and are governed by the site owner's privacy notice and settings. Site owners can disable session replay in their PostHog integration settings.
+
+**Referral attribution:** We use [Dub](https://dub.co/legal/privacy) to credit partners who refer new customers. If you accept analytics cookies, Dub stores a `dub_id` cookie on usenotra.com and its subdomains when you arrive through a partner link. When you create a workspace, we send Dub that click ID, your workspace ID, your name and your email address. When you subscribe, Stripe shares the purchase with Dub so the referring partner can be paid a commission. If you decline analytics cookies, Dub is not loaded and your signup is not attributed.
+
+**Email tracking:** Emails we send through [Brew](https://brew.new) contain a small invisible image and links that pass through a redirect. This tells us whether an email was delivered, opened, or clicked, so we can keep emails deliverable and see which ones are useful. Many email clients block the image by default, and you can do the same in your email client's settings.
 
 ## 5. Information We Collect
 
@@ -46,30 +56,58 @@ We collect the following types of information:
 
 **Contact Data:** When you use our contact form, we collect your name, email address, company (if provided), and message to handle your inquiry. To screen for spam, we send only the message text to TypeSafe AI's Jev model through Vercel AI Gateway; the separate name, email, and company fields are not sent to the model. Your message may contain personal information you choose to include. Messages classified as spam are not forwarded to our team.
 
+**Notra Feedback:** Notra Feedback is our own feedback collection and triage system. When you submit a bug report, feature request, question, or other feedback, we store the message and any supplied title, category, sentiment, related page URL, project reference, and submission metadata. Depending on the submission channel, metadata can include the source, agent or integration name and model, tool version, browser or client user-agent, external identifiers, and additional context supplied by the submitting integration. Public feedback endpoints use IP-based rate limits to prevent abuse.
+
+Feedback is routed to the receiving organization's inbox and is accessible to its authorized users. Feedback sent to Notra's own inbox is used by our team to investigate issues, respond to requests, and improve the product. We may process the message, title, related URL, and agent context through our AI classification and evaluation providers to suggest a title, category, or sentiment. Send only information relevant to the feedback, and do not include credentials, payment-card details, health records, or other sensitive personal records. The fields available through an individual assistant tool may be narrower than those supported by the feedback API.
+
+**AI Traffic Data:** When you install Notra's AI traffic tracking on your website or connect a log drain, we receive request logs for visits from AI agents, crawlers, and assistants. These logs can include the requested host and path, request method, timestamp, user-agent, sanitized referrer, approximate country, preferred language, request ID, and the agent and purpose we classify from the request. We use IP addresses only transiently to group requests into journeys and do not store them with these logs. Ordinary human visits are dropped unless you separately enable visitor analytics for a Notra-hosted site.
+
+**Email Data:** To send account, notification, and (if you opted in) marketing emails, we share your email address, name, sign-up date, internal user ID, your email notification preferences, and, if you opted into marketing emails, when and how you gave that consent with our email provider [Brew](https://brew.new). Brew also records delivery, open, click, bounce, and unsubscribe events for the emails we send you.
+
 **Payment Data:** If you subscribe to a paid plan, payment processing is handled by our billing provider [Autumn](https://useautumn.com) (powered by Stripe). We do not store your credit card details directly. When you sign up, we create an Autumn customer profile to enable usage tracking. If you later initiate a payment and a Stripe customer does not already exist, we may create one to process the transaction.
+
+### Connected assistants and MCP
+
+When you connect Notra to an assistant such as ChatGPT or Codex, the assistant sends the arguments for the tools you authorize it to use. These can include workspace and project identifiers, business content such as draft text and writing instructions, publishing destinations and times, and product feedback you choose to send. Notra processes those requests to carry out the selected operations and returns the requested results to the connected assistant. Content-generation and visibility tasks may also send the task's content or queries to the AI and infrastructure providers used to perform that task. Publishing and webhook delivery send the selected content to the configured destinations.
+
+The connection is intended for business content and brand visibility. Do not submit health records, biometric data, government identifiers, payment card information, passwords, API keys, or authentication secrets in tool arguments. Authenticate using the connection's sign-in flow; configure integration credentials in Notra's dashboard. Billing on our website is separate from this connection and does not require payment-card details in an assistant conversation.
+
+When enabled, MCP usage analytics are sent to PostHog and include tool name, client and protocol version, time, duration, outcome, authentication type, and internal workspace and user identifiers. These usage events do not include tool arguments, response content, or authentication tokens. Saved content and feedback are subject to the retention and deletion provisions below. You can disconnect Notra in your assistant to stop future calls through that connection; disconnecting does not delete content already saved in Notra or in the assistant. Contact us using the details below to exercise your data rights.
 
 ## 6. Third-Party Services
 
 We use the following third-party services to operate and improve the Service:
 
-- **Vercel** — Hosting, deployment, and AI Gateway access for content generation and contact-form spam classification
-- **TypeSafe AI** — Jev model used through Vercel AI Gateway to classify contact-form messages for spam
-- **[Resend](https://resend.com)** — Transactional email delivery
+- **Vercel** — Hosting, deployment, and AI Gateway access for content generation, contact-form spam classification, and feedback classification
+- **TypeSafe AI** — Jev model used through Vercel AI Gateway to classify contact-form messages for spam and evaluate feedback for classification
+- **[Brew](https://brew.new)** — Email delivery, email contact management (email address, name, user ID, sign-up date, and email preferences), and email delivery and engagement tracking
+- **[PostHog](https://posthog.com/privacy)** — Product and MCP usage analytics, account and workspace analytics, error tracking, and session replay where enabled, as described above
+- **Cloudflare** — DNS, CDN and network proxy for our domains, hosting for Notra Sites and file storage
 - **Upstash** — Redis database and message queues
-- **[Autumn](https://useautumn.com)** — Subscription billing (powered by Stripe)
-- **[databuddy](https://databuddy.cc)** — Cookie-free, GDPR-compliant analytics and signup attribution
+- **Tinybird** — Storage and analysis of AI traffic logs, Notra Sites visitor analytics, MCP server analytics and social media analytics
+- **[Autumn](https://useautumn.com)** — Subscription billing (powered by Stripe), including the pseudonymous attribution data described above
+- **[databuddy](https://databuddy.cc)** — Cookie-free, GDPR-compliant analytics, A/B testing, signup attribution and revenue attribution
+- **[Dub](https://dub.co/legal/privacy)** — Partner referral attribution and commission tracking
 - **GitHub** — OAuth authentication and repository integration
 - **Google** — OAuth authentication
 
-Each of these services has its own privacy policy governing the data they process.
+Each of these services has its own privacy policy governing the data they process. For the personal data we process on behalf of our customers, such as AI traffic and Notra Sites visitor data, see our [Data Processing Agreement](/dpa) and the full list of [sub-processors](/subprocessors).
 
 ## 7. Retention and Deletion
 
 We retain your personal data for as long as your account is active or as needed to provide you with the Service. If you request deletion of your account, we will delete your personal data within 30 days, except where we are required to retain certain information for legal or regulatory purposes.
 
-Contact messages forwarded to our team are retained as needed to handle the inquiry. We do not save messages classified as spam.
+Contact messages forwarded to our team are retained as needed to handle the inquiry. We do not save contact-form messages classified as spam. Notra Feedback entries, their classification and submission metadata, and triage status are stored in the receiving organization’s inbox and fall under the retention and deletion provisions in this section. For feedback sent to another organization, contact that organization to request deletion or exercise your data rights.
 
-To request deletion of your account and associated data, contact us at dominik@usenotra.com.
+AI traffic logs are retained to power your traffic reports. Raw AI traffic events are kept for 396 days after they are captured and then deleted in monthly batches, so at the latest about one month after that period ends. We may keep aggregated or anonymised results derived from these logs for research and product improvement as described in section 9, including after the reporting period shown in your dashboard.
+
+If you connect your own MCP server to Notra, the request logs it sends us are kept for 90 days after they are captured and then deleted in monthly batches, so at the latest about one month after that period ends. These logs include the user IDs and intents your server passes and, only if you opt in, the tool arguments and responses your server has already redacted.
+
+When we take a Notra site offline, suspend a workspace or ban an account for abuse, we keep a record of the action, its reason and who took it for 2 years to handle reviews and repeat abuse, and then delete it. When you delete your account, we delete the records about your account at the same time.
+
+When you delete your account, we also delete your contact record at our email provider Brew.
+
+To request deletion of your account and associated data, contact us at support@usenotra.com.
 
 ## 8. Third-Party Websites
 
@@ -81,10 +119,12 @@ We use the information we collect for the following purposes:
 
 - **Service delivery:** To provide, maintain, and improve the Service
 - **Billing:** To process subscriptions and payments
-- **Communications:** To send you important updates about the Service, including security notices and changes to our terms. Marketing emails are opt-in only, and you can unsubscribe using the link in the footer of each marketing email.
+- **Communications:** To send you important updates about the Service, including security notices and changes to our terms. Marketing emails are opt-in only, and you can unsubscribe using the link in the footer of each marketing email or in your notification settings. Notification emails can be turned off in your organization's notification settings.
 - **AI content generation:** To process your connected data through AI models and generate content drafts on your behalf
 - **Contact inquiries and spam prevention:** To handle contact-form submissions and classify message text for spam before forwarding inquiries
-- **Analytics:** To understand how the Service is used and to improve the user experience
+- **Notra Feedback:** To collect and classify product feedback, investigate reports, and track their resolution
+- **Research and product improvement:** To analyze AI traffic logs, including aggregated patterns across customers, so we can understand how AI agents and crawlers behave and improve the Service, such as agent classification and traffic insights. Where a log entry relates to a person, such as a visit referred by an AI assistant, we use it for this purpose only in aggregated or anonymised form, and we do not use these logs to identify individual human visitors
+- **Analytics and troubleshooting:** To understand product and workflow usage, diagnose errors, and improve the user experience; session replay, where enabled, helps investigate interaction problems
 
 We do not sell your personal data to third parties.
 
@@ -92,7 +132,7 @@ We do not sell your personal data to third parties.
 
 If you are a California resident, you have the right to request disclosure of the categories and specific pieces of personal information we have collected about you, the categories of sources from which your personal information is collected, the business purpose for collecting your personal information, and the categories of third parties with whom we share your personal information.
 
-To exercise your rights under the California Consumer Privacy Act (CCPA), contact us at dominik@usenotra.com.
+To exercise your rights under the California Consumer Privacy Act (CCPA), contact us at support@usenotra.com.
 
 ## 11. Updates to This Notice
 
@@ -110,7 +150,7 @@ This Privacy Policy is governed by the laws of the Federal Republic of Germany. 
 
 If you have any questions about this Privacy Policy or our data practices, please contact us at:
 
-**Email:** dominik@usenotra.com
+**Email:** support@usenotra.com
 
 Notra, Inc.<br />
 2261 Market Street STE 98632<br />

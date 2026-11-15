@@ -2,6 +2,7 @@ import type {
   SkillListItem,
   SkillSortKey,
   SkillSortState,
+  SkillUpstreamStatus,
 } from "@/types/skills/page";
 
 const RELATIVE_UNITS: { unit: Intl.RelativeTimeFormatUnit; ms: number }[] = [
@@ -51,8 +52,6 @@ export function filterSkills<T extends SkillListItem>(
     return (
       name.includes(needle) ||
       skill.description.toLowerCase().includes(needle) ||
-      // Labels only insert spaces where the slug has hyphens, so a needle
-      // without a space that matches the label already matches the slug.
       (needle.includes(" ") &&
         skillDisplayName(skill.name).toLowerCase().includes(needle))
     );
@@ -109,4 +108,14 @@ export function toggleSkillSort(
     return { key, direction: key === "updatedAt" ? "desc" : "asc" };
   }
   return { key, direction: current.direction === "asc" ? "desc" : "asc" };
+}
+
+export function hasSkillUpdate(
+  upstream: SkillUpstreamStatus | null | undefined
+): boolean {
+  return Boolean(upstream && upstream.latestVersion > upstream.version);
+}
+
+export function skillDocument(description: string, content: string): string {
+  return `---\ndescription: ${description}\n---\n\n${content}`;
 }

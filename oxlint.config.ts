@@ -1,10 +1,10 @@
 import { defineConfig } from "oxlint";
 import core from "ultracite/oxlint/core";
-import next from "ultracite/oxlint/next";
 import react from "ultracite/oxlint/react";
+import tanstack from "ultracite/oxlint/tanstack";
 
 export default defineConfig({
-  extends: [core, react, next],
+  extends: [core, react, tanstack],
   jsPlugins: ["@shadcn/lint"],
   settings: {
     shadcn: {
@@ -20,12 +20,11 @@ export default defineConfig({
     "packages/db/migrations/**",
     ".temp/**",
     "**/*.astro",
+    "apps/sites-builder/fixtures/**",
   ],
   options: {
     reportUnusedDisableDirectives: "warn",
   },
-  // Keep the full presets as the source of truth while baselining rules that
-  // conflict with existing code. Newly added Ultracite rules stay enabled.
   rules: {
     "shadcn/no-restyle": [
       "warn",
@@ -38,13 +37,15 @@ export default defineConfig({
           },
           { pattern: "^Skeleton$", allow: ["layout", "shape"] },
           {
+            pattern: "^CopyButton$",
+            allow: ["layout", "text-muted-foreground"],
+          },
+          { pattern: "^Spinner$", allow: ["layout", "color"] },
+          {
             pattern: "^TitleCard$",
             allow: ["layout", "border-t-0", "pt-0"],
           },
           {
-            // TooltipTrigger is wrapped around arbitrary content everywhere, so
-            // the restyles below are the baseline that already exists. Listing
-            // them keeps the rule flagging anything new.
             pattern: "^TooltipTrigger$",
             allow: [
               "layout",
@@ -125,7 +126,6 @@ export default defineConfig({
     "jsx-a11y/interactive-supports-focus": "off",
     "jsx-a11y/no-static-element-interactions": "off",
     "jsx-a11y/prefer-tag-over-role": "off",
-    "nextjs/no-img-element": "off",
     "node/callback-return": "off",
     "oxc/branches-sharing-code": "off",
     "oxc/no-accumulating-spread": "off",
@@ -252,14 +252,23 @@ export default defineConfig({
       },
     },
     {
-      files: ["packages/geo/src/index.ts", "packages/geo/src/feedback.ts"],
+      // The design-token rules target the dashboard. The registry, its previews and the marketing site style freely, and emails need inline styles.
+      files: ["apps/ui/**", "apps/web/**", "packages/email/**"],
       rules: {
-        "oxc/no-barrel-file": "off",
+        "shadcn/no-restyle": "off",
+        "shadcn/no-arbitrary-values": "off",
+        "shadcn/no-raw-colors": "off",
+        "shadcn/no-inline-styles": "off",
       },
     },
     {
-      // Every Autumn customer read must go through the shared wrapper, or it
-      // requests a differently-shaped `expand` and gets its own cache entry.
+      // Satori (next/og) only reads inline styles; there are no classes to use.
+      files: ["apps/console/src/lib/ai-trends/share-card.tsx"],
+      rules: {
+        "shadcn/no-inline-styles": "off",
+      },
+    },
+    {
       files: ["apps/dashboard/src/**"],
       rules: {
         "no-restricted-imports": [
@@ -285,13 +294,6 @@ export default defineConfig({
       ],
       rules: {
         "no-restricted-imports": "off",
-      },
-    },
-    {
-      files: ["apps/web/**"],
-      rules: {
-        "nextjs/no-html-link-for-pages": "off",
-        "nextjs/no-head-element": "off",
       },
     },
   ],

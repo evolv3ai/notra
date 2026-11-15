@@ -5,8 +5,10 @@ import type {
 } from "@notra/ai/types/github-mention";
 import { getRepositoryFileContents } from "@notra/ai/utils/github-pr-commit";
 
-const MARKDOWN_IMAGE_PATTERN = /(!\[[^\]]*\]\()(<[^>\n]*>|[^)\s]+)/g;
-const VIDEO_SRC_PATTERN = /(<video\b[^>]*?\ssrc=")([^"]+)/g;
+// Alt text (escapes allowed) and tag attributes stop at the next opener, so
+// unclosed `![` or `<video` runs cannot make each match rescan the file.
+const MARKDOWN_IMAGE_PATTERN = /(!\[(?:\\.|[^[\]\\])*\]\()(<[^>\n]*>|[^)\s]+)/g;
+const VIDEO_SRC_PATTERN = /(<video\b[^<>]*?\ssrc=")([^"]+)/g;
 const FENCE_OR_TEXT_PATTERN = /```[\s\S]*?```|[\s\S]+?(?=```|$)/g;
 const ABSOLUTE_URL_PATTERN = /^https?:\/\//i;
 
@@ -143,9 +145,6 @@ export function resolveEditableMarkdown(params: {
       "The pull request changed, but its published file could not be read. Retry once the current file is available; the stale Notra post cannot safely replace it."
     );
   }
-  // The changed file is not an original source-to-repository mapping. Keep its
-  // repository targets rather than guessing by image position and corrupting
-  // replacements or reorders.
   const markdown = params.publishedFile;
   return { markdown, fromPullRequest: markdown !== params.postMarkdown };
 }

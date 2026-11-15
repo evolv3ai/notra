@@ -1,9 +1,3 @@
-import { formatEngineFamily } from "@/utils/geo-charts";
-
-export function scanPreflightEngineNames(engines: readonly string[]): string[] {
-  return [...new Set(engines.map((engine) => formatEngineFamily(engine)))];
-}
-
 /** `undefined` means run every tracked engine. Empty selection is not a payload. */
 export function scanPreflightEnginesToSubmit(
   tracked: readonly string[],

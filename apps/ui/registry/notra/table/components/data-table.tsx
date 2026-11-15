@@ -1,0 +1,65 @@
+"use client";
+
+import { Skeleton } from "@/components/ui/skeleton";
+
+import {
+  TABLE_SKELETON_COLUMN_WIDTHS,
+  TABLE_SKELETON_ROW_COUNT,
+  TABLE_SKELETON_ROW_HEIGHT,
+} from "../constants/data-table";
+import type {
+  DataTablePagination,
+  DataTableProps,
+  DataTableSkeletonProps,
+  InfiniteDataTableProps,
+} from "../types/data-table";
+import { DataTableRoot } from "./data-table-root";
+
+export type {
+  DataTablePagination,
+  DataTableProps,
+  InfiniteDataTableProps,
+  SortState,
+  TableColumn,
+} from "../types/data-table";
+
+/** The app's table: sortable, selectable, paged or bounded with a scrolling body. */
+function DataTable<T>(props: DataTableProps<T>) {
+  return <DataTableRoot {...props} />;
+}
+
+/** A fixed-height, virtualized table that asks for the next page near the bottom. */
+function InfiniteDataTable<T>(props: InfiniteDataTableProps<T>) {
+  return <DataTableRoot {...props} rowSizing="fixed" />;
+}
+
+/** Loading placeholder with the same chrome as a real table. */
+function DataTableSkeleton({
+  columnWidths = TABLE_SKELETON_COLUMN_WIDTHS,
+  rows = TABLE_SKELETON_ROW_COUNT,
+  rowHeight = TABLE_SKELETON_ROW_HEIGHT,
+  height,
+  selectable = false,
+  toolbar,
+  className,
+}: DataTableSkeletonProps) {
+  return (
+    <DataTableRoot
+      className={className}
+      columns={columnWidths.map((column, index) => ({
+        ...(typeof column === "string" ? { width: column } : column),
+        key: `skeleton-column-${String(index)}`,
+        header: <Skeleton className="h-3.5 w-16" />,
+      }))}
+      data={[]}
+      height={height ?? (rows + 1) * rowHeight}
+      loading
+      rowHeight={rowHeight}
+      scrollFade={false}
+      selectable={selectable}
+      toolbar={toolbar}
+    />
+  );
+}
+
+export { DataTable, DataTableSkeleton, InfiniteDataTable };

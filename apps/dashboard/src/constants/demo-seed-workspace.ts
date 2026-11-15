@@ -6,7 +6,6 @@ import type {
   DemoSeedTeammate,
 } from "@/types/demo-seed";
 
-/** Fictional Fieldnote teammates; emails use the reserved .example domain. */
 export const DEMO_SEED_TEAMMATES: readonly DemoSeedTeammate[] = [
   {
     name: "Maya Okafor",
@@ -155,10 +154,6 @@ export const DEMO_SEED_PERSONAS: readonly DemoSeedPersona[] = [
   },
 ];
 
-/**
- * Social accounts behind the analytics pages. Their stats are generated at
- * read time (see `@notra/analytics/tinybird/demo-social`).
- */
 export const DEMO_SEED_SOCIAL_ACCOUNTS: readonly DemoSeedSocialAccount[] = [
   {
     provider: "twitter",

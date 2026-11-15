@@ -13,11 +13,27 @@ export function formatValidationError(error: ZodError): string {
   return path ? `${path}: ${issue.message}` : issue.message;
 }
 
+function getValidationErrorCode(error: ZodError): string | undefined {
+  const issue = error.issues[0];
+  if (issue?.code !== "custom") {
+    return undefined;
+  }
+  const code = issue.params?.code;
+  return typeof code === "string" ? code : undefined;
+}
+
 export function createOpenApiApp() {
   return new OpenAPIHono<ApiEnv>({
     defaultHook: (result, c) => {
       if (!result.success) {
-        return c.json({ error: formatValidationError(result.error) }, 400);
+        const code = getValidationErrorCode(result.error);
+        return c.json(
+          {
+            error: formatValidationError(result.error),
+            ...(code ? { code } : {}),
+          },
+          400
+        );
       }
     },
   });

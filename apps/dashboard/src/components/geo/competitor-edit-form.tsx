@@ -35,13 +35,14 @@ import { useForm } from "@tanstack/react-form";
 import { useDebouncedCallback } from "@tanstack/react-pacer";
 import Color from "color";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useTranslations } from "next-intl";
 import { type ComponentProps, useEffect, useId, useRef, useState } from "react";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { CompetitorLogoPreview } from "@/components/geo/competitor-logo-preview";
 import { COMPETITOR_SWATCHES } from "@/constants/charts";
 import { useGeoCompetitorsDb } from "@/lib/hooks/use-geo-db";
+import { useCompanyLogo } from "@/lib/hooks/use-onboarding";
 import { cn } from "@/lib/utils";
 import type { CompetitorEditFormProps } from "@/types/geo";
 
@@ -243,6 +244,13 @@ function CompetitorSynonymsField({
                 }}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={(event) => {
+                  if (
+                    event.nativeEvent.isComposing ||
+                    event.nativeEvent.keyCode === 229
+                  ) {
+                    return;
+                  }
+                  // Modified Enter must commit the draft, not submit without it.
                   if (event.key === "Enter") {
                     event.preventDefault();
                     commitDraft();
@@ -286,6 +294,7 @@ export function CompetitorEditForm({
   organizationId,
   competitor,
   initialName,
+  initialDomain,
   onDone,
   onCancel,
   onImportCsv,
@@ -304,7 +313,7 @@ export function CompetitorEditForm({
   const form = useForm({
     defaultValues: {
       name: competitor?.name ?? initialName ?? "",
-      website: competitor?.domain ?? "",
+      website: competitor?.domain ?? initialDomain ?? "",
       synonyms: competitor?.synonyms ?? [],
       kind: competitor?.kind ?? ("direct" as GeoCompetitorKind),
       color: competitor?.color ?? "",
@@ -324,6 +333,26 @@ export function CompetitorEditForm({
       onDone();
     },
   });
+
+  const lookupName =
+    competitor?.domain || initialDomain
+      ? null
+      : (competitor?.name ?? initialName)?.trim() || null;
+  const { data: lookup } = useCompanyLogo(null, lookupName);
+  const lookupDomain = lookup?.domain ?? null;
+  useEffect(() => {
+    if (!lookupDomain) {
+      return;
+    }
+    const websiteMeta = form.getFieldMeta("website");
+    if (websiteMeta?.isDirty || form.getFieldValue("website")) {
+      return;
+    }
+    if (form.getFieldValue("name").trim() !== lookupName) {
+      return;
+    }
+    form.setFieldValue("website", lookupDomain, { dontUpdateMeta: true });
+  }, [form, lookupDomain, lookupName]);
 
   const debouncedColorChange = useDebouncedCallback(
     (hex: string) => form.setFieldValue("color", hex),
@@ -511,7 +540,7 @@ export function CompetitorEditForm({
             {tCommon("cancel")}
           </Button>
         )}
-        <Button type="submit">
+        <Button data-dialog-confirm type="submit">
           {competitor ? tCommon("saveChanges") : tGeoShared("addCompetitor")}
         </Button>
       </div>

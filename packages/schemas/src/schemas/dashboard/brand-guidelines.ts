@@ -3,8 +3,12 @@ import "zod/compile";
 import * as z from "zod";
 
 import { BRAND_GUIDELINE_HEX_COLOR_REGEX } from "../../constants/dashboard/brand-guidelines";
+import {
+  BRAND_GUIDELINE_PDF_FILENAME_MAX_LENGTH,
+  BRAND_GUIDELINE_PDF_KEY_MAX_LENGTH,
+} from "../../constants/dashboard/upload";
 
-export const guidelineColorRoleSchema = z.enum([
+const guidelineColorRoleSchema = z.enum([
   "primary",
   "secondary",
   "accent",
@@ -14,14 +18,14 @@ export const guidelineColorRoleSchema = z.enum([
   "custom",
 ]);
 
-export const guidelineFontRoleSchema = z.enum([
+const guidelineFontRoleSchema = z.enum([
   "heading",
   "body",
   "button",
   "unknown",
 ]);
 
-export const guidelineTokenTypeSchema = z.enum([
+const guidelineTokenTypeSchema = z.enum([
   "spacing",
   "radius",
   "shadow",
@@ -29,11 +33,11 @@ export const guidelineTokenTypeSchema = z.enum([
   "unknown",
 ]);
 
-export const guidelineAssetKindSchema = z.enum(["logo", "wordmark"]);
+const guidelineAssetKindSchema = z.enum(["logo", "wordmark"]);
 
-export const guidelineAssetVariantSchema = z.enum(["light", "dark"]);
+const guidelineAssetVariantSchema = z.enum(["light", "dark"]);
 
-export const guidelineScreenshotKindSchema = z.enum([
+const guidelineScreenshotKindSchema = z.enum([
   "desktop_hero",
   "desktop_full_page",
   "mobile_hero",
@@ -92,6 +96,26 @@ export const createGuidelineColorSchema = z.object({
   lightValue: z.string().trim().min(1, "A light color is required").max(64),
   darkValue: z.string().trim().max(64).nullable().optional(),
   usage: optionalNullableText(240),
+});
+
+const guidelinePdfKeySchema = z
+  .string()
+  .min(1)
+  .max(BRAND_GUIDELINE_PDF_KEY_MAX_LENGTH)
+  .refine((value) => !value.includes("..") && !value.startsWith("/"), {
+    message: "Invalid object key",
+  });
+
+export const attachGuidelineSourcePdfSchema = z.object({
+  key: guidelinePdfKeySchema,
+  filename: z
+    .string()
+    .trim()
+    .min(1)
+    .max(BRAND_GUIDELINE_PDF_FILENAME_MAX_LENGTH)
+    .refine((value) => value.toLowerCase().endsWith(".pdf"), {
+      message: "Brand guideline file must be a PDF",
+    }),
 });
 
 export const createGuidelineAssetSchema = z.object({

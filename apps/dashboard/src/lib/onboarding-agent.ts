@@ -7,6 +7,7 @@ import {
   createSlackConnectChannelWithInvite,
   hasSlackConnectConfigured,
 } from "@notra/ai/integrations/slack";
+import { logError } from "@notra/ai/utils/server-log";
 import { buildExternalChannelName } from "@notra/ai/utils/slack";
 import { db } from "@notra/db/drizzle";
 import { brandSettings, organizations } from "@notra/db/schema";
@@ -15,7 +16,6 @@ import {
   OnboardingAgentCompensationError,
   OnboardingAgentTriggerError,
 } from "@notra/schemas/dashboard/onboarding-agent";
-import { getVercelOidcToken } from "@vercel/oidc";
 import { and, eq, isNull, lt, or } from "drizzle-orm";
 import { Effect } from "effect";
 import { Client } from "eve/client";
@@ -66,6 +66,7 @@ async function createEveAgentClient(
     redirect: "error" as const,
   };
 
+  const { getVercelOidcToken } = await import("@vercel/oidc");
   const token = await getVercelOidcToken().catch(() => null);
   if (token) {
     return new Client({
@@ -183,10 +184,11 @@ export async function startOnboardingAgentSession({
 
 export async function sendOnboardingSlackInvite({
   email,
-  organizationName,
 }: OnboardingSlackInviteInput): Promise<OnboardingSlackInviteResult> {
   const normalizedEmail = email.trim().toLowerCase();
+  const domain = normalizedEmail.split("@").at(-1);
   if (
+    !domain ||
     !hasSlackConnectConfigured() ||
     isFreeEmail(normalizedEmail) ||
     isEduEmail(normalizedEmail)
@@ -195,18 +197,14 @@ export async function sendOnboardingSlackInvite({
   }
 
   try {
-    const channelName = buildExternalChannelName(organizationName);
     const result = await createSlackConnectChannelWithInvite({
-      channelName,
-      email,
+      channelName: buildExternalChannelName(domain),
+      email: normalizedEmail,
       externalLimited: false,
     });
     return { channelId: result.channelId, invited: true };
   } catch (error) {
-    console.error(
-      `[Onboarding Agent] Slack Connect invite failed for ${organizationName}`,
-      error
-    );
+    logError("[Onboarding] Slack Connect invite failed", error, { domain });
     return { invited: false };
   }
 }

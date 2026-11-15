@@ -19,7 +19,7 @@ export function CtaBanner({
   signupSource = CTA_BANNER_SIGNUP_SOURCE,
 }: CtaBannerProps) {
   return (
-    <div className="relative mx-auto flex min-h-[27.4375rem] w-full max-w-[87rem] shrink-0 items-center justify-center overflow-clip rounded-[1.5625rem] bg-[#C8B2EE40] px-6 py-16 antialiased dark:bg-[#231d3a]">
+    <div className="relative mx-auto flex w-full max-w-[87rem] shrink-0 items-center justify-center overflow-clip rounded-[1.5625rem] bg-[#C8B2EE40] px-6 py-12 antialiased sm:min-h-[27.4375rem] sm:py-16 dark:bg-[#231d3a]">
       <DeferredDithering
         className="absolute -top-66.25 left-[-5.368rem] h-264.5 w-403.25"
         colorBack="#00000000"
@@ -30,13 +30,13 @@ export function CtaBanner({
         speed={0.7}
         type="4x4"
       />
-      <div className="relative flex w-full max-w-[53.3125rem] flex-col items-center gap-10.5">
+      <div className="relative flex w-full max-w-[53.3125rem] flex-col items-center gap-8 sm:gap-10.5">
         <div className="flex flex-col items-center gap-3">
           <div className="flex flex-col items-center gap-4.5">
-            <h2 className="font-display max-w-[46.625rem] text-center text-[2.5rem] leading-[114%] font-medium tracking-[-0.125rem] text-balance text-[#1E1E1E] sm:text-[3rem] lg:text-[4rem] dark:text-white">
+            <h2 className="font-display max-w-[46.625rem] text-center text-[2.25rem] leading-[110%] font-medium tracking-[-0.0625rem] text-balance text-[#1E1E1E] sm:text-[3rem] sm:tracking-[-0.125rem] lg:text-[4rem] dark:text-white">
               {heading}
             </h2>
-            <p className="max-w-[33.5rem] text-center font-sans text-lg/5.5 font-medium tracking-[-0.03125rem] text-balance text-[#1E1E1EE6] dark:text-white/85">
+            <p className="max-w-[33.5rem] text-center font-sans text-base/6 font-medium tracking-[-0.03125rem] text-balance text-[#1E1E1EE6] sm:text-lg/5.5 dark:text-white/85">
               {subcopy}
             </p>
           </div>

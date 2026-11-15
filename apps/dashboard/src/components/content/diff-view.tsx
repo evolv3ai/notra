@@ -1,15 +1,28 @@
 "use client";
 
-import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
-import ReactDiffViewer, { DiffMethod } from "react-diff-viewer-continued";
+import ReactDiffViewerImport, { DiffMethod } from "react-diff-viewer-continued";
+import { useTranslations } from "use-intl";
+
+const ReactDiffViewer = ((
+  ReactDiffViewerImport as unknown as { default?: typeof ReactDiffViewerImport }
+).default ?? ReactDiffViewerImport) as typeof ReactDiffViewerImport;
 
 interface DiffViewProps {
   originalMarkdown: string;
   currentMarkdown: string;
+  originalTitle?: string;
+  currentTitle?: string;
+  compareBy?: "words" | "lines";
 }
 
-export function DiffView({ originalMarkdown, currentMarkdown }: DiffViewProps) {
+export function DiffView({
+  originalMarkdown,
+  currentMarkdown,
+  originalTitle,
+  currentTitle,
+  compareBy = "words",
+}: DiffViewProps) {
   const t = useTranslations("content.detail.diff");
   const tCommon = useTranslations("common");
   const { resolvedTheme } = useTheme();
@@ -30,10 +43,11 @@ export function DiffView({ originalMarkdown, currentMarkdown }: DiffViewProps) {
     <div className="overflow-auto rounded-lg text-sm">
       <ReactDiffViewer
         compareMethod={DiffMethod.WORDS}
-        leftTitle={t("original")}
+        disableWordDiff={compareBy === "lines"}
+        leftTitle={originalTitle ?? t("original")}
         newValue={currentMarkdown}
         oldValue={originalMarkdown}
-        rightTitle={tCommon("labels.current")}
+        rightTitle={currentTitle ?? tCommon("labels.current")}
         splitView={true}
         styles={{
           variables: {

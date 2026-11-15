@@ -4,6 +4,7 @@ import {
   RepeatIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { formatCompactNumber } from "@notra/utils/format-compact-number";
 
 interface MockTweet {
   authorName: string;
@@ -17,27 +18,18 @@ interface MockTweet {
   platforms: string[];
 }
 
-const TRAILING_ZERO_REGEX = /\.0$/;
-
 const MOCK_TWEET: MockTweet = {
   authorName: "Dominik Koch",
   authorHandle: "dominikkoch",
   authorAvatar: "https://avatars.githubusercontent.com/u/68947960?s=200&v=4",
   content:
-    "Just shipped our biggest update yet. Real-time collab, revamped dashboard, and 3x faster sync.\n\nHonestly can't believe how far we've come in 6 months.",
+    "Just shipped our biggest update yet. Real-time collab, revamped dashboard and 3x faster sync.\n\nHonestly can't believe how far we've come in 6 months.",
   likes: 847,
   retweets: 92,
   replies: 31,
   date: "Mar 8",
   platforms: ["Twitter"],
 };
-
-function formatCompactNumber(num: number): string {
-  if (num >= 1000) {
-    return `${(num / 1000).toFixed(1).replace(TRAILING_ZERO_REGEX, "")}K`;
-  }
-  return String(num);
-}
 
 function MockReferenceCard({ tweet }: { tweet: MockTweet }) {
   return (
@@ -88,15 +80,15 @@ function MockReferenceCard({ tweet }: { tweet: MockTweet }) {
         <div className="flex items-center gap-3 pt-0.5">
           <span className="text-muted-foreground flex items-center gap-1 text-xs">
             <HugeiconsIcon className="size-3.5" icon={Comment01Icon} />
-            {formatCompactNumber(tweet.replies)}
+            {formatCompactNumber(tweet.replies, "en-US", 1)}
           </span>
           <span className="text-muted-foreground flex items-center gap-1 text-xs">
             <HugeiconsIcon className="size-3.5" icon={RepeatIcon} />
-            {formatCompactNumber(tweet.retweets)}
+            {formatCompactNumber(tweet.retweets, "en-US", 1)}
           </span>
           <span className="text-muted-foreground flex items-center gap-1 text-xs">
             <HugeiconsIcon className="size-3.5" icon={FavouriteIcon} />
-            {formatCompactNumber(tweet.likes)}
+            {formatCompactNumber(tweet.likes, "en-US", 1)}
           </span>
         </div>
       </div>

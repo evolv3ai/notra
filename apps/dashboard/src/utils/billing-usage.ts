@@ -1,6 +1,6 @@
 import { FEATURES } from "@notra/ai/billing/features";
 
-import { USAGE_FEATURE_ORDER } from "@/constants/billing";
+import { USAGE_METERED_FEATURES } from "@/constants/billing";
 import type {
   BalanceRecord,
   FeatureData,
@@ -18,30 +18,6 @@ function isLogRetentionFeature(featureId: string) {
     featureId === FEATURES.LOG_RETENTION_7_DAYS ||
     featureId === FEATURES.LOG_RETENTION_14_DAYS ||
     featureId === FEATURES.LOG_RETENTION_30_DAYS
-  );
-}
-
-function isHiddenFromFeatureList(featureId: string) {
-  return (
-    featureId === FEATURES.AI_ANSWERS ||
-    featureId === FEATURES.AI_CREDITS ||
-    // Both credit balances are cents, which the count rows would misread.
-    featureId === FEATURES.PULL_REQUEST_CREDITS ||
-    featureId === FEATURES.ZDR ||
-    isLogRetentionFeature(featureId)
-  );
-}
-
-function usageFeatureOrder(featureId: string) {
-  const index = USAGE_FEATURE_ORDER.indexOf(featureId);
-  return index === -1 ? USAGE_FEATURE_ORDER.length : index;
-}
-
-function hasRetentionEntitlement(feature: FeatureData | undefined) {
-  return (
-    feature?.unlimited === true ||
-    (feature?.included ?? 0) > 0 ||
-    (feature?.balance ?? 0) > 0
   );
 }
 
@@ -71,43 +47,13 @@ export function featuresFromBalances(
   return features;
 }
 
-export function limitedUsageFeatures(features: readonly FeatureData[]) {
-  return features
-    .filter(
-      (feature) =>
-        !feature.unlimited &&
-        feature.included !== null &&
-        !isHiddenFromFeatureList(feature.id)
-    )
-    .toSorted(
-      (left, right) => usageFeatureOrder(left.id) - usageFeatureOrder(right.id)
-    );
-}
-
-export function unlimitedUsageFeatures(features: readonly FeatureData[]) {
-  return features
-    .filter(
-      (feature) => feature.unlimited && !isHiddenFromFeatureList(feature.id)
-    )
-    .toSorted(
-      (left, right) => usageFeatureOrder(left.id) - usageFeatureOrder(right.id)
-    );
-}
-
-export function usageRetentionDays(features: readonly FeatureData[]): number {
-  const fourteen = features.find(
-    (feature) => feature.id === FEATURES.LOG_RETENTION_14_DAYS
-  );
-  const thirty = features.find(
-    (feature) => feature.id === FEATURES.LOG_RETENTION_30_DAYS
-  );
-  if (hasRetentionEntitlement(thirty)) {
-    return 30;
-  }
-  if (hasRetentionEntitlement(fourteen)) {
-    return 14;
-  }
-  return 7;
+export function meteredUsageFeatures(features: readonly FeatureData[]) {
+  return USAGE_METERED_FEATURES.flatMap((id) => {
+    const feature = features.find((candidate) => candidate.id === id);
+    return feature && !feature.unlimited && feature.included !== null
+      ? [feature]
+      : [];
+  });
 }
 
 export function usageBreakdownPoints(

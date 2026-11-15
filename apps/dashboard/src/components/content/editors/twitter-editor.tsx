@@ -7,12 +7,13 @@ import {
   TabsTrigger,
 } from "@notra/ui/components/ui/tabs";
 import { TitleCard } from "@notra/ui/components/ui/title-card";
-import { useTranslations } from "next-intl";
 import { parseAsStringLiteral, useQueryState } from "nuqs";
 import { useEffect, useRef } from "react";
+import { useTranslations } from "use-intl";
 
 import { TwitterPost } from "@/components/twitter-post";
 import { useSelectedSocialAccount } from "@/lib/hooks/use-selected-social-account";
+import { resolveOrganizationLogo } from "@/utils/avatar";
 import { twitterAuthorFromAccount } from "@/utils/twitter";
 
 import type { ContentEditorProps } from "./types";
@@ -51,7 +52,7 @@ export function TwitterEditor({
     ? twitterAuthorFromAccount(selectedAccount)
     : {
         name: organization?.name ?? tCommon("labels.yourName"),
-        avatar: organization?.logo ?? undefined,
+        avatar: resolveOrganizationLogo(organization?.logo),
         handle: (organization?.name ?? "yourname")
           .toLowerCase()
           .replace(/\s+/g, ""),
@@ -98,6 +99,9 @@ export function TwitterEditor({
               }
             }}
             onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) {
+                return;
+              }
               if (e.key === "Enter") {
                 e.preventDefault();
                 titleInputRef.current?.blur();

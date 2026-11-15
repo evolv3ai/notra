@@ -14,6 +14,7 @@ import { geoDb } from "./effect";
 import { GeoDatabaseError } from "./errors";
 import { lockGeoProjectInTransaction } from "./lock";
 import { toTrackedPrompt } from "./mappers";
+import { toggleGeoPrompt } from "./programs";
 import { requireGeoProject } from "./projects";
 import { promptKey } from "./prompt-key";
 
@@ -26,7 +27,8 @@ export const listSuggestions = Effect.fn("geo.suggestions.list")(function* (
       where: and(
         eq(geoPromptSuggestions.organizationId, input.organizationId),
         eq(geoPromptSuggestions.projectId, scope.projectId),
-        eq(geoPromptSuggestions.status, "pending")
+        eq(geoPromptSuggestions.status, "pending"),
+        eq(geoPromptSuggestions.source, "search_console")
       ),
       orderBy: [desc(geoPromptSuggestions.createdAt)],
     })
@@ -36,14 +38,13 @@ export const listSuggestions = Effect.fn("geo.suggestions.list")(function* (
       id: row.id,
       prompt: row.prompt,
       title: row.title,
-      source: row.source,
+      source: "search_console" as const,
       keywords: row.sourceKeywords,
       createdAt: row.createdAt.toISOString(),
     })),
   };
 });
 
-/** SQL-only transaction adapter. Project lock serializes normalized prompt reuse. */
 async function acceptSuggestionInTx(
   tx: DbTransaction,
   organizationId: string,
@@ -88,15 +89,105 @@ async function acceptSuggestionInTx(
   return toTrackedPrompt(prompt);
 }
 
+/** Autopilot's pending changes to tracked prompts, e.g. pausing a dead prompt. */
+export const listAutopilotPromptSuggestions = Effect.fn(
+  "geo.suggestions.listAutopilot"
+)(function* (input: GeoScopeInput) {
+  const scope = yield* requireGeoProject(input);
+  const rows = yield* geoDb("list autopilot suggestions", () =>
+    db.query.geoPromptSuggestions.findMany({
+      where: and(
+        eq(geoPromptSuggestions.organizationId, input.organizationId),
+        eq(geoPromptSuggestions.projectId, scope.projectId),
+        eq(geoPromptSuggestions.status, "pending"),
+        eq(geoPromptSuggestions.source, "autopilot")
+      ),
+      orderBy: [desc(geoPromptSuggestions.createdAt)],
+    })
+  );
+  return {
+    suggestions: rows.map((row) => ({
+      id: row.id,
+      prompt: row.prompt,
+      action: row.action,
+      targetPromptId: row.targetPromptId,
+      reason: row.reason,
+      reasonData: row.reasonData,
+      createdAt: row.createdAt.toISOString(),
+    })),
+  };
+});
+
+/**
+ * Pause suggestions act on an existing prompt instead of adding one. The
+ * suggestion is claimed first (pending → accepted), so a parallel "Keep"
+ * either wins or loses cleanly; a failed pause puts it back.
+ */
+const acceptPauseSuggestion = Effect.fn("geo.suggestions.acceptPause")(
+  function* (input: GeoSuggestionInput, projectId: string) {
+    const scoped = and(
+      eq(geoPromptSuggestions.id, input.suggestionId),
+      eq(geoPromptSuggestions.organizationId, input.organizationId),
+      eq(geoPromptSuggestions.projectId, projectId)
+    );
+    const [suggestion] = yield* geoDb("claim pause suggestion", () =>
+      db
+        .update(geoPromptSuggestions)
+        .set({ status: "accepted" })
+        .where(
+          and(
+            scoped,
+            eq(geoPromptSuggestions.status, "pending"),
+            eq(geoPromptSuggestions.action, "pause")
+          )
+        )
+        .returning()
+    );
+    if (!suggestion) {
+      return null;
+    }
+    const targetPromptId = suggestion.targetPromptId;
+    const prompt = targetPromptId
+      ? yield* toggleGeoPrompt(input, targetPromptId, false).pipe(
+          // The prompt was deleted in the meantime: nothing left to pause.
+          Effect.catchTag("GeoPromptNotFoundError", () => Effect.succeed(null)),
+          Effect.tapError(() =>
+            geoDb("release pause suggestion", () =>
+              db
+                .update(geoPromptSuggestions)
+                .set({ status: "pending" })
+                .where(scoped)
+            )
+          )
+        )
+      : null;
+    if (!prompt) {
+      yield* geoDb("retire pause suggestion", () =>
+        db
+          .update(geoPromptSuggestions)
+          .set({ status: "dismissed" })
+          .where(scoped)
+      );
+      return yield* Effect.fail(
+        new GeoSuggestionNotFoundError({ suggestionId: input.suggestionId })
+      );
+    }
+    return { projectId, prompt, suggestion };
+  }
+);
+
 export const acceptSuggestion = Effect.fn("geo.suggestions.accept")(function* (
   input: GeoSuggestionInput
 ) {
   const { projectId } = yield* requireGeoProject(input);
+  const paused = yield* acceptPauseSuggestion(input, projectId);
+  if (paused) {
+    return paused;
+  }
   return yield* Effect.tryPromise({
     try: () =>
       db.transaction(async (tx) => {
         await lockGeoProjectInTransaction(tx, projectId);
-        // Read pending state under a row lock, so dismiss/accept cannot both win.
         const [suggestion] = await tx
           .select()
           .from(geoPromptSuggestions)
@@ -138,7 +229,8 @@ export const acceptAllSuggestions = Effect.fn("geo.suggestions.acceptAll")(
         where: and(
           eq(geoPromptSuggestions.organizationId, input.organizationId),
           eq(geoPromptSuggestions.projectId, projectId),
-          eq(geoPromptSuggestions.status, "pending")
+          eq(geoPromptSuggestions.status, "pending"),
+          eq(geoPromptSuggestions.source, "search_console")
         ),
       })
     );
@@ -155,7 +247,10 @@ export const acceptAllSuggestions = Effect.fn("geo.suggestions.acceptAll")(
             and(
               eq(geoPromptSuggestions.organizationId, input.organizationId),
               eq(geoPromptSuggestions.projectId, projectId),
-              eq(geoPromptSuggestions.status, "pending")
+              eq(geoPromptSuggestions.status, "pending"),
+              // "Track all" covers the Search Console list; Autopilot's
+              // prompt changes are always accepted one by one.
+              eq(geoPromptSuggestions.source, "search_console")
             )
           )
           .orderBy(

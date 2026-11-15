@@ -87,6 +87,19 @@ export function collectContentChatToolOutputEffects({
   }
 
   for (const part of lastAssistantMessage.parts) {
+    if (part.type === "tool-updatePostDetails") {
+      const detailsPart = part as { toolCallId: string; state: string };
+      if (
+        detailsPart.state === "output-available" &&
+        !processedToolCalls.has(detailsPart.toolCallId)
+      ) {
+        effects.push({
+          type: "invalidate-content",
+          toolCallId: detailsPart.toolCallId,
+        });
+      }
+      continue;
+    }
     if (part.type !== "tool-editMarkdown" && part.type !== "tool-reviseImage") {
       continue;
     }

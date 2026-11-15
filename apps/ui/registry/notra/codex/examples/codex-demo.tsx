@@ -16,12 +16,10 @@ import type { CodexChatTurn } from "../types/codex";
 
 const PARAGRAPH_SEPARATOR = "\n\n";
 
-/** How close to the bottom still counts as following the transcript. */
 const FOLLOW_THRESHOLD_PX = 48;
 
 const CODE_PATTERN = /(`[^`]+`)/;
 
-/** Renders one paragraph, turning `backticks` into code. */
 const CodexInline = ({ text }: { text: string }) => {
   let offset = 0;
   return text.split(CODE_PATTERN).map((part) => {
@@ -69,10 +67,6 @@ export default function CodexDemo() {
   const terminalRef = useRef<HTMLDivElement>(null);
   const followRef = useRef(false);
 
-  // Follow new output only while the reader sits at the bottom, so
-  // scrolling up to reread a turn is not undone by the next streamed word.
-  // Sending always jumps back down. Scrolling the viewport directly (not
-  // scrollIntoView) keeps the host page still.
   const viewportOf = () =>
     terminalRef.current?.querySelector<HTMLElement>(
       '[data-slot="scroll-area-viewport"]'

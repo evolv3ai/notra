@@ -1,0 +1,269 @@
+---
+title: "blog.json reference"
+sidebarTitle: "blog.json"
+description: "Lists the settings you can put in blog.json, along with their types, limits and defaults."
+authors:
+  - handle: jan
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/sites/reference/blog-json
+  type: reference
+  applies_to:
+    - notra
+  language: en
+  status: stable
+---
+
+`blog.json` sits at the root of your site folder. Every setting is optional except `name`, and the whole file is optional too, so without it the site builds with the defaults below and the site name from the dashboard.
+
+## JSON Schema
+
+Start the file with `$schema` to get autocomplete and inline errors in VS Code, Cursor, Zed and JetBrains editors:
+
+```json blog.json
+{
+  "$schema": "https://usenotra.com/schemas/blog.json",
+  "name": "Acme"
+}
+```
+
+Notra publishes the schema at [usenotra.com/schemas/blog.json](https://usenotra.com/schemas/blog.json) (JSON Schema draft 2020-12), and you can also use it to validate the file in CI or generate types:
+
+```bash
+curl -s https://usenotra.com/schemas/blog.json | npx json-schema-to-typescript > blog-config.d.ts
+```
+
+## Validation
+
+Every build checks `blog.json` before it builds anything, and mistakes stop the build, with the deployment log and the GitHub check naming the setting and what to change:
+
+```text
+✖ blog.json  blog.layout: Invalid option: expected one of "grid"|"list"|"magazine"|"cards"
+```
+
+- Notra ignores an unknown top-level setting with a warning that suggests the closest match, like `Unknown setting "navBar" is ignored. Did you mean "navbar"?`.
+- Unknown keys inside `authors`, `integrations` and `security` stop the build, because a typo there would turn something off without any warning.
+- Notra ignores other unknown nested keys.
+
+The tables below use these shared formats:
+
+| Format | Rule |
+| --- | --- |
+| Color | Hex with 3 or 6 digits, like `#0D9373` |
+| Path | A file in your site, like `/images/logo.svg`, or a full URL |
+| Link | A path starting with `/`, an `http(s)://` URL or a `mailto:` address |
+| Icon | A [Lucide](https://lucide.dev/icons) icon name from the [list below](#icons), like `book-open` |
+
+## Icons
+
+Notra bundles a set of Lucide icons, and a name outside it is ignored: a link shows without an icon, and a [page action](/sites/customize/navigation#page-actions) falls back to `arrow-up-right`. You can use `arrow-left`, `arrow-right`, `arrow-up-right`, `bell`, `book`, `book-marked`, `book-open`, `bookmark`, `box`, `briefcase`, `building-2`, `calendar`, `chart-line`, `check`, `chevron-down`, `circle-check`, `circle-help`, `clock`, `close`, `cloud`, `code`, `compass`, `copy`, `cpu`, `credit-card`, `database`, `dollar-sign`, `download`, `external-link`, `file-text`, `flag`, `gift`, `git-branch`, `github`, `globe`, `graduation-cap`, `handshake`, `headphones`, `heart`, `house`, `image`, `info`, `layers`, `layout-dashboard`, `library`, `life-buoy`, `lightbulb`, `link`, `linkedin`, `lock`, `mail`, `map`, `megaphone`, `menu`, `message-circle`, `message-square`, `mic`, `monitor`, `moon`, `newspaper`, `notebook-pen`, `octagon-alert`, `package`, `palette`, `pen-line`, `play`, `plus`, `puzzle`, `rocket`, `rss`, `search`, `settings`, `shield`, `sparkles`, `star`, `sticky-note`, `sun`, `tag`, `terminal`, `text-align-start`, `triangle-alert`, `trophy`, `user`, `users`, `video`, `wrench`, `x`, `youtube`, `zap`.
+
+## Site
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `$schema` | string | | The JSON Schema URL, for your editor |
+| `name` | string, 1 to 80 characters | **Required** | Site name in the header, titles, share images and `llms.txt` |
+| `description` | string, up to 300 characters | | Site description, and the fallback for section descriptions |
+| `theme` | `"notra"` | `"notra"` | The only theme so far |
+| `logo` | Path, or `{ light, dark, href? }` | | Header logo, and `href` sets where it links to. See [details](/sites/customize/navigation#logo-and-favicon) |
+| `favicon` | Path, or `{ light, dark }` | | Browser tab icon |
+
+## Design
+
+See [Design and CSS](/sites/customize/design).
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `colors.primary` | Color | `#8B5CF6` | Links, highlights and active states |
+| `colors.light` | Color | `primary` | The accent in dark mode |
+| `colors.dark` | Color | `primary` | Button color |
+| `appearance` | `"light" \| "dark" \| "system"` or `{ default, strict, storageKey }` | `"system"` | Starting mode, and `strict: true` hides the toggle |
+| `appearance.storageKey` | Letters, digits, `.`, `_` and `-`, up to 64 characters | `"notra-theme"` | The `localStorage` key that stores the reader's choice. See [details](/sites/customize/design#light-and-dark-mode) |
+| `fonts.family` | string | Inter | A Google Font, or the name of your own font with `source` |
+| `fonts.weight` | 100 to 900 | `400` | Body text weight |
+| `fonts.source` | Path | | Your own font file |
+| `fonts.format` | `"woff2" \| "woff"` | `"woff2"` | Format of `source` |
+| `fonts.heading`, `fonts.body` | `{ family, weight?, source?, format? }` | | A separate font for headings or body text, where `heading.weight` sets heading weight (default `500`) |
+| `background.decoration` | `"none" \| "grid" \| "dots" \| "gradient"` | `"none"` | Page decoration |
+| `background.color` | `{ light?, dark? }` Colors | | Page color per mode |
+| `background.image` | Path, or `{ light, dark }` | | Page background image |
+| `styling.codeblocks` | `"system" \| "dark"`, a Shiki theme, or `{ light, dark }` | `"system"` | [Syntax theme](/sites/components/code#syntax-theme) |
+| `styling.smartQuotes` | boolean | `true` | Turn `"`, `'`, `--` and `...` into typographic quotes, dashes and ellipses. See [details](/sites/customize/design#smart-quotes) |
+| `layout.width` | 40 to 120 or `"full"` | `72` | Widest content column, in rem |
+
+## Navigation
+
+See [Logo, navigation and banner](/sites/customize/navigation).
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `navbar.areas` | Up to 2 of `{ area: "blog" \| "changelog", label? }`, each area once | Automatic | Choose area link order and labels; omitted areas are hidden, `[]` hides both, and unmounted areas are skipped |
+| `navbar.links` | Up to 8 of `{ label, href, icon? }`, `{ type, href, label? }` or `{ label, icon?, items }` | `[]` | Header links or dropdowns with 1–8 non-nested links; `type` is `github`, `discord`, `x`, `linkedin`, `youtube` or `slack`; internal links show their active state |
+| `navbar.primary` | `{ type, href }` | | Secondary button with a platform icon. Mintlify's `{ type: "button", label, href }` is read as `navbar.cta` with a warning |
+| `navbar.cta` | `{ label, href }` | | Main call to action |
+| `footer.links` | Up to 16 links, or up to 6 `{ header?, items }` columns with 1 to 12 links | `[]` | Footer links |
+| `footer.socials` | Object of platform → URL | `{}` | `x`, `github`, `linkedin`, `youtube`, `discord`, `slack`, `instagram`, `facebook`, `bluesky`, `threads`, `reddit`, `medium`, `telegram`, `hacker-news`, `website` |
+| `banner.content` | Markdown, 1 to 300 characters | **Required** in `banner` | One line across the top of every page |
+| `banner.type` | `"info" \| "warning" \| "critical"` | `"info"` | Banner color |
+| `banner.color` | Color, or `{ light, dark }` | | Your own banner color |
+| `banner.dismissible` | boolean | `false` | Show a close button |
+| `contextual.options` | Up to 12 of `copy`, `view`, `chatgpt`, `claude`, `t3chat`, `perplexity`, `grok` or `{ title, href, description?, icon? }` | All built-ins except `t3chat` | [Page actions](/sites/customize/navigation#page-actions) on blog posts and opted-in changelog entries; `[]` hides all actions |
+| `contextual.display` | `"meta" \| "none"` | `"meta"` | `meta` shows actions below the page heading; `none` hides them in both areas |
+
+Link labels are up to 60 characters.
+
+## Blog
+
+See [Layouts](/sites/customize/layouts#blog).
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `blog.title` | string, 1 to 120 characters | `"Blog"` | Index heading |
+| `blog.description` | string, up to 400 characters | Site `description` | Line under the heading |
+| `blog.layout` | `"grid" \| "list" \| "magazine" \| "cards"` | `"grid"` | Index layout |
+| `blog.hero.style` | `"wash" \| "plain" \| "image" \| "none"` | `"plain"` | Index hero |
+| `blog.hero.eyebrow` | string, up to 60 characters | | Line above the heading |
+| `blog.hero.image` | Path | | Image for the `image` style |
+| `blog.featured` | `"latest" \| "none"` or up to 6 post paths | `"none"` | Posts pinned on top. With `"none"`, posts with `featured: true` |
+| `blog.categories` | `boolean` or up to 12 tag names | `false` | [Category bar](/sites/customize/layouts#category-bar) above the posts: `true` for every tag, a list for these tags in this order |
+| `blog.search` | boolean | `false` | Search post titles, summaries and tags; combines with the category filter |
+| `blog.card.image` | `boolean \| "auto"` | `"auto"` | Cover image on cards. `"auto"` shows covers, with placeholders for the rest, when a post on the page has one |
+| `blog.card.excerpt` | boolean | `true` | Summary on cards |
+| `blog.card.author` | boolean | `true` | First author on cards |
+| `blog.card.date` | boolean | `true` | Date on cards |
+| `blog.card.readingTime` | boolean | `false` | Reading time on cards |
+| `blog.card.style` | `"auto" \| "tile" \| "plain"` | `"auto"` | Filled tiles in `grid` and `magazine`. `auto` only for the first row of a `grid` without filters or featured posts. See [Cards](/sites/customize/layouts#cards) |
+| `blog.authorPage` | `"inline" \| "stacked"` | `"inline"` | Author page layout |
+| `blog.post.toc` | boolean | `true` | "On this page" |
+| `blog.post.authorCard` | boolean | `true` | Author list beside the post, or under the title |
+| `blog.post.readingTime` | boolean | `true` | Reading time next to the date |
+| `blog.post.pagination` | boolean | `true` | Previous and next post |
+| `blog.post.width` | `"wide" \| "narrow"` | `"wide"` | Post layout |
+| `blog.post.header` | `"stacked" \| "compact"` | `"stacked"` | Post header style. `compact` moves the authors into the sidebar |
+| `blog.post.cover` | boolean | `true` | The post's `image` above the text. Share images still use it |
+
+## Changelog
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `changelog.title` | string, 1 to 120 characters | `"Changelog"` | Index heading |
+| `changelog.description` | string, up to 400 characters | Site `description` | Line under the heading |
+| `changelog.layout` | `"timeline" \| "cards" \| "compact"` | `"timeline"` | Index layout |
+| `changelog.hero` | Same as `blog.hero` | `"plain"` | Index hero |
+| `changelog.pageActions` | boolean | `false` | Show the shared page-actions menu on individual changelog entries; uses `contextual` options |
+| `changelog.minimap` | boolean | `true` | Show the entry minimap on the left of the `timeline` changelog on wide screens |
+
+## Authors
+
+`authors` is an object that maps each author id to an author. Posts can also describe authors in their frontmatter. See [Authors](/sites/posts#authors).
+
+| Setting | Type | Description |
+| --- | --- | --- |
+| id | Lowercase letters, digits and dashes, 1 to 40 characters | Used in a post's `author` |
+| `name` | string, 1 to 80 characters, **required** | Display name |
+| `title` | string, up to 80 characters | Role, like "Engineer" |
+| `avatar` | `/path` or `https://` URL | Profile picture |
+| `bio` | string, up to 300 characters | Short bio on the author page |
+| `url`, `x`, `linkedin`, `github`, `youtube` | URL | Profile links |
+
+## SEO
+
+See [SEO, share images and redirects](/sites/customize/seo).
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `seo.metatags` | Object of name → value, with values up to 500 characters | `{}` | Extra `<meta>` tags |
+| `seo.indexing` | `"navigable" \| "all"` | `"navigable"` | `all` also indexes author and tag pages |
+| `seo.image` | `/path` or `https://` URL | Generated from the section title | Share image for pages without their own, like the section home, tag and author pages. See [Share images](/sites/customize/seo#share-images) |
+| `seo.imageAlt` | string, up to 200 characters | | Alt text for `seo.image` |
+| `seo.organization` | `{ name, legalName?, url?, logo?, sameAs? }` | From `name`, `logo` and `footer.socials` | The publisher for structured data, with up to 12 `sameAs` URLs |
+| `thumbnails.enabled` | boolean | `true` | Generated share images for posts and section home pages |
+| `thumbnails.appearance` | `"light" \| "dark"` | `"light"` | Share image colors |
+| `thumbnails.background` | Path to a PNG, JPEG or SVG | | Share image background |
+| `thumbnails.layout` | `"default" \| "author" \| "article"` | `"default"` | `author` shows logo, label, title, the first author and your domain, see [Share images](/sites/customize/seo#author-layout). `article` shows date, category, title, description and all authors, see [Article layout](/sites/customize/seo#article-layout) |
+| `thumbnails.label` | string, up to 40 characters | Section title | Top-right label in the `author` layout, category fallback in the `article` layout |
+| `errors.404.title` | string, up to 120 characters | "This page doesn't exist" | 404 heading |
+| `errors.404.description` | string, up to 300 characters | | 404 text |
+| `errors.404.redirect` | boolean | `false` | Send readers to the section home instead |
+| `metadata.timestamp` | boolean | `true` | Show "Updated" dates |
+| `metadata.dateFormat` | `"short" \| "long"` | `"short"` | Dates like "Oct 12, 2026" or "October 12, 2026" |
+| `markdown.instructions` | string of up to 2000 characters, or up to 20 strings of up to 500 characters each | | Instructions for AI agents in `llms.txt` and every Markdown page |
+
+## Redirects
+
+`redirects` is a list of up to 500 rules. See [Redirects](/sites/customize/seo#redirects).
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `source` | Path starting with `/` | **Required** | Full path on your domain, ending in `/*` to match everything below it |
+| `destination` | `/path` or `https://` URL | **Required** | Where to send readers, ending in `/*` to keep the rest of the path |
+| `permanent` | boolean | `true` | `308` when true, `307` when false |
+
+## Variables
+
+`variables` is an object that maps names to values, which you use as `{{ name }}` in posts. See [Variables](/sites/posts#variables).
+
+Names start with a letter and use letters, digits, `_` and `-`, up to 40 characters, and values are up to 500 characters. Variables also work in `description`, `banner.content`, `markdown.instructions` and the `title` and `description` of `blog` and `changelog`.
+
+## Integrations
+
+For step-by-step setup in the dashboard or repository, see [Analytics integrations](/sites/integrations/analytics/overview). Provider scripts run on the live production site only, after you publish and deploy the configuration. Drafts, previews and local development do not activate them.
+
+| Setting | Format |
+| --- | --- |
+| `integrations.databuddy.clientId` | Public Databuddy Client ID from your website's tracking code |
+| `integrations.databuddy.*` | Optional tracker options such as `trackWebVitals`, `trackErrors`, `samplingRate`, `skipPatterns`, `apiUrl` and `replay`. See [Databuddy](/sites/integrations/analytics/databuddy#options) for every option |
+| `integrations.ga4.measurementId` | Public Google Analytics 4 web stream Measurement ID, starting with `G-`, like `G-ABC123XYZ9` |
+| `integrations.plausible.domain` | Your domain as added in Plausible, like `acme.com` |
+| `integrations.plausible.server` | Optional self-hosted server hostname with an optional port, like `plausible.acme.com:8443`, without a protocol or path. Defaults to `plausible.io`; requests use HTTPS |
+| `integrations.posthog.apiKey` | Starts with `phc_` |
+| `integrations.posthog.apiHost` | An `https://` URL, with the default `https://us.i.posthog.com` |
+| `integrations.posthog.sessionRecording` | Boolean, defaults to `true`. Set to `false` to disable recording while keeping analytics |
+| `integrations.umami.websiteId` | Public Website ID as a UUID from Umami's Tracking code |
+| `integrations.umami.scriptUrl` | Optional full HTTPS script URL. Defaults to `https://cloud.umami.is/script.js`; supports self-hosted script paths and ports |
+| `integrations.c15t.backendURL` | Your Inth project URL or self-hosted c15t backend, as an `https://` URL. Turns on the cookie banner. See [c15t cookie banner](/sites/integrations/consent/c15t) for every `c15t` option |
+| `integrations.c15t.scripts` | Object that maps custom script paths, like `scripts/hotjar.js`, to `measurement`, `marketing`, `functionality` or `experience`. Listed scripts load only after the visitor allows that category |
+| `integrations.umami.hostUrl` | Optional HTTPS collection base URL, corresponding to `data-host-url`. Leave empty unless events should go to a different endpoint |
+
+## Security
+
+See [Content-Security-Policy](/sites/custom-scripts#content-security-policy).
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `security.contentSecurityPolicy` | boolean | `true` | Send a `Content-Security-Policy` header |
+| `security.allowedOrigins` | Up to 32 `https://` or `wss://` origins, `*.` wildcards allowed | `[]` | Extra hosts scripts may load from and connect to |
+| `security.webAssembly` | boolean | `false` | Let scripts compile WebAssembly, for runtimes like Rive. See [details](/sites/custom-scripts#webassembly) |
+
+## Full example
+
+```json blog.json
+{
+  "$schema": "https://usenotra.com/schemas/blog.json",
+  "name": "Acme",
+  "description": "Notes from the Acme team.",
+  "logo": { "light": "/images/logo.svg", "dark": "/images/logo-dark.svg", "href": "https://acme.com" },
+  "favicon": "/images/favicon.svg",
+  "colors": { "primary": "#0D9373", "light": "#55D799" },
+  "fonts": { "family": "Inter" },
+  "navbar": {
+    "links": [{ "label": "Docs", "href": "https://acme.com/docs" }],
+    "primary": { "type": "github", "href": "https://github.com/acme/acme" },
+    "cta": { "label": "Sign up", "href": "https://acme.com/signup" }
+  },
+  "footer": {
+    "links": [{ "label": "Privacy", "href": "https://acme.com/privacy" }],
+    "socials": { "x": "https://x.com/acme", "github": "https://github.com/acme" }
+  },
+  "blog": { "title": "Acme Blog", "layout": "magazine", "card": { "image": true } },
+  "changelog": { "title": "What's new", "layout": "timeline" },
+  "authors": {
+    "jan": { "name": "Jan Burzinski", "title": "Engineer", "avatar": "/images/team/jan.jpg" }
+  },
+  "variables": { "product": "Acme Flow" },
+  "redirects": [{ "source": "/blog/old-post", "destination": "/blog/new-post" }],
+  "integrations": { "plausible": { "domain": "acme.com" } }
+}
+```

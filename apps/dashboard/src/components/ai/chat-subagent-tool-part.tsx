@@ -10,15 +10,10 @@ import {
   getChatSubagentSteps,
 } from "@/utils/chat-subagents";
 
-/**
- * Renders a subagent tool call, such as the code researcher, with its own
- * tool calls nested below. Shared by the chat page and the agent sidebar.
- */
 export function ChatSubagentToolPart({
   part,
   isActive,
 }: ChatSubagentToolPartProps) {
-  // Preliminary outputs stream the subagent's steps while it still runs.
   const isPreliminary =
     part.state === "output-available" && part.preliminary === true;
   const output = part.state === "output-available" ? part.output : undefined;

@@ -21,8 +21,6 @@ import {
   listBrandIdentities,
   patchBrandIdentity,
 } from "../programs/brand-identities";
-import type { DbClient } from "../types/db";
-import { getOrganizationId } from "../utils/auth";
 import { isBrandAnalysisConfigured } from "../utils/brand-analysis";
 import {
   respondToBrandIdentityFailure,
@@ -31,7 +29,7 @@ import {
 } from "../utils/brand-identities";
 import { createOpenApiApp } from "../utils/openapi-app";
 import { errorResponse, rateLimitResponse } from "../utils/openapi-responses";
-import { getOrganizationResponse } from "../utils/organizations";
+import { resolveRequestOrganization } from "../utils/organizations";
 import { enforceRatelimit, RATE_LIMITS, ratelimit } from "../utils/ratelimit";
 import { getRedis } from "../utils/redis";
 
@@ -253,29 +251,12 @@ const deleteBrandIdentityRoute = createRoute({
   },
 });
 
-async function requireOrganization(
-  c: {
-    get: (key: "db") => DbClient;
-  },
-  orgId: string
-) {
-  const organization = await getOrganizationResponse(c.get("db"), orgId);
-  return organization ?? null;
-}
-
 brandIdentitiesRoutes.openapi(getBrandIdentitiesRoute, async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
   }
-
-  const organization = await requireOrganization(c, orgId);
-  if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
+  const { orgId, organization } = scope;
 
   const result = await runBrandIdentityProgram(
     listBrandIdentities({ db: c.get("db"), organizationId: orgId })
@@ -297,22 +278,15 @@ brandIdentitiesRoutes.openapi(getBrandIdentitiesRoute, async (c) => {
 });
 
 brandIdentitiesRoutes.openapi(createBrandIdentityRoute, async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
   }
+  const { orgId, organization } = scope;
 
   const body = c.req.valid("json");
   const runtimeEnv = c.env ?? {};
   const redis = getRedis(runtimeEnv);
-  const organization = await requireOrganization(c, orgId);
-
-  if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
 
   if (!redis || !isBrandAnalysisConfigured(runtimeEnv)) {
     return c.json({ error: "Brand analysis is unavailable" }, 503);
@@ -329,15 +303,9 @@ brandIdentitiesRoutes.openapi(createBrandIdentityRoute, async (c) => {
   );
 
   if (duplicateCheck._tag === "Failure") {
-    const response = respondToBrandIdentityFailure(c, duplicateCheck.failure);
-    if (response) {
-      return response;
-    }
-    throw duplicateCheck.failure;
+    return respondToBrandIdentityFailure(c, duplicateCheck.failure);
   }
 
-  // Charged immediately before the brand analysis workflow is queued: the 404,
-  // 503 and 409 above must not spend the caller's budget.
   const rateLimited = await enforceRatelimit(c, ratelimit.brandGeneration);
   if (rateLimited) {
     return rateLimited;
@@ -354,33 +322,22 @@ brandIdentitiesRoutes.openapi(createBrandIdentityRoute, async (c) => {
   );
 
   if (result._tag === "Failure") {
-    const response = respondToBrandIdentityFailure(c, result.failure);
-    if (response) {
-      return response;
-    }
-    throw result.failure;
+    return respondToBrandIdentityFailure(c, result.failure);
   }
 
   return c.json({ job: result.success.job, organization }, 202);
 });
 
 brandIdentitiesRoutes.openapi(getBrandAnalysisJobRoute, async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
   }
+  const { orgId, organization } = scope;
 
   const { jobId } = c.req.valid("param");
   const runtimeEnv = c.env ?? {};
   const redis = getRedis(runtimeEnv);
-  const organization = await requireOrganization(c, orgId);
-
-  if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
 
   if (!redis) {
     return c.json({ error: "Brand analysis is unavailable" }, 503);
@@ -406,20 +363,13 @@ brandIdentitiesRoutes.openapi(getBrandAnalysisJobRoute, async (c) => {
 });
 
 brandIdentitiesRoutes.openapi(getBrandIdentityRoute, async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
   }
+  const { orgId, organization } = scope;
 
   const { brandIdentityId } = c.req.valid("param");
-  const organization = await requireOrganization(c, orgId);
-
-  if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
 
   const result = await runBrandIdentityProgram(
     getBrandIdentity({
@@ -445,21 +395,14 @@ brandIdentitiesRoutes.openapi(getBrandIdentityRoute, async (c) => {
 });
 
 brandIdentitiesRoutes.openapi(patchBrandIdentityRoute, async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
   }
+  const { orgId, organization } = scope;
 
   const { brandIdentityId } = c.req.valid("param");
   const body = c.req.valid("json");
-  const organization = await requireOrganization(c, orgId);
-
-  if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
 
   const result = await runBrandIdentityProgram(
     patchBrandIdentity({
@@ -471,11 +414,7 @@ brandIdentitiesRoutes.openapi(patchBrandIdentityRoute, async (c) => {
   );
 
   if (result._tag === "Failure") {
-    const response = respondToBrandIdentityFailure(c, result.failure);
-    if (response) {
-      return response;
-    }
-    throw result.failure;
+    return respondToBrandIdentityFailure(c, result.failure);
   }
 
   return c.json(
@@ -488,21 +427,14 @@ brandIdentitiesRoutes.openapi(patchBrandIdentityRoute, async (c) => {
 });
 
 brandIdentitiesRoutes.openapi(deleteBrandIdentityRoute, async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
   }
+  const { orgId, organization } = scope;
 
   const { brandIdentityId } = c.req.valid("param");
   const runtimeEnv = c.env ?? {};
-  const organization = await requireOrganization(c, orgId);
-
-  if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
 
   const result = await runBrandIdentityProgram(
     deleteBrandIdentity({
@@ -514,11 +446,7 @@ brandIdentitiesRoutes.openapi(deleteBrandIdentityRoute, async (c) => {
   );
 
   if (result._tag === "Failure") {
-    const response = respondToBrandIdentityFailure(c, result.failure);
-    if (response) {
-      return response;
-    }
-    throw result.failure;
+    return respondToBrandIdentityFailure(c, result.failure);
   }
 
   return c.json(

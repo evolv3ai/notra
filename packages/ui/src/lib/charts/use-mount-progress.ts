@@ -16,7 +16,6 @@ export function useMountProgress(
     transitionRef.current = enterTransition;
   }, [enterTransition]);
 
-  // replayKey intentionally retriggers enter when motion settings change
   // biome-ignore lint/correctness/useExhaustiveDependencies: replayKey
   useEffect(() => {
     progress.set(0);

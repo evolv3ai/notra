@@ -167,6 +167,7 @@ export const contentGenerationJobSchema = z.object({
   workflowRunId: z.string().nullable(),
   postId: z.string().nullable(),
   error: z.string().nullable(),
+  errorCode: z.string().nullable().optional(),
   source: z.enum(["api", "dashboard"]).default("api"),
   createdAt: z.string(),
   updatedAt: z.string(),

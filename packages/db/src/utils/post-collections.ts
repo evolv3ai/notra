@@ -27,7 +27,7 @@ function ordinalSuffix(day: number) {
   }
 }
 
-export function getContentTypeLabel(contentType: string) {
+function getContentTypeLabel(contentType: string) {
   return (
     CONTENT_TYPE_LABELS[contentType] ??
     contentType
@@ -38,7 +38,7 @@ export function getContentTypeLabel(contentType: string) {
   );
 }
 
-export function formatPostCollectionDate(date: Date) {
+function formatPostCollectionDate(date: Date) {
   const month = date.toLocaleString("en-US", { month: "long" });
   const day = date.getDate();
   const year = date.getFullYear();

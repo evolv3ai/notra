@@ -6,8 +6,8 @@ import type {
   DeleteResourceResponse,
 } from "@notra/schemas/dashboard/integrations";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef } from "react";
+import { useTranslations } from "use-intl";
 
 import type {
   BrandSettings,
@@ -78,8 +78,6 @@ export function useBrandAnalysisProgress(
     enabled: !!organizationId,
     refetchInterval: (query) => {
       const progress = query.state.data?.progress;
-      // No data yet (still loading, or the last request failed): keep polling
-      // so a single transient failure cannot freeze the progress UI.
       if (!progress) {
         return INITIAL_POLL_INTERVAL_MS;
       }

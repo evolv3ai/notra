@@ -1,4 +1,3 @@
-import { GEO_PROMPT_FUNNEL_TOP_POSITION } from "@notra/geo-core/constants/geo";
 import { trackedPromptScanId } from "@notra/geo-core/geo/prompts";
 import type {
   GeoPresenceStatus,
@@ -12,58 +11,14 @@ import { GEO_PROMPT_FILTER_ALL } from "@notra/schemas/constants/dashboard/geo-pr
 
 import type {
   EngineFamilyPromptHit,
+  GeoLostPromptRow,
+  GeoPromptBrandCount,
   GeoPromptCoverage,
   GeoPromptTableFilters,
   GeoPromptTableRow,
 } from "@/types/geo";
 import { bestFuzzyScore, fuzzyMatches } from "@/utils/fuzzy";
-
-function promptMentionSets(results: readonly GeoPromptResultSummary[]): {
-  mentioned: Set<string>;
-  topRanked: Set<string>;
-} {
-  const mentioned = new Set<string>();
-  const topRanked = new Set<string>();
-  for (const result of results) {
-    if (!result.mentioned) {
-      continue;
-    }
-    mentioned.add(result.promptId);
-    if (
-      result.position !== null &&
-      result.position <= GEO_PROMPT_FUNNEL_TOP_POSITION
-    ) {
-      topRanked.add(result.promptId);
-    }
-  }
-  return { mentioned, topRanked };
-}
-
-export function promptCoverage(
-  promptCount: number,
-  results: readonly GeoPromptResultSummary[]
-): GeoPromptCoverage {
-  const { mentioned } = promptMentionSets(results);
-  if (promptCount <= 0) {
-    return { mentioned: mentioned.size, total: 0, rate: null };
-  }
-  return {
-    mentioned: mentioned.size,
-    total: promptCount,
-    rate: mentioned.size / promptCount,
-  };
-}
-
-export function promptCoverageInsight(coverage: GeoPromptCoverage): string {
-  if (coverage.rate === null) {
-    return "add prompts to scan";
-  }
-  if (coverage.mentioned === 0) {
-    return "no tracked prompts mentioned yet";
-  }
-  return `${coverage.mentioned} of ${coverage.total} tracked prompts`;
-}
-
+import { uniquePromptBrandNames } from "@/utils/geo-prompt-brands";
 const PRESENCE_SORT_VALUE: Record<GeoPresenceStatus, number> = {
   "training-data": 3,
   "retrieval-only": 2,
@@ -150,7 +105,7 @@ export function buildPromptTableRows(
     .map((entry) => entry.row);
 }
 
-export function bestMentionedResult(
+function bestMentionedResult(
   results: readonly GeoPromptResultSummary[]
 ): GeoPromptResultSummary | null {
   let best: GeoPromptResultSummary | null = null;
@@ -216,6 +171,47 @@ export function engineFamilyPromptHits(
   });
 }
 
+/**
+ * Share of the enabled tracked prompts whose latest answer on the engine family
+ * shows the brand. Paused or removed prompts drop out, and enabled prompts the
+ * engine has not answered yet count as not visible. Without a prompt list
+ * (`null`, e.g. design-system fixtures) the answered prompts stand in for it.
+ */
+export function engineFamilyPromptCoverage(
+  hits: readonly EngineFamilyPromptHit[],
+  trackedPrompts: readonly GeoTrackedPrompt[] | null
+): GeoPromptCoverage | null {
+  const isVisible = (hit: EngineFamilyPromptHit) =>
+    hit.mentioned || Boolean(hit.ownedSourceCited);
+  if (trackedPrompts === null) {
+    if (hits.length === 0) {
+      return null;
+    }
+    const visible = hits.filter(isVisible).length;
+    return {
+      mentioned: visible,
+      total: hits.length,
+      rate: visible / hits.length,
+    };
+  }
+  const enabledScanIds = new Set(
+    trackedPrompts
+      .filter((prompt) => prompt.enabled)
+      .map((prompt) => trackedPromptScanId(prompt))
+  );
+  if (enabledScanIds.size === 0) {
+    return null;
+  }
+  const visible = hits.filter(
+    (hit) => enabledScanIds.has(hit.promptId) && isVisible(hit)
+  ).length;
+  return {
+    mentioned: visible,
+    total: enabledScanIds.size,
+    rate: visible / enabledScanIds.size,
+  };
+}
+
 export function promptTableRowForId(
   promptId: string,
   results: readonly GeoPromptResultSummary[]
@@ -240,4 +236,66 @@ export function promptTableRowForId(
     presence: null,
     results: group,
   };
+}
+
+/**
+ * Brands the engines named on a prompt instead of yours, most named first.
+ * `count` is how many answers named the brand.
+ */
+export function promptMentionedInstead(
+  results: readonly GeoPromptResultSummary[]
+): GeoPromptBrandCount[] {
+  const counts = new Map<string, number>();
+  for (const result of results) {
+    for (const name of uniquePromptBrandNames(result.competitors)) {
+      if (name) {
+        counts.set(name, (counts.get(name) ?? 0) + 1);
+      }
+    }
+  }
+  return [...counts]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+/**
+ * Prompts where an answer named a competitor but not you, most lost answers
+ * first.
+ */
+export function buildLostPromptRows(
+  results: readonly GeoPromptResultSummary[]
+): GeoLostPromptRow[] {
+  const byPrompt = new Map<string, GeoPromptResultSummary[]>();
+  for (const result of results) {
+    const group = byPrompt.get(result.promptId) ?? [];
+    group.push(result);
+    byPrompt.set(result.promptId, group);
+  }
+  const rows: GeoLostPromptRow[] = [];
+  for (const [promptId, group] of byPrompt) {
+    const lostResults = group.filter(
+      (result) =>
+        !result.mentioned &&
+        uniquePromptBrandNames(result.competitors).length > 0
+    );
+    if (lostResults.length === 0) {
+      continue;
+    }
+    rows.push({
+      promptId,
+      prompt: group[0]?.prompt ?? "",
+      answers: group.length,
+      lost: lostResults.length,
+      lostEngines: [
+        ...new Set(lostResults.map((result) => engineFamilyOf(result.engine))),
+      ],
+      brands: promptMentionedInstead(lostResults),
+    });
+  }
+  return rows.sort(
+    (a, b) =>
+      b.lost - a.lost ||
+      b.lost / b.answers - a.lost / a.answers ||
+      a.prompt.localeCompare(b.prompt)
+  );
 }

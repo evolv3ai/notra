@@ -1,4 +1,5 @@
 import { Databuddy } from "@databuddy/sdk/node";
+import { logWarn } from "@notra/ai/utils/server-log";
 import type {
   ContentCreatedTrackingEvent,
   ContentFailedTrackingEvent,
@@ -17,18 +18,18 @@ const apiKey = process.env.DATABUDDY_API_KEY;
 const websiteId = process.env.NEXT_PUBLIC_DATABUDDY_DASHBOARD_WEBSITE_ID;
 
 if (!apiKey) {
-  console.warn(
+  logWarn(
     "DATABUDDY_API_KEY not configured. Server-side Databuddy tracking will be disabled."
   );
 }
 
 if (!websiteId) {
-  console.warn(
+  logWarn(
     "NEXT_PUBLIC_DATABUDDY_DASHBOARD_WEBSITE_ID not configured. Server-side Databuddy tracking will be disabled."
   );
 }
 
-export const databuddy =
+const databuddy =
   apiKey && websiteId
     ? new Databuddy({
         websiteId,
@@ -39,97 +40,69 @@ export const databuddy =
 
 const isDevelopment = process.env.NODE_ENV === "development";
 
-export async function trackScheduledContentCreated(
+async function trackWorkflowEvent(
+  name: string,
+  source: string | undefined,
+  properties: Record<string, unknown>,
+  logContext: Record<string, unknown>
+): Promise<void> {
+  if (!databuddy) {
+    return;
+  }
+
+  try {
+    const result = await databuddy.track({
+      name,
+      namespace: "workflows",
+      source: source ?? "schedule",
+      properties,
+    });
+
+    if (!result.success && isDevelopment) {
+      logWarn(`[Databuddy] ${name} failed`, {
+        ...logContext,
+        error: result.error,
+      });
+    }
+  } catch (error) {
+    if (isDevelopment) {
+      logWarn(`[Databuddy] ${name} error`, {
+        ...logContext,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+}
+
+export function trackScheduledContentCreated(
   event: ContentCreatedTrackingEvent
 ): Promise<void> {
-  if (!databuddy) {
-    return;
-  }
-
-  try {
-    const result = await databuddy.track({
-      name: CONTENT_CREATED_DATABUDDY_EVENT,
-      namespace: "workflows",
-      source: event.source ?? "schedule",
-      properties: buildContentCreatedDatabuddyProperties(event),
-    });
-
-    if (!result.success && isDevelopment) {
-      console.warn("[Databuddy] scheduled_content_created failed", {
-        triggerId: event.triggerId,
-        postId: event.postId,
-        error: result.error,
-      });
-    }
-  } catch (error) {
-    if (isDevelopment) {
-      console.warn("[Databuddy] scheduled_content_created error", {
-        triggerId: event.triggerId,
-        postId: event.postId,
-        error,
-      });
-    }
-  }
+  return trackWorkflowEvent(
+    CONTENT_CREATED_DATABUDDY_EVENT,
+    event.source,
+    buildContentCreatedDatabuddyProperties(event),
+    { triggerId: event.triggerId, postId: event.postId }
+  );
 }
 
-export async function trackScheduledContentFailed(
+export function trackScheduledContentFailed(
   event: ContentFailedTrackingEvent
 ): Promise<void> {
-  if (!databuddy) {
-    return;
-  }
-
-  try {
-    const result = await databuddy.track({
-      name: CONTENT_FAILED_DATABUDDY_EVENT,
-      namespace: "workflows",
-      source: event.source ?? "schedule",
-      properties: buildContentFailedDatabuddyProperties(event),
-    });
-
-    if (!result.success && isDevelopment) {
-      console.warn("[Databuddy] scheduled_content_failed failed", {
-        triggerId: event.triggerId,
-        error: result.error,
-      });
-    }
-  } catch (error) {
-    if (isDevelopment) {
-      console.warn("[Databuddy] scheduled_content_failed error", {
-        triggerId: event.triggerId,
-        error,
-      });
-    }
-  }
+  return trackWorkflowEvent(
+    CONTENT_FAILED_DATABUDDY_EVENT,
+    event.source,
+    buildContentFailedDatabuddyProperties(event),
+    { triggerId: event.triggerId }
+  );
 }
 
-export async function trackScheduledContentSkipped(
+export function trackScheduledContentSkipped(
   event: ContentSkippedTrackingEvent
 ): Promise<void> {
-  if (!databuddy) {
-    return;
-  }
-
-  try {
-    const result = await databuddy.track({
-      name: CONTENT_SKIPPED_DATABUDDY_EVENT,
-      namespace: "workflows",
-      source: event.source ?? "schedule",
-      properties: buildContentSkippedDatabuddyProperties(event),
-    });
-
-    if (!result.success && isDevelopment) {
-      console.warn("[Databuddy] scheduled_content_skipped failed", {
-        triggerId: event.triggerId,
-        error: result.error,
-      });
-    }
-  } catch (error) {
-    if (isDevelopment) {
-      console.warn("[Databuddy] scheduled_content_skipped error", {
-        triggerId: event.triggerId,
-        error,
-      });
-    }
-  }
+  return trackWorkflowEvent(
+    CONTENT_SKIPPED_DATABUDDY_EVENT,
+    event.source,
+    buildContentSkippedDatabuddyProperties(event),
+    { triggerId: event.triggerId }
+  );
 }

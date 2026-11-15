@@ -2,35 +2,23 @@
 
 import {
   GEO_EMPTY_TRAFFIC_RESPONSE,
-  GEO_SPARKLINE_MIN_POINTS,
-  GEO_SPARKLINE_TREND_CLASS,
   GEO_TRAFFIC_OTHER_GROUP,
 } from "@notra/geo-core/constants/geo";
 import {
-  buildTrafficTrendRows,
-  formatAiTrafficTimestamp,
   hasTrafficSourceSeries,
   toGeoTrafficPreviousTotals,
-  sparklineTrend,
   trafficSparklineDays,
 } from "@notra/geo-core/utils/ai-traffic";
 import { AnimatedNumber } from "@notra/ui/components/animated-number";
-import { useIsMobile } from "@notra/ui/hooks/use-mobile";
-import { useLocale, useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
+import { Skeleton } from "@notra/ui/components/ui/skeleton";
+import { memo, useCallback, useMemo, useState } from "react";
+import { InstrumentEmpty, InstrumentSection } from "ui/card";
+import { useLocale, useTranslations } from "use-intl";
 
-import { GeoRateSparkline } from "@/components/geo/geo-rate-sparkline";
 import { TrafficHero } from "@/components/geo/traffic-hero";
-import { TrafficPurposeCell } from "@/components/geo/traffic-purpose-cell";
-import { TrafficSourceGroupCell } from "@/components/geo/traffic-source-group-cell";
 import { TrafficSourceSheet } from "@/components/geo/traffic-source-sheet";
 import { TrafficSourcesStack } from "@/components/geo/traffic-sources-group";
-import {
-  InstrumentEmpty,
-  InstrumentSection,
-} from "@/components/instrument/instrument-module";
-import type { TableColumn } from "@/components/motion/table";
-import { TRAFFIC_SOURCE_COLUMN_MIN_WIDTH } from "@/constants/geo-traffic-sources";
+import { useTrafficSourceColumns } from "@/lib/hooks/use-traffic-source-columns";
 import type {
   AiTrafficCardProps,
   GeoTrafficSourceBand,
@@ -40,50 +28,75 @@ import {
   buildTrafficGroupSeries,
   groupTrafficSources,
   trafficGroupKey,
+  trafficGroupPathsAreLowerBound,
+  withSourcePaths,
 } from "@/utils/ai-traffic-groups";
+
+const MemoTrafficHero = memo(TrafficHero);
+const MemoTrafficSourcesStack = memo(TrafficSourcesStack);
 
 export function AiTrafficCard({
   traffic,
+  sourcePaths,
   pages,
   range,
   settingsHref,
   isPending = false,
+  showHero = true,
 }: AiTrafficCardProps) {
-  const t = useTranslations("geo.aiTrafficCard");
   const tCommon = useTranslations("common");
   const tShared = useTranslations("geo.shared");
   const locale = useLocale();
-  const { sources, totals, points, previousConversions } =
-    traffic ?? GEO_EMPTY_TRAFFIC_RESPONSE;
-  const previousTotals = toGeoTrafficPreviousTotals(
-    sources,
-    previousConversions
+  const {
+    sources: fastSources,
+    totals,
+    points,
+    previousConversions,
+  } = traffic ?? GEO_EMPTY_TRAFFIC_RESPONSE;
+  const sources = useMemo(
+    () => withSourcePaths(fastSources, sourcePaths),
+    [fastSources, sourcePaths]
   );
-  const groups = groupTrafficSources(sources).map((group) =>
-    group.key === GEO_TRAFFIC_OTHER_GROUP.key
-      ? { ...group, label: tCommon("labels.other") }
-      : group
+  const pathsPending = sourcePaths === undefined;
+  const previousTotals = useMemo(
+    () => toGeoTrafficPreviousTotals(sources, previousConversions),
+    [sources, previousConversions]
+  );
+  const groups = useMemo(
+    () =>
+      groupTrafficSources(sources).map((group) =>
+        group.key === GEO_TRAFFIC_OTHER_GROUP.key
+          ? { ...group, label: tCommon("labels.other") }
+          : group
+      ),
+    [sources, tCommon]
   );
   const [collapsed, setCollapsed] = useState<ReadonlySet<GeoTrafficSourceBand>>(
     () => new Set()
   );
-  const toggleCollapsed = (band: GeoTrafficSourceBand) =>
-    setCollapsed((current) => {
-      const next = new Set(current);
-      if (next.has(band)) {
-        next.delete(band);
-      } else {
-        next.add(band);
-      }
-      return next;
-    });
+  const toggleCollapsed = useCallback(
+    (band: GeoTrafficSourceBand) =>
+      setCollapsed((current) => {
+        const next = new Set(current);
+        if (next.has(band)) {
+          next.delete(band);
+        } else {
+          next.add(band);
+        }
+        return next;
+      }),
+    []
+  );
   const [openGroupKey, setOpenGroupKey] = useState<string | null>(null);
-  const isMobile = useIsMobile();
+  const [sourceSheetOpen, setSourceSheetOpen] = useState(false);
+  const openSource = useCallback((group: GeoTrafficSourceGroup) => {
+    setOpenGroupKey(trafficGroupKey(group.band, group.key));
+    setSourceSheetOpen(true);
+  }, []);
   const sparklineDays = useMemo(
     () => trafficSparklineDays(points, range?.from, range?.to),
     [points, range?.from, range?.to]
   );
-  const trendRows = buildTrafficTrendRows(points, locale, sparklineDays);
   const canSparkline = hasTrafficSourceSeries(points);
   const seriesByGroup = useMemo(() => {
     const map = new Map<string, { day: string; value: number }[]>();
@@ -107,102 +120,34 @@ export function AiTrafficCard({
 
   const openGroup =
     openGroupKey === null
-      ? null
+      ? (groups[0] ?? null)
       : (groups.find(
           (group) => trafficGroupKey(group.band, group.key) === openGroupKey
         ) ?? null);
 
-  const columns = useMemo<TableColumn<GeoTrafficSourceGroup>[]>(() => {
-    const categorySize = isMobile
-      ? TRAFFIC_SOURCE_COLUMN_MIN_WIDTH.categoryMobile
-      : TRAFFIC_SOURCE_COLUMN_MIN_WIDTH.category;
-    const visitsSize = isMobile
-      ? TRAFFIC_SOURCE_COLUMN_MIN_WIDTH.visitsMobile
-      : TRAFFIC_SOURCE_COLUMN_MIN_WIDTH.visits;
-    const next: TableColumn<GeoTrafficSourceGroup>[] = [
-      {
-        key: "source",
-        header: tCommon("labels.source"),
-        width: "1fr",
-        minWidth: TRAFFIC_SOURCE_COLUMN_MIN_WIDTH.source,
-        sortable: true,
-        cell: (row) => <TrafficSourceGroupCell group={row} />,
-        sortValue: (row) => row.label,
-      },
-      {
-        key: "category",
-        header: tShared("purpose"),
-        width: categorySize,
-        minWidth: categorySize,
-        sortable: true,
-        cell: (row) => <TrafficPurposeCell group={row} />,
-        sortValue: (row) => row.categories.join(","),
-      },
-      {
-        key: "visits",
-        header: tShared("visits"),
-        width: visitsSize,
-        minWidth: visitsSize,
-        sortable: true,
-        cell: (row) => {
-          const series = seriesByGroup.get(trafficGroupKey(row.band, row.key));
-          const showSpark =
-            series !== undefined && series.length >= GEO_SPARKLINE_MIN_POINTS;
+  const sourceColumns = useTrafficSourceColumns({ seriesByKey: seriesByGroup });
+  const columns = useMemo(
+    () =>
+      sourceColumns.map((column) =>
+        column.key === "paths"
+          ? {
+              ...column,
+              cell: (row: GeoTrafficSourceGroup) =>
+                pathsPending ? (
+                  <Skeleton className="ml-auto h-3 w-8" />
+                ) : (
+                  <span className="text-sm tabular-nums">
+                    {trafficGroupPathsAreLowerBound(row) ? "≥ " : null}
+                    <AnimatedNumber locale={locale} value={row.paths} />
+                  </span>
+                ),
+            }
+          : column
+      ),
+    [sourceColumns, locale, pathsPending]
+  );
 
-          return (
-            <span className="flex items-center gap-2">
-              {showSpark ? (
-                <GeoRateSparkline
-                  className={GEO_SPARKLINE_TREND_CLASS[sparklineTrend(series)]}
-                  label={t("visitTrend", { source: row.label })}
-                  points={series}
-                />
-              ) : null}
-              <span className="text-sm tabular-nums">
-                <AnimatedNumber locale={locale} value={row.visits} />
-              </span>
-            </span>
-          );
-        },
-      },
-    ];
-
-    if (!isMobile) {
-      next.push(
-        {
-          key: "paths",
-          header: tShared("pages"),
-          collapsePriority: 1,
-          width: TRAFFIC_SOURCE_COLUMN_MIN_WIDTH.paths,
-          minWidth: TRAFFIC_SOURCE_COLUMN_MIN_WIDTH.paths,
-          sortable: true,
-          align: "right",
-          cell: (row) => (
-            <span className="text-sm tabular-nums">
-              <AnimatedNumber locale={locale} value={row.paths} />
-            </span>
-          ),
-        },
-        {
-          key: "lastSeenAt",
-          header: tShared("lastSeen"),
-          collapsePriority: 2,
-          width: TRAFFIC_SOURCE_COLUMN_MIN_WIDTH.lastSeenAt,
-          minWidth: TRAFFIC_SOURCE_COLUMN_MIN_WIDTH.lastSeenAt,
-          sortable: true,
-          cell: (row) => (
-            <span className="text-muted-foreground text-xs whitespace-nowrap tabular-nums">
-              {formatAiTrafficTimestamp(row.lastSeenAt, locale)}
-            </span>
-          ),
-        }
-      );
-    }
-
-    return next;
-  }, [isMobile, locale, seriesByGroup, t]);
-
-  if (sources.length === 0) {
+  if (groups.length === 0) {
     return (
       <InstrumentSection eyebrow={tCommon("labels.sources")}>
         <InstrumentEmpty
@@ -215,35 +160,38 @@ export function AiTrafficCard({
 
   return (
     <div className="flex flex-col gap-6">
-      <TrafficHero
-        groups={groups}
-        points={points}
-        previousTotals={previousTotals}
-        rows={trendRows}
-        settingsHref={settingsHref}
-        totals={totals}
-      />
+      {showHero ? (
+        <MemoTrafficHero
+          groups={groups}
+          points={points}
+          previousTotals={previousTotals}
+          days={sparklineDays}
+          settingsHref={settingsHref}
+          totals={totals}
+        />
+      ) : null}
       <InstrumentSection eyebrow={tCommon("labels.sources")}>
-        <TrafficSourcesStack
+        <MemoTrafficSourcesStack
           collapsed={collapsed}
           columns={columns}
           groups={groups}
           loading={isPending}
-          onOpen={(group) =>
-            setOpenGroupKey(trafficGroupKey(group.band, group.key))
-          }
+          onOpen={openSource}
           onToggle={toggleCollapsed}
         />
       </InstrumentSection>
       <TrafficSourceSheet
         group={openGroup}
-        onOpenChange={(open) => {
-          if (!open) {
-            setOpenGroupKey(null);
-          }
-        }}
+        open={sourceSheetOpen && openGroup !== null}
+        onOpenChange={setSourceSheetOpen}
         pages={pages}
-        series={openGroupKey ? (seriesByGroup.get(openGroupKey) ?? []) : []}
+        series={
+          openGroup
+            ? (seriesByGroup.get(
+                trafficGroupKey(openGroup.band, openGroup.key)
+              ) ?? [])
+            : []
+        }
       />
     </div>
   );

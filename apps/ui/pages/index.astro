@@ -2,12 +2,13 @@
 import data from "blume:data";
 import PageLayout from "blume/components/layout/PageLayout.astro";
 
+import CtaBanner from "../src/components/cta-banner.astro";
 import LandingHero from "../src/components/landing-hero.astro";
 import LandingSections from "../src/components/landing-sections.astro";
 import ThemeHotkey from "../src/components/theme-hotkey.astro";
 
 const { config, navigation } = data;
-const repoUrl = config.repoUrl ?? "https://github.com/usenotra/notra";
+const repoUrl = config.repoUrl ?? "https://github.com/usenotra";
 ---
 
 <PageLayout
@@ -27,5 +28,8 @@ const repoUrl = config.repoUrl ?? "https://github.com/usenotra/notra";
 >
   <LandingHero repoUrl={repoUrl} />
   <LandingSections />
+  <div class="mx-auto max-w-6xl px-6 pb-20">
+    <CtaBanner />
+  </div>
   <ThemeHotkey slot="footer" />
 </PageLayout>

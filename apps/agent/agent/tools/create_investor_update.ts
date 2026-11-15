@@ -1,3 +1,8 @@
 import { createCreatePostTool } from "@notra/tools/assistant/create-post";
 
-export default createCreatePostTool("investor_update");
+import { withToolActivityLabel } from "../lib/utils/tool-activity";
+
+export default withToolActivityLabel(
+  createCreatePostTool("investor_update"),
+  "Saving a investor update draft"
+);

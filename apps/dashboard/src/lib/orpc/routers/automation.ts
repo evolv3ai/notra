@@ -4,18 +4,22 @@ import {
   deleteQstashSchedule,
 } from "@notra/ai/qstash/triggers";
 import { QstashScheduleSetupError } from "@notra/ai/schemas/qstash";
+import { logError } from "@notra/ai/utils/server-log";
 import {
   hashTrigger,
   normalizeTriggerConfig,
+  scheduleDedupeHashes,
 } from "@notra/ai/utils/trigger-hash";
 import { db } from "@notra/db/drizzle";
 import {
   contentTriggerLookbackWindows,
   contentTriggers,
   githubIntegrations,
+  linearIntegrations,
 } from "@notra/db/schema";
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
 import { organizationIdInputSchema } from "@notra/schemas/dashboard/auth/organization";
+import { listAutomationRunsInputSchema } from "@notra/schemas/dashboard/automation/runs";
 import {
   configureEventTriggerBodySchema,
   configureScheduleBodySchema,
@@ -26,13 +30,17 @@ import {
 } from "@notra/schemas/dashboard/integrations";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { customAlphabet } from "nanoid";
-import { getTranslations } from "next-intl/server";
 
 import { DEFAULT_LOOKBACK_WINDOW } from "@/constants/workflows";
 import { trackServerEvent } from "@/lib/analytics/posthog-server";
-import { assertOrganizationAccess } from "@/lib/auth/organization";
+import {
+  listAutomationRuns,
+  listLatestAutomationRuns,
+} from "@/lib/automation/runs";
 import { assertActiveSubscription } from "@/lib/billing/subscription";
-import { baseProcedure } from "@/lib/orpc/base";
+import { getTranslations } from "@/lib/i18n/server";
+import { baseProcedure, withOrganizationAccess } from "@/lib/orpc/base";
+import { automationAlertsRouter } from "@/lib/orpc/routers/automation-alerts";
 import {
   ManualTriggerRunError,
   triggerManualAutomationRun,
@@ -47,12 +55,6 @@ import {
 } from "../utils/errors";
 
 const nanoid = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 16);
-
-function toEffectiveLookbackWindow(
-  lookbackWindow?: LookbackWindow | null
-): LookbackWindow {
-  return lookbackWindow ?? DEFAULT_LOOKBACK_WINDOW;
-}
 
 async function ensureTriggerInOrganization(
   organizationId: string,
@@ -74,24 +76,43 @@ async function ensureTriggerInOrganization(
 
 async function ensureScheduleTargetsExist(
   organizationId: string,
-  repositoryIds: string[]
+  repositoryIds: string[],
+  linearIntegrationIds: string[] = []
 ) {
-  if (repositoryIds.length === 0) {
+  if (repositoryIds.length === 0 && linearIntegrationIds.length === 0) {
     return;
   }
 
-  const targetIntegrations = await db.query.githubIntegrations.findMany({
-    where: and(
-      eq(githubIntegrations.organizationId, organizationId),
-      inArray(githubIntegrations.id, repositoryIds)
-    ),
-    columns: { id: true },
-  });
+  const [targetIntegrations, targetLinearIntegrations] = await Promise.all([
+    db.query.githubIntegrations.findMany({
+      where: and(
+        eq(githubIntegrations.organizationId, organizationId),
+        inArray(githubIntegrations.id, repositoryIds)
+      ),
+      columns: { id: true },
+    }),
+    linearIntegrationIds.length === 0
+      ? Promise.resolve([])
+      : db.query.linearIntegrations.findMany({
+          where: and(
+            eq(linearIntegrations.organizationId, organizationId),
+            eq(linearIntegrations.enabled, true),
+            inArray(linearIntegrations.id, linearIntegrationIds)
+          ),
+          columns: { id: true },
+        }),
+  ]);
 
   const existingIds = new Set(
     targetIntegrations.map((integration) => integration.id)
   );
-  const missingIds = repositoryIds.filter((id) => !existingIds.has(id));
+  const existingLinearIds = new Set(
+    targetLinearIntegrations.map((integration) => integration.id)
+  );
+  const missingIds = [
+    ...repositoryIds.filter((id) => !existingIds.has(id)),
+    ...linearIntegrationIds.filter((id) => !existingLinearIds.has(id)),
+  ];
 
   if (missingIds.length > 0) {
     const tErrors = await getTranslations("errors.automation");
@@ -130,6 +151,11 @@ async function mapQstashError(error: unknown): Promise<never> {
   }
 
   throw error;
+}
+
+async function duplicateTriggerError() {
+  const tErrors = await getTranslations("errors.automation");
+  return conflict(tErrors("duplicateTrigger"), { code: "DUPLICATE_TRIGGER" });
 }
 
 function filterTriggersByRepositoryIds<TTrigger extends { targets: unknown }>(
@@ -191,16 +217,77 @@ function serializeTrigger(trigger: {
   };
 }
 
+const deleteTrigger = baseProcedure
+  .input(triggerInputSchema)
+  .use(withOrganizationAccess)
+  .handler(async ({ context, input }) => {
+    const { auth } = context;
+    const existing = await db.query.contentTriggers.findFirst({
+      where: and(
+        eq(contentTriggers.id, input.triggerId),
+        eq(contentTriggers.organizationId, input.organizationId)
+      ),
+    });
+
+    if (!existing) {
+      return { success: true };
+    }
+
+    if (existing.qstashScheduleId) {
+      // A surviving schedule is harmless: the schedule workflow exits with
+      // trigger_not_found once the row is gone.
+      await deleteQstashSchedule(existing.qstashScheduleId).catch((error) => {
+        logError("Error deleting schedule", error);
+      });
+    }
+
+    await db
+      .delete(contentTriggers)
+      .where(
+        and(
+          eq(contentTriggers.id, input.triggerId),
+          eq(contentTriggers.organizationId, input.organizationId)
+        )
+      );
+
+    trackServerEvent({
+      event:
+        existing.sourceType === "cron"
+          ? POSTHOG_EVENTS.SCHEDULE_DELETED
+          : POSTHOG_EVENTS.EVENT_TRIGGER_DELETED,
+      headers: context.headers,
+      userId: auth.user.id,
+      organizationId: input.organizationId,
+      properties: {
+        trigger_id: existing.id,
+        output_type: existing.outputType,
+        auto_publish: existing.autoPublish,
+        enabled: existing.enabled,
+      },
+    });
+
+    return { success: true };
+  });
+
 export const automationRouter = {
+  alerts: automationAlertsRouter,
+  runs: {
+    list: baseProcedure
+      .input(listAutomationRunsInputSchema)
+      .use(withOrganizationAccess)
+      .handler(({ input }) => listAutomationRuns(input)),
+    latest: baseProcedure
+      .input(organizationIdInputSchema)
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => ({
+        lastRunAt: await listLatestAutomationRuns(input.organizationId),
+      })),
+  },
   events: {
     list: baseProcedure
       .input(schedulesListInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         const triggers = await db.query.contentTriggers.findMany({
           where: and(
             eq(contentTriggers.organizationId, input.organizationId),
@@ -218,11 +305,9 @@ export const automationRouter = {
       }),
     create: baseProcedure
       .input(organizationIdInputSchema.and(configureEventTriggerBodySchema))
+      .use(withOrganizationAccess)
       .handler(async ({ context, input }) => {
-        const auth = await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
+        const { auth } = context;
         await assertActiveSubscription(input.organizationId);
 
         if (input.sourceType !== "github_webhook") {
@@ -261,10 +346,7 @@ export const automationRouter = {
               existing_trigger_id: existing.id,
             },
           });
-          const tErrors = await getTranslations("errors.automation");
-          throw conflict(tErrors("duplicateTrigger"), {
-            code: "DUPLICATE_TRIGGER",
-          });
+          throw await duplicateTriggerError();
         }
 
         const [trigger] = await db
@@ -305,11 +387,9 @@ export const automationRouter = {
       }),
     update: baseProcedure
       .input(triggerInputSchema.and(configureEventTriggerBodySchema))
+      .use(withOrganizationAccess)
       .handler(async ({ context, input }) => {
-        const auth = await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
+        const { auth } = context;
         await assertActiveSubscription(input.organizationId);
 
         if (input.sourceType !== "github_webhook") {
@@ -355,10 +435,7 @@ export const automationRouter = {
               existing_trigger_id: duplicate.id,
             },
           });
-          const tErrors = await getTranslations("errors.automation");
-          throw conflict(tErrors("duplicateTrigger"), {
-            code: "DUPLICATE_TRIGGER",
-          });
+          throw await duplicateTriggerError();
         }
 
         const previousQstashScheduleId = existing.qstashScheduleId;
@@ -388,7 +465,7 @@ export const automationRouter = {
         if (previousQstashScheduleId) {
           await deleteQstashSchedule(previousQstashScheduleId).catch(
             (error) => {
-              console.error("Error deleting schedule:", error);
+              logError("Error deleting schedule", error);
             }
           );
         }
@@ -415,66 +492,13 @@ export const automationRouter = {
 
         return { trigger: serializeTrigger(trigger) };
       }),
-    delete: baseProcedure
-      .input(triggerInputSchema)
-      .handler(async ({ context, input }) => {
-        const auth = await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
-        const existing = await db.query.contentTriggers.findFirst({
-          where: and(
-            eq(contentTriggers.id, input.triggerId),
-            eq(contentTriggers.organizationId, input.organizationId)
-          ),
-        });
-
-        if (!existing) {
-          return { success: true };
-        }
-
-        if (existing.qstashScheduleId) {
-          await deleteQstashSchedule(existing.qstashScheduleId);
-        }
-
-        await db
-          .delete(contentTriggers)
-          .where(
-            and(
-              eq(contentTriggers.id, input.triggerId),
-              eq(contentTriggers.organizationId, input.organizationId)
-            )
-          );
-
-        trackServerEvent({
-          event:
-            existing.sourceType === "cron"
-              ? POSTHOG_EVENTS.SCHEDULE_DELETED
-              : POSTHOG_EVENTS.EVENT_TRIGGER_DELETED,
-          headers: context.headers,
-          userId: auth.user.id,
-          organizationId: input.organizationId,
-          properties: {
-            trigger_id: existing.id,
-            output_type: existing.outputType,
-            auto_publish: existing.autoPublish,
-            enabled: existing.enabled,
-          },
-        });
-
-        return { success: true };
-      }),
+    delete: deleteTrigger,
   },
   schedules: {
     list: baseProcedure
       .input(schedulesListInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         const triggers = await db.query.contentTriggers.findMany({
           where: and(
             eq(contentTriggers.organizationId, input.organizationId),
@@ -483,48 +507,32 @@ export const automationRouter = {
           orderBy: (items, { desc }) => [desc(items.createdAt)],
         });
 
-        const triggerIds = triggers.map((trigger) => trigger.id);
-        const lookbackWindows =
-          triggerIds.length > 0
-            ? await db.query.contentTriggerLookbackWindows.findMany({
-                where: inArray(
-                  contentTriggerLookbackWindows.triggerId,
-                  triggerIds
-                ),
-              })
-            : [];
-
-        const lookbackWindowByTriggerId = new Map(
-          lookbackWindows.map((item) => [
-            item.triggerId,
-            item.window as LookbackWindow,
-          ])
-        );
-
         const filteredTriggers = filterTriggersByRepositoryIds(
           triggers,
           input.repositoryIds
         );
-
-        const triggersWithLookback = filteredTriggers.map((trigger) => ({
-          ...trigger,
-          lookbackWindow: toEffectiveLookbackWindow(
-            lookbackWindowByTriggerId.get(trigger.id)
-          ),
-        }));
-
+        const triggerIds = filteredTriggers.map((trigger) => trigger.id);
         const allRepositoryIds = [
           ...new Set(
-            triggersWithLookback.flatMap((trigger) => {
+            filteredTriggers.flatMap((trigger) => {
               const parsed = triggerTargetsSchema.safeParse(trigger.targets);
               return parsed.success ? parsed.data.repositoryIds : [];
             })
           ),
         ];
 
-        const repositories =
+        const [lookbackWindows, repositories] = await Promise.all([
+          triggerIds.length > 0
+            ? db.query.contentTriggerLookbackWindows.findMany({
+                columns: { triggerId: true, window: true },
+                where: inArray(
+                  contentTriggerLookbackWindows.triggerId,
+                  triggerIds
+                ),
+              })
+            : [],
           allRepositoryIds.length > 0
-            ? await db
+            ? db
                 .select({
                   id: githubIntegrations.id,
                   owner: githubIntegrations.owner,
@@ -532,8 +540,27 @@ export const automationRouter = {
                   defaultBranch: githubIntegrations.defaultBranch,
                 })
                 .from(githubIntegrations)
-                .where(inArray(githubIntegrations.id, allRepositoryIds))
-            : [];
+                .where(
+                  and(
+                    eq(githubIntegrations.organizationId, input.organizationId),
+                    inArray(githubIntegrations.id, allRepositoryIds)
+                  )
+                )
+            : [],
+        ]);
+
+        const lookbackWindowByTriggerId = new Map(
+          lookbackWindows.map((item) => [
+            item.triggerId,
+            item.window as LookbackWindow,
+          ])
+        );
+        const triggersWithLookback = filteredTriggers.map((trigger) => ({
+          ...trigger,
+          lookbackWindow:
+            lookbackWindowByTriggerId.get(trigger.id) ??
+            DEFAULT_LOOKBACK_WINDOW,
+        }));
 
         const repositoryMap = Object.fromEntries(
           repositories
@@ -553,11 +580,9 @@ export const automationRouter = {
       }),
     create: baseProcedure
       .input(organizationIdInputSchema.and(configureScheduleBodySchema))
+      .use(withOrganizationAccess)
       .handler(async ({ context, input }) => {
-        const auth = await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
+        const { auth } = context;
         await assertActiveSubscription(input.organizationId);
 
         const normalized = normalizeTriggerConfig({
@@ -577,7 +602,7 @@ export const automationRouter = {
         const existing = await db.query.contentTriggers.findFirst({
           where: and(
             eq(contentTriggers.organizationId, input.organizationId),
-            eq(contentTriggers.dedupeHash, dedupeHash)
+            inArray(contentTriggers.dedupeHash, scheduleDedupeHashes(input))
           ),
         });
 
@@ -596,23 +621,20 @@ export const automationRouter = {
               existing_trigger_id: existing.id,
             },
           });
-          const tErrors = await getTranslations("errors.automation");
-          throw conflict(tErrors("duplicateTrigger"), {
-            code: "DUPLICATE_TRIGGER",
-          });
+          throw await duplicateTriggerError();
         }
 
         if (input.enabled === true) {
           await ensureScheduleTargetsExist(
             input.organizationId,
-            normalized.targets.repositoryIds
+            normalized.targets.repositoryIds,
+            normalized.targets.linearIntegrationIds
           );
         }
 
         const triggerId = nanoid();
         const cronExpression = buildCronExpression(input.sourceConfig.cron);
         let qstashScheduleId: string | null = null;
-        const persistedLookbackWindow = input.lookbackWindow;
         const persistedName =
           input.name.trim() ||
           (await getTranslations("automation.schedules.page"))("untitled");
@@ -654,12 +676,12 @@ export const automationRouter = {
 
             await tx.insert(contentTriggerLookbackWindows).values({
               triggerId,
-              window: persistedLookbackWindow,
+              window: input.lookbackWindow,
             });
 
             return {
               ...createdTrigger,
-              lookbackWindow: persistedLookbackWindow,
+              lookbackWindow: input.lookbackWindow,
             };
           });
 
@@ -674,7 +696,7 @@ export const automationRouter = {
               frequency: input.sourceConfig.cron.frequency,
               auto_publish: input.autoPublish,
               enabled: input.enabled,
-              lookback_window: persistedLookbackWindow,
+              lookback_window: input.lookbackWindow,
               repo_count: normalized.targets.repositoryIds.length,
             },
           });
@@ -684,7 +706,7 @@ export const automationRouter = {
           if (qstashScheduleId) {
             await deleteQstashSchedule(qstashScheduleId).catch(
               (cleanupError) => {
-                console.error("Error deleting schedule:", cleanupError);
+                logError("Error deleting schedule", cleanupError);
               }
             );
           }
@@ -698,7 +720,7 @@ export const automationRouter = {
               )
             )
             .catch((cleanupError) => {
-              console.error("Error deleting trigger:", cleanupError);
+              logError("Error deleting trigger", cleanupError);
             });
 
           throw internalServerError("Internal server error", error);
@@ -706,11 +728,9 @@ export const automationRouter = {
       }),
     update: baseProcedure
       .input(triggerInputSchema.and(configureScheduleBodySchema))
+      .use(withOrganizationAccess)
       .handler(async ({ context, input }) => {
-        const auth = await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
+        const { auth } = context;
         await assertActiveSubscription(input.organizationId);
 
         const normalized = normalizeTriggerConfig({
@@ -730,7 +750,7 @@ export const automationRouter = {
         const duplicate = await db.query.contentTriggers.findFirst({
           where: and(
             eq(contentTriggers.organizationId, input.organizationId),
-            eq(contentTriggers.dedupeHash, dedupeHash),
+            inArray(contentTriggers.dedupeHash, scheduleDedupeHashes(input)),
             ne(contentTriggers.id, input.triggerId)
           ),
         });
@@ -751,34 +771,25 @@ export const automationRouter = {
               existing_trigger_id: duplicate.id,
             },
           });
-          const tErrors = await getTranslations("errors.automation");
-          throw conflict(tErrors("duplicateTrigger"), {
-            code: "DUPLICATE_TRIGGER",
-          });
+          throw await duplicateTriggerError();
         }
 
-        const existing = await db.query.contentTriggers.findFirst({
-          where: and(
-            eq(contentTriggers.id, input.triggerId),
-            eq(contentTriggers.organizationId, input.organizationId)
-          ),
-        });
-
-        if (!existing) {
-          throw notFound("Schedule not found");
-        }
+        const existing = await ensureTriggerInOrganization(
+          input.organizationId,
+          input.triggerId
+        );
 
         if (input.enabled === true) {
           await ensureScheduleTargetsExist(
             input.organizationId,
-            normalized.targets.repositoryIds
+            normalized.targets.repositoryIds,
+            normalized.targets.linearIntegrationIds
           );
         }
 
-        const existingScheduleId = existing.qstashScheduleId ?? null;
+        const existingScheduleId = existing.qstashScheduleId;
         const cronExpression = buildCronExpression(input.sourceConfig.cron);
         let qstashScheduleId: string | null = null;
-        const persistedLookbackWindow = input.lookbackWindow;
         const persistedName =
           input.name.trim() ||
           existing.name ||
@@ -829,19 +840,19 @@ export const automationRouter = {
               .insert(contentTriggerLookbackWindows)
               .values({
                 triggerId: input.triggerId,
-                window: persistedLookbackWindow,
+                window: input.lookbackWindow,
               })
               .onConflictDoUpdate({
                 target: contentTriggerLookbackWindows.triggerId,
                 set: {
-                  window: persistedLookbackWindow,
+                  window: input.lookbackWindow,
                   updatedAt: new Date(),
                 },
               });
 
             return {
               ...updatedTrigger,
-              lookbackWindow: persistedLookbackWindow,
+              lookbackWindow: input.lookbackWindow,
             };
           });
 
@@ -866,7 +877,7 @@ export const automationRouter = {
           if (qstashScheduleId && qstashScheduleId !== existingScheduleId) {
             await deleteQstashSchedule(qstashScheduleId).catch(
               (cleanupError) => {
-                console.error("Error deleting schedule:", cleanupError);
+                logError("Error deleting schedule", cleanupError);
               }
             );
           }
@@ -874,63 +885,12 @@ export const automationRouter = {
           throw internalServerError("Internal server error", error);
         }
       }),
-    delete: baseProcedure
-      .input(triggerInputSchema)
-      .handler(async ({ context, input }) => {
-        const auth = await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
-        const existing = await db.query.contentTriggers.findFirst({
-          where: and(
-            eq(contentTriggers.id, input.triggerId),
-            eq(contentTriggers.organizationId, input.organizationId)
-          ),
-        });
-
-        if (!existing) {
-          return { success: true };
-        }
-
-        if (existing.qstashScheduleId) {
-          await deleteQstashSchedule(existing.qstashScheduleId);
-        }
-
-        await db
-          .delete(contentTriggers)
-          .where(
-            and(
-              eq(contentTriggers.id, input.triggerId),
-              eq(contentTriggers.organizationId, input.organizationId)
-            )
-          );
-
-        trackServerEvent({
-          event:
-            existing.sourceType === "cron"
-              ? POSTHOG_EVENTS.SCHEDULE_DELETED
-              : POSTHOG_EVENTS.EVENT_TRIGGER_DELETED,
-          headers: context.headers,
-          userId: auth.user.id,
-          organizationId: input.organizationId,
-          properties: {
-            trigger_id: existing.id,
-            output_type: existing.outputType,
-            auto_publish: existing.autoPublish,
-            enabled: existing.enabled,
-          },
-        });
-
-        return { success: true };
-      }),
+    delete: deleteTrigger,
     runNow: baseProcedure
       .input(triggerInputSchema)
+      .use(withOrganizationAccess)
       .handler(async ({ context, input }) => {
-        const auth = await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
+        const { auth } = context;
         await assertActiveSubscription(input.organizationId);
 
         try {

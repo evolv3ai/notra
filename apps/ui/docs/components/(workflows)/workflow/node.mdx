@@ -1,0 +1,44 @@
+---
+title: Node
+description: A step card with a kind icon or brand logo, a status light, handles, a model chip and a timer.
+---
+
+<Component path="workflow/examples/workflow-node" />
+
+<RegistryInstall name="workflow-node" />
+
+`WorkflowNodeCard` is the step the canvas draws for every node, built on the [shell](/docs/components/workflow/shell) card. The inner card shows the step's kind, title, description and a status light that glows while the step runs. The footer on the frame holds chips for the integration or model and how long the step takes. AI steps add a dice icon to the model chip to mark them as non-deterministic, and failed or waiting steps get a banner above the card.
+
+Steps without labeled ports get one input and one output handle in the header. Give `inputs` labels to stack a row per input, which is how a merge takes several inputs. Labeled `outputs` become branches in a rail under the card, which is how an if/else or a decision routes the run. Each branch can say what happens next with `hint` and how often it's taken with `rate`, and the branch a run takes lights up.
+
+Give an if/else a `rule` to spell out what it checks in plain words, like `{ subject: "Listicle", operator: "mentions", value: "Notra" }`.
+
+| Prop | Default | Description |
+| --- | --- | --- |
+| `node` | | The step: `id`, `kind`, `title`, `position` and optional `description`, `logo`, `model`, `rule`, `inputs`, `outputs`, `branch` and `durationMs`. |
+| `state` | | `{ status, elapsedMs }`. Running and waiting steps tick their timer. |
+| `selected` | | Draws the selection ring. |
+| `connectable` | | Renders React Flow handles. Leave it off to use the card outside a canvas, like in a list or a preview. |
+
+`WorkflowFlowNode` is the React Flow node type that wraps the card with `connectable` on. Register it as a `nodeType` to use workflow steps in your own `ReactFlow`.
+
+`kind` is one of `trigger`, `task`, `ai`, `integration`, `condition`, `switch`, `merge`, `loop`, `delay`, `approval`, `email` or `output`.
+
+## Ports
+
+<Component path="workflow/examples/workflow-ports" />
+
+```tsx
+{
+  id: "route",
+  kind: "switch",
+  title: "Week over week",
+  outputs: [
+    { id: "up", label: "Visibility up" },
+    { id: "flat", label: "No change" },
+    { id: "down", label: "Visibility down" },
+  ],
+}
+```
+
+<include>./_used-in.mdx</include>

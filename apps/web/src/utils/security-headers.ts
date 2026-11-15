@@ -1,4 +1,4 @@
-import { APP_URL, DEMO_URL } from "./urls";
+import { APP_URL } from "./urls";
 
 const LOCAL_DASHBOARD_ORIGIN = "http://localhost:3000";
 
@@ -16,12 +16,12 @@ export function buildSecurityHeaders(isDevelopment: boolean) {
     "X-DNS-Prefetch-Control": "on",
     "Content-Security-Policy": [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' databuddy.cc *.databuddy.cc https://challenges.cloudflare.com",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' databuddy.cc *.databuddy.cc https://challenges.cloudflare.com www.dubcdn.com",
       "style-src 'self' 'unsafe-inline'",
       "font-src 'self'",
-      "img-src 'self' data: blob: databuddy.cc *.databuddy.cc avatars.githubusercontent.com cdn.contentport.io media.brand.dev *.r2.dev cdn.usenotra.com pbs.twimg.com abs.twimg.com",
-      `connect-src 'self' databuddy.cc *.databuddy.cc *.inth.app *.c15t.com *.c15t.dev ${dashboardSessionOrigin}`,
-      `frame-src https://challenges.cloudflare.com ${DEMO_URL}`,
+      "img-src 'self' data: blob: databuddy.cc *.databuddy.cc avatars.githubusercontent.com www.google.com *.gstatic.com cdn.contentport.io media.brand.dev logos.context.dev *.r2.dev cdn.usenotra.com pbs.twimg.com abs.twimg.com i.imgur.com",
+      `connect-src 'self' databuddy.cc *.databuddy.cc api.dub.co *.inth.app *.c15t.com *.c15t.dev i.imgur.com ${dashboardSessionOrigin}`,
+      "frame-src https://challenges.cloudflare.com",
       "frame-ancestors 'none'",
       "object-src 'none'",
       "base-uri 'self'",

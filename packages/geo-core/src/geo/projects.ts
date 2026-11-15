@@ -1,5 +1,7 @@
+import { scheduleDeletedAnalyticsPurge } from "@notra/ai/utils/deleted-analytics-purge";
+import { purgeDeletedProjectAnalytics } from "@notra/analytics/tinybird/purge";
 import { db } from "@notra/db/drizzle";
-import { brandSettings, geoSettings, projects } from "@notra/db/schema";
+import { brandSettings, geoSettings, projects, sites } from "@notra/db/schema";
 import type { GeoCheckScope } from "@notra/db/types/geo-checks";
 import { bumpGeoCheckGeneration } from "@notra/db/utils/geo-check-cache";
 import { and, asc, count, desc, eq, sql } from "drizzle-orm";
@@ -20,7 +22,7 @@ import { SUPPORTED_GEO_LANGUAGES } from "../utils/geo-language-rows";
 import { normalizeWebsiteUrl } from "../utils/geo-website";
 import { memoizeGeoRequest } from "../utils/request-memo";
 import { deleteGeoCache } from "./cache";
-import { geoDb } from "./effect";
+import { geoDb, geoSkip } from "./effect";
 import {
   GeoBrandIdentityMissingError,
   GeoBrandIdentityNotFoundError,
@@ -32,6 +34,7 @@ import {
 import { invalidateGeoIngestHostsCache } from "./ingest-hosts-cache";
 import { lockGeoOrganization, lockGeoProject } from "./lock";
 import { toGeoProject } from "./mappers";
+import { geoTransaction } from "./transaction";
 
 export const listGeoProjects = Effect.fn("geo.projectsList")(function* (
   organizationId: string
@@ -196,6 +199,8 @@ export const updateGeoProject = Effect.fn("geo.projectUpdate")(function* (
  *   organization independently of any project.
  * - The scan schedule needs no teardown: the cron sweep reads `geo_settings`
  *   live, and the settings row cascades away with the project.
+ * - Hosted Sites block deletion. They are never orphaned or removed here;
+ *   the project FK also restricts deletion if a concurrent Site is created.
  * - The organization's last project cannot be deleted: `resolveGeoScope` falls
  *   back to the oldest project, so removing the final one leaves every GEO
  *   read unresolvable. The count is re-taken inside the deleting transaction
@@ -244,56 +249,68 @@ export const deleteGeoProject = Effect.fn("geo.projectDelete")(function* (
     );
   }
 
-  const outcome = yield* geoDb("project delete failed", () =>
-    db.transaction(async (tx) => {
-      await Effect.runPromise(lockGeoOrganization(tx, organizationId));
-      await Effect.runPromise(lockGeoProject(tx, projectId));
-
-      const target = await tx
-        .select({ id: projects.id })
-        .from(projects)
-        .where(
-          and(
-            eq(projects.id, projectId),
-            eq(projects.organizationId, organizationId)
+  const outcome = yield* geoTransaction("project delete failed", (tx) =>
+    Effect.gen(function* () {
+      yield* lockGeoOrganization(tx, organizationId);
+      yield* lockGeoProject(tx, projectId);
+      return yield* geoDb("project delete failed", async () => {
+        const target = await tx
+          .select({ id: projects.id })
+          .from(projects)
+          .where(
+            and(
+              eq(projects.id, projectId),
+              eq(projects.organizationId, organizationId)
+            )
           )
-        )
-        .limit(1)
-        .for("update");
-      if (!target.length) {
-        return "not_found" as const;
-      }
+          .limit(1)
+          .for("update");
+        if (!target.length) {
+          return "not_found" as const;
+        }
 
-      const remaining = await tx
-        .select({ count: count() })
-        .from(projects)
-        .where(eq(projects.organizationId, organizationId));
-      if ((remaining.at(0)?.count ?? 0) <= 1) {
-        return "last_project" as const;
-      }
+        const remaining = await tx
+          .select({ count: count() })
+          .from(projects)
+          .where(eq(projects.organizationId, organizationId));
+        if ((remaining.at(0)?.count ?? 0) <= 1) {
+          return "last_project" as const;
+        }
 
-      const deleted = await tx
-        .delete(projects)
-        .where(
-          and(
-            eq(projects.id, projectId),
-            eq(projects.organizationId, organizationId)
+        const currentSites = await tx
+          .select({ id: sites.id })
+          .from(sites)
+          .where(
+            and(
+              eq(sites.organizationId, organizationId),
+              eq(sites.projectId, projectId)
+            )
           )
-        )
-        .returning({ id: projects.id });
-      return deleted.length ? ("deleted" as const) : ("not_found" as const);
+          .limit(1);
+        if (currentSites.length) {
+          return "has_sites" as const;
+        }
+        const deleted = await tx
+          .delete(projects)
+          .where(
+            and(
+              eq(projects.id, projectId),
+              eq(projects.organizationId, organizationId)
+            )
+          )
+          .returning({ id: projects.id });
+        return deleted.length ? ("deleted" as const) : ("not_found" as const);
+      });
     })
   );
 
-  if (outcome === "last_project") {
+  if (outcome === "last_project" || outcome === "has_sites") {
     return yield* Effect.fail(
-      new GeoProjectDeleteBlockedError({ projectId, reason: "last_project" })
+      new GeoProjectDeleteBlockedError({ projectId, reason: outcome })
     );
   }
 
   if (outcome === "deleted") {
-    // The project's checks went with it (cascade); org-wide aggregates must
-    // stop counting them now, not when their cache entries expire.
     yield* Effect.promise(() => bumpGeoCheckGeneration([organizationId]));
     if (URL.canParse(existing.websiteUrl)) {
       const onboardingUrl = normalizeWebsiteUrl(existing.websiteUrl);
@@ -301,7 +318,6 @@ export const deleteGeoProject = Effect.fn("geo.projectDelete")(function* (
       if (onboardingUrl && onboardingUrl !== existing.websiteUrl) {
         urls.push(onboardingUrl);
       }
-      // Discovery is cached per prompt language, so drop every variant.
       yield* deleteGeoCache(
         ...urls.flatMap((url) =>
           SUPPORTED_GEO_LANGUAGES.map((language) =>
@@ -313,6 +329,14 @@ export const deleteGeoProject = Effect.fn("geo.projectDelete")(function* (
     yield* Effect.promise(() =>
       invalidateGeoIngestHostsCache(organizationId, projectId)
     );
+    // The project row is gone either way, so a failed purge must not fail the
+    // delete. The queued second purge retries until the rows are gone.
+    yield* Effect.tryPromise(() =>
+      purgeDeletedProjectAnalytics({ organizationId, projectId })
+    ).pipe(geoSkip("project analytics purge failed", { projectId }));
+    yield* Effect.tryPromise(() =>
+      scheduleDeletedAnalyticsPurge({ organizationId, projectId })
+    ).pipe(geoSkip("project analytics purge queueing failed", { projectId }));
   }
 
   return { id: projectId, success: true as const };
@@ -323,8 +347,6 @@ export const resolveGeoScope = Effect.fn("geo.resolveScope")(function* (
 ) {
   const { organizationId, projectId } = input;
   if (projectId) {
-    // One round trip instead of two, shared by every GEO procedure in the
-    // same request.
     const row = yield* geoDb("project lookup failed", () =>
       memoizeGeoRequest(`scope:${organizationId}:${projectId}`, async () => {
         const [found] = await db
@@ -385,7 +407,7 @@ export const resolveGeoScope = Effect.fn("geo.resolveScope")(function* (
 export function geoCheckScope(scope: GeoProjectScope): GeoCheckScope {
   return {
     organizationId: scope.organizationId,
-    projectId: scope.projectId ?? null,
+    projectId: scope.projectId,
   };
 }
 

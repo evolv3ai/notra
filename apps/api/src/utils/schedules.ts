@@ -1,7 +1,5 @@
-import crypto from "node:crypto";
-
-import { toUtcDateString } from "@notra/ai/utils/schedule-interval";
-import { githubIntegrations } from "@notra/db/schema";
+import { normalizeCronConfig } from "@notra/ai/qstash/triggers";
+import { scheduleDedupeHashes } from "@notra/ai/utils/trigger-hash";
 import type { QstashError } from "@notra/schemas/api/qstash";
 import {
   createScheduleRequestSchema,
@@ -10,13 +8,10 @@ import {
   scheduleTargetsRepositoryIdsSchema,
   scheduleTargetsSchema,
 } from "@notra/schemas/api/schedules";
-import { and, eq, inArray } from "drizzle-orm";
 import { Effect } from "effect";
-// biome-ignore lint/performance/noNamespaceImport: Zod recommended way of importing
 import * as z from "zod";
 
 import type { ScheduleDatabaseError } from "../errors/schedules";
-import type { DbClient } from "../types/db";
 import type {
   CreateScheduleBody,
   ScheduleDomainError,
@@ -27,7 +22,6 @@ import { logError } from "./logging";
 
 export const DEFAULT_SCHEDULE_NAME = "Untitled Schedule";
 
-/** Leave unexpected database errors to Hono's central error handler. */
 export function runScheduleProgram<A, E extends ScheduleDomainError>(
   program: Effect.Effect<A, E | ScheduleDatabaseError>
 ) {
@@ -42,45 +36,12 @@ export function runScheduleProgram<A, E extends ScheduleDomainError>(
   );
 }
 
-function normalizeCronConfig(
-  config: CreateScheduleBody["sourceConfig"]["cron"]
-) {
-  const base = {
-    frequency: config.frequency,
-    hour: config.hour,
-    minute: config.minute,
-  } as const;
-
-  if (config.frequency === "weekly") {
-    return {
-      ...base,
-      dayOfWeek: config.dayOfWeek ?? 1,
-    };
-  }
-
-  if (config.frequency === "monthly") {
-    return {
-      ...base,
-      dayOfMonth: config.dayOfMonth ?? 1,
-    };
-  }
-
-  if (config.frequency === "custom") {
-    return {
-      ...base,
-      intervalDays: config.intervalDays,
-      anchorDate: config.anchorDate ?? toUtcDateString(new Date()),
-    };
-  }
-
-  return base;
-}
-
 export function normalizeSchedule(input: CreateScheduleBody) {
   return {
     ...input,
     sourceConfig: {
-      cron: normalizeCronConfig(input.sourceConfig.cron),
+      cron:
+        normalizeCronConfig(input.sourceConfig.cron) ?? input.sourceConfig.cron,
     },
     targets: {
       repositoryIds: [...input.targets.repositoryIds].sort(),
@@ -89,51 +50,7 @@ export function normalizeSchedule(input: CreateScheduleBody) {
 }
 
 export function hashSchedule(input: CreateScheduleBody) {
-  const normalized = normalizeSchedule(input);
-
-  return crypto
-    .createHash("sha256")
-    .update(
-      JSON.stringify({
-        sourceType: normalized.sourceType,
-        sourceConfig: normalized.sourceConfig,
-        targets: normalized.targets,
-        outputType: normalized.outputType,
-        outputConfig: normalized.outputConfig ?? null,
-        lookbackWindow: normalized.lookbackWindow,
-      })
-    )
-    .digest("hex");
-}
-
-export async function ensureScheduleTargetsExist(
-  db: DbClient,
-  organizationId: string,
-  repositoryIds: string[],
-  message: string
-) {
-  if (repositoryIds.length === 0) {
-    return null;
-  }
-
-  const integrations = await db.query.githubIntegrations.findMany({
-    where: and(
-      eq(githubIntegrations.organizationId, organizationId),
-      inArray(githubIntegrations.id, repositoryIds)
-    ),
-    columns: { id: true },
-  });
-
-  const existingIds = new Set(
-    integrations.map((integration) => integration.id)
-  );
-  const missingIds = repositoryIds.filter((id) => !existingIds.has(id));
-
-  if (missingIds.length > 0) {
-    return { error: message, missingIntegrationIds: missingIds };
-  }
-
-  return null;
+  return scheduleDedupeHashes(input)[0];
 }
 
 export function serializeSchedule(trigger: ScheduleTriggerWithLookbackWindow) {

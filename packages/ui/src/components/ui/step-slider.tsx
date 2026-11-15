@@ -7,13 +7,10 @@ import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { nearestStepIndex, stepRatio } from "@notra/ui/lib/step-slider";
 import type { StepSliderProps } from "@notra/ui/types/step-slider";
 
-/** Stops closer than this to the thumb sit under it and are not drawn. */
 const STOP_UNDER_THUMB = 0.01;
 
-/** Center of a stop from the inline start, inset by the thumb radius so the ends line up with the thumb. */
 const stopCenter = (ratio: number) => `calc(1rem + ${ratio} * (100% - 2rem))`;
 
-/** Mask positions of the dot band, from before the fill's start to past its end. */
 const SWEEP_FROM = -60;
 const SWEEP_TO = 160;
 const SWEEP_KEYFRAMES: Keyframe[] = [
@@ -24,12 +21,7 @@ const SWEEP_TIMING: KeyframeAnimationOptions = {
   duration: 900,
   easing: "ease-out",
 };
-/**
- * Progress at which the band's leading edge reaches the end of the fill
- * (mask position 100%). Past it the band only trails out of view.
- */
 const SWEEP_PAST_FILL = (100 - SWEEP_FROM) / (SWEEP_TO - SWEEP_FROM);
-/** Two bands, so a fresh sweep can start while the last one trails out. */
 const SWEEP_BANDS = [0, 1] as const;
 
 const defaultFormatLabel = (value: number) => value;
@@ -68,10 +60,6 @@ export const StepSlider = ({
   const sweeps = useRef<(Animation | undefined)[]>([]);
   const activeSweep = useRef(0);
 
-  // A band still crossing the fill keeps going, so fast stepping never cuts
-  // it off or restarts it. Its mask is relative to the fill, so it runs
-  // across the new width too. Once it has crossed, the next step sends a
-  // fresh band on the other layer while the old one trails out.
   useEffect(() => {
     const active = sweeps.current[activeSweep.current];
     const isRunning = active?.playState === "running";
@@ -124,7 +112,6 @@ export const StepSlider = ({
       disabled={disabled}
       max={lastIndex}
       min={0}
-      // Keys move from a between-stops position by whole steps, so round back onto one.
       onValueChange={(nextIndex) => select(Math.round(nextIndex))}
       onValueCommitted={(nextIndex) => commit(Math.round(nextIndex))}
       step={1}
@@ -208,7 +195,6 @@ export const StepSlider = ({
               <button
                 className={cn(
                   "absolute start-(--stop) top-0 -translate-x-1/2 cursor-pointer transition-colors duration-100 hover:text-[#1E1E1E] disabled:pointer-events-none rtl:translate-x-1/2 dark:hover:text-white",
-                  // Narrow containers keep the major labels only.
                   !isMajor && "hidden @lg:block",
                   steps[stepIndex] === current &&
                     "font-medium text-[#1E1E1E] dark:text-white"

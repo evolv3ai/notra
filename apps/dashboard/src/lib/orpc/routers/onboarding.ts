@@ -1,10 +1,10 @@
 import { retrieveBrand, searchBrands } from "@notra/ai/utils/context-dev";
 import { db } from "@notra/db/drizzle";
 import {
-  brandSettings,
-  contentTriggers,
-  geoSettings,
-  githubIntegrations,
+  geoAgentReadinessReports,
+  geoCompetitors,
+  geoPrompts,
+  geoScans,
   onboardingSuggestions,
   organizations,
 } from "@notra/db/schema";
@@ -17,10 +17,10 @@ import {
 import { companyLogoInputSchema } from "@notra/schemas/dashboard/onboarding/company-logo";
 import { ORPCError } from "@orpc/server";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { getTranslations } from "next-intl/server";
 
 import { COMPANY_LOGO_LOOKUP_TIMEOUT_MS } from "@/constants/company-logo";
 import { assertOrganizationAccess } from "@/lib/auth/organization";
+import { getTranslations } from "@/lib/i18n/server";
 import {
   getOnboardingAgentState,
   startSelfServeOnboardingAgent,
@@ -33,7 +33,7 @@ import {
   readCachedCompanyLogo,
   writeCachedCompanyLogo,
 } from "@/lib/onboarding/company-logo-cache";
-import { authorizedProcedure } from "@/lib/orpc/base";
+import { authorizedProcedure, withOrganizationAccess } from "@/lib/orpc/base";
 import { runOrpcEffect } from "@/lib/orpc/effect";
 import { toGeoOrpcError } from "@/lib/orpc/utils/geo-errors";
 import type { CompanyLogoResult } from "@/types/onboarding";
@@ -49,7 +49,6 @@ export const onboardingRouter = {
         searchByName: input.searchByName,
       };
 
-      // Cached logos cost nothing upstream and do not consume the user's budget.
       const cached = await readCachedCompanyLogo(cacheKeyInput);
       if (cached) {
         return cached;
@@ -83,8 +82,6 @@ export const onboardingRouter = {
           };
         }
       } catch {
-        // Failures and timeouts are cached as unresolved (short TTL) so every
-        // page view does not wait on the same slow lookup again.
         result = {
           domain: input.searchByName ? null : input.query,
           url: null,
@@ -115,43 +112,33 @@ export const onboardingRouter = {
     }),
   get: authorizedProcedure
     .input(organizationIdInputSchema)
-    .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
-
-      // Mounted by the sidebar on every page: one round trip instead of five.
-      // Columns in a single-table select render unqualified, so the subqueries
-      // bind the organization id as a parameter instead of correlating.
+    .use(withOrganizationAccess)
+    .handler(async ({ input }) => {
       const organizationId = input.organizationId;
       const [org] = await db
         .select({
           onboardingCompleted: organizations.onboardingCompleted,
           onboardingDismissed: organizations.onboardingDismissed,
-          hasBrandIdentity: sql<boolean>`exists (select 1 from ${brandSettings} where ${brandSettings.organizationId} = ${organizationId})`,
-          hasIntegration: sql<boolean>`exists (select 1 from ${githubIntegrations} where ${githubIntegrations.organizationId} = ${organizationId})`,
-          hasSchedule: sql<boolean>`exists (select 1 from ${contentTriggers} where ${contentTriggers.organizationId} = ${organizationId} and ${contentTriggers.sourceType} = 'cron')`,
-          hasGeoTracking: sql<boolean>`exists (select 1 from ${geoSettings} where ${geoSettings.organizationId} = ${organizationId})`,
+          hasPrompt: sql<boolean>`exists (select 1 from ${geoPrompts} where ${geoPrompts.organizationId} = ${organizationId})`,
+          hasCompetitor: sql<boolean>`exists (select 1 from ${geoCompetitors} where ${geoCompetitors.organizationId} = ${organizationId})`,
+          hasScan: sql<boolean>`exists (select 1 from ${geoScans} where ${geoScans.organizationId} = ${organizationId} and ${geoScans.status} = 'completed')`,
+          hasAgentReadiness: sql<boolean>`exists (select 1 from ${geoAgentReadinessReports} where ${geoAgentReadinessReports.organizationId} = ${organizationId} and ${geoAgentReadinessReports.status} = 'completed')`,
         })
         .from(organizations)
         .where(eq(organizations.id, input.organizationId))
         .limit(1);
 
-      const hasBrandIdentity = org?.hasBrandIdentity ?? false;
-      const hasIntegration = org?.hasIntegration ?? false;
-      const hasSchedule = org?.hasSchedule ?? false;
-      const hasGeoTracking = org?.hasGeoTracking ?? false;
+      const hasPrompt = org?.hasPrompt ?? false;
+      const hasCompetitor = org?.hasCompetitor ?? false;
+      const hasScan = org?.hasScan ?? false;
+      const hasAgentReadiness = org?.hasAgentReadiness ?? false;
       const onboardingCompleted = org?.onboardingCompleted ?? false;
       const onboardingDismissed = org?.onboardingDismissed ?? false;
 
-      if (
-        hasBrandIdentity &&
-        hasIntegration &&
-        hasSchedule &&
-        !onboardingCompleted
-      ) {
+      const setupComplete =
+        hasPrompt && hasCompetitor && hasScan && hasAgentReadiness;
+
+      if (setupComplete && !onboardingCompleted) {
         await db
           .update(organizations)
           .set({ onboardingCompleted: true })
@@ -159,39 +146,26 @@ export const onboardingRouter = {
       }
 
       return {
-        hasBrandIdentity,
-        hasIntegration,
-        hasSchedule,
-        hasGeoTracking,
-        onboardingCompleted:
-          hasBrandIdentity && hasIntegration && hasSchedule
-            ? true
-            : onboardingCompleted,
+        hasPrompt,
+        hasCompetitor,
+        hasScan,
+        hasAgentReadiness,
+        onboardingCompleted: setupComplete || onboardingCompleted,
         onboardingDismissed,
       };
     }),
   agentRun: authorizedProcedure
     .input(organizationIdInputSchema)
-    .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
-
+    .use(withOrganizationAccess)
+    .handler(async ({ input }) => {
       return resolveOnboardingAgentRunState(
         await getOnboardingAgentState(input.organizationId)
       );
     }),
   runAgent: authorizedProcedure
     .input(organizationIdInputSchema)
+    .use(withOrganizationAccess)
     .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
-
       const { success: withinLimit } = await ratelimit.onboardingAgent.limit(
         input.organizationId
       );
@@ -222,13 +196,8 @@ export const onboardingRouter = {
     }),
   suggestions: authorizedProcedure
     .input(listSuggestionsInputSchema)
-    .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
-
+    .use(withOrganizationAccess)
+    .handler(async ({ input }) => {
       const filters = [
         eq(onboardingSuggestions.organizationId, input.organizationId),
       ];
@@ -243,13 +212,8 @@ export const onboardingRouter = {
     }),
   dismissSuggestion: authorizedProcedure
     .input(dismissSuggestionInputSchema)
-    .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
-
+    .use(withOrganizationAccess)
+    .handler(async ({ input }) => {
       const updated = await db
         .update(onboardingSuggestions)
         .set({ dismissed: true })

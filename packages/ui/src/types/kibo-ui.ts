@@ -20,3 +20,11 @@ export interface ColorPickerLabels {
   eyeDropper: string;
   mode: string;
 }
+
+declare global {
+  interface Window {
+    EyeDropper: new () => {
+      open(): Promise<{ sRGBHex: string }>;
+    };
+  }
+}

@@ -1,15 +1,27 @@
 import type { EvlogDrain, GeoLogEvent, GeoLogger } from "@notra/ai/types/evlog";
 import type { LogFlushScheduler } from "@notra/ai/types/operational-log";
 import { isGeoLogEvent } from "@notra/ai/utils/evlog";
+import {
+  evlogRequestIntegration,
+  getOpenRequestLogger,
+  trackRequestLoggerEmit,
+  useRequestLogger,
+} from "@notra/ai/utils/evlog-request";
 import { getEvlogRuntime } from "@notra/ai/utils/evlog-runtime";
+import { alertGatewayLimit } from "@notra/ai/utils/gateway-limit-alert";
 import { createLogFlushScheduler } from "@notra/ai/utils/log-flush-scheduler";
 import {
   getOperationalContext,
   runWithOperationalContext,
 } from "@notra/ai/utils/operational-context";
-import type { DrainContext } from "evlog";
-import { createEvlog } from "evlog/next";
-import { createInstrumentation } from "evlog/next/instrumentation/create";
+import { resolveRequestId } from "@notra/ai/utils/request-id";
+import {
+  type DrainContext,
+  EvlogError,
+  initLogger,
+  log,
+  createError,
+} from "evlog";
 
 const service = process.env.NODE_ENV === "development" ? "notra-dev" : "notra";
 
@@ -20,10 +32,23 @@ export function setLogFlushScheduler(scheduler: LogFlushScheduler): void {
 }
 
 export async function flushLogs(): Promise<void> {
+  await Promise.all([
+    ...(runtime.pendingAIUsage ?? []),
+    ...(runtime.pendingAlerts ?? []),
+  ]);
   await Promise.all([runtime.aiDrain?.flush(), runtime.geoDrain?.flush()]);
 }
 
 function routeDrain(ctx: DrainContext) {
+  if (ctx.event.event === "ai.call.limit_hit") {
+    runtime.pendingAlerts ??= new Set();
+    const pending = runtime.pendingAlerts;
+    const alert = alertGatewayLimit(ctx.event).catch(() => {
+      console.warn("[ai.gateway.alert] Slack delivery failed");
+    });
+    pending.add(alert);
+    void alert.finally(() => pending.delete(alert));
+  }
   if (isGeoLogEvent(ctx.event)) {
     runtime.geoDrain?.(ctx);
   } else {
@@ -32,42 +57,71 @@ function routeDrain(ctx: DrainContext) {
   try {
     runtime.flushScheduler?.(flushLogs);
   } catch {
-    // createLogFlushScheduler already falls back to a macrotask flush when the
-    // host hook (Next's after()) is unavailable; this is defense-in-depth so a
-    // scheduler failure can never break the drain call chain.
+    return;
   }
 }
 
 const drain: EvlogDrain | undefined =
-  runtime.aiDrain || runtime.geoDrain ? routeDrain : undefined;
+  runtime.aiDrain || runtime.geoDrain || process.env.GEO_SCAN_ALERT_WEBHOOK_URL
+    ? routeDrain
+    : undefined;
 
-const config = {
-  service,
-  drain,
-};
+export { log, createError, useRequestLogger as useLogger };
 
-const evlog = createEvlog(config);
-export const { useLogger, log, createError } = evlog;
+let registered = false;
+
+export function register(): void {
+  if (registered) {
+    return;
+  }
+  initLogger({ env: { service }, drain });
+  registered = true;
+}
 
 export function withEvlog<TArgs extends unknown[], TReturn>(
   handler: (...args: TArgs) => TReturn
+): (...args: TArgs) => Promise<Awaited<TReturn>>;
+export function withEvlog<TArgs extends unknown[], TReturn>(
+  handler: (...args: TArgs) => TReturn
 ) {
-  return evlog.withEvlog((...args: TArgs) => {
+  return async (...args: TArgs) => {
+    if (getOpenRequestLogger()) {
+      return await handler(...args);
+    }
     const parent = getOperationalContext();
-    const loggerRequestId = useLogger().getContext().requestId;
-    const requestId =
-      parent?.requestId ??
-      (typeof loggerRequestId === "string"
-        ? loggerRequestId
-        : crypto.randomUUID());
-    useLogger().set({ requestId });
-    return runWithOperationalContext({ ...parent, requestId }, () =>
-      handler(...args)
+    const request = args[0] instanceof Request ? args[0] : undefined;
+    const { logger, finish, finishResponse, runWith } =
+      evlogRequestIntegration.start(request, { drain });
+    trackRequestLoggerEmit(logger);
+    const loggerRequestId = logger.getContext().requestId;
+    const requestId = resolveRequestId(parent?.requestId, loggerRequestId);
+    logger.set({ requestId });
+    const startHeader = request?.headers.get("x-evlog-start");
+    if (startHeader) {
+      logger.set({ middlewareStart: Number(startHeader) });
+    }
+    return runWith(() =>
+      runWithOperationalContext({ ...parent, requestId }, async () => {
+        try {
+          const result = await handler(...args);
+          if (result instanceof Response) {
+            return await finishResponse(result, { status: result.status });
+          }
+          await finish({ status: 200 });
+          return result;
+        } catch (error) {
+          await finish({
+            error: error instanceof Error ? error : new Error(String(error)),
+          });
+          if (request && EvlogError.isEvlogError(error)) {
+            return Response.json(error.toJSON(), { status: error.status });
+          }
+          throw error;
+        }
+      })
     );
-  });
+  };
 }
-
-export const { register, onRequestError } = createInstrumentation(config);
 
 export const geoLogDrainEnabled = runtime.geoDrain !== undefined;
 
@@ -80,6 +134,5 @@ export const geoLog: GeoLogger = {
 };
 
 export async function flushGeoLog(): Promise<void> {
-  // GEO jobs can also call AI and website-data integrations.
   await flushLogs();
 }

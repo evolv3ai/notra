@@ -7,7 +7,7 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@notra/ui/components/shared/responsive-dialog";
-import { useTranslations } from "next-intl";
+import { useTranslations } from "use-intl";
 
 import { CompetitorEditForm } from "@/components/geo/competitor-edit-form";
 import type { CompetitorEditDialogProps } from "@/types/geo";
@@ -18,6 +18,7 @@ export function CompetitorEditDialog({
   organizationId,
   competitor,
   initialName,
+  initialDomain,
   onImportCsv,
 }: CompetitorEditDialogProps) {
   const t = useTranslations("geo.competitorEditDialog");
@@ -38,6 +39,7 @@ export function CompetitorEditDialog({
         </ResponsiveDialogHeader>
         <CompetitorEditForm
           competitor={competitor}
+          initialDomain={initialDomain}
           initialName={initialName}
           onCancel={() => onOpenChange(false)}
           onDone={() => onOpenChange(false)}

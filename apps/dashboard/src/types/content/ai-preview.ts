@@ -5,11 +5,7 @@ import type { PublishedSocialPost } from "@/types/content/post-social";
 export type PreviewIncomingState = "draft" | "finished";
 export type PreviewEffectiveState = "draft" | "loading" | "finished";
 
-export type SocialPreviewUserAction =
-  | "none"
-  | "saving"
-  | "generating"
-  | "save-failed";
+type SocialPreviewUserAction = "none" | "saving" | "generating" | "save-failed";
 
 export interface SocialPreviewState {
   userAction: SocialPreviewUserAction;
@@ -37,6 +33,8 @@ export interface BlogChangelogPreviewProps {
   organizationId: string;
   organizationSlug: string;
   postId?: string;
+  /** Opens the post in the chat's side preview. */
+  onOpenPreview?: () => void;
   onRevise?: () => void;
   state: PreviewIncomingState;
   title: string;
@@ -66,7 +64,7 @@ export interface BlogPreviewActionsProps extends Pick<
   onSave: () => Promise<void>;
 }
 
-export interface SocialPreviewCallbacks {
+interface SocialPreviewCallbacks {
   onApprove?: () => void;
   onPublished?: (published: PublishedSocialPost) => void;
   onDeny?: () => void;

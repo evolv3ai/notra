@@ -2,6 +2,7 @@ import type {
   SocialConnectPlatform,
   SocialPublishSurface,
 } from "@notra/schemas/dashboard/social-accounts";
+import type { SocialVideoAttachment } from "@notra/schemas/types/dashboard/content";
 
 import type { BrandSettings } from "@/types/hooks/brand-analysis";
 
@@ -20,6 +21,20 @@ export interface PostSocialButtonProps {
   onContentChange?: (value: string) => void;
   onPublished?: (published: PublishedSocialPost) => void;
   from?: SocialPublishSurface;
+  /** Saved post id; the attached video is stored on it. */
+  contentId?: string;
+  /** Video already saved on the post. */
+  initialVideo?: SocialVideoAttachment | null;
+  onUploadingChange?: (uploading: boolean) => void;
+}
+
+export interface SocialVideoAttachmentProps {
+  value: SocialVideoAttachment | null;
+  onChange: (video: SocialVideoAttachment | null) => void;
+  disabled?: boolean;
+  /** The post the video belongs to, so other dialogs see its upload. */
+  contentId?: string;
+  onUploadingChange?: (uploading: boolean) => void;
 }
 
 export interface PublishErrorInfo {

@@ -1,5 +1,11 @@
+import "@/workflows/runtime";
 import { flushGeoLog } from "@notra/ai/evlog";
 import { publishGeoVisibilityChange } from "@notra/geo-core/geo/live";
+import {
+  collectGeoOlostepResults,
+  pendingGeoOlostepBatches,
+  submitGeoOlostepBatches,
+} from "@notra/geo-core/geo/olostep";
 import { runGeoScanPersonaBatch } from "@notra/geo-core/geo/persona-scan";
 import {
   finalizeGeoScanProject,
@@ -19,6 +25,10 @@ import type {
   GeoScanProjectPlanResult,
   GeoScanProjectTotals,
 } from "@notra/geo-core/types/geo";
+import type {
+  GeoOlostepQuery,
+  GeoOlostepResults,
+} from "@notra/geo-core/types/geo-olostep";
 import { flushPostHogServer } from "@notra/posthog/server";
 import { Effect } from "effect";
 
@@ -27,6 +37,8 @@ import {
   trackGeoScanStepResult,
 } from "@/lib/analytics/geo-workflow-events";
 import { geoCoreDashboardLayer } from "@/lib/geo/configure";
+import { revokeFreeScanBalance } from "@/lib/geo/free-scan";
+import type { GeoDashboardRuntime } from "@/types/geo-runtime";
 
 function parseClaimedAt(claimedAt?: string): Date | undefined {
   if (!claimedAt) {
@@ -56,17 +68,37 @@ async function flushObservability(): Promise<void> {
   await flushPostHogServer();
 }
 
+async function runScanBatch<E>(
+  context: GeoScanProjectContext,
+  batch: Effect.Effect<GeoScanBatchOutcome, E, GeoDashboardRuntime>
+): Promise<GeoScanBatchOutcome> {
+  try {
+    const outcome = await Effect.runPromise(
+      batch.pipe(Effect.provide(geoCoreDashboardLayer))
+    );
+    await publishBatchProgress(context, outcome);
+    return outcome;
+  } finally {
+    await flushObservability();
+  }
+}
+
 export async function listGeoScanProjectsStep(
   organizationId: string,
-  options: { projectId?: string; projectIds?: string[]; claimedAt?: string }
+  options: {
+    projectId?: string;
+    projectIds?: string[];
+    claimedAt?: string;
+    manual?: boolean;
+  }
 ): Promise<string[]> {
   "use step";
   try {
     return await Effect.runPromise(
       listGeoScanProjects(organizationId, {
         projectId: options.projectId,
-        projectIds: options.projectIds,
         claimedAt: parseClaimedAt(options.claimedAt),
+        manual: options.manual,
       }).pipe(Effect.provide(geoCoreDashboardLayer))
     );
   } finally {
@@ -83,6 +115,7 @@ export async function prepareGeoScanProjectStep(
     retried: boolean;
     promptIds?: string[];
     engines?: string[];
+    manual?: boolean;
   }
 ): Promise<GeoScanProjectPlanResult> {
   "use step";
@@ -95,6 +128,7 @@ export async function prepareGeoScanProjectStep(
         promptIds: options.promptIds,
         engines: options.engines,
         retried: options.retried,
+        manual: options.manual,
       }).pipe(Effect.provide(geoCoreDashboardLayer))
     );
     if (result.status === "planned") {
@@ -147,17 +181,30 @@ export async function runGeoScanTaskBatchStep(
   tasks: GeoScanPlannedTask[]
 ): Promise<GeoScanBatchOutcome> {
   "use step";
-  try {
-    const outcome = await Effect.runPromise(
-      runGeoScanTaskBatch(context, tasks).pipe(
-        Effect.provide(geoCoreDashboardLayer)
-      )
-    );
-    await publishBatchProgress(context, outcome);
-    return outcome;
-  } finally {
-    await flushObservability();
-  }
+  return await runScanBatch(context, runGeoScanTaskBatch(context, tasks));
+}
+
+/** Submits the queries at `indexes`; returns the created batch ids. */
+export async function submitGeoOlostepBatchesStep(
+  queries: GeoOlostepQuery[],
+  indexes: number[]
+): Promise<string[]> {
+  "use step";
+  return await Effect.runPromise(submitGeoOlostepBatches(queries, indexes));
+}
+
+export async function pendingGeoOlostepBatchesStep(
+  batchIds: string[]
+): Promise<string[]> {
+  "use step";
+  return await Effect.runPromise(pendingGeoOlostepBatches(batchIds));
+}
+
+export async function collectGeoOlostepResultsStep(
+  batchIds: string[]
+): Promise<GeoOlostepResults> {
+  "use step";
+  return await Effect.runPromise(collectGeoOlostepResults(batchIds));
 }
 
 export async function runGeoScanSequenceBatchStep(
@@ -165,17 +212,10 @@ export async function runGeoScanSequenceBatchStep(
   sequences: GeoScanPlannedSequence[]
 ): Promise<GeoScanBatchOutcome> {
   "use step";
-  try {
-    const outcome = await Effect.runPromise(
-      runGeoScanSequenceBatch(context, sequences).pipe(
-        Effect.provide(geoCoreDashboardLayer)
-      )
-    );
-    await publishBatchProgress(context, outcome);
-    return outcome;
-  } finally {
-    await flushObservability();
-  }
+  return await runScanBatch(
+    context,
+    runGeoScanSequenceBatch(context, sequences)
+  );
 }
 
 export async function runGeoScanPersonaBatchStep(
@@ -183,17 +223,7 @@ export async function runGeoScanPersonaBatchStep(
   personas: GeoScanPlannedPersona[]
 ): Promise<GeoScanBatchOutcome> {
   "use step";
-  try {
-    const outcome = await Effect.runPromise(
-      runGeoScanPersonaBatch(context, personas).pipe(
-        Effect.provide(geoCoreDashboardLayer)
-      )
-    );
-    await publishBatchProgress(context, outcome);
-    return outcome;
-  } finally {
-    await flushObservability();
-  }
+  return await runScanBatch(context, runGeoScanPersonaBatch(context, personas));
 }
 
 export async function finalizeGeoScanProjectStep(
@@ -270,4 +300,20 @@ export async function trackGeoScanRetryScheduledStep(
   } finally {
     await flushObservability();
   }
+}
+
+export async function revokeFreeScanBalanceStep(
+  organizationId: string
+): Promise<void> {
+  "use step";
+  await Effect.runPromise(
+    revokeFreeScanBalance(organizationId).pipe(
+      Effect.retry({ times: 2 }),
+      Effect.tapError((error) =>
+        Effect.logWarning("Failed to revoke free scan balance").pipe(
+          Effect.annotateLogs({ organizationId, error: error._tag })
+        )
+      )
+    )
+  );
 }

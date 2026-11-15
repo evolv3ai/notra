@@ -47,14 +47,11 @@ export function resolveChatMessageAuthor({
     if (sessionUser && sessionUser.id === authorUserId) {
       return toChatMessageAuthor(sessionUser);
     }
-    // Author left the organization: fall back to a seeded placeholder avatar.
     return unknownChatMessageAuthor(authorUserId);
   }
   const externalSource = metadata?.externalChannelId?.source;
   if (externalSource && externalSource !== "dashboard") {
     return null;
   }
-  // Legacy messages without an author were written before authorship was
-  // stored; attribute them to the viewer.
   return sessionUser ? toChatMessageAuthor(sessionUser) : null;
 }

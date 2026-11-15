@@ -83,6 +83,15 @@ export function formatSnakeCaseLabel(value: string): string {
   return value.replaceAll("_", " ").trim();
 }
 
+export function formatMilliseconds(value: number, locale: string): string {
+  return new Intl.NumberFormat(locale, {
+    style: "unit",
+    unit: "millisecond",
+    unitDisplay: "short",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
 export function formatBytes(bytes: number, locale: string): string {
   const format = (value: number, unit: "byte" | "kilobyte" | "megabyte") =>
     new Intl.NumberFormat(locale, {

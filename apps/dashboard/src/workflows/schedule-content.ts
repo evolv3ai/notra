@@ -1,5 +1,8 @@
-import { getContentBillingLimitLabel } from "@notra/ai/billing/content-billing";
 import { CONTENT_AGENT_MODEL } from "@notra/ai/constants/models";
+import {
+  describeContentBillingDenial,
+  getContentBillingLimitLabel,
+} from "@notra/ai/utils/content-billing-messages";
 import { isCustomIntervalDue } from "@notra/ai/utils/schedule-interval";
 import { scheduleWorkflowPayloadSchema } from "@notra/schemas/dashboard/workflows";
 import { sleep } from "workflow";
@@ -12,11 +15,15 @@ import {
   SCHEDULE_RATE_LIMIT_MAX_ATTEMPTS,
 } from "@/constants/workflows";
 import type { ContentGenerationResult } from "@/lib/workflows/schedule/types";
-import type { WorkflowContentBillingGate } from "@/types/workflows/content-generation-steps";
+import { parseTriggerOutputConfig } from "@/lib/workflows/shared/parsing";
 import type { ScheduleContentWorkflowResult } from "@/types/workflows/schedule-generation";
 import { resolveContentLimitPauseReason } from "@/utils/content-billing";
 import { parseCustomIntervalCron } from "@/utils/schedule-interval";
 
+import {
+  recordAutomationRunFinish,
+  recordAutomationRunStart,
+} from "./steps/automation-run-history";
 import {
   appendAutomationLog,
   claimWorkflowExecution,
@@ -32,6 +39,7 @@ import {
   finalizeContentBilling,
   finishGeneration,
   gateContentBilling,
+  notifyContentCreatedInSlack,
   notifyContentLimitReached,
   recordWorkflowPause,
   startGenerationTracking,
@@ -83,13 +91,26 @@ export async function scheduleContentWorkflow(payload: {
     await fetchScheduleTriggerContext(triggerId);
   if (!trigger) {
     console.log(`[Schedule] Trigger ${triggerId} not found, canceling`);
+    if (manual) {
+      await recordAutomationRunFinish({
+        id: resolvedExecutionId,
+        status: "failed",
+        errorMessage: "The automation could not be loaded",
+      });
+    }
     return { status: "trigger_not_found" };
   }
   if (!trigger.enabled) {
     console.log(`[Schedule] Trigger ${triggerId} is disabled, canceling`);
+    if (manual) {
+      await recordAutomationRunFinish({
+        id: resolvedExecutionId,
+        status: "skipped",
+        errorMessage: "The automation is turned off",
+      });
+    }
     return { status: "trigger_disabled" };
   }
-  // "Every N days" schedules fire daily from QStash; only interval days run.
   const customInterval = parseCustomIntervalCron(trigger.sourceConfig);
   if (!manual && customInterval && !isCustomIntervalDue(customInterval)) {
     console.log(
@@ -98,6 +119,12 @@ export async function scheduleContentWorkflow(payload: {
     return { status: "not_due" };
   }
   const automationName = trigger.name.trim() || trigger.outputType;
+  await recordAutomationRunStart({
+    id: resolvedExecutionId,
+    organizationId: trigger.organizationId,
+    automationId: triggerId,
+    manual,
+  });
 
   const gate = await gateContentBilling({
     organizationId: trigger.organizationId,
@@ -123,8 +150,19 @@ export async function scheduleContentWorkflow(payload: {
         });
       }
     }
+    await recordAutomationRunFinish({
+      id: resolvedExecutionId,
+      status: "skipped",
+      errorMessage: describeContentBillingDenial(gate),
+    });
     return { status: "credits_exhausted" };
   }
+  const releaseBilling = () =>
+    finalizeContentBilling({
+      reservation: gate,
+      action: "release",
+      logPrefix: LOG_PREFIX,
+    });
 
   let sources: Awaited<ReturnType<typeof fetchScheduleSources>>;
   let brand: Awaited<ReturnType<typeof fetchBrandSettingsData>>;
@@ -134,6 +172,7 @@ export async function scheduleContentWorkflow(payload: {
       fetchScheduleSources({
         organizationId: trigger.organizationId,
         repositoryIds: trigger.targets.repositoryIds,
+        linearIntegrationIds: trigger.targets.linearIntegrationIds,
       }),
       fetchBrandSettingsData({
         organizationId: trigger.organizationId,
@@ -142,10 +181,11 @@ export async function scheduleContentWorkflow(payload: {
       fetchGenerationUserId(trigger.organizationId),
     ]);
   } catch (error) {
-    await finalizeContentBilling({
-      reservation: gate,
-      action: "release",
-      logPrefix: LOG_PREFIX,
+    await releaseBilling();
+    await recordAutomationRunFinish({
+      id: resolvedExecutionId,
+      status: "failed",
+      errorMessage: "Unexpected workflow error",
     });
     throw error;
   }
@@ -155,16 +195,118 @@ export async function scheduleContentWorkflow(payload: {
     console.log(
       `[Schedule] No valid data sources for trigger ${triggerId}, canceling`
     );
-    await finalizeContentBilling({
-      reservation: gate,
-      action: "release",
-      logPrefix: LOG_PREFIX,
+    await releaseBilling();
+    await recordAutomationRunFinish({
+      id: resolvedExecutionId,
+      status: "skipped",
+      errorMessage: "No connected data sources",
     });
     return { status: "no_sources" };
   }
 
   const runId = `${triggerId}-${Date.now()}`;
   const collectionId = `group_${runId}`;
+  const integrationType = manual ? "manual" : "schedule";
+  const logPayload = {
+    runId,
+    triggerName: automationName,
+    outputType: trigger.outputType,
+    lookbackWindow,
+    repositoryCount: repositories.length,
+  };
+
+  const finish = async (
+    status: "success" | "failed" | "skipped",
+    { postId, ...detail }: { reason?: string; title?: string; postId?: string }
+  ) => {
+    await recordAutomationRunFinish({
+      id: resolvedExecutionId,
+      status,
+      title: detail.title,
+      errorMessage: detail.reason,
+      postId,
+    });
+    await finishGeneration({
+      organizationId: trigger.organizationId,
+      runId,
+      workflow: WORKFLOW_ANALYTICS_NAMES.SCHEDULE_CONTENT,
+      startedAt: workflowStartedAt,
+      triggerId,
+      outputType: trigger.outputType,
+      triggerName: automationName,
+      status,
+      ...detail,
+    });
+  };
+  const cleanupCollection = () =>
+    cleanupEmptyCollection({
+      collectionId,
+      organizationId: trigger.organizationId,
+    });
+  const pauseAutomaticRun = async () => {
+    if (!manual) {
+      await recordWorkflowPause({
+        triggerId,
+        organizationId: trigger.organizationId,
+        automationName,
+        reason: "workflow_errors",
+        logPrefix: LOG_PREFIX,
+      });
+    }
+  };
+  const reportUnsuccessfulRun = async (
+    kind: "failed" | "skipped",
+    reason: string
+  ) => {
+    await appendAutomationLog({
+      organizationId: trigger.organizationId,
+      integrationId: triggerId,
+      integrationType,
+      title:
+        kind === "failed"
+          ? `Schedule "${automationName}" failed to generate content`
+          : `Schedule "${automationName}" skipped content generation`,
+      payload: logPayload,
+      status: kind,
+      errorMessage: reason,
+    });
+    await trackContentOutcome({
+      kind,
+      triggerId: trigger.id,
+      organizationId: trigger.organizationId,
+      outputType: trigger.outputType,
+      creationMode,
+      reason,
+      lookbackWindow,
+      repositoryCount: repositories.length,
+      source: "schedule",
+      logPrefix: LOG_PREFIX,
+    });
+    const notificationData = await fetchNotificationData({
+      organizationId: trigger.organizationId,
+      setting:
+        kind === "failed"
+          ? "scheduledContentFailed"
+          : "scheduledContentSkipped",
+    });
+    if (notificationData.enabled && notificationData.ownerEmails.length > 0) {
+      await enqueueDigest({
+        organizationId: trigger.organizationId,
+        recipientEmails: notificationData.ownerEmails,
+        kind:
+          kind === "failed"
+            ? "scheduled_content_failed"
+            : "scheduled_content_skipped",
+        event: {
+          organizationName: notificationData.organizationName,
+          organizationSlug: notificationData.organizationSlug,
+          scheduleName: automationName,
+          reason,
+        },
+        logPrefix: LOG_PREFIX,
+      });
+    }
+  };
 
   try {
     await startGenerationTracking({
@@ -172,7 +314,7 @@ export async function scheduleContentWorkflow(payload: {
       runId,
       triggerId: trigger.id,
       outputType: trigger.outputType,
-      triggerName: trigger.name.trim() || trigger.outputType,
+      triggerName: automationName,
     });
     await createGenerationCollection({
       collectionId,
@@ -220,212 +362,36 @@ export async function scheduleContentWorkflow(payload: {
     }
 
     if (contentResult.status === "rate_limited") {
-      await finishGeneration({
-        organizationId: trigger.organizationId,
-        runId,
-        workflow: WORKFLOW_ANALYTICS_NAMES.SCHEDULE_CONTENT,
-        startedAt: workflowStartedAt,
-        triggerId,
-        outputType: trigger.outputType,
-        triggerName: automationName,
-        status: "failed",
+      await finish("failed", {
         reason: "GitHub API rate limit hit repeatedly",
       });
-      await finalizeContentBilling({
-        reservation: gate,
-        action: "release",
-        logPrefix: LOG_PREFIX,
-      });
-      await cleanupEmptyCollection({
-        collectionId,
-        organizationId: trigger.organizationId,
-      });
+      await releaseBilling();
+      await cleanupCollection();
       return { status: "rate_limited_exhausted" };
     }
 
     if (contentResult.status === "unsupported_output_type") {
-      await finishGeneration({
-        organizationId: trigger.organizationId,
-        runId,
-        workflow: WORKFLOW_ANALYTICS_NAMES.SCHEDULE_CONTENT,
-        startedAt: workflowStartedAt,
-        triggerId,
-        outputType: trigger.outputType,
-        triggerName: automationName,
-        status: "failed",
-        reason: "Unsupported output type",
-      });
-      await finalizeContentBilling({
-        reservation: gate,
-        action: "release",
-        logPrefix: LOG_PREFIX,
-      });
-      if (!manual) {
-        await recordWorkflowPause({
-          triggerId,
-          organizationId: trigger.organizationId,
-          automationName,
-          reason: "workflow_errors",
-          logPrefix: LOG_PREFIX,
-        });
-      }
-      await cleanupEmptyCollection({
-        collectionId,
-        organizationId: trigger.organizationId,
-      });
+      await finish("failed", { reason: "Unsupported output type" });
+      await releaseBilling();
+      await pauseAutomaticRun();
+      await cleanupCollection();
       return { status: "unsupported_output_type" };
     }
 
     if (contentResult.status === "generation_failed") {
-      await finalizeContentBilling({
-        reservation: gate,
-        action: "release",
-        logPrefix: LOG_PREFIX,
-      });
-      await finishGeneration({
-        organizationId: trigger.organizationId,
-        runId,
-        workflow: WORKFLOW_ANALYTICS_NAMES.SCHEDULE_CONTENT,
-        startedAt: workflowStartedAt,
-        triggerId,
-        outputType: trigger.outputType,
-        triggerName: automationName,
-        status: "failed",
-        reason: contentResult.reason,
-      });
-      await appendAutomationLog({
-        organizationId: trigger.organizationId,
-        integrationId: triggerId,
-        integrationType: manual ? "manual" : "schedule",
-        title: `Schedule "${automationName}" failed to generate content`,
-        payload: {
-          runId,
-          triggerName: automationName,
-          outputType: trigger.outputType,
-          lookbackWindow,
-          repositoryCount: repositories.length,
-        },
-        status: "failed",
-        errorMessage: contentResult.reason,
-      });
-      await trackContentOutcome({
-        kind: "failed",
-        triggerId: trigger.id,
-        organizationId: trigger.organizationId,
-        outputType: trigger.outputType,
-        creationMode,
-        reason: contentResult.reason,
-        lookbackWindow,
-        repositoryCount: repositories.length,
-        source: "schedule",
-        logPrefix: LOG_PREFIX,
-      });
-      const failureNotificationData = await fetchNotificationData({
-        organizationId: trigger.organizationId,
-        setting: "scheduledContentFailed",
-      });
-      if (
-        failureNotificationData.enabled &&
-        failureNotificationData.ownerEmails.length > 0
-      ) {
-        await enqueueDigest({
-          organizationId: trigger.organizationId,
-          recipientEmails: failureNotificationData.ownerEmails,
-          kind: "scheduled_content_failed",
-          event: {
-            organizationName: failureNotificationData.organizationName,
-            organizationSlug: failureNotificationData.organizationSlug,
-            scheduleName: automationName,
-            reason: contentResult.reason,
-          },
-          logPrefix: LOG_PREFIX,
-        });
-      }
-      if (!manual) {
-        await recordWorkflowPause({
-          triggerId,
-          organizationId: trigger.organizationId,
-          automationName,
-          reason: "workflow_errors",
-          logPrefix: LOG_PREFIX,
-        });
-      }
-      await cleanupEmptyCollection({
-        collectionId,
-        organizationId: trigger.organizationId,
-      });
+      await releaseBilling();
+      await finish("failed", { reason: contentResult.reason });
+      await reportUnsuccessfulRun("failed", contentResult.reason);
+      await pauseAutomaticRun();
+      await cleanupCollection();
       return { status: "generation_failed", reason: contentResult.reason };
     }
 
     if (contentResult.status === "skipped") {
-      await finalizeContentBilling({
-        reservation: gate,
-        action: "release",
-        logPrefix: LOG_PREFIX,
-      });
-      await finishGeneration({
-        organizationId: trigger.organizationId,
-        runId,
-        workflow: WORKFLOW_ANALYTICS_NAMES.SCHEDULE_CONTENT,
-        startedAt: workflowStartedAt,
-        triggerId,
-        outputType: trigger.outputType,
-        triggerName: automationName,
-        status: "skipped",
-        reason: contentResult.reason,
-      });
-      await appendAutomationLog({
-        organizationId: trigger.organizationId,
-        integrationId: triggerId,
-        integrationType: manual ? "manual" : "schedule",
-        title: `Schedule "${automationName}" skipped content generation`,
-        payload: {
-          runId,
-          triggerName: automationName,
-          outputType: trigger.outputType,
-          lookbackWindow,
-          repositoryCount: repositories.length,
-        },
-        status: "skipped",
-        errorMessage: contentResult.reason,
-      });
-      await trackContentOutcome({
-        kind: "skipped",
-        triggerId: trigger.id,
-        organizationId: trigger.organizationId,
-        outputType: trigger.outputType,
-        creationMode,
-        reason: contentResult.reason,
-        lookbackWindow,
-        repositoryCount: repositories.length,
-        source: "schedule",
-        logPrefix: LOG_PREFIX,
-      });
-      const skippedNotificationData = await fetchNotificationData({
-        organizationId: trigger.organizationId,
-        setting: "scheduledContentSkipped",
-      });
-      if (
-        skippedNotificationData.enabled &&
-        skippedNotificationData.ownerEmails.length > 0
-      ) {
-        await enqueueDigest({
-          organizationId: trigger.organizationId,
-          recipientEmails: skippedNotificationData.ownerEmails,
-          kind: "scheduled_content_skipped",
-          event: {
-            organizationName: skippedNotificationData.organizationName,
-            organizationSlug: skippedNotificationData.organizationSlug,
-            scheduleName: automationName,
-            reason: contentResult.reason,
-          },
-          logPrefix: LOG_PREFIX,
-        });
-      }
-      await cleanupEmptyCollection({
-        collectionId,
-        organizationId: trigger.organizationId,
-      });
+      await releaseBilling();
+      await finish("skipped", { reason: contentResult.reason });
+      await reportUnsuccessfulRun("skipped", contentResult.reason);
+      await cleanupCollection();
       if (!manual) {
         await clearWorkflowPause({ triggerId, logPrefix: LOG_PREFIX });
       }
@@ -439,35 +405,12 @@ export async function scheduleContentWorkflow(payload: {
       console.warn("[Schedule] Content generation returned no posts", {
         triggerId,
       });
-      await finishGeneration({
-        organizationId: trigger.organizationId,
-        runId,
-        workflow: WORKFLOW_ANALYTICS_NAMES.SCHEDULE_CONTENT,
-        startedAt: workflowStartedAt,
-        triggerId,
-        outputType: trigger.outputType,
-        triggerName: automationName,
-        status: "failed",
+      await finish("failed", {
         reason: "Content generation returned no posts",
       });
-      await finalizeContentBilling({
-        reservation: gate,
-        action: "release",
-        logPrefix: LOG_PREFIX,
-      });
-      if (!manual) {
-        await recordWorkflowPause({
-          triggerId,
-          organizationId: trigger.organizationId,
-          automationName,
-          reason: "workflow_errors",
-          logPrefix: LOG_PREFIX,
-        });
-      }
-      await cleanupEmptyCollection({
-        collectionId,
-        organizationId: trigger.organizationId,
-      });
+      await releaseBilling();
+      await pauseAutomaticRun();
+      await cleanupCollection();
       return { status: "empty_result" };
     }
 
@@ -477,17 +420,7 @@ export async function scheduleContentWorkflow(payload: {
         ? primaryPost.title
         : `${createdPosts.length} ${trigger.outputType.replaceAll("_", " ")} drafts`;
 
-    await finishGeneration({
-      organizationId: trigger.organizationId,
-      runId,
-      workflow: WORKFLOW_ANALYTICS_NAMES.SCHEDULE_CONTENT,
-      startedAt: workflowStartedAt,
-      triggerId,
-      outputType: trigger.outputType,
-      triggerName: automationName,
-      status: "success",
-      title: contentTitle,
-    });
+    await finish("success", { title: contentTitle, postId });
 
     await finalizeContentBilling({
       reservation: gate,
@@ -495,34 +428,42 @@ export async function scheduleContentWorkflow(payload: {
       units: createdPosts.length,
       usage: contentResult.usage,
       fallbackModelId: CONTENT_AGENT_MODEL,
-      properties: buildCreditProperties(
-        gate,
-        trigger.outputType,
-        automationName,
-        triggerId,
-        runId
-      ),
+      properties: {
+        source: "workflow_schedule",
+        output_type: trigger.outputType,
+        trigger_name: automationName,
+        trigger_id: triggerId,
+        run_id: runId,
+        markup_applied: gate.useMarkup,
+      },
       logPrefix: LOG_PREFIX,
+    }).catch((billingError) => {
+      console.error(
+        `[${LOG_PREFIX}] Billing confirmation failed for run ${runId}; content remains created`,
+        billingError
+      );
     });
 
     try {
+      const notify = parseTriggerOutputConfig(trigger.outputConfig)?.notify;
+      if (notify?.slack) {
+        await notifyContentCreatedInSlack({
+          organizationId: trigger.organizationId,
+          automationName,
+          posts: createdPosts.map(({ postId, title }) => ({ postId, title })),
+        });
+      }
       await appendAutomationLog({
         organizationId: trigger.organizationId,
         integrationId: triggerId,
-        integrationType: manual ? "manual" : "schedule",
+        integrationType,
         title:
           createdPosts.length === 1
             ? `Schedule "${automationName}" created "${contentTitle}"`
             : `Schedule "${automationName}" created ${createdPosts.length} drafts`,
         status: "success",
         referenceId: postId,
-        payload: {
-          runId,
-          triggerName: automationName,
-          outputType: trigger.outputType,
-          lookbackWindow,
-          repositoryCount: repositories.length,
-        },
+        payload: logPayload,
       });
       await trackContentOutcome({
         kind: "created",
@@ -539,6 +480,7 @@ export async function scheduleContentWorkflow(payload: {
       const notificationData = await fetchNotificationData({
         organizationId: trigger.organizationId,
         setting: "scheduledContentCreation",
+        force: notify?.email,
       });
       if (notificationData.enabled && notificationData.ownerEmails.length > 0) {
         const baseUrl = process.env.APP_URL ?? "https://app.usenotra.com";
@@ -557,6 +499,7 @@ export async function scheduleContentWorkflow(payload: {
             })),
             contentType: trigger.outputType,
             contentOverviewLink,
+            automationEmail: notify?.email === true,
             subject: manual
               ? `New content created from ${automationName}`
               : `Your ${automationName} schedule created new content`,
@@ -576,52 +519,10 @@ export async function scheduleContentWorkflow(payload: {
 
     return { status: "success", triggerId, postId };
   } catch (error) {
-    await finishGeneration({
-      organizationId: trigger.organizationId,
-      runId,
-      workflow: WORKFLOW_ANALYTICS_NAMES.SCHEDULE_CONTENT,
-      startedAt: workflowStartedAt,
-      triggerId,
-      outputType: trigger.outputType,
-      triggerName: automationName,
-      status: "failed",
-      reason: "Unexpected workflow error",
-    });
-    await finalizeContentBilling({
-      reservation: gate,
-      action: "release",
-      logPrefix: LOG_PREFIX,
-    });
-    await cleanupEmptyCollection({
-      collectionId,
-      organizationId: trigger.organizationId,
-    });
-    if (!manual) {
-      await recordWorkflowPause({
-        triggerId,
-        organizationId: trigger.organizationId,
-        automationName,
-        reason: "workflow_errors",
-        logPrefix: LOG_PREFIX,
-      });
-    }
+    await finish("failed", { reason: "Unexpected workflow error" });
+    await releaseBilling();
+    await cleanupCollection();
+    await pauseAutomaticRun();
     throw error;
   }
-}
-
-function buildCreditProperties(
-  gate: WorkflowContentBillingGate,
-  outputType: string,
-  triggerName: string,
-  triggerId: string,
-  runId: string
-): Record<string, string | number | boolean> {
-  return {
-    source: "workflow_schedule",
-    output_type: outputType,
-    trigger_name: triggerName,
-    trigger_id: triggerId,
-    run_id: runId,
-    markup_applied: gate.useMarkup,
-  };
 }

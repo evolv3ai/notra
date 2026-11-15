@@ -6,14 +6,15 @@ import { and, eq, sql } from "drizzle-orm";
 import { Effect } from "effect";
 
 import {
+  GEO_DRAIN_PATHS,
   GEO_INGEST_PATH,
   GEO_INGEST_SECRET_ENV,
-  GEO_INGEST_SECRET_FALLBACK_ENV,
+  GEO_INGEST_SITE_TOKEN_PREFIX,
+  GEO_INGEST_SITE_TOKEN_SIGNING_DOMAIN,
   GEO_INGEST_TOKEN_ENV,
   GEO_INGEST_TOKEN_SEPARATOR,
 } from "../constants/geo";
 import type {
-  GeoIngestFramework,
   GeoIngestIdentity,
   GeoIngestSetupInfo,
   GeoIngestSetupResponse,
@@ -25,21 +26,9 @@ import { geoDb } from "./effect";
 import { resolveGeoScope } from "./projects";
 
 export {
-  geoIngestHostsCacheKey,
   invalidateGeoIngestHostsCache,
   invalidateGeoIngestHostsCacheForBrand,
 } from "./ingest-hosts-cache";
-
-/**
- * Tracking-token issuing, revocation and install snippets.
- *
- * This used to live in `apps/dashboard/src/lib/geo-ingest/*`. It is entirely
- * Next-free — `node:crypto`, drizzle and `process.env` — and the
- * public API needs the exact same answers as the dashboard, so it moved here
- * rather than being copied. The dashboard modules now re-export from this file,
- * which keeps a single implementation and leaves every existing dashboard
- * import path working.
- */
 
 const GENERATION_SEGMENT_REGEX = /^g\d+$/;
 const FALLBACK_APP_URL = "https://app.usenotra.com";
@@ -88,13 +77,10 @@ async function rotateGeoIngestTokenGeneration(
         )
       )
       .returning({ generation: projects.geoIngestTokenGeneration });
-    if (!row) {
-      return null;
-    }
-    return row.generation;
+    return row?.generation ?? null;
   }
 
-  const outcome = await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     const [organization] = await tx
       .update(organizations)
       .set({
@@ -111,18 +97,12 @@ async function rotateGeoIngestTokenGeneration(
         geoIngestTokenGeneration: sql`${projects.geoIngestTokenGeneration} + 1`,
       })
       .where(eq(projects.organizationId, organizationId));
-    return organization;
+    return organization.generation;
   });
-  if (!outcome) {
-    return null;
-  }
-  return outcome.generation;
 }
 
 export function getGeoIngestSecret(): string | null {
-  const secret =
-    process.env[GEO_INGEST_SECRET_ENV] ??
-    process.env[GEO_INGEST_SECRET_FALLBACK_ENV];
+  const secret = process.env[GEO_INGEST_SECRET_ENV];
   return secret && secret.length > 0 ? secret : null;
 }
 
@@ -134,7 +114,7 @@ function sign(payload: string, secret: string): string {
   return createHmac("sha256", secret).update(payload).digest("hex");
 }
 
-export function buildGeoIngestToken(
+function buildGeoIngestToken(
   organizationId: string,
   projectId: string | undefined,
   generation: number
@@ -155,6 +135,51 @@ export function buildGeoIngestToken(
   return `${payload}${GEO_INGEST_TOKEN_SEPARATOR}${signature}`;
 }
 
+function signaturesMatch(signature: string, expected: string): boolean {
+  const signatureBytes = Buffer.from(signature);
+  const expectedBytes = Buffer.from(expected);
+  return (
+    signatureBytes.length === expectedBytes.length &&
+    timingSafeEqual(signatureBytes, expectedBytes)
+  );
+}
+
+export function buildGeoIngestSiteToken(siteId: string): string | null {
+  const secret = getGeoIngestSecret();
+  if (!secret) {
+    return null;
+  }
+  const signature = sign(
+    `${GEO_INGEST_SITE_TOKEN_SIGNING_DOMAIN}${siteId}`,
+    secret
+  );
+  return `${GEO_INGEST_SITE_TOKEN_PREFIX}${siteId}${GEO_INGEST_TOKEN_SEPARATOR}${signature}`;
+}
+
+export function isGeoIngestSiteToken(token: string): boolean {
+  return token.startsWith(GEO_INGEST_SITE_TOKEN_PREFIX);
+}
+
+export function verifyGeoIngestSiteToken(token: string): string | null {
+  const secret = getGeoIngestSecret();
+  if (!(secret && isGeoIngestSiteToken(token))) {
+    return null;
+  }
+  const body = token.slice(GEO_INGEST_SITE_TOKEN_PREFIX.length);
+  const separatorIndex = body.lastIndexOf(GEO_INGEST_TOKEN_SEPARATOR);
+  if (separatorIndex <= 0) {
+    return null;
+  }
+  const siteId = body.slice(0, separatorIndex);
+  const expected = sign(
+    `${GEO_INGEST_SITE_TOKEN_SIGNING_DOMAIN}${siteId}`,
+    secret
+  );
+  return signaturesMatch(body.slice(separatorIndex + 1), expected)
+    ? siteId
+    : null;
+}
+
 export function verifyGeoIngestToken(token: string): GeoIngestIdentity | null {
   const secret = getGeoIngestSecret();
   if (!secret) {
@@ -168,17 +193,7 @@ export function verifyGeoIngestToken(token: string): GeoIngestIdentity | null {
 
   const payload = token.slice(0, separatorIndex);
   const signature = token.slice(separatorIndex + 1);
-  const expected = sign(payload, secret);
-  const signatureBytes = Buffer.from(signature);
-  const expectedBytes = Buffer.from(expected);
-  // Compare byte lengths: a multi-byte signature with the right character
-  // count would otherwise make timingSafeEqual throw.
-  if (signatureBytes.length !== expectedBytes.length) {
-    return null;
-  }
-
-  const matches = timingSafeEqual(signatureBytes, expectedBytes);
-  if (!matches) {
+  if (!signaturesMatch(signature, sign(payload, secret))) {
     return null;
   }
 
@@ -198,13 +213,13 @@ export function verifyGeoIngestToken(token: string): GeoIngestIdentity | null {
   return { organizationId, projectId: projectId || null, generation };
 }
 
-export function buildGeoAppUrl(): string {
+function buildGeoAppUrl(): string {
   const base =
     process.env.NEXT_PUBLIC_APP_URL ?? process.env.APP_URL ?? FALLBACK_APP_URL;
   return new URL("/", base).origin;
 }
 
-export function buildGeoIngestUrl(): string {
+function buildGeoIngestUrl(): string {
   const appUrl = buildGeoAppUrl();
   const ingestOrigin = resolveGeoIngestOrigin(
     process.env.GEO_INGEST_URL,
@@ -213,13 +228,10 @@ export function buildGeoIngestUrl(): string {
   return new URL(GEO_INGEST_PATH, ingestOrigin ?? appUrl).toString();
 }
 
-function processTokenExpr(): string {
-  return `process.env.${GEO_INGEST_TOKEN_ENV}!`;
-}
-
-function denoTokenExpr(): string {
-  return `Deno.env.get("${GEO_INGEST_TOKEN_ENV}")!`;
-}
+const PROCESS_TOKEN_EXPR = `process.env.${GEO_INGEST_TOKEN_ENV}!`;
+const DENO_TOKEN_EXPR = `Deno.env.get("${GEO_INGEST_TOKEN_ENV}")!`;
+const IMPORT_META_TOKEN_EXPR = `import.meta.env.${GEO_INGEST_TOKEN_ENV}!`;
+const SVELTEKIT_TOKEN_EXPR = `env.${GEO_INGEST_TOKEN_ENV}!`;
 
 function buildNextSnippet(appUrl: string): string {
   return [
@@ -227,7 +239,7 @@ function buildNextSnippet(appUrl: string): string {
     'import { after, NextResponse } from "next/server";',
     "",
     "const geo = createGeoProxy({",
-    `  token: ${processTokenExpr()},`,
+    `  token: ${PROCESS_TOKEN_EXPR},`,
     `  endpoint: "${appUrl}",`,
     "});",
     "",
@@ -243,7 +255,7 @@ function buildNuxtSnippet(appUrl: string): string {
     'import { createGeoHandler } from "@usenotra/geo/nuxt";',
     "",
     "const geo = createGeoHandler({",
-    `  token: ${processTokenExpr()},`,
+    `  token: ${PROCESS_TOKEN_EXPR},`,
     `  endpoint: "${appUrl}",`,
     "});",
     "",
@@ -259,7 +271,7 @@ function buildNetlifySnippet(appUrl: string): string {
     'import type { Context } from "@netlify/edge-functions";',
     "",
     "const geo = createGeoHandler({",
-    `  token: ${denoTokenExpr()},`,
+    `  token: ${DENO_TOKEN_EXPR},`,
     `  endpoint: "${appUrl}",`,
     "});",
     "",
@@ -277,7 +289,7 @@ function buildTanStackSnippet(appUrl: string): string {
     'import { createGeoMiddleware } from "@usenotra/geo/tanstack";',
     "",
     "const geo = createMiddleware().server(createGeoMiddleware({",
-    `  token: ${processTokenExpr()},`,
+    `  token: ${PROCESS_TOKEN_EXPR},`,
     `  endpoint: "${appUrl}",`,
     "}));",
     "",
@@ -287,20 +299,12 @@ function buildTanStackSnippet(appUrl: string): string {
   ].join("\n");
 }
 
-function importMetaTokenExpr(): string {
-  return `import.meta.env.${GEO_INGEST_TOKEN_ENV}!`;
-}
-
-function svelteKitTokenExpr(): string {
-  return `env.${GEO_INGEST_TOKEN_ENV}!`;
-}
-
 function buildAstroSnippet(appUrl: string): string {
   return [
     'import { createGeoMiddleware } from "@usenotra/geo/astro";',
     "",
     "export const onRequest = createGeoMiddleware({",
-    `  token: ${importMetaTokenExpr()},`,
+    `  token: ${IMPORT_META_TOKEN_EXPR},`,
     `  endpoint: "${appUrl}",`,
     "});",
   ].join("\n");
@@ -312,42 +316,35 @@ function buildSvelteKitSnippet(appUrl: string): string {
     'import { createGeoHandle } from "@usenotra/geo/sveltekit";',
     "",
     "export const handle = createGeoHandle({",
-    `  token: ${svelteKitTokenExpr()},`,
+    `  token: ${SVELTEKIT_TOKEN_EXPR},`,
     `  endpoint: "${appUrl}",`,
     "});",
   ].join("\n");
 }
 
-export function buildGeoSnippet(
-  appUrl: string,
-  framework: GeoIngestFramework = "next"
-): string {
-  if (framework === "tanstack") {
-    return buildTanStackSnippet(appUrl);
-  }
-  if (framework === "nuxt") {
-    return buildNuxtSnippet(appUrl);
-  }
-  if (framework === "netlify") {
-    return buildNetlifySnippet(appUrl);
-  }
-  if (framework === "astro") {
-    return buildAstroSnippet(appUrl);
-  }
-  if (framework === "sveltekit") {
-    return buildSvelteKitSnippet(appUrl);
-  }
-  return buildNextSnippet(appUrl);
+function buildReactRouterSnippet(appUrl: string): string {
+  return [
+    'import { createGeoMiddleware } from "@usenotra/geo/react-router";',
+    'import type { Route } from "./+types/root";',
+    "",
+    "const geo = createGeoMiddleware({",
+    `  token: ${PROCESS_TOKEN_EXPR},`,
+    `  endpoint: "${appUrl}",`,
+    "});",
+    "",
+    "export const middleware: Route.MiddlewareFunction[] = [geo];",
+  ].join("\n");
 }
 
-export function buildGeoSnippets(appUrl: string): GeoIngestSnippets {
+function buildGeoSnippets(appUrl: string): GeoIngestSnippets {
   return {
-    next: buildGeoSnippet(appUrl, "next"),
-    nuxt: buildGeoSnippet(appUrl, "nuxt"),
-    netlify: buildGeoSnippet(appUrl, "netlify"),
-    tanstack: buildGeoSnippet(appUrl, "tanstack"),
-    astro: buildGeoSnippet(appUrl, "astro"),
-    sveltekit: buildGeoSnippet(appUrl, "sveltekit"),
+    next: buildNextSnippet(appUrl),
+    nuxt: buildNuxtSnippet(appUrl),
+    netlify: buildNetlifySnippet(appUrl),
+    tanstack: buildTanStackSnippet(appUrl),
+    astro: buildAstroSnippet(appUrl),
+    sveltekit: buildSvelteKitSnippet(appUrl),
+    reactRouter: buildReactRouterSnippet(appUrl),
   };
 }
 
@@ -360,19 +357,25 @@ export function buildGeoSnippets(appUrl: string): GeoIngestSnippets {
  * holder post events), so the read path builds this and never the token.
  */
 export function buildGeoIngestSetupInfo(): GeoIngestSetupInfo {
-  const snippets = buildGeoSnippets(new URL(buildGeoIngestUrl()).origin);
+  const ingestUrl = buildGeoIngestUrl();
+  const { origin } = new URL(ingestUrl);
+  const snippets = buildGeoSnippets(origin);
   return {
-    ingestUrl: buildGeoIngestUrl(),
+    ingestUrl,
     snippet: snippets.next,
     snippets,
+    drainUrls: {
+      vercel: new URL(GEO_DRAIN_PATHS.vercel, origin).toString(),
+      cloudflare: new URL(GEO_DRAIN_PATHS.cloudflare, origin).toString(),
+    },
   };
 }
 
 /**
  * The full "how do I install tracking" payload, token included.
  *
- * Lifted verbatim out of the dashboard's `geo.ingestSetup` oRPC procedure so
- * both surfaces answer identically. `token` is `""` when `GEO_INGEST_SECRET`
+ * Shared by the dashboard and the public API so both surfaces answer
+ * identically. `token` is `""` when `GEO_INGEST_SECRET`
  * is unset — the dashboard renders that as "not configured yet"; the public API
  * turns it into a 503 instead, because an empty token is not a usable answer.
  */

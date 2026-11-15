@@ -7,8 +7,8 @@ import {
   PaintBoardIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { EXPECTED_COLOR_ROLES } from "@/constants/brand-guideline-ui";
@@ -35,10 +35,6 @@ export function GuidelinesColorsSection({
   const [editing, setEditing] = useState<BrandGuidelineColor | null>(null);
   const [creatingRole, setCreatingRole] =
     useState<BrandGuidelineColorRole | null>(null);
-
-  if (colors.length === 0) {
-    return null;
-  }
 
   const missingRoles = EXPECTED_COLOR_ROLES.filter(
     (role) => !colors.some((color) => color.role === role)

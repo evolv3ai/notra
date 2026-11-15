@@ -11,6 +11,7 @@ import type { LanguageModelUsage } from "ai";
 import { type ComponentProps, createContext, useContext } from "react";
 import { getUsage } from "tokenlens";
 import { cn } from "@notra/ui/lib/utils";
+import { formatCompactNumber } from "@notra/utils/format-compact-number";
 
 const PERCENT_MAX = 100;
 const ICON_RADIUS = 10;
@@ -150,12 +151,8 @@ export const ContextContentHeader = ({
     style: "percent",
     maximumFractionDigits: 1,
   }).format(usedPercent);
-  const used = new Intl.NumberFormat("en-US", {
-    notation: "compact",
-  }).format(usedTokens);
-  const total = new Intl.NumberFormat("en-US", {
-    notation: "compact",
-  }).format(maxTokens);
+  const used = formatCompactNumber(usedTokens, "en-US");
+  const total = formatCompactNumber(maxTokens, "en-US");
 
   return (
     <div className={cn("w-full space-y-2 p-3", className)} {...props}>
@@ -398,9 +395,7 @@ const TokensWithCost = ({
   <span>
     {tokens === undefined
       ? "—"
-      : new Intl.NumberFormat("en-US", {
-          notation: "compact",
-        }).format(tokens)}
+      : formatCompactNumber(tokens, "en-US")}
     {costText ? (
       <span className="ml-2 text-muted-foreground">• {costText}</span>
     ) : null}

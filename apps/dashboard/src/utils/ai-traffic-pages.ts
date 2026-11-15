@@ -111,6 +111,21 @@ export function filterTrafficPageGroupsByHost(
   );
 }
 
+/** Distinct paths for the path filter: human top pages first, then AI pages. */
+export function trafficPathOptions(
+  ...lists: readonly (readonly Pick<GeoTrafficPage, "path">[])[]
+): string[] {
+  const paths = new Set<string>();
+  for (const list of lists) {
+    for (const page of list) {
+      if (page.path.length > 0) {
+        paths.add(page.path);
+      }
+    }
+  }
+  return [...paths];
+}
+
 export function trafficHostsFromPages(
   pages: readonly Pick<GeoTrafficPage, "host">[]
 ): string[] {

@@ -1,3 +1,4 @@
+import type { Transition } from "motion/react";
 import type { ReactNode } from "react";
 
 export type GeoPresenceStatus =
@@ -55,6 +56,7 @@ export type EngineIconKey =
   | "cursor"
   | "claude-code"
   | "codex"
+  | "fx"
   | "apple"
   | "duckduckgo"
   | "cloudflare"
@@ -67,6 +69,7 @@ export type EngineIconKey =
   | "kimi"
   | "zai"
   | "exa"
+  | "parallel"
   | "commoncrawl"
   | "youcom"
   | "liner"
@@ -126,6 +129,8 @@ export interface GeoPromptAnswerThreadProps {
   result: GeoAnswerResult;
   timestamp: string;
   labels?: Partial<GeoAnswerThreadLabels>;
+  /** Below the lg breakpoint, grow with the answer instead of scrolling inside a fixed-height frame. */
+  fitContentBelowLg?: boolean;
 }
 
 export interface PromptEngineSwitcherItem {
@@ -140,6 +145,13 @@ export interface PromptEngineSwitcherProps {
   active: string;
   onChange: (engine: string, direction: number) => void;
   labels?: Partial<PromptEngineSwitcherLabels>;
+  /** Pill slide between engines; defaults to the flat indicator spring. */
+  transition?: Transition;
+  /**
+   * Keeps every engine on one row on small screens: inactive pills show
+   * only their icon there, the active one keeps its name.
+   */
+  compactOnMobile?: boolean;
 }
 
 export interface PromptEngineSwitcherLabels {

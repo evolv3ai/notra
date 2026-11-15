@@ -1,8 +1,10 @@
+import { supportsPostSlug } from "@notra/ai/schemas/post";
 import { unavailableImageRevisionToolInputSchema } from "@notra/ai/schemas/repo-image";
 import {
   createGetBrandReferencesTool,
   createSearchBrandReferencesTool,
 } from "@notra/ai/tools/brand-references";
+import { createSearchCompanyKnowledgeTool } from "@notra/ai/tools/company-knowledge";
 import { createMarkdownTools } from "@notra/ai/tools/edit-markdown";
 import { exampleTool } from "@notra/ai/tools/example";
 import {
@@ -12,24 +14,18 @@ import {
   createGetGeoPromptResultsTool,
   createListGeoProjectsTool,
 } from "@notra/ai/tools/geo";
-import {
-  createGetCommitsByTimeframeTool,
-  createGetPullRequestsTool,
-  createGetReleaseByTagTool,
-} from "@notra/ai/tools/github";
+import { buildGitHubDataTools } from "@notra/ai/tools/github";
 import { createImageRevisionTool } from "@notra/ai/tools/image";
-import {
-  createGetLinearCyclesTool,
-  createGetLinearIssuesTool,
-  createGetLinearProjectsTool,
-} from "@notra/ai/tools/linear";
+import { buildLinearDataTools } from "@notra/ai/tools/linear";
 import {
   createGetBrandIdentityTool,
   createListBrandIdentitiesTool,
 } from "@notra/ai/tools/organization";
+import { createPostDetailsTools } from "@notra/ai/tools/post-details";
 import { registerSitemapTools } from "@notra/ai/tools/sitemap";
 import { getSkillByName, listAvailableSkills } from "@notra/ai/tools/skills";
 import { registerWebSearchTools } from "@notra/ai/tools/web-search";
+import type { ResolveLinearIntegrationContext } from "@notra/ai/types/agents";
 import type { AgentType } from "@notra/ai/types/brand-references";
 import type {
   BuildToolSetDeps,
@@ -39,6 +35,7 @@ import type {
   ToolSet,
   ValidatedIntegration,
 } from "@notra/ai/types/orchestration";
+import { logWarn } from "@notra/ai/utils/server-log";
 import { type Tool, tool } from "ai";
 
 export function buildToolSet(
@@ -55,8 +52,9 @@ export function buildToolSet(
     contentType,
     currentPostId,
     userId,
-    imageDefaults,
+    imageContext,
     useMarkup,
+    chargeAiCredits,
     onMarkdownUpdate,
     validatedIntegrations,
   } = params;
@@ -79,24 +77,21 @@ export function buildToolSet(
   registerBrandAndGeoTools(tools, descriptions, organizationId, contentType);
 
   if (isImageContent) {
-    if (currentPostId && userId && imageDefaults) {
+    if (currentPostId && userId && imageContext?.canRevise) {
       tools.reviseImage = createImageRevisionTool({
         organizationId,
         userId,
         postId: currentPostId,
-        title: imageDefaults.title,
-        integrationId: imageDefaults.integrationId,
-        branch: imageDefaults.branch,
-        brandIdentityId: imageDefaults.brandIdentityId,
         useMarkup,
+        chargeAiCredits,
       });
       descriptions.unshift(
-        "**Image Editing**: Revise the current image using reviseImage. It restores the saved sandbox snapshot, applies the visual change, saves the updated image back to this content item, and stores a new snapshot."
+        "**Image Editing**: Revise the current image using reviseImage. Marketing images restore the saved sandbox snapshot, apply the visual change, and store a new snapshot. Diagrams are edited directly in seconds; set useRepository only when the change needs new facts from the code. Call reviseImage once per request and describe the whole change in one prompt."
       );
     } else {
       tools.reviseImage = createUnavailableImageRevisionTool();
       descriptions.unshift(
-        "**Image Editing**: Image revision is unavailable because the saved sandbox metadata is missing. Call reviseImage to explain the missing metadata."
+        "**Image Editing**: Image revision is unavailable because there is neither a valid editable diagram nor the sandbox metadata needed for marketing-image edits. Call reviseImage to explain this limitation."
       );
     }
   } else {
@@ -105,7 +100,7 @@ export function buildToolSet(
       onUpdate:
         onMarkdownUpdate ??
         (() => {
-          console.log("onMarkdownUpdate is not set");
+          logWarn("[Tool Registry] onMarkdownUpdate is not set");
         }),
     });
 
@@ -114,6 +109,18 @@ export function buildToolSet(
     descriptions.unshift(
       "**Markdown Editing**: View and edit the document using getMarkdown and editMarkdown"
     );
+
+    if (currentPostId && contentType && supportsPostSlug(contentType)) {
+      const { getPostDetails, updatePostDetails } = createPostDetailsTools({
+        organizationId,
+        postId: currentPostId,
+      });
+      tools.getPostDetails = getPostDetails;
+      tools.updatePostDetails = updatePostDetails;
+      descriptions.unshift(
+        "**Post Details**: Read and change the cover image, tags, excerpt, authors, featured flag, search visibility and shown date (the Overview tab) using getPostDetails and updatePostDetails. These are not part of the markdown."
+      );
+    }
   }
 
   if (isDev) {
@@ -123,39 +130,17 @@ export function buildToolSet(
     );
   }
 
-  const hasGitHub = validatedIntegrations.some(
-    (i) => i.type === "github" && i.repositories.length > 0
-  );
-
-  if (hasGitHub) {
-    const allowedIntegrationIds = Array.from(
-      new Set(
-        validatedIntegrations
-          .filter((integration) => integration.type === "github")
-          .map((integration) => integration.id)
-      )
-    );
-
-    tools.getPullRequests = createGetPullRequestsTool(
-      {
+  if (hasGitHubRepositories(validatedIntegrations)) {
+    Object.assign(
+      tools,
+      buildGitHubDataTools({
         organizationId,
-        allowedIntegrationIds,
-      },
-      deps?.resolveContext
-    );
-    tools.getReleaseByTag = createGetReleaseByTagTool(
-      {
-        organizationId,
-        allowedIntegrationIds,
-      },
-      deps?.resolveContext
-    );
-    tools.getCommitsByTimeframe = createGetCommitsByTimeframeTool(
-      {
-        organizationId,
-        allowedIntegrationIds,
-      },
-      deps?.resolveContext
+        allowedIntegrationIds: uniqueIntegrationIds(
+          validatedIntegrations,
+          "github"
+        ),
+        resolveContext: deps?.resolveContext,
+      })
     );
 
     const repos = getGitHubRepoList(validatedIntegrations);
@@ -164,35 +149,13 @@ export function buildToolSet(
     );
   }
 
-  const hasLinear = validatedIntegrations.some((i) => i.type === "linear");
-
-  if (hasLinear) {
-    const allowedLinearIntegrationIds = Array.from(
-      new Set(
-        validatedIntegrations
-          .filter((integration) => integration.type === "linear")
-          .map((integration) => integration.id)
-      )
-    );
-
-    tools.getLinearIssues = createGetLinearIssuesTool(
-      { organizationId, allowedIntegrationIds: allowedLinearIntegrationIds },
-      deps?.resolveLinearContext
-    );
-    tools.getLinearProjects = createGetLinearProjectsTool(
-      { organizationId, allowedIntegrationIds: allowedLinearIntegrationIds },
-      deps?.resolveLinearContext
-    );
-    tools.getLinearCycles = createGetLinearCyclesTool(
-      { organizationId, allowedIntegrationIds: allowedLinearIntegrationIds },
-      deps?.resolveLinearContext
-    );
-
-    const teams = getLinearTeamList(validatedIntegrations);
-    descriptions.push(
-      `**Linear Integration**: Fetch issues, projects, and cycles${teams ? ` from: ${teams}` : ""}`
-    );
-  }
+  registerLinearTools(
+    tools,
+    descriptions,
+    organizationId,
+    validatedIntegrations,
+    deps?.resolveLinearContext
+  );
 
   return { tools, descriptions };
 }
@@ -217,6 +180,9 @@ function registerBrandAndGeoTools(
     organizationId,
     agentType,
   });
+  tools.searchCompanyKnowledge = createSearchCompanyKnowledgeTool({
+    organizationId,
+  });
   tools.listGeoProjects = createListGeoProjectsTool({ organizationId });
   tools.getGeoOverview = createGetGeoOverviewTool({ organizationId });
   tools.getGeoPromptResults = createGetGeoPromptResultsTool({
@@ -230,7 +196,7 @@ function registerBrandAndGeoTools(
   });
 
   descriptions.push(
-    "**Brand**: Load company and voice details with listBrandIdentities and getBrandIdentity. Match writing style with getBrandReferences or searchBrandReferences before drafting. Pass the same brandIdentityId to sitemap and brand-reference tools when writing for a non-default brand."
+    "**Brand**: Load company and voice details with listBrandIdentities and getBrandIdentity. Match writing style with getBrandReferences or searchBrandReferences before drafting. Look up positioning, competitors and covered topics from onboarding research with searchCompanyKnowledge. Pass the same brandIdentityId to sitemap and brand-reference tools when writing for a non-default brand."
   );
   descriptions.push(
     "**GEO Analytics**: List GEO projects, then inspect AI visibility, prompt wins/losses, competitor share, and project context with listGeoProjects, getGeoOverview, getGeoPromptResults, getGeoCompetitorShare, and getGeoProjectContext."
@@ -258,17 +224,40 @@ function brandAgentTypeFromContent(
 function createUnavailableImageRevisionTool(): Tool {
   return tool({
     description:
-      "Explain why this generated image cannot be revised because its saved sandbox metadata is missing.",
+      "Explain why this image cannot be revised without an editable diagram or saved sandbox metadata.",
     inputSchema: unavailableImageRevisionToolInputSchema,
     execute: async () => ({
       status: "unavailable",
       message:
-        "This image cannot be revised because the saved sandbox metadata is missing.",
+        "This image has no editable diagram or saved sandbox metadata needed to revise it.",
     }),
   });
 }
 
-function getGitHubRepoList(integrations: ValidatedIntegration[]): string {
+export function hasGitHubRepositories(
+  integrations: ValidatedIntegration[]
+): boolean {
+  return integrations.some(
+    (i) => i.type === "github" && i.repositories.length > 0
+  );
+}
+
+export function uniqueIntegrationIds(
+  integrations: ValidatedIntegration[],
+  type: ValidatedIntegration["type"]
+): string[] {
+  return Array.from(
+    new Set(
+      integrations
+        .filter((integration) => integration.type === type)
+        .map((integration) => integration.id)
+    )
+  );
+}
+
+export function getGitHubRepoList(
+  integrations: ValidatedIntegration[]
+): string {
   const repos: string[] = [];
   for (const integration of integrations) {
     if (integration.type === "github") {
@@ -280,14 +269,36 @@ function getGitHubRepoList(integrations: ValidatedIntegration[]): string {
   return repos.join(", ");
 }
 
-function getLinearTeamList(integrations: ValidatedIntegration[]): string {
-  const teams: string[] = [];
-  for (const integration of integrations) {
-    if (integration.type === "linear") {
-      teams.push(integration.linearTeamName ?? integration.displayName);
-    }
+export function registerLinearTools(
+  tools: Record<string, Tool>,
+  descriptions: string[],
+  organizationId: string,
+  integrations: ValidatedIntegration[],
+  resolveContext?: ResolveLinearIntegrationContext
+) {
+  if (!integrations.some((i) => i.type === "linear")) {
+    return;
   }
-  return teams.join(", ");
+
+  Object.assign(
+    tools,
+    buildLinearDataTools({
+      organizationId,
+      allowedIntegrationIds: uniqueIntegrationIds(integrations, "linear"),
+      resolveContext,
+    })
+  );
+
+  const teams = integrations
+    .flatMap((integration) =>
+      integration.type === "linear"
+        ? [integration.linearTeamName ?? integration.displayName]
+        : []
+    )
+    .join(", ");
+  descriptions.push(
+    `**Linear Integration**: Fetch issues, projects, and cycles${teams ? ` from: ${teams}` : ""}`
+  );
 }
 
 export function getRepoContextFromIntegrations(

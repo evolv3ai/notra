@@ -1,21 +1,25 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 import { parseAsStringLiteral, useQueryState } from "nuqs";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { PageContainer } from "@/components/layout/container";
 import { SkillDeleteDialog } from "@/components/skills/skill-delete-dialog";
 import { SkillDetailHeader } from "@/components/skills/skill-detail-header";
 import { SkillEditorForm } from "@/components/skills/skill-editor-form";
 import { SkillUnsavedChangesToast } from "@/components/skills/skill-unsaved-changes-toast";
+import { SkillUpdateCard } from "@/components/skills/skill-update-card";
 import { SKILL_EDITOR_VIEWS } from "@/constants/skills";
+import { useSkillUpdateSync } from "@/lib/hooks/use-skill-update-sync";
+import { useWarnBeforeUnload } from "@/lib/hooks/use-warn-before-unload";
+import { useRouter } from "@/lib/navigation";
 import { dashboardOrpc } from "@/lib/orpc/query";
 import { updateSkillFormSchema } from "@/schemas/skill-form";
 import type { SkillDetailPageClientProps } from "@/types/skills/page";
+import { hasSkillUpdate } from "@/utils/skills";
 
 import { SkillEditorSkeleton } from "../skeleton";
 
@@ -53,6 +57,8 @@ export default function PageClient({
       input: { organizationId, name },
     })
   );
+  const upstream =
+    skill?.upstream && hasSkillUpdate(skill.upstream) ? skill.upstream : null;
 
   if (skill?.name === name && original?.name !== skill.name) {
     setOriginal({
@@ -137,6 +143,19 @@ export default function PageClient({
     },
   });
 
+  const syncMutation = useSkillUpdateSync({
+    organizationId,
+    name,
+    reviewedVersion: skill?.upstream?.latestVersion,
+    reviewedUpdatedAt: skill?.updatedAt,
+    onApplied: (synced) => {
+      setOriginal({ name, ...synced });
+      setDescription(synced.description);
+      setContent(synced.content);
+    },
+    invalidate,
+  });
+
   useEffect(() => {
     handleSaveRef.current = () => {
       if (!hasChanges || saveMutation.isPending || deleteMutation.isPending) {
@@ -179,15 +198,7 @@ export default function PageClient({
     };
   }, []);
 
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasChanges) {
-        e.preventDefault();
-      }
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [hasChanges]);
+  useWarnBeforeUnload(hasChanges);
 
   return (
     <PageContainer className="flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
@@ -203,6 +214,20 @@ export default function PageClient({
 
         {isPending ? <SkillEditorSkeleton /> : null}
 
+        {upstream ? (
+          <SkillUpdateCard
+            content={original?.content ?? skill?.content ?? ""}
+            description={original?.description ?? skill?.description ?? ""}
+            disabled={
+              hasChanges || saveMutation.isPending || syncMutation.isPending
+            }
+            onApply={() => syncMutation.mutate(false)}
+            onKeep={() => syncMutation.mutate(true)}
+            pending={syncMutation.isPending}
+            upstream={upstream}
+          />
+        ) : null}
+
         {!isPending && skill ? (
           <SkillEditorForm
             content={content}
@@ -214,7 +239,7 @@ export default function PageClient({
             onNameChange={setNameInput}
             onViewChange={setView}
             originalContent={original?.content ?? ""}
-            savePending={saveMutation.isPending}
+            savePending={saveMutation.isPending || syncMutation.isPending}
             view={view}
           />
         ) : null}

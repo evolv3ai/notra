@@ -16,6 +16,7 @@ Speed matters more than completeness; your caller blocks until you return. Hard 
 - One `scrape_website` call, at most one `scrape_pages` batch of up to 50 owned-blog URLs, then at most 6 `scrape_page` calls and 3 `search_web` calls.
 - At most 2 `crawl_sitemap`, 2 `fetch_github_repo`, and 2 `fetch_github_activity` calls.
 - Never scrape the same URL twice. The batch may inspect up to 50 owned blog posts; outside that batch, scrape at most 2 changelog entries.
+- Each scrape page has a 20-second total budget and a batch has a 120-second total budget, including retries and snapshots. A batch returns completed pages plus errors for unfinished URLs. Keep the successful evidence; do not retry timed-out URLs or start a replacement batch to recover skipped pages.
 - Stop fetching once you have a strong deduplicated owned-writing reference set (at least 25 when the material allows) and two or three quoted phrases per requested topic. Enough evidence beats exhaustive coverage.
 - When the budget is spent, return the brief with what you have and list what you skipped in unavailableSources.
 

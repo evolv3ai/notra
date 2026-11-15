@@ -1,3 +1,4 @@
+import { hasAiTrafficEventsQuota } from "@notra/ai/billing/ai-traffic-events";
 import { classifyAgentFeedback } from "@notra/ai/jobs/feedback-classifier";
 import { agentFeedback, organizations, projects } from "@notra/db/schema";
 import { and, count, desc, eq } from "drizzle-orm";
@@ -6,9 +7,11 @@ import { nanoid } from "nanoid";
 
 import {
   FeedbackDatabaseError,
+  FeedbackIdempotencyConflictError,
   FeedbackNotFoundError,
   FeedbackOrganizationNotFoundError,
   FeedbackProjectNotFoundError,
+  FeedbackQuotaExceededError,
 } from "../errors/feedback";
 import type {
   ListFeedbackProgramInput,
@@ -23,14 +26,6 @@ import type {
 const database = <A>(operation: () => Promise<A>) =>
   Effect.tryPromise({
     try: operation,
-    catch: (cause) => new FeedbackDatabaseError({ cause }),
-  });
-
-const classifyFeedback = (
-  params: Parameters<typeof classifyAgentFeedback>[0]
-) =>
-  Effect.tryPromise({
-    try: () => classifyAgentFeedback(params),
     catch: (cause) => new FeedbackDatabaseError({ cause }),
   });
 
@@ -185,6 +180,22 @@ export const updateFeedback = Effect.fn("feedback.update")(function* ({
   return updated;
 });
 
+/**
+ * Submissions are often unauthenticated, so a replayed idempotency key only
+ * returns the stored row for the same message. Otherwise a guessed key would
+ * read someone else's feedback and its triage state.
+ */
+const deduplicatedSubmission = (
+  existing: SubmitFeedbackProgramSuccess["feedback"],
+  body: SubmitFeedbackProgramInput["body"]
+) =>
+  existing.message === body.message
+    ? Effect.succeed({
+        feedback: existing,
+        deduplicated: true,
+      } satisfies SubmitFeedbackProgramSuccess)
+    : Effect.fail(new FeedbackIdempotencyConflictError());
+
 export const submitFeedback = Effect.fn("feedback.submit")(function* ({
   db,
   organizationId,
@@ -200,11 +211,12 @@ export const submitFeedback = Effect.fn("feedback.submit")(function* ({
       idempotencyKey
     );
     if (existing) {
-      return {
-        feedback: existing,
-        deduplicated: true,
-      } satisfies SubmitFeedbackProgramSuccess;
+      return yield* deduplicatedSubmission(existing, body);
     }
+  }
+
+  if (!(yield* hasAiTrafficEventsQuota(organizationId))) {
+    return yield* new FeedbackQuotaExceededError();
   }
 
   const projectId =
@@ -221,14 +233,21 @@ export const submitFeedback = Effect.fn("feedback.submit")(function* ({
   const feedbackId = nanoid();
   const needsClassification = !(body.kind && body.sentiment && body.title);
   const classification = needsClassification
-    ? yield* classifyFeedback({
-        organizationId,
-        feedbackId,
-        message: body.message,
-        title: body.title,
-        contextUrl: body.contextUrl,
-        agentClient: body.agentClient,
-      })
+    ? yield* database(() =>
+        classifyAgentFeedback({
+          organizationId,
+          feedbackId,
+          message: body.message,
+          title: body.title,
+          contextUrl: body.contextUrl,
+          agentClient: body.agentClient,
+          suppliedFields: {
+            kind: body.kind,
+            sentiment: body.sentiment,
+            title: body.title,
+          },
+        })
+      )
     : null;
 
   const [created] = yield* database(() =>
@@ -273,8 +292,5 @@ export const submitFeedback = Effect.fn("feedback.submit")(function* ({
     return yield* new FeedbackNotFoundError();
   }
 
-  return {
-    feedback: existing,
-    deduplicated: true,
-  } satisfies SubmitFeedbackProgramSuccess;
+  return yield* deduplicatedSubmission(existing, body);
 });

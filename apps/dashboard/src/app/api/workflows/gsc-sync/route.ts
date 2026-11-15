@@ -1,4 +1,4 @@
-import { getAppUrl } from "@notra/ai/qstash/triggers";
+import { logError } from "@notra/ai/utils/server-log";
 import { GSC_SYNC_WORKFLOW_PATH } from "@notra/geo-core/constants/google-search-console";
 import { gscSyncPayloadSchema } from "@notra/geo-core/schemas/google-search-console";
 import { flattenError } from "zod";
@@ -11,7 +11,7 @@ export async function POST(request: Request) {
   const verified = await verifyQstashSignature({
     request,
     rawBody,
-    url: `${getAppUrl()}${GSC_SYNC_WORKFLOW_PATH}`,
+    path: GSC_SYNC_WORKFLOW_PATH,
   });
   if (!verified) {
     return new Response("Unauthorized", { status: 401 });
@@ -28,7 +28,9 @@ export async function POST(request: Request) {
 
   const parsed = gscSyncPayloadSchema.safeParse(body);
   if (!parsed.success) {
-    console.error("[GSC] Invalid sync payload:", flattenError(parsed.error));
+    logError("[GSC] Invalid sync payload", undefined, {
+      issues: flattenError(parsed.error),
+    });
     return new Response("Invalid payload", { status: 400 });
   }
 

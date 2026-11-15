@@ -34,7 +34,7 @@ export function buildScanModelOptions({
     };
   };
   const untracked = (catalog ?? []).filter(
-    (model) => !trackedIds.has(model.id)
+    (model) => !model.hidden && !trackedIds.has(model.id)
   );
   return [
     ...tracked.map(toOption),

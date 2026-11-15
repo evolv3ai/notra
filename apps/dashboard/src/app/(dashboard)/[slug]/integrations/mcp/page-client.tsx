@@ -2,13 +2,14 @@
 
 import { PlusSignIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { PageHeading } from "@notra/ui/components/shared/page-heading";
 import { Kbd } from "@notra/ui/components/ui/kbd";
 import { openMcpOAuthPopup } from "@notra/utils/oauth-popup";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { EmptyState } from "@/components/empty-state";
@@ -16,7 +17,6 @@ import { EmptyStateCardsPreview } from "@/components/empty-state-preview";
 import { AddMcpServerDialog } from "@/components/integrations/add-mcp-server-dialog";
 import { McpServerCard } from "@/components/integrations/mcp-server-card";
 import { PageContainer } from "@/components/layout/container";
-import { PageHeading } from "@/components/layout/page-heading";
 import { useOrganizationsContext } from "@/components/providers/organization-provider";
 import { dashboardOrpc } from "@/lib/orpc/query";
 
@@ -131,11 +131,8 @@ export default function PageClient({ organizationSlug }: PageClientProps) {
   return (
     <PageContainer className="flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
       <div className="w-full space-y-6 px-4 lg:px-6">
-        <PageHeading
-          description={t("description")}
-          title={tIntegrationsShared("mcpServers")}
-        >
-          <Button className="gap-1.5" onClick={() => setDialogOpen(true)}>
+        <PageHeading description={t("description")} title="MCP">
+          <Button onClick={() => setDialogOpen(true)}>
             <HugeiconsIcon className="size-4" icon={PlusSignIcon} />
             {t("connect")}
             <Kbd className="ml-1 hidden sm:inline-flex">C</Kbd>
@@ -148,11 +145,8 @@ export default function PageClient({ organizationSlug }: PageClientProps) {
           {!showLoading && servers.length === 0 ? (
             <EmptyState
               action={
-                <Button
-                  onClick={() => setDialogOpen(true)}
-                  size="sm"
-                  variant="outline"
-                >
+                <Button onClick={() => setDialogOpen(true)} variant="outline">
+                  <HugeiconsIcon className="size-4" icon={PlusSignIcon} />
                   {t("connect")}
                 </Button>
               }

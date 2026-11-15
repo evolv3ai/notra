@@ -18,7 +18,9 @@ import {
 import { isDemoMode } from "@notra/utils/demo-mode";
 import type { Context } from "hono";
 
+import { ORGANIZATION_SCOPED_API_KEY_ERROR } from "../constants/skills";
 import { createAgentClient, isAgentApiEnabled } from "../lib/agent/client";
+import { isAccountKeyAuth, isOAuthAuth } from "../types/auth";
 import { checkAgentAiCredits } from "../utils/agent-credits";
 import { getOrganizationId } from "../utils/auth";
 import { createOpenApiApp } from "../utils/openapi-app";
@@ -32,7 +34,6 @@ const chatRateLimitResponse = rateLimitResponse(
   RATE_LIMITS.chatGeneration.window
 );
 
-// The demo has no agent service; /v1/chats answers with the demo agent.
 const DEMO_AGENT_UNAVAILABLE =
   "The agent session API isn't available in the demo. Use POST /v1/chats to try the agent.";
 
@@ -42,31 +43,24 @@ const commonErrorResponses = {
   503: errorResponse("Agent service is not configured"),
 };
 
-async function requireAgentContext(
-  c: Context
-): Promise<
-  { ok: true; organizationId: string } | { ok: false; response: Response }
-> {
+async function requireAgentContext(c: Context) {
   if (isDemoMode()) {
     return {
-      ok: false,
+      ok: false as const,
       response: c.json({ error: DEMO_AGENT_UNAVAILABLE }, 403),
     };
   }
   if (!isAgentApiEnabled()) {
     return {
-      ok: false,
+      ok: false as const,
       response: c.json({ error: "Agent service is not configured" }, 503),
     };
   }
   const organizationId = getOrganizationId(c);
   if (!organizationId) {
     return {
-      ok: false,
-      response: c.json(
-        { error: "Forbidden: API key must be scoped to an organization" },
-        403
-      ),
+      ok: false as const,
+      response: c.json({ error: ORGANIZATION_SCOPED_API_KEY_ERROR }, 403),
     };
   }
   const rateLimited = await enforceRatelimit(
@@ -75,9 +69,20 @@ async function requireAgentContext(
     "organization"
   );
   if (rateLimited) {
-    return { ok: false, response: rateLimited };
+    return { ok: false as const, response: rateLimited };
   }
-  return { ok: true, organizationId };
+  const auth = c.get("auth");
+  const userId =
+    auth && (isAccountKeyAuth(auth) || isOAuthAuth(auth)) ? auth.userId : null;
+  return { ok: true as const, organizationId, userId };
+}
+
+/** Dashboard sessions belong to their user; org keys only see unowned ones. */
+function canAccessSession(
+  mapping: { userId: string | null },
+  userId: string | null
+) {
+  return !mapping.userId || mapping.userId === userId;
 }
 
 agentChatsRoutes.openAPIRegistry.registerPath(
@@ -114,10 +119,13 @@ agentChatsRoutes.openAPIRegistry.registerPath(
 );
 
 agentChatsRoutes.post("/eve/v1/session", async (c) => {
+  const log = c.get("log");
+  log.set({ feature: "agent_session" });
   const context = await requireAgentContext(c);
   if (!context.ok) {
     return context.response;
   }
+  log.set({ organizationId: context.organizationId });
   const credits = await checkAgentAiCredits(context.organizationId);
   if (!credits.allowed) {
     return c.json({ error: credits.error, code: credits.code }, credits.status);
@@ -132,6 +140,7 @@ agentChatsRoutes.post("/eve/v1/session", async (c) => {
   try {
     const client = await createAgentClient({
       organizationId: context.organizationId,
+      userId: context.userId ?? undefined,
       useMarkup: credits.useMarkup,
       chargeAiCredits: credits.chargeAiCredits,
     });
@@ -139,9 +148,20 @@ agentChatsRoutes.post("/eve/v1/session", async (c) => {
       fetchUpstream: (path, init) => client.fetch(path, init),
       scope: {
         organizationId: context.organizationId,
+        userId: context.userId ?? undefined,
         surface: "standalone-chat",
       },
       message: parsed.data.message,
+    });
+    log.set({ sessionId: created.eveSessionId });
+    log.audit({
+      action: "agent.session.created",
+      actor: {
+        type: "api",
+        id: c.get("auth").keyId ?? context.organizationId,
+      },
+      target: { type: "agent_session", id: created.eveSessionId },
+      outcome: "success",
     });
     return c.json(
       {
@@ -152,7 +172,9 @@ agentChatsRoutes.post("/eve/v1/session", async (c) => {
       { "x-eve-session-id": created.eveSessionId }
     );
   } catch (error) {
-    console.error("[agent-chats] Session creation failed", error);
+    log.error(error instanceof Error ? error : String(error), {
+      errorCode: "agent_session_create_failed",
+    });
     return c.json({ error: "Agent session creation failed" }, 502);
   }
 });
@@ -193,17 +215,21 @@ agentChatsRoutes.openAPIRegistry.registerPath(
   })
 );
 
+// evlog-map-disable-next-line audit -- audited on session creation
 agentChatsRoutes.post("/eve/v1/session/:sessionId", async (c) => {
+  const log = c.get("log");
+  log.set({ feature: "agent_session_message" });
   const context = await requireAgentContext(c);
   if (!context.ok) {
     return context.response;
   }
   const sessionId = c.req.param("sessionId");
+  log.set({ organizationId: context.organizationId, sessionId });
   const mapping = await getAgentSessionMapping(
     context.organizationId,
     sessionId
   );
-  if (!mapping) {
+  if (!(mapping && canAccessSession(mapping, context.userId))) {
     return c.json({ error: "Session not found" }, 404);
   }
 
@@ -269,17 +295,21 @@ agentChatsRoutes.openAPIRegistry.registerPath(
   })
 );
 
+// evlog-map-disable-next-line audit -- audited on session creation
 agentChatsRoutes.get("/eve/v1/session/:sessionId/stream", async (c) => {
+  const log = c.get("log");
+  log.set({ feature: "agent_session_stream" });
   const context = await requireAgentContext(c);
   if (!context.ok) {
     return context.response;
   }
   const sessionId = c.req.param("sessionId");
+  log.set({ organizationId: context.organizationId, sessionId });
   const mapping = await getAgentSessionMapping(
     context.organizationId,
     sessionId
   );
-  if (!mapping) {
+  if (!(mapping && canAccessSession(mapping, context.userId))) {
     return c.json({ error: "Session not found" }, 404);
   }
 
@@ -313,29 +343,16 @@ const listAgentChatsRoute = createRoute({
 });
 
 agentChatsRoutes.openapi(listAgentChatsRoute, async (c) => {
-  if (isDemoMode()) {
-    return c.json({ error: DEMO_AGENT_UNAVAILABLE }, 403);
-  }
-  if (!isAgentApiEnabled()) {
-    return c.json({ error: "Agent service is not configured" }, 503);
-  }
-  const organizationId = getOrganizationId(c);
-  if (!organizationId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
-  }
-  const rateLimited = await enforceRatelimit(
-    c,
-    ratelimit.chatGeneration,
-    "organization"
-  );
-  if (rateLimited) {
-    return rateLimited;
+  const context = await requireAgentContext(c);
+  if (!context.ok) {
+    return context.response;
   }
   const { limit } = c.req.valid("query");
-  const sessions = await listAgentSessionMappings(organizationId, limit);
+  const sessions = await listAgentSessionMappings(
+    context.organizationId,
+    limit,
+    context.userId
+  );
   return c.json(
     {
       sessions: sessions.map((session) => ({

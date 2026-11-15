@@ -1,10 +1,11 @@
+import { getBaseUrl } from "@notra/ai/qstash/triggers";
 import { publicationSyncRepairSchema } from "@notra/ai/schemas/content-publication";
 import type { PublicationRepairScheduler } from "@notra/ai/types/content-publication";
 
 export const scheduleContentPublicationSyncRepair: PublicationRepairScheduler =
   async (repair) => {
     const payload = publicationSyncRepairSchema.parse(repair);
-    const baseUrl = process.env.WORKFLOW_BASE_URL?.replace(/\/$/, "");
+    const baseUrl = getBaseUrl();
     const secret = process.env.INTERNAL_WORKFLOW_SECRET?.trim();
     if (!(baseUrl && secret)) {
       throw new Error("Publication repair workflow is not configured");

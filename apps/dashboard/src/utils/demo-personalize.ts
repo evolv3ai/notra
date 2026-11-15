@@ -29,12 +29,9 @@ export function personalizeDemoText(text: string, companyName: string): string {
   if (companyName === DEMO_COMPANY_NAME) {
     return text;
   }
-  // English possessive: "Labs'" rather than "Labs's".
   const possessive = companyName.endsWith("s")
     ? `${companyName}'`
     : `${companyName}'s`;
-  // Replacer functions: a string replacement would expand `$&` and friends
-  // in the visitor's company name.
   return text
     .replaceAll(`${DEMO_COMPANY_NAME}'s`, () => possessive)
     .replaceAll(DEMO_COMPANY_NAME, () => companyName)

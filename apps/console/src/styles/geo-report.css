@@ -1,0 +1,42 @@
+/* GEO report document — always light, Notra palette. */
+.geo-report {
+  --geo-ink: #1e1e1e;
+  --geo-paper: #f6f3f1;
+  --geo-paper-deep: #ece6e0;
+  --geo-violet: #8b5cf6;
+  --geo-violet-deep: #5b3fb0;
+  --geo-lavender: #c8b2ee;
+  --geo-lavender-soft: #e9dffa;
+  --geo-night: #141019;
+  --geo-muted: rgb(30 30 30 / 0.62);
+  --geo-line: rgb(30 30 30 / 0.12);
+  --geo-display: var(--font-geist-sans), var(--font-sans), sans-serif;
+  color: var(--geo-ink);
+  background: var(--geo-paper);
+  font-family: var(--geo-display);
+  font-feature-settings: "ss01", "cv11";
+  color-scheme: light;
+}
+
+@media print {
+  .geo-print-hide {
+    display: none !important;
+  }
+
+  .geo-report {
+    color-scheme: light;
+    background: #f6f3f1;
+  }
+
+  .geo-section {
+    break-inside: avoid;
+  }
+
+  .geo-section ~ .geo-section {
+    break-before: page;
+  }
+
+  .geo-cover {
+    break-after: page;
+  }
+}

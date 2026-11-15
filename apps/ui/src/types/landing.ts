@@ -6,13 +6,21 @@ export type LandingPreview =
   | "claude"
   | "claude-code"
   | "codex"
+  | "composer"
+  | "data-table"
   | "duotone-tooltip"
   | "gemini"
+  | "icon-tabs"
+  | "listicle-outreach"
   | "marketing-button"
   | "opencode"
   | "perplexity"
   | "shimmer"
-  | "tooltip";
+  | "sonner"
+  | "step-slider"
+  | "tooltip"
+  | "workflow-builder"
+  | "workflow-node";
 
 export interface LandingComponentLink {
   description: string;

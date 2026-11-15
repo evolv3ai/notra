@@ -6,9 +6,7 @@ import {
 import type { EvaluationResult } from "@notra/ai/types/evaluation";
 import type { RoutingDecision } from "@notra/ai/types/orchestration";
 
-export type RoutingEvaluation = EvaluationResult<
-  typeof ROUTING_EVALUATION_QUESTIONS
->;
+type RoutingEvaluation = EvaluationResult<typeof ROUTING_EVALUATION_QUESTIONS>;
 
 export function buildRoutingEvaluationState(
   userMessage: string,

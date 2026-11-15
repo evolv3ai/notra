@@ -32,7 +32,6 @@ export function ChatMinimapRail({ className, turns }: ChatMinimapRailProps) {
   const firstVisibleIndex = isTurnVisible.indexOf(true);
   const lastIndex = turns.length - 1;
 
-  // Long threads overflow the rail, so keep the active line inside it.
   useEffect(() => {
     const list = listRef.current;
     const item = list?.children[firstVisibleIndex];
@@ -62,7 +61,7 @@ export function ChatMinimapRail({ className, turns }: ChatMinimapRailProps) {
   return (
     <ChatMinimap
       className={cn(
-        "absolute top-1/2 left-3 z-10 hidden -translate-y-1/2 md:flex",
+        "absolute top-1/2 left-3 z-10 hidden -translate-y-1/2 @min-[50rem]/chat:flex",
         className
       )}
       side="right"

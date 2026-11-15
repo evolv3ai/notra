@@ -19,8 +19,6 @@ export async function githubMentionWorkflow(context: GitHubMentionContext) {
   try {
     result = await processGitHubMentionStep(context);
   } catch (error) {
-    // The processing attempt may have reached GitHub before interruption.
-    // Keep its claim and expose the failure instead of blindly replaying it.
     await logGitHubMentionResultStep(
       context,
       {

@@ -10,11 +10,11 @@ export function GroupDetailSkeleton() {
   return (
     <PageContainer className="flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
       <div className="w-full space-y-6 px-4 lg:px-6">
-        <div className="space-y-4">
-          <Skeleton className="h-4 w-20" />
-          <div className="space-y-2">
+        <div className="space-y-3">
+          <Skeleton className="h-5 w-20" />
+          <div className="space-y-1">
             <Skeleton className="h-9 w-72" />
-            <Skeleton className="h-4 w-56" />
+            <Skeleton className="h-5 w-56" />
           </div>
         </div>
         <div className="grid gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

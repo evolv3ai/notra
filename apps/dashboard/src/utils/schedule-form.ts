@@ -2,6 +2,7 @@ import { CUSTOM_SCHEDULE_DEFAULT_INTERVAL_DAYS } from "@notra/ai/constants/sched
 import { toUtcDateString } from "@notra/ai/utils/schedule-interval";
 import type { ScheduleOutputType } from "@notra/schemas/dashboard/integrations";
 
+import { NO_AUTOMATION_NOTIFY } from "@/constants/automation-notify";
 import { DEFAULT_SCHEDULE } from "@/constants/schedule";
 import { SCHEDULE_PRESETS } from "@/constants/schedule-presets";
 import type {
@@ -15,7 +16,7 @@ import type { Trigger } from "@/types/triggers/triggers";
 
 const TIME_PATTERN = /^(\d{1,2}):(\d{2})$/;
 
-export function padTimeUnit(value: number): string {
+function padTimeUnit(value: number): string {
   return value.toString().padStart(2, "0");
 }
 
@@ -47,7 +48,8 @@ export function formatTimeValue(hour: number, minute: number): string {
 
 export function getDefaultScheduleValues(
   editTrigger?: Trigger,
-  presetId?: SchedulePresetId | null
+  presetId?: SchedulePresetId | null,
+  overrides?: Partial<ScheduleFormValues>
 ): ScheduleFormValues {
   if (editTrigger) {
     const supportedType: ScheduleOutputType =
@@ -59,7 +61,12 @@ export function getDefaultScheduleValues(
       outputType: supportedType,
       instructions: editTrigger.outputConfig?.instructions ?? "",
       schedule: editTrigger.sourceConfig.cron ?? DEFAULT_SCHEDULE,
-      repositoryIds: editTrigger.targets.repositoryIds,
+      repositoryIds: [
+        ...editTrigger.targets.repositoryIds,
+        ...(editTrigger.targets.linearIntegrationIds ?? []).map(
+          (id) => `linear:${id}`
+        ),
+      ],
       lookbackWindow: editTrigger.lookbackWindow ?? "last_7_days",
       brandVoiceId:
         editTrigger.outputConfig?.brandVoiceId &&
@@ -67,6 +74,7 @@ export function getDefaultScheduleValues(
           ? editTrigger.outputConfig.brandVoiceId
           : "",
       autoPublish: editTrigger.autoPublish ?? false,
+      notify: editTrigger.outputConfig?.notify ?? NO_AUTOMATION_NOTIFY,
     };
   }
   const preset = presetId ? getPresetScheduleValues(presetId) : undefined;
@@ -79,6 +87,8 @@ export function getDefaultScheduleValues(
     lookbackWindow: preset?.lookbackWindow ?? "last_7_days",
     brandVoiceId: "",
     autoPublish: false,
+    notify: NO_AUTOMATION_NOTIFY,
+    ...overrides,
   };
 }
 

@@ -1,4 +1,8 @@
-import type { ContextItem, TextSelection } from "@notra/ai/types/chat";
+import type {
+  ChatAttachment,
+  ContextItem,
+  TextSelection,
+} from "@notra/ai/types/chat";
 
 import type {
   ChatContextOption,
@@ -100,7 +104,8 @@ export function getContentChatInputChrome({
   const isEmpty = value.trim().length === 0 && skillTagCount === 0;
   const hasAttachmentChips = hasReadyAttachments || pendingUploadCount > 0;
   const isInputLocked = disabled || isUsageBlocked;
-  const canQueue = isLoading && !isEmpty && !hasAttachmentChips;
+  const canQueue =
+    isLoading && (!isEmpty || hasReadyAttachments) && pendingUploadCount === 0;
   const showStop = isLoading && !canQueue && Boolean(onStop);
   const hasContextChips =
     contextCount > 0 || hasSelection || queuedCount > 0 || skillTagCount > 0;
@@ -129,7 +134,7 @@ export function getContentChatInputChrome({
   };
 }
 
-export function getComposerSendChrome(
+function getComposerSendChrome(
   showStop: boolean,
   canQueue: boolean,
   labels: ContentChatInputChromeLabels
@@ -172,7 +177,7 @@ export function getSelectionPreview(selection: TextSelection) {
     : selection.text;
 }
 
-export function toGithubContextItem(repo: EnabledRepo): ContextItem {
+function toGithubContextItem(repo: EnabledRepo): ContextItem {
   return {
     type: "github-repo",
     owner: repo.owner,
@@ -243,4 +248,36 @@ export function buildContentChatContextOptions({
   }
 
   return options;
+}
+
+/** Short type label for a file tile, e.g. "pdf" from "brief.pdf" or "application/pdf". */
+export function getAttachmentExtension(
+  filename?: string,
+  mediaType?: string
+): string | null {
+  const fromName = filename?.includes(".")
+    ? filename.split(".").pop()
+    : undefined;
+  if (fromName) {
+    return fromName;
+  }
+  return mediaType?.split("/")[1]?.split(/[+.;]/)[0] ?? null;
+}
+
+/** Appends files that are not already in the list, keeping order. */
+export function mergeChatAttachments(
+  current: ChatAttachment[],
+  next: ChatAttachment[]
+): ChatAttachment[] {
+  const keys = new Set(current.map((attachment) => attachment.key));
+  return [
+    ...current,
+    ...next.filter((attachment) => {
+      if (keys.has(attachment.key)) {
+        return false;
+      }
+      keys.add(attachment.key);
+      return true;
+    }),
+  ];
 }

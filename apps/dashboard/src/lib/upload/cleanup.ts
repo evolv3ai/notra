@@ -25,30 +25,10 @@ async function deleteObjectsByPrefix(prefix: string) {
       })
     );
 
-    const contents = listResult.Contents ?? [];
-    const keys = contents
+    const keys = (listResult.Contents ?? [])
       .map((obj) => obj.Key)
       .filter((key): key is string => key != null);
-
-    if (keys.length > 0) {
-      const chunks: string[][] = [];
-      for (let i = 0; i < keys.length; i += MAX_KEYS_PER_DELETE) {
-        chunks.push(keys.slice(i, i + MAX_KEYS_PER_DELETE));
-      }
-
-      for (const chunk of chunks) {
-        await r2.send(
-          new DeleteObjectsCommand({
-            Bucket: bucketName,
-            Delete: {
-              Objects: chunk.map((Key) => ({ Key })),
-              Quiet: true,
-            },
-          })
-        );
-        totalDeleted += chunk.length;
-      }
-    }
+    totalDeleted += await deleteR2Keys(keys);
 
     continuationToken = listResult.NextContinuationToken;
   } while (continuationToken);
@@ -122,8 +102,6 @@ export async function deleteOrganizationChatFiles(organizationId: string) {
     );
     const deleted = await deleteR2Keys(keys);
 
-    // Remove DB rows for these keys so they don't re-surface in user
-    // attachment lists with dead URLs.
     if (keys.length > 0) {
       await db
         .delete(chatAttachments)

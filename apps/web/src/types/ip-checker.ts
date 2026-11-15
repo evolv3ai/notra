@@ -131,3 +131,7 @@ export interface IpCheckNoticeProps {
   message: string;
   status: IpCheckStatus;
 }
+
+export interface IpCheckerSearch {
+  ip?: string;
+}

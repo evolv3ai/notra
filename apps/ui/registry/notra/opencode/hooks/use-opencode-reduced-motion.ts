@@ -15,7 +15,6 @@ const readPreference = () =>
 
 const readServerPreference = () => false;
 
-/** The user's reduced-motion preference, unless `override` is set. */
 export const useOpencodeReducedMotion = (override?: boolean): boolean => {
   const prefersReduced = useSyncExternalStore(
     subscribe,

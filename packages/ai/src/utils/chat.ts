@@ -7,24 +7,13 @@ import type {
   ChatSessionSummary,
 } from "../types/chat";
 
-function findLastUserMessageIndex(messages: UIMessage[]) {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    if (messages[index]?.role === "user") {
-      return index;
-    }
-  }
-  return -1;
-}
-
 export function stampUserMessageAuthors<T extends UIMessage>(
   messages: T[],
   authorUserId: string
 ): T[] {
-  const lastUserIndex = findLastUserMessageIndex(messages);
-  if (lastUserIndex === -1) {
-    return messages;
-  }
-
+  const lastUserIndex = messages.findLastIndex(
+    (message) => message.role === "user"
+  );
   const message = messages[lastUserIndex];
   if (!message) {
     return messages;
@@ -111,20 +100,6 @@ export function chatSessionsQueryKey(
   return ["chat-sessions", organizationId, projectId ?? null] as const;
 }
 
-export function chatSessionPath(organizationId: string, chatId: string) {
-  return `/api/organizations/${organizationId}/chat/${chatId}`;
-}
-
-export function chatSessionsPath(
-  organizationId: string,
-  projectId?: string | null
-) {
-  const base = `/api/organizations/${organizationId}/chat/sessions`;
-  return projectId
-    ? `${base}?projectId=${encodeURIComponent(projectId)}`
-    : base;
-}
-
 export function contentChatSessionsQueryKey(
   organizationId: string,
   contentId: string
@@ -164,17 +139,6 @@ export function dashboardAgentChatHistoryQueryKey(
   chatId: string | null
 ) {
   return ["dashboard-agent-chat-history", organizationId, chatId] as const;
-}
-
-export function dashboardAgentChatSessionsPath(organizationId: string) {
-  return chatSessionsPath(organizationId);
-}
-
-export function dashboardAgentChatHistoryPath(
-  organizationId: string,
-  chatId: string
-) {
-  return chatSessionPath(organizationId, chatId);
 }
 
 export function sortChatSessions(sessions: ChatSessionSummary[]) {

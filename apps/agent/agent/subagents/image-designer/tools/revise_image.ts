@@ -1,3 +1,8 @@
 import { createReviseImageTool } from "@notra/tools/image/revise-image";
 
-export default createReviseImageTool();
+import { withToolActivityLabel } from "../../../lib/utils/tool-activity";
+
+export default withToolActivityLabel(
+  createReviseImageTool(),
+  "Revising a content image"
+);

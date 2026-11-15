@@ -1,12 +1,12 @@
-import { describeContentBillingDenial } from "@notra/ai/billing/content-billing";
 import type { AgentTokenUsage } from "@notra/ai/types/agents";
+import { describeContentBillingDenial } from "@notra/ai/utils/content-billing-messages";
 import { db } from "@notra/db/drizzle";
 import { geoPromptTranslations, geoSettings } from "@notra/db/schema";
 import { and, eq } from "drizzle-orm";
 import { Effect } from "effect";
 
 import {
-  GEO_JUDGE_MODEL,
+  GEO_TRANSLATION_MODEL,
   GEO_LANGUAGE_MAX_PROMPTS,
   GEO_SCAN_CONCURRENCY,
 } from "../constants/geo";
@@ -23,10 +23,12 @@ import type {
   GeoScopeInput,
   GeoSkipFields,
 } from "../types/geo";
+import { logGeoFailure } from "../utils/geo-log";
 import { planGeoPromptTranslations } from "../utils/geo-prompt-translations";
 import { addAgentTokenUsage, agentTokenUsageFrom } from "../utils/token-usage";
 import { geoDb, geoSkip } from "./effect";
 import {
+  type GeoDatabaseError,
   GeoPromptNotFoundError,
   GeoPromptTranslationError,
   GeoSettingsMissingError,
@@ -37,6 +39,7 @@ import { toGeoSettings } from "./mappers";
 import { loadGeoModelCatalog } from "./model-catalog";
 import { requireGeoProject } from "./projects";
 import { loadGeoScanPrompts } from "./scan-prompts";
+import { geoTransaction } from "./transaction";
 
 interface GeoPromptTranslationScope {
   organizationId: string;
@@ -127,8 +130,7 @@ const storeDefaultPicks = (
 /**
  * Runs a change to the picks under the project lock, re-planning inside it so
  * capacity checks and writes can't interleave with another request. A
- * rejection comes back as a value because the transaction only carries
- * database failures.
+ * rejection rolls the change back.
  */
 const changePicks = (
   scope: GeoPromptTranslationScope,
@@ -136,28 +138,22 @@ const changePicks = (
   change: (
     tx: DbTransaction,
     entries: readonly GeoPromptTranslationEntry[]
-  ) => Effect.Effect<GeoPromptTranslationError | null, never | Error>
+  ) => Effect.Effect<void, GeoPromptTranslationError | GeoDatabaseError>
 ) =>
-  geoDb("prompt translation change failed", () =>
-    db.transaction((tx) =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          yield* lockGeoProject(tx, scope.projectId);
-          const plan = (yield* planWith(tx, scope)).find(
-            (item) => item.language === language
-          );
-          if (!plan) {
-            return new GeoPromptTranslationError({ reason: "language" });
-          }
-          yield* storeDefaultPicks(tx, scope, plan);
-          return yield* change(tx, plan.entries);
-        })
-      )
-    )
-  ).pipe(
-    Effect.flatMap((rejection) =>
-      rejection ? Effect.fail(rejection) : Effect.void
-    )
+  geoTransaction("prompt translation change failed", (tx) =>
+    Effect.gen(function* () {
+      yield* lockGeoProject(tx, scope.projectId);
+      const plan = (yield* planWith(tx, scope)).find(
+        (item) => item.language === language
+      );
+      if (!plan) {
+        return yield* Effect.fail(
+          new GeoPromptTranslationError({ reason: "language" })
+        );
+      }
+      yield* storeDefaultPicks(tx, scope, plan);
+      yield* change(tx, plan.entries);
+    })
   );
 
 /** Saves model output only onto rows that are still picked and not hand-written. */
@@ -218,7 +214,6 @@ const syncLanguage = Effect.fn("geo.promptTranslations.syncLanguage")(
         : null;
     const usage = translated ? agentTokenUsageFrom(translated.usage) : null;
     if (usage) {
-      // Reported before saving: the model work happened even if a save fails.
       options.onUsage?.(usage);
     }
     const fresh = new Map<string, string>();
@@ -234,8 +229,6 @@ const syncLanguage = Effect.fn("geo.promptTranslations.syncLanguage")(
         }
       }
     }
-    // A failed translation keeps an older stored text rather than dropping
-    // the prompt; prompts that were never translated sit this scan out.
     const prompts: GeoPromptDefinition[] = entries.flatMap((entry) => {
       const text = fresh.get(entry.promptId) ?? entry.text;
       return text ? [{ id: entry.promptId, text }] : [];
@@ -263,19 +256,17 @@ export const syncGeoPromptTranslations = Effect.fn(
   scope: GeoPromptTranslationScope,
   options: GeoPromptTranslationSyncOptions = {}
 ) {
-  const plans = yield* geoDb("prompt translation defaults failed", () =>
-    db.transaction((tx) =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          yield* lockGeoProject(tx, scope.projectId);
-          const locked = yield* planWith(tx, scope);
-          yield* Effect.forEach(locked, (plan) =>
-            storeDefaultPicks(tx, scope, plan)
-          );
-          return locked;
-        })
-      )
-    )
+  const plans = yield* geoTransaction(
+    "prompt translation defaults failed",
+    (tx) =>
+      Effect.gen(function* () {
+        yield* lockGeoProject(tx, scope.projectId);
+        const locked = yield* planWith(tx, scope);
+        yield* Effect.forEach(locked, (plan) =>
+          storeDefaultPicks(tx, scope, plan)
+        );
+        return locked;
+      })
   );
   return yield* Effect.forEach(
     plans,
@@ -371,7 +362,7 @@ export const translateGeoPromptTranslations = Effect.fn(
         reservation: gate,
         action,
         usage,
-        fallbackModelId: GEO_JUDGE_MODEL,
+        fallbackModelId: GEO_TRANSLATION_MODEL,
         properties: {
           source: "geo_prompt_translations",
           run_id: runId,
@@ -383,15 +374,16 @@ export const translateGeoPromptTranslations = Effect.fn(
       .pipe(
         Effect.catch((error) =>
           Effect.sync(() => {
-            console.error(
-              `[GeoPromptTranslations] billing ${action} failed:`,
-              error
+            logGeoFailure(
+              "geo.prompt_translations.billing_failed",
+              `Prompt translation billing ${action} failed`,
+              error,
+              { action, runId, projectId: scope.projectId }
             );
           })
         )
       );
 
-  // Bill whatever the model already did, also when a later step fails.
   let spent: AgentTokenUsage | null = null;
   const settleSpent = () =>
     Effect.suspend(() =>
@@ -422,16 +414,20 @@ export const selectGeoPromptTranslation = Effect.fn(
       );
       if (input.selected && !isPicked) {
         if (entries.length >= GEO_LANGUAGE_MAX_PROMPTS) {
-          return new GeoPromptTranslationError({
-            reason: "limit",
-            limit: GEO_LANGUAGE_MAX_PROMPTS,
-          });
+          return yield* Effect.fail(
+            new GeoPromptTranslationError({
+              reason: "limit",
+              limit: GEO_LANGUAGE_MAX_PROMPTS,
+            })
+          );
         }
         yield* insertPicks(tx, scope, input.language, [input.promptId]);
       }
       if (!input.selected && isPicked) {
         if (entries.length <= 1) {
-          return new GeoPromptTranslationError({ reason: "last" });
+          return yield* Effect.fail(
+            new GeoPromptTranslationError({ reason: "last" })
+          );
         }
         yield* geoDb("prompt translation unpick failed", () =>
           tx
@@ -439,7 +435,6 @@ export const selectGeoPromptTranslation = Effect.fn(
             .where(translationRow(scope, input.promptId, input.language))
         );
       }
-      return null;
     })
   );
   return yield* respond(scope);
@@ -460,7 +455,9 @@ const writePickedRow = Effect.fn("geo.promptTranslations.writePicked")(
       Effect.gen(function* () {
         const entry = entries.find((item) => item.promptId === input.promptId);
         if (!entry) {
-          return new GeoPromptTranslationError({ reason: "not_picked" });
+          return yield* Effect.fail(
+            new GeoPromptTranslationError({ reason: "not_picked" })
+          );
         }
         yield* geoDb("prompt translation update failed", () =>
           tx
@@ -468,7 +465,6 @@ const writePickedRow = Effect.fn("geo.promptTranslations.writePicked")(
             .set(values(entry))
             .where(translationRow(scope, input.promptId, input.language))
         );
-        return null;
       })
     );
     return yield* respond(scope);
@@ -520,29 +516,23 @@ export const pickNewGeoPrompts = Effect.fn("geo.promptTranslations.pickNew")(
       return;
     }
     const scope = yield* loadProjectScope(input);
-    yield* geoDb("prompt translation pick failed", () =>
-      db.transaction((tx) =>
-        Effect.runPromise(
-          Effect.gen(function* () {
-            yield* lockGeoProject(tx, scope.projectId);
-            for (const plan of yield* planWith(tx, scope)) {
-              if (plan.defaulted) {
-                continue;
-              }
-              const room = GEO_LANGUAGE_MAX_PROMPTS - plan.entries.length;
-              const picked = new Set(
-                plan.entries.map((entry) => entry.promptId)
-              );
-              yield* insertPicks(
-                tx,
-                scope,
-                plan.language,
-                promptIds.filter((id) => !picked.has(id)).slice(0, room)
-              );
-            }
-          })
-        )
-      )
+    yield* geoTransaction("prompt translation pick failed", (tx) =>
+      Effect.gen(function* () {
+        yield* lockGeoProject(tx, scope.projectId);
+        for (const plan of yield* planWith(tx, scope)) {
+          if (plan.defaulted) {
+            continue;
+          }
+          const room = GEO_LANGUAGE_MAX_PROMPTS - plan.entries.length;
+          const picked = new Set(plan.entries.map((entry) => entry.promptId));
+          yield* insertPicks(
+            tx,
+            scope,
+            plan.language,
+            promptIds.filter((id) => !picked.has(id)).slice(0, room)
+          );
+        }
+      })
     );
   }
 );

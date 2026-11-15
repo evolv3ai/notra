@@ -1,10 +1,13 @@
 import { db } from "@notra/db/drizzle";
 import { granolaIntegrations } from "@notra/db/schema";
+import {
+  decryptToken,
+  encryptToken,
+} from "@notra/db/utils/integration-encryption";
 import { and, eq } from "drizzle-orm";
 import { customAlphabet } from "nanoid";
 
 import { GRANOLA_API_BASE_URL } from "../constants/granola";
-import { decryptToken, encryptToken } from "../crypto/token-encryption";
 import type {
   CreateGranolaIntegrationParams,
   GranolaKeyVerificationResult,
@@ -14,6 +17,11 @@ import type { GranolaToolContext } from "../types/tools";
 import { hasOrganizationAccess } from "../utils/organization-access";
 
 const nanoid = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 16);
+const createdByUserRelation = {
+  createdByUser: {
+    columns: { id: true, name: true, email: true, image: true },
+  },
+} as const;
 
 export async function verifyGranolaApiKey(
   apiKey: string
@@ -57,18 +65,14 @@ export async function createGranolaIntegration(
     throw new Error("User does not have access to this organization.");
   }
 
-  const encryptedApiKey = encryptToken(apiKey);
-
-  const id = `gra_${nanoid()}`;
-
   const [integration] = await db
     .insert(granolaIntegrations)
     .values({
-      id,
+      id: `gra_${nanoid()}`,
       organizationId,
       createdByUserId: userId,
       displayName,
-      encryptedApiKey,
+      encryptedApiKey: encryptToken(apiKey),
       workspaceName: workspaceName ?? null,
     })
     .returning();
@@ -79,16 +83,7 @@ export async function createGranolaIntegration(
 export async function getGranolaIntegrationById(integrationId: string) {
   const integration = await db.query.granolaIntegrations.findFirst({
     where: eq(granolaIntegrations.id, integrationId),
-    with: {
-      createdByUser: {
-        columns: {
-          id: true,
-          name: true,
-          email: true,
-          image: true,
-        },
-      },
-    },
+    with: createdByUserRelation,
   });
 
   return integration ?? null;
@@ -99,16 +94,7 @@ export async function getGranolaIntegrationsByOrganization(
 ) {
   return db.query.granolaIntegrations.findMany({
     where: eq(granolaIntegrations.organizationId, organizationId),
-    with: {
-      createdByUser: {
-        columns: {
-          id: true,
-          name: true,
-          email: true,
-          image: true,
-        },
-      },
-    },
+    with: createdByUserRelation,
     orderBy: (table, { desc }) => [desc(table.createdAt)],
   });
 }
@@ -132,33 +118,10 @@ export async function deleteGranolaIntegration(integrationId: string) {
     .where(eq(granolaIntegrations.id, integrationId));
 }
 
-export async function getDecryptedGranolaApiKey(
-  integrationId: string
-): Promise<string | undefined> {
-  const [integration] = await db
-    .select({
-      encryptedApiKey: granolaIntegrations.encryptedApiKey,
-    })
-    .from(granolaIntegrations)
-    .where(eq(granolaIntegrations.id, integrationId))
-    .limit(1);
-
-  if (!integration?.encryptedApiKey) {
-    return undefined;
-  }
-
-  return decryptToken(integration.encryptedApiKey);
-}
-
 export async function getGranolaToolContextByIntegrationId(
   integrationId: string,
   options: { organizationId: string }
 ): Promise<GranolaToolContext> {
-  const whereClause = and(
-    eq(granolaIntegrations.id, integrationId),
-    eq(granolaIntegrations.organizationId, options.organizationId)
-  );
-
   const [integration] = await db
     .select({
       id: granolaIntegrations.id,
@@ -168,7 +131,12 @@ export async function getGranolaToolContextByIntegrationId(
       enabled: granolaIntegrations.enabled,
     })
     .from(granolaIntegrations)
-    .where(whereClause)
+    .where(
+      and(
+        eq(granolaIntegrations.id, integrationId),
+        eq(granolaIntegrations.organizationId, options.organizationId)
+      )
+    )
     .limit(1);
 
   if (!integration) {

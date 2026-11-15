@@ -1,13 +1,10 @@
 "use client";
 
-import { AiMagicIcon, Tick01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { useTranslations } from "next-intl";
+import { useTranslations } from "use-intl";
 
 import { AgentFeedbackSetup } from "@/components/agent-feedback/feedback-setup";
-import { Button } from "@/components/button";
 import { EmptyStateTablePreview } from "@/components/empty-state-preview";
-import { useCopyCode } from "@/components/geo/code-snippet";
+import { CopyPromptButton } from "@/components/geo/code-snippet";
 import {
   EMPTY_STATE_TABLE_COLUMNS,
   EMPTY_STATE_TABLE_ROWS,
@@ -19,9 +16,7 @@ export function AgentFeedbackEmpty({
   organizationId,
 }: AgentFeedbackEmptyProps) {
   const t = useTranslations("feedback");
-  const tCommon = useTranslations("common");
   const { data: setup } = useAgentFeedbackSetup(organizationId);
-  const { copied, copy } = useCopyCode(setup?.prompt ?? "");
 
   return (
     <div className="relative w-full overflow-hidden rounded-2xl">
@@ -38,10 +33,10 @@ export function AgentFeedbackEmpty({
       </div>
       <div className="relative z-10 mx-auto w-full max-w-2xl px-6 py-12 md:py-16">
         <div className="mb-6 text-center">
-          <h3 className="text-xl font-semibold text-balance">
+          <h3 className="text-lg font-semibold text-balance">
             {t("empty.title")}
           </h3>
-          <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-sm text-pretty">
+          <p className="text-muted-foreground mx-auto mt-1.5 max-w-sm text-sm leading-relaxed text-pretty">
             {t("empty.description")}
           </p>
         </div>
@@ -49,23 +44,15 @@ export function AgentFeedbackEmpty({
           <h4 className="text-sm font-semibold text-balance">
             {t("setup.title")}
           </h4>
-          <Button
-            className="h-8 shrink-0 gap-1.5 px-3"
+          <CopyPromptButton
+            className="shrink-0"
             disabled={!setup}
-            onClick={copy}
-            size="sm"
-            variant="outline"
-          >
-            <HugeiconsIcon icon={copied ? Tick01Icon : AiMagicIcon} size={14} />
-            {copied
-              ? tCommon("labels.promptCopied")
-              : tCommon("labels.copyAgentPrompt")}
-          </Button>
+            prompt={setup?.prompt ?? ""}
+          />
         </div>
         <AgentFeedbackSetup
-          className="border-border bg-card shadow-lift relative -mt-5 rounded-2xl border p-4 text-left sm:p-5"
+          className="border-table-card-border bg-table-card shadow-table-card relative -mt-5 rounded-2xl border p-4 text-left sm:p-5"
           setup={setup}
-          showPromptAction={false}
         />
       </div>
     </div>

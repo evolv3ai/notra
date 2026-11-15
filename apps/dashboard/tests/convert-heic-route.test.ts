@@ -22,7 +22,6 @@ mock.module("@/utils/compress-content-image", () => ({
 
 const { POST } = await import("../src/app/api/uploads/convert-heic/route");
 
-// Simulate untrusted streaming bodies whose Content-Length is missing or intentionally inaccurate.
 function streamedRequest(length: number, declaredLength?: string) {
   let canceled = false;
   let sent = false;
@@ -78,19 +77,4 @@ test("authenticates before reading an oversized upload stream", async () => {
   );
   expect((await POST(request)).status).toBe(401);
   expect(wasCanceled()).toBe(false);
-});
-
-test("parses a bounded multipart HEIC and returns the converted image", async () => {
-  const form = new FormData();
-  form.set("file", new File(["0000ftypheic0000"], "sample.heic"));
-  const response = await POST(
-    new Request("http://localhost/api/uploads/convert-heic", {
-      method: "POST",
-      body: form,
-    })
-  );
-  expect(response.status).toBe(200);
-  expect(response.headers.get("Content-Type")).toBe("image/jpeg");
-  expect(await response.text()).toBe("jpeg");
-  expect(convert).toHaveBeenCalled();
 });

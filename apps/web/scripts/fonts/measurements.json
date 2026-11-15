@@ -1,0 +1,4325 @@
+{
+  "measuredOn": "2026-10-30",
+  "baselineCommit": "012c060",
+  "environment": {
+    "os": "Ubuntu 24.04 Linux x86_64",
+    "chrome": "156.0.8078.47",
+    "compositing": "software (--disable-gpu)",
+    "viewportWidths": [1440, 390],
+    "deviceScaleFactors": [1, 2]
+  },
+  "acceptance": "The first after frame must exactly match one whole fixed baseline control. All 32 cases also match baseline frame 0. Other controls remain diagnostic records.",
+  "baseline": {
+    "origin": "http://127.0.0.1:3101",
+    "browser": "156.0.8078.47",
+    "nonFontCssSha256": "8bbe9d24812ec4c4e62c85123e408f4721f71bd0e21f3fba262cfa477a35deed",
+    "records": [
+      {
+        "route": "/",
+        "fonts": {
+          "/assets/Satoshi-Variable-CFg-z2ne.woff2": 42588,
+          "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2": 48256
+        },
+        "bytes": 90844,
+        "preloads": [],
+        "usage": [
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "AI Feature Check"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "not cited"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "State of AI Search \u00b7 October 2026"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "fix"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "notrareviews.com"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "3"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "66%"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "$0"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Notra"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "."
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Reply in place"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Every scan keeps the whole answer. Open a prompt and read what each engine wrote, where you show up "
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Find out what AI agents say about you and change it."
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Ask a follow-up in the thread and see if the recommendation survives a buyer pushing back."
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Gemini"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Neutral"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "1,522"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Penfold"
+          }
+        ]
+      },
+      {
+        "route": "/brand",
+        "fonts": {
+          "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2": 48256,
+          "/assets/instrument-serif-latin-400-normal-DnYpCC2O.woff2": 21032,
+          "/assets/Satoshi-Variable-CFg-z2ne.woff2": 42588
+        },
+        "bytes": 111876,
+        "preloads": [],
+        "usage": [
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "AI Feature Check"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Reddit"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "State of AI Search \u00b7 October 2026"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "fix"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "#131316"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "3"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "66%"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "The quick brown fox jumps over the lazy dog"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Notra"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Typography"
+          },
+          {
+            "fontFamily": "\"Instrument Serif\", ui-serif, serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "The quick brown fox jumps over the lazy dog"
+          }
+        ]
+      },
+      {
+        "route": "/features/conversations",
+        "fonts": {
+          "/assets/Satoshi-Variable-CFg-z2ne.woff2": 42588,
+          "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2": 48256
+        },
+        "bytes": 90844,
+        "preloads": [],
+        "usage": [
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "AI Feature Check"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Reddit"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "State of AI Search \u00b7 October 2026"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "fix"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "notrareviews.com"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "3"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "66%"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Sign In"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Notra"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Keep your spot through every follow-up"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Book a Call"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Changelog tool research"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Read each answer, check your position per turn and spot the follow-up where buyers get sent elsewher"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "2"
+          },
+          {
+            "fontFamily": "\"JetBrains Mono\", monospace",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "#4"
+          },
+          {
+            "fontFamily": "Inter, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Turn 3"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "A full buying thread in three steps"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "3 of 3"
+          }
+        ]
+      },
+      {
+        "route": "/integrations/github",
+        "fonts": {
+          "/assets/Satoshi-Variable-CFg-z2ne.woff2": 42588,
+          "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2": 48256
+        },
+        "bytes": 90844,
+        "preloads": [],
+        "usage": [
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "AI Feature Check"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Reddit"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "State of AI Search \u00b7 October 2026"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "fix"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "notrareviews.com"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "3"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "66%"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Sign In"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Notra"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Runs on a schedule"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Get a release by tag, including its notes and assets."
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Book a Call"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "300",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "#482"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "8f3c2a1"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "get_release_by_tag"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Publish a changelog every week"
+          }
+        ]
+      },
+      {
+        "route": "/blog/how-to-build-a-muse-connector",
+        "fonts": {
+          "/assets/Satoshi-Variable-CFg-z2ne.woff2": 42588,
+          "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2": 48256
+        },
+        "bytes": 90844,
+        "preloads": [],
+        "usage": [
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "AI Feature Check"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Reddit"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Why this is worth doing now"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "fix"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Previous"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "3"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "66%"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Sign In"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Notra"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Find out what AI agents say about you and change it."
+          }
+        ]
+      },
+      {
+        "route": "/state-of-ai-search/email-api/2026-10",
+        "fonts": {
+          "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2": 48256,
+          "/assets/Satoshi-Variable-CFg-z2ne.woff2": 42588
+        },
+        "bytes": 90844,
+        "preloads": [],
+        "usage": [
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "AI Feature Check"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Reddit"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "State of AI Search \u00b7 October 2026"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "fix"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "notrareviews.com"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "3"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "66%"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Sign In"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Notra"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Where do you rank in AI search?"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Book a Call"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Google Cloud SQL"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "38%"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "5"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Resend"
+          },
+          {
+            "fontFamily": "\"Google Sans\", \"Google Sans Flex\", Roboto, Arial, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "1"
+          },
+          {
+            "fontFamily": "\"Google Sans\", \"Google Sans Flex\", Roboto, Arial, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "If you share your expected monthly volume and tech stack (e.g., Python, Node.js, PHP), I can recomme"
+          },
+          {
+            "fontFamily": "\"Google Sans\", \"Google Sans Flex\", Roboto, Arial, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Top Transactional Email APIs"
+          },
+          {
+            "fontFamily": "\"Google Sans\", \"Google Sans Flex\", Roboto, Arial, sans-serif",
+            "fontWeight": "700",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Amazon SES"
+          }
+        ]
+      },
+      {
+        "route": "/state-of-ai-search/changelog/2026-10",
+        "fonts": {
+          "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2": 48256,
+          "/assets/Satoshi-Variable-CFg-z2ne.woff2": 42588
+        },
+        "bytes": 90844,
+        "preloads": [],
+        "usage": [
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "AI Feature Check"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Reddit"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "State of AI Search \u00b7 October 2026"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "fix"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "notrareviews.com"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "3"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "66%"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Sign In"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Notra"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Where do you rank in AI search?"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Book a Call"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Google Cloud SQL"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "38%"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "5"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Headway"
+          },
+          {
+            "fontFamily": "\"Google Sans\", \"Google Sans Flex\", Roboto, Arial, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "1"
+          },
+          {
+            "fontFamily": "\"Google Sans\", \"Google Sans Flex\", Roboto, Arial, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Do you need just a public changelog or an in-app widget and feedback board too?"
+          },
+          {
+            "fontFamily": "\"Google Sans\", \"Google Sans Flex\", Roboto, Arial, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Key Features to Look For"
+          },
+          {
+            "fontFamily": "\"Google Sans\", \"Google Sans Flex\", Roboto, Arial, sans-serif",
+            "fontWeight": "700",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Automation"
+          }
+        ]
+      }
+    ],
+    "differences": [],
+    "rangeTests": [
+      {
+        "family": "Inter Variable",
+        "scenario": "core",
+        "text": "ASCII \u2018quotes\u2019 \u2014 \u2026 \u00b7",
+        "fonts": {
+          "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2": 48256
+        },
+        "bytes": 48256,
+        "platformFonts": [
+          {
+            "familyName": "Inter",
+            "postScriptName": "Inter-Regular",
+            "isCustomFont": true,
+            "glyphCount": 20
+          }
+        ]
+      },
+      {
+        "family": "Inter Variable",
+        "scenario": "latin1",
+        "text": "T\u00e9 \u00c5V caf\u00e9",
+        "fonts": {
+          "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2": 48256
+        },
+        "bytes": 48256,
+        "platformFonts": [
+          {
+            "familyName": "Inter",
+            "postScriptName": "Inter-Regular",
+            "isCustomFont": true,
+            "glyphCount": 10
+          }
+        ]
+      },
+      {
+        "family": "Inter Variable",
+        "scenario": "extended",
+        "text": "T\u00e9 \u00c5V caf\u00e9 \u0141\u00f3d\u017a",
+        "fonts": {
+          "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2": 48256,
+          "/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2": 85068
+        },
+        "bytes": 133324,
+        "platformFonts": [
+          {
+            "familyName": "Inter",
+            "postScriptName": "Inter-Regular",
+            "isCustomFont": true,
+            "glyphCount": 15
+          }
+        ]
+      },
+      {
+        "family": "Inter Variable",
+        "scenario": "cjk",
+        "text": "ASCII \u65e5\u672c\u8a9e \u4e2d\u6587 \ud55c\uad6d\uc5b4",
+        "fonts": {
+          "/assets/inter-latin-wght-normal-Dx4kXJAl.woff2": 48256
+        },
+        "bytes": 48256,
+        "platformFonts": [
+          {
+            "familyName": "Noto Sans CJK JP",
+            "postScriptName": "NotoSansCJKjp-Regular",
+            "isCustomFont": false,
+            "glyphCount": 8
+          },
+          {
+            "familyName": "Inter",
+            "postScriptName": "Inter-Regular",
+            "isCustomFont": true,
+            "glyphCount": 8
+          }
+        ]
+      },
+      {
+        "family": "Instrument Serif",
+        "scenario": "core",
+        "text": "ASCII \u2018quotes\u2019 \u2014 \u2026 \u00b7",
+        "fonts": {
+          "/assets/instrument-serif-latin-400-normal-DnYpCC2O.woff2": 21032
+        },
+        "bytes": 21032,
+        "platformFonts": [
+          {
+            "familyName": "Instrument Serif",
+            "postScriptName": "InstrumentSerif-Regular",
+            "isCustomFont": true,
+            "glyphCount": 20
+          }
+        ]
+      },
+      {
+        "family": "Instrument Serif",
+        "scenario": "latin1",
+        "text": "T\u00e9 \u00c5V caf\u00e9",
+        "fonts": {
+          "/assets/instrument-serif-latin-400-normal-DnYpCC2O.woff2": 21032
+        },
+        "bytes": 21032,
+        "platformFonts": [
+          {
+            "familyName": "Instrument Serif",
+            "postScriptName": "InstrumentSerif-Regular",
+            "isCustomFont": true,
+            "glyphCount": 10
+          }
+        ]
+      },
+      {
+        "family": "Instrument Serif",
+        "scenario": "extended",
+        "text": "T\u00e9 \u00c5V caf\u00e9 \u0141\u00f3d\u017a",
+        "fonts": {
+          "/assets/instrument-serif-latin-400-normal-DnYpCC2O.woff2": 21032,
+          "/assets/instrument-serif-latin-ext-400-normal-C2je3j2s.woff2": 11604
+        },
+        "bytes": 32636,
+        "platformFonts": [
+          {
+            "familyName": "Instrument Serif",
+            "postScriptName": "InstrumentSerif-Regular",
+            "isCustomFont": true,
+            "glyphCount": 15
+          }
+        ]
+      },
+      {
+        "family": "Instrument Serif",
+        "scenario": "cjk",
+        "text": "ASCII \u65e5\u672c\u8a9e \u4e2d\u6587 \ud55c\uad6d\uc5b4",
+        "fonts": {
+          "/assets/instrument-serif-latin-400-normal-DnYpCC2O.woff2": 21032
+        },
+        "bytes": 21032,
+        "platformFonts": [
+          {
+            "familyName": "Instrument Serif",
+            "postScriptName": "InstrumentSerif-Regular",
+            "isCustomFont": true,
+            "glyphCount": 8
+          },
+          {
+            "familyName": "Noto Sans CJK JP",
+            "postScriptName": "NotoSansCJKjp-Regular",
+            "isCustomFont": false,
+            "glyphCount": 8
+          }
+        ]
+      }
+    ]
+  },
+  "optimized": {
+    "origin": "http://127.0.0.1:3102",
+    "baselineOrigin": "http://127.0.0.1:3101",
+    "browser": "156.0.8078.47",
+    "nonFontCssSha256": "8bbe9d24812ec4c4e62c85123e408f4721f71bd0e21f3fba262cfa477a35deed",
+    "records": [
+      {
+        "route": "/",
+        "fonts": {
+          "/assets/inter-core-DzT6hdMm.woff2": 40892,
+          "/assets/Satoshi-Variable-CFg-z2ne.woff2": 42588
+        },
+        "bytes": 83480,
+        "preloads": [
+          {
+            "href": "/assets/inter-core-DzT6hdMm.woff2",
+            "crossOrigin": "anonymous",
+            "type": "font/woff2"
+          }
+        ],
+        "usage": [
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "AI Feature Check"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "not cited"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "State of AI Search \u00b7 October 2026"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "fix"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "notrareviews.com"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "3"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "66%"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "$0"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Notra"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "."
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Reply in place"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Every scan keeps the whole answer. Open a prompt and read what each engine wrote, where you show up "
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Find out what AI agents say about you and change it."
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Ask a follow-up in the thread and see if the recommendation survives a buyer pushing back."
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Gemini"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Neutral"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "1,522"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Penfold"
+          }
+        ]
+      },
+      {
+        "route": "/brand",
+        "fonts": {
+          "/assets/inter-core-DzT6hdMm.woff2": 40892,
+          "/assets/instrument-core-DeKvgloc.woff2": 14512,
+          "/assets/Satoshi-Variable-CFg-z2ne.woff2": 42588
+        },
+        "bytes": 97992,
+        "preloads": [
+          {
+            "href": "/assets/inter-core-DzT6hdMm.woff2",
+            "crossOrigin": "anonymous",
+            "type": "font/woff2"
+          },
+          {
+            "href": "/assets/instrument-core-DeKvgloc.woff2",
+            "crossOrigin": "anonymous",
+            "type": "font/woff2"
+          }
+        ],
+        "usage": [
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "AI Feature Check"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Reddit"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "State of AI Search \u00b7 October 2026"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "fix"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "#131316"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "3"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "66%"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "The quick brown fox jumps over the lazy dog"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Notra"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Typography"
+          },
+          {
+            "fontFamily": "\"Instrument Serif\", ui-serif, serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "The quick brown fox jumps over the lazy dog"
+          }
+        ]
+      },
+      {
+        "route": "/features/conversations",
+        "fonts": {
+          "/assets/inter-core-DzT6hdMm.woff2": 40892,
+          "/assets/Satoshi-Variable-CFg-z2ne.woff2": 42588
+        },
+        "bytes": 83480,
+        "preloads": [
+          {
+            "href": "/assets/inter-core-DzT6hdMm.woff2",
+            "crossOrigin": "anonymous",
+            "type": "font/woff2"
+          }
+        ],
+        "usage": [
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "AI Feature Check"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Reddit"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "State of AI Search \u00b7 October 2026"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "fix"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "notrareviews.com"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "3"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "66%"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Sign In"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Notra"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Keep your spot through every follow-up"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Book a Call"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Changelog tool research"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Read each answer, check your position per turn and spot the follow-up where buyers get sent elsewher"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "2"
+          },
+          {
+            "fontFamily": "\"JetBrains Mono\", monospace",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "#4"
+          },
+          {
+            "fontFamily": "Inter, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Turn 3"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "A full buying thread in three steps"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "3 of 3"
+          }
+        ]
+      },
+      {
+        "route": "/integrations/github",
+        "fonts": {
+          "/assets/inter-core-DzT6hdMm.woff2": 40892,
+          "/assets/Satoshi-Variable-CFg-z2ne.woff2": 42588
+        },
+        "bytes": 83480,
+        "preloads": [
+          {
+            "href": "/assets/inter-core-DzT6hdMm.woff2",
+            "crossOrigin": "anonymous",
+            "type": "font/woff2"
+          }
+        ],
+        "usage": [
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "AI Feature Check"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Reddit"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "State of AI Search \u00b7 October 2026"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "fix"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "notrareviews.com"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "3"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "66%"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Sign In"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Notra"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Runs on a schedule"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Get a release by tag, including its notes and assets."
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Book a Call"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "300",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "#482"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "8f3c2a1"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "get_release_by_tag"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Publish a changelog every week"
+          }
+        ]
+      },
+      {
+        "route": "/blog/how-to-build-a-muse-connector",
+        "fonts": {
+          "/assets/Satoshi-Variable-CFg-z2ne.woff2": 42588,
+          "/assets/inter-core-DzT6hdMm.woff2": 40892
+        },
+        "bytes": 83480,
+        "preloads": [
+          {
+            "href": "/assets/inter-core-DzT6hdMm.woff2",
+            "crossOrigin": "anonymous",
+            "type": "font/woff2"
+          }
+        ],
+        "usage": [
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "AI Feature Check"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Reddit"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Why this is worth doing now"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "fix"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Previous"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "3"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "66%"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Sign In"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Notra"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Find out what AI agents say about you and change it."
+          }
+        ]
+      },
+      {
+        "route": "/state-of-ai-search/email-api/2026-10",
+        "fonts": {
+          "/assets/inter-core-DzT6hdMm.woff2": 40892,
+          "/assets/Satoshi-Variable-CFg-z2ne.woff2": 42588
+        },
+        "bytes": 83480,
+        "preloads": [
+          {
+            "href": "/assets/inter-core-DzT6hdMm.woff2",
+            "crossOrigin": "anonymous",
+            "type": "font/woff2"
+          }
+        ],
+        "usage": [
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "AI Feature Check"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Reddit"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "State of AI Search \u00b7 October 2026"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "fix"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "notrareviews.com"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "3"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "66%"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Sign In"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Notra"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Where do you rank in AI search?"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Book a Call"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Google Cloud SQL"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "38%"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "5"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Resend"
+          },
+          {
+            "fontFamily": "\"Google Sans\", \"Google Sans Flex\", Roboto, Arial, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "1"
+          },
+          {
+            "fontFamily": "\"Google Sans\", \"Google Sans Flex\", Roboto, Arial, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "If you share your expected monthly volume and tech stack (e.g., Python, Node.js, PHP), I can recomme"
+          },
+          {
+            "fontFamily": "\"Google Sans\", \"Google Sans Flex\", Roboto, Arial, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Top Transactional Email APIs"
+          },
+          {
+            "fontFamily": "\"Google Sans\", \"Google Sans Flex\", Roboto, Arial, sans-serif",
+            "fontWeight": "700",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Amazon SES"
+          }
+        ]
+      },
+      {
+        "route": "/state-of-ai-search/changelog/2026-10",
+        "fonts": {
+          "/assets/inter-core-DzT6hdMm.woff2": 40892,
+          "/assets/Satoshi-Variable-CFg-z2ne.woff2": 42588
+        },
+        "bytes": 83480,
+        "preloads": [
+          {
+            "href": "/assets/inter-core-DzT6hdMm.woff2",
+            "crossOrigin": "anonymous",
+            "type": "font/woff2"
+          }
+        ],
+        "usage": [
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "AI Feature Check"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Reddit"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "State of AI Search \u00b7 October 2026"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "fix"
+          },
+          {
+            "fontFamily": "ui-monospace, SFMono-Regular, \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "notrareviews.com"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "3"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "66%"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Sign In"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "weight style small-caps",
+            "hyphens": "manual",
+            "sample": "Notra"
+          },
+          {
+            "fontFamily": "Satoshi, \"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Where do you rank in AI search?"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Book a Call"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Google Cloud SQL"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "38%"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "tabular-nums",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "5"
+          },
+          {
+            "fontFamily": "\"Inter Variable\", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Headway"
+          },
+          {
+            "fontFamily": "\"Google Sans\", \"Google Sans Flex\", Roboto, Arial, sans-serif",
+            "fontWeight": "500",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "1"
+          },
+          {
+            "fontFamily": "\"Google Sans\", \"Google Sans Flex\", Roboto, Arial, sans-serif",
+            "fontWeight": "400",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Do you need just a public changelog or an in-app widget and feedback board too?"
+          },
+          {
+            "fontFamily": "\"Google Sans\", \"Google Sans Flex\", Roboto, Arial, sans-serif",
+            "fontWeight": "600",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Key Features to Look For"
+          },
+          {
+            "fontFamily": "\"Google Sans\", \"Google Sans Flex\", Roboto, Arial, sans-serif",
+            "fontWeight": "700",
+            "fontStyle": "normal",
+            "fontFeatureSettings": "normal",
+            "fontVariationSettings": "normal",
+            "fontVariantNumeric": "normal",
+            "fontVariantLigatures": "normal",
+            "fontKerning": "auto",
+            "fontSynthesis": "none",
+            "hyphens": "manual",
+            "sample": "Automation"
+          }
+        ]
+      }
+    ],
+    "differences": [
+      {
+        "route": "/",
+        "width": 1440,
+        "scale": 1,
+        "height": 8007,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "572ae7fa440fc0bc5bb8375f131d6eed5dbf44039c029563301b084510cc1604"
+      },
+      {
+        "route": "/",
+        "width": 390,
+        "scale": 1,
+        "height": 13334,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 22,
+            "maxChannelDelta": 2
+          },
+          {
+            "frame": 2,
+            "pixels": 19,
+            "maxChannelDelta": 2
+          }
+        ],
+        "htmlSha256": "572ae7fa440fc0bc5bb8375f131d6eed5dbf44039c029563301b084510cc1604"
+      },
+      {
+        "route": "/",
+        "width": 1440,
+        "scale": 2,
+        "height": 16014,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "572ae7fa440fc0bc5bb8375f131d6eed5dbf44039c029563301b084510cc1604"
+      },
+      {
+        "route": "/",
+        "width": 390,
+        "scale": 2,
+        "height": 26668,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "572ae7fa440fc0bc5bb8375f131d6eed5dbf44039c029563301b084510cc1604"
+      },
+      {
+        "route": "/brand",
+        "width": 1440,
+        "scale": 1,
+        "height": 3399,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "f3f23776c36648a3c911fc8fe1b360b405707c840e3bfc69d337213e43b236e2"
+      },
+      {
+        "route": "/brand",
+        "width": 390,
+        "scale": 1,
+        "height": 5349,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 19,
+            "maxChannelDelta": 2
+          },
+          {
+            "frame": 2,
+            "pixels": 19,
+            "maxChannelDelta": 2
+          }
+        ],
+        "htmlSha256": "f3f23776c36648a3c911fc8fe1b360b405707c840e3bfc69d337213e43b236e2"
+      },
+      {
+        "route": "/brand",
+        "width": 1440,
+        "scale": 2,
+        "height": 6798,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "f3f23776c36648a3c911fc8fe1b360b405707c840e3bfc69d337213e43b236e2"
+      },
+      {
+        "route": "/brand",
+        "width": 390,
+        "scale": 2,
+        "height": 10698,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "f3f23776c36648a3c911fc8fe1b360b405707c840e3bfc69d337213e43b236e2"
+      },
+      {
+        "route": "/features/conversations",
+        "width": 1440,
+        "scale": 1,
+        "height": 4071,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "49270416840c3db5fa73f8c81c4b5b204b1245a4fbe55d86c335880f0c252f52"
+      },
+      {
+        "route": "/features/conversations",
+        "width": 390,
+        "scale": 1,
+        "height": 6503,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 19,
+            "maxChannelDelta": 2
+          },
+          {
+            "frame": 2,
+            "pixels": 19,
+            "maxChannelDelta": 2
+          }
+        ],
+        "htmlSha256": "49270416840c3db5fa73f8c81c4b5b204b1245a4fbe55d86c335880f0c252f52"
+      },
+      {
+        "route": "/features/conversations",
+        "width": 1440,
+        "scale": 2,
+        "height": 8142,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "49270416840c3db5fa73f8c81c4b5b204b1245a4fbe55d86c335880f0c252f52"
+      },
+      {
+        "route": "/features/conversations",
+        "width": 390,
+        "scale": 2,
+        "height": 13006,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "49270416840c3db5fa73f8c81c4b5b204b1245a4fbe55d86c335880f0c252f52"
+      },
+      {
+        "route": "/integrations/github",
+        "width": 1440,
+        "scale": 1,
+        "height": 3081,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "d3d17d283c6305692cf565a7abd32784fd79dea42be0bad47f2a1201f756b091"
+      },
+      {
+        "route": "/integrations/github",
+        "width": 390,
+        "scale": 1,
+        "height": 4507,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "d3d17d283c6305692cf565a7abd32784fd79dea42be0bad47f2a1201f756b091"
+      },
+      {
+        "route": "/integrations/github",
+        "width": 1440,
+        "scale": 2,
+        "height": 6162,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "d3d17d283c6305692cf565a7abd32784fd79dea42be0bad47f2a1201f756b091"
+      },
+      {
+        "route": "/integrations/github",
+        "width": 390,
+        "scale": 2,
+        "height": 9014,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "d3d17d283c6305692cf565a7abd32784fd79dea42be0bad47f2a1201f756b091"
+      },
+      {
+        "route": "/blog/how-to-build-a-muse-connector",
+        "width": 1440,
+        "scale": 1,
+        "height": 5151,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 164,
+            "maxChannelDelta": 39
+          },
+          {
+            "frame": 2,
+            "pixels": 164,
+            "maxChannelDelta": 39
+          }
+        ],
+        "htmlSha256": "4c28e5a3a5e179d4da8858af7e6556f946f832b7dd0fea5ffaad3527fccae4ef"
+      },
+      {
+        "route": "/blog/how-to-build-a-muse-connector",
+        "width": 390,
+        "scale": 1,
+        "height": 7823,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 183,
+            "maxChannelDelta": 40
+          },
+          {
+            "frame": 2,
+            "pixels": 160,
+            "maxChannelDelta": 40
+          }
+        ],
+        "htmlSha256": "4c28e5a3a5e179d4da8858af7e6556f946f832b7dd0fea5ffaad3527fccae4ef"
+      },
+      {
+        "route": "/blog/how-to-build-a-muse-connector",
+        "width": 1440,
+        "scale": 2,
+        "height": 10302,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 438,
+            "maxChannelDelta": 42
+          },
+          {
+            "frame": 2,
+            "pixels": 438,
+            "maxChannelDelta": 42
+          }
+        ],
+        "htmlSha256": "4c28e5a3a5e179d4da8858af7e6556f946f832b7dd0fea5ffaad3527fccae4ef"
+      },
+      {
+        "route": "/blog/how-to-build-a-muse-connector",
+        "width": 390,
+        "scale": 2,
+        "height": 15646,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 364,
+            "maxChannelDelta": 43
+          },
+          {
+            "frame": 2,
+            "pixels": 364,
+            "maxChannelDelta": 43
+          }
+        ],
+        "htmlSha256": "4c28e5a3a5e179d4da8858af7e6556f946f832b7dd0fea5ffaad3527fccae4ef"
+      },
+      {
+        "route": "/state-of-ai-search/email-api/2026-10",
+        "width": 1440,
+        "scale": 1,
+        "height": 6595,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "d0c24825d3fdb7fce857915d4a81ab69c19f3fccb19cbd5c54336d234da5c515"
+      },
+      {
+        "route": "/state-of-ai-search/email-api/2026-10",
+        "width": 390,
+        "scale": 1,
+        "height": 8659,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 20,
+            "maxChannelDelta": 3
+          },
+          {
+            "frame": 2,
+            "pixels": 20,
+            "maxChannelDelta": 3
+          }
+        ],
+        "htmlSha256": "d0c24825d3fdb7fce857915d4a81ab69c19f3fccb19cbd5c54336d234da5c515"
+      },
+      {
+        "route": "/state-of-ai-search/email-api/2026-10",
+        "width": 1440,
+        "scale": 2,
+        "height": 13190,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "d0c24825d3fdb7fce857915d4a81ab69c19f3fccb19cbd5c54336d234da5c515"
+      },
+      {
+        "route": "/state-of-ai-search/email-api/2026-10",
+        "width": 390,
+        "scale": 2,
+        "height": 17318,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "d0c24825d3fdb7fce857915d4a81ab69c19f3fccb19cbd5c54336d234da5c515"
+      },
+      {
+        "route": "/state-of-ai-search/changelog/2026-10",
+        "width": 1440,
+        "scale": 1,
+        "height": 6595,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "10d86aac3cce67e50b4df7910df648efabb7f02ddbe0dfae56a289d75ea08de9"
+      },
+      {
+        "route": "/state-of-ai-search/changelog/2026-10",
+        "width": 390,
+        "scale": 1,
+        "height": 8631,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 20,
+            "maxChannelDelta": 3
+          },
+          {
+            "frame": 2,
+            "pixels": 20,
+            "maxChannelDelta": 3
+          }
+        ],
+        "htmlSha256": "10d86aac3cce67e50b4df7910df648efabb7f02ddbe0dfae56a289d75ea08de9"
+      },
+      {
+        "route": "/state-of-ai-search/changelog/2026-10",
+        "width": 1440,
+        "scale": 2,
+        "height": 13190,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "10d86aac3cce67e50b4df7910df648efabb7f02ddbe0dfae56a289d75ea08de9"
+      },
+      {
+        "route": "/state-of-ai-search/changelog/2026-10",
+        "width": 390,
+        "scale": 2,
+        "height": 17262,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "10d86aac3cce67e50b4df7910df648efabb7f02ddbe0dfae56a289d75ea08de9"
+      },
+      {
+        "route": "/__font-probe",
+        "width": 1440,
+        "scale": 1,
+        "height": 11484,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "00615577f7d2eb90930fdfb40c52221a15cc5c491fdf61ea796c96df7b30ebe0"
+      },
+      {
+        "route": "/__font-probe",
+        "width": 390,
+        "scale": 1,
+        "height": 38252,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "00615577f7d2eb90930fdfb40c52221a15cc5c491fdf61ea796c96df7b30ebe0"
+      },
+      {
+        "route": "/__font-probe",
+        "width": 1440,
+        "scale": 2,
+        "height": 22968,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "00615577f7d2eb90930fdfb40c52221a15cc5c491fdf61ea796c96df7b30ebe0"
+      },
+      {
+        "route": "/__font-probe",
+        "width": 390,
+        "scale": 2,
+        "height": 76504,
+        "pixels": 0,
+        "maxChannelDelta": 0,
+        "controlFrame": 0,
+        "controls": [
+          {
+            "frame": 0,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 1,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          },
+          {
+            "frame": 2,
+            "pixels": 0,
+            "maxChannelDelta": 0
+          }
+        ],
+        "htmlSha256": "00615577f7d2eb90930fdfb40c52221a15cc5c491fdf61ea796c96df7b30ebe0"
+      }
+    ],
+    "rangeTests": [
+      {
+        "family": "Inter Variable",
+        "scenario": "core",
+        "text": "ASCII \u2018quotes\u2019 \u2014 \u2026 \u00b7",
+        "fonts": {
+          "/assets/inter-core-DzT6hdMm.woff2": 40892
+        },
+        "bytes": 40892,
+        "platformFonts": [
+          {
+            "familyName": "Notra Text",
+            "postScriptName": "NotraText",
+            "isCustomFont": true,
+            "glyphCount": 20
+          }
+        ]
+      },
+      {
+        "family": "Inter Variable",
+        "scenario": "latin1",
+        "text": "T\u00e9 \u00c5V caf\u00e9",
+        "fonts": {
+          "/assets/inter-core-DzT6hdMm.woff2": 40892
+        },
+        "bytes": 40892,
+        "platformFonts": [
+          {
+            "familyName": "Notra Text",
+            "postScriptName": "NotraText",
+            "isCustomFont": true,
+            "glyphCount": 10
+          }
+        ]
+      },
+      {
+        "family": "Inter Variable",
+        "scenario": "extended",
+        "text": "T\u00e9 \u00c5V caf\u00e9 \u0141\u00f3d\u017a",
+        "fonts": {
+          "/assets/inter-core-DzT6hdMm.woff2": 40892,
+          "/assets/inter-extended-CCnGkQbt.woff2": 16072
+        },
+        "bytes": 56964,
+        "platformFonts": [
+          {
+            "familyName": "Notra Text",
+            "postScriptName": "NotraText",
+            "isCustomFont": true,
+            "glyphCount": 15
+          }
+        ]
+      },
+      {
+        "family": "Inter Variable",
+        "scenario": "cjk",
+        "text": "ASCII \u65e5\u672c\u8a9e \u4e2d\u6587 \ud55c\uad6d\uc5b4",
+        "fonts": {
+          "/assets/inter-core-DzT6hdMm.woff2": 40892
+        },
+        "bytes": 40892,
+        "platformFonts": [
+          {
+            "familyName": "Noto Sans CJK JP",
+            "postScriptName": "NotoSansCJKjp-Regular",
+            "isCustomFont": false,
+            "glyphCount": 8
+          },
+          {
+            "familyName": "Notra Text",
+            "postScriptName": "NotraText",
+            "isCustomFont": true,
+            "glyphCount": 8
+          }
+        ]
+      },
+      {
+        "family": "Instrument Serif",
+        "scenario": "core",
+        "text": "ASCII \u2018quotes\u2019 \u2014 \u2026 \u00b7",
+        "fonts": {
+          "/assets/instrument-core-DeKvgloc.woff2": 14512
+        },
+        "bytes": 14512,
+        "platformFonts": [
+          {
+            "familyName": "Notra Accent",
+            "postScriptName": "NotraAccent",
+            "isCustomFont": true,
+            "glyphCount": 20
+          }
+        ]
+      },
+      {
+        "family": "Instrument Serif",
+        "scenario": "latin1",
+        "text": "T\u00e9 \u00c5V caf\u00e9",
+        "fonts": {
+          "/assets/instrument-core-DeKvgloc.woff2": 14512
+        },
+        "bytes": 14512,
+        "platformFonts": [
+          {
+            "familyName": "Notra Accent",
+            "postScriptName": "NotraAccent",
+            "isCustomFont": true,
+            "glyphCount": 10
+          }
+        ]
+      },
+      {
+        "family": "Instrument Serif",
+        "scenario": "extended",
+        "text": "T\u00e9 \u00c5V caf\u00e9 \u0141\u00f3d\u017a",
+        "fonts": {
+          "/assets/instrument-core-DeKvgloc.woff2": 14512,
+          "/assets/instrument-extended-BghfimSh.woff2": 6964
+        },
+        "bytes": 21476,
+        "platformFonts": [
+          {
+            "familyName": "Notra Accent",
+            "postScriptName": "NotraAccent",
+            "isCustomFont": true,
+            "glyphCount": 15
+          }
+        ]
+      },
+      {
+        "family": "Instrument Serif",
+        "scenario": "cjk",
+        "text": "ASCII \u65e5\u672c\u8a9e \u4e2d\u6587 \ud55c\uad6d\uc5b4",
+        "fonts": {
+          "/assets/instrument-core-DeKvgloc.woff2": 14512
+        },
+        "bytes": 14512,
+        "platformFonts": [
+          {
+            "familyName": "Noto Sans CJK JP",
+            "postScriptName": "NotoSansCJKjp-Regular",
+            "isCustomFont": false,
+            "glyphCount": 8
+          },
+          {
+            "familyName": "Notra Accent",
+            "postScriptName": "NotraAccent",
+            "isCustomFont": true,
+            "glyphCount": 8
+          }
+        ]
+      }
+    ]
+  },
+  "counterfactualBytes": {
+    "safe": {
+      "inter-cyrillic-extended.woff2": 1624,
+      "inter-greek-extended.woff2": 2040,
+      "inter-vietnamese-extended.woff2": 4108,
+      "inter-extended.woff2": 16072,
+      "inter-core.woff2": 40892,
+      "instrument-extended.woff2": 6964,
+      "instrument-core.woff2": 14512
+    },
+    "narrow-weight": {
+      "inter-cyrillic-extended.woff2": 1500,
+      "inter-greek-extended.woff2": 1756,
+      "inter-vietnamese-extended.woff2": 3772,
+      "inter-extended.woff2": 14564,
+      "inter-core.woff2": 37284,
+      "instrument-extended.woff2": 6964,
+      "instrument-core.woff2": 14512
+    },
+    "ascii-core": {
+      "inter-cyrillic-extended.woff2": 1624,
+      "inter-greek-extended.woff2": 2040,
+      "inter-vietnamese-extended.woff2": 4108,
+      "inter-extended.woff2": 16072,
+      "inter-core.woff2": 25964,
+      "instrument-extended.woff2": 6964,
+      "instrument-core.woff2": 10368
+    },
+    "hinted": {
+      "inter-cyrillic-extended.woff2": 1644,
+      "inter-greek-extended.woff2": 1984,
+      "inter-vietnamese-extended.woff2": 4068,
+      "inter-extended.woff2": 16060,
+      "inter-core.woff2": 40872,
+      "instrument-extended.woff2": 10636,
+      "instrument-core.woff2": 20384
+    }
+  }
+}

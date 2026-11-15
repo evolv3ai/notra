@@ -1,8 +1,24 @@
 import { Effect } from "effect";
 
 import type { GeoSkipFields } from "../types/geo";
-import { logGeoSkip } from "../utils/geo-log";
+import { logGeoFailure, logGeoSkip } from "../utils/geo-log";
 import { GeoDatabaseError, GeoTinybirdError } from "./errors";
+
+export function geoRequiredQuery<A>(
+  label: string,
+  run: () => Promise<A | null>
+): Effect.Effect<A, GeoTinybirdError> {
+  return Effect.tryPromise({
+    try: run,
+    catch: (cause) => new GeoTinybirdError({ label, cause }),
+  }).pipe(
+    Effect.flatMap((result) =>
+      result === null
+        ? Effect.fail(new GeoTinybirdError({ label, cause: "No query result" }))
+        : Effect.succeed(result)
+    )
+  );
+}
 
 export function geoQuery<A>(
   label: string,
@@ -13,7 +29,7 @@ export function geoQuery<A>(
     catch: (cause) => new GeoTinybirdError({ label, cause }),
   }).pipe(
     Effect.catch((error) => {
-      console.error(`[GEO] ${error.label}:`, error.cause);
+      logGeoFailure("geo.query.failed", error.label, error.cause);
       return Effect.succeed(null);
     })
   );

@@ -3,14 +3,15 @@ import type {
   GeoScanResultSummary,
   GeoScanRunSummary,
 } from "@notra/geo-core/types/geo-scan-history";
-import type { useTranslations } from "next-intl";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
+import type { useTranslations } from "use-intl";
 
-import type { useFormatRelative } from "@/lib/hooks/use-format-relative";
 import type { useGeoScanRun } from "@/lib/hooks/use-geo-scan-history";
 
 export interface GeoScanActivityStatusProps {
-  run: GeoScanRunSummary | undefined;
+  run: GeoScanRunSummary;
+  /** A newer scan was triggered but has not written its row yet. */
+  starting: boolean;
 }
 
 export interface GeoScanRequest {
@@ -82,6 +83,8 @@ export interface GeoScanRunLoadedProps {
   run: GeoScanRunSummary;
   query: ReturnType<typeof useGeoScanRun>;
   state: GeoScanRunDetailState;
+  /** A scan is in flight per the settings; this run may be the older one. */
+  starting: boolean;
   onStateChange: Dispatch<SetStateAction<GeoScanRunDetailState>>;
 }
 
@@ -90,16 +93,47 @@ export interface GeoScanViewCountProps {
   locale: string;
 }
 
-export type GeoScanRunView = "answers" | "pending";
+export type GeoScanRunView = "answers" | "mentioned" | "pending";
 
 export type GeoScanPendingAnswer = NonNullable<
   ReturnType<typeof useGeoScanRun>["data"]
 >["pending"][number];
 
+type GeoScanLivePage = NonNullable<
+  NonNullable<ReturnType<typeof useGeoScanRun>["data"]>["live"]
+>;
+
+type GeoScanLiveRow = GeoScanLivePage["rows"][number];
+
+export interface GeoScanAnswerTableRow extends GeoScanResultSummary {
+  /** Same prompt as the row above, so its text steps back. */
+  repeated: boolean;
+}
+
+export interface GeoScanLiveTableRow extends GeoScanLiveRow {
+  /** Same prompt as the row above, so its text steps back. */
+  repeated: boolean;
+}
+
+export interface GeoScanLiveStatusCellProps {
+  status: GeoScanLiveRow["status"];
+}
+
+export interface GeoScanRunLiveTableProps {
+  live: GeoScanLivePage;
+  showLanguage: boolean;
+  emptyState: ReactNode;
+  onOffsetChange: (offset: number) => void;
+  height: number;
+  loading: boolean;
+  onRowClick: (row: GeoScanResultSummary) => void;
+}
+
 export interface GeoScanRunFiltersProps {
   view: GeoScanRunView;
   onViewChange: (view: GeoScanRunView) => void;
   answerCount: number;
+  mentionedCount: number;
   pendingCount: number;
   running: boolean;
   engine: string;
@@ -122,17 +156,10 @@ export interface GeoScanModelCellProps {
 export interface GeoScanPromptCellProps {
   prompt: string;
   turn: number | null;
-}
-
-export interface GeoScanTablePaginationProps {
-  offset: number;
-  total: number;
-  itemLabel: string;
-  onOffsetChange: (offset: number) => void;
+  repeated?: boolean;
 }
 
 export interface GeoScanRunEmptyStateInput {
-  running: boolean;
   isError: boolean;
   hasData: boolean;
   loading: boolean;
@@ -143,7 +170,6 @@ export interface GeoScanRunPendingTableProps {
   pending: GeoScanPendingAnswer[];
   showLanguage: boolean;
   emptyState: ReactNode;
-  running: boolean;
   offset: number;
   onOffsetChange: (offset: number) => void;
   total: number;
@@ -174,6 +200,8 @@ export interface ScanRunDetailViewInput {
 
 export interface ScanRunDetailView {
   running: boolean;
+  /** Plan-ordered page of a running scan, null once it has finished. */
+  live: GeoScanLivePage | null;
   pendingTotal: number;
   pending: GeoScanPendingAnswer[];
   results: GeoScanResultSummary[];
@@ -186,16 +214,9 @@ export interface ScanRunDetailView {
   pendingOffset: number;
   total: number;
   answerCount: number;
+  mentionedCount: number;
 }
-
-export type ScanActivityStatusTranslator = ReturnType<
-  typeof useTranslations<"geo.scanActivityStatus">
->;
 
 export type ScanRunDetailTranslator = ReturnType<
   typeof useTranslations<"geo.scanRunDetail">
->;
-
-export type ScanActivityRelativeFormatter = ReturnType<
-  typeof useFormatRelative
 >;

@@ -1,21 +1,26 @@
 import { ArrowUp01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { BlogPostTocProps, TocPosition } from "~types/blog";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import type { BlogPostTocProps, TocSection } from "~types/blog";
 
 import {
   TOC_DEPTHS,
-  TOC_PATH_TRACK_WIDTH,
   TOC_SCROLL_LOCK_FALLBACK_MS,
   TOC_SCROLL_OFFSET_PX,
   TOC_STICKY_OFFSET_PX,
 } from "@/lib/blog/constants";
 import {
-  buildTocPath,
+  buildTocSections,
   getHeadingId,
   scrollToHeading,
   scrollToTop,
 } from "@/lib/blog/toc";
+
+const TOC_LINK_CLASS =
+  "flex gap-2 py-1.25 font-sans text-sm leading-snug transition-colors before:mt-[0.05em] before:h-[0.55em] before:w-[0.5em] before:shrink-0 before:border-b before:border-l before:content-[''] before:transition-colors";
+const TOC_LINK_IDLE_CLASS =
+  "text-muted-foreground hover:text-foreground before:border-muted-foreground/50";
+const TOC_LINK_ACTIVE_CLASS = "text-foreground before:border-foreground";
 
 export function BlogPostToc({ toc }: BlogPostTocProps) {
   const items = useMemo(
@@ -25,12 +30,13 @@ export function BlogPostToc({ toc }: BlogPostTocProps) {
       ),
     [toc]
   );
+  const sections: TocSection[] = useMemo(
+    () => buildTocSections(items),
+    [items]
+  );
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [positions, setPositions] = useState<TocPosition[]>([]);
   const [hasScrolled, setHasScrolled] = useState(false);
   const navRef = useRef<HTMLElement>(null);
-  const listRef = useRef<HTMLUListElement>(null);
-  const linkRefs = useRef(new Map<string, HTMLAnchorElement>());
   const scrollLockRef = useRef(false);
   const scrollLockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -76,39 +82,6 @@ export function BlogPostToc({ toc }: BlogPostTocProps) {
     return () => window.removeEventListener("scrollend", handleScrollEnd);
   }, []);
 
-  useLayoutEffect(() => {
-    function measure() {
-      const next: TocPosition[] = [];
-      for (const item of items) {
-        const id = getHeadingId(item);
-        const link = linkRefs.current.get(id);
-        if (!link) {
-          continue;
-        }
-        next.push({
-          id,
-          depth: item.depth,
-          top: link.offsetTop,
-          height: link.offsetHeight,
-        });
-      }
-      setPositions(next);
-    }
-
-    measure();
-
-    const observer = new ResizeObserver(measure);
-    const list = listRef.current;
-    if (list) {
-      observer.observe(list);
-    }
-    window.addEventListener("resize", measure);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, [items]);
-
   useEffect(() => {
     if (items.length === 0) {
       return;
@@ -150,101 +123,79 @@ export function BlogPostToc({ toc }: BlogPostTocProps) {
     return null;
   }
 
-  const lastPosition = positions.at(-1);
-  const containerHeight = lastPosition
-    ? lastPosition.top + lastPosition.height
-    : 0;
-  const pathD = buildTocPath(positions);
-  const activePos = activeId
-    ? (positions.find((p) => p.id === activeId) ?? null)
-    : null;
-  const clipPath = activePos
-    ? `inset(${activePos.top}px 0px ${Math.max(
-        0,
-        containerHeight - activePos.top - activePos.height
-      )}px 0px)`
-    : "inset(100% 0px 0px 0px)";
+  const expandedId =
+    sections.find(
+      (section) =>
+        section.id === activeId ||
+        section.children.some((child) => child.id === activeId)
+    )?.id ?? null;
+
+  function handleClick(event: MouseEvent<HTMLAnchorElement>, id: string) {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    event.preventDefault();
+    lockScrollSpy();
+    setActiveId(id);
+    scrollToHeading(id);
+  }
 
   return (
     <nav aria-label="On this page" className="not-prose" ref={navRef}>
-      <p className="text-foreground mb-3 font-sans text-sm font-medium">
+      <p className="text-muted-foreground mb-3 font-mono text-xs tracking-wider uppercase">
         On this page
       </p>
-      <div className="relative">
-        {positions.length > 0 && containerHeight > 0 ? (
-          <>
-            <svg
-              aria-hidden="true"
-              className="text-border pointer-events-none absolute top-0 left-0"
-              height={containerHeight}
-              preserveAspectRatio="none"
-              viewBox={`0 0 ${TOC_PATH_TRACK_WIDTH} ${containerHeight}`}
-              width={TOC_PATH_TRACK_WIDTH}
+      <ol className="flex flex-col">
+        {sections.map((section) => (
+          <li key={section.id}>
+            <a
+              className={`${TOC_LINK_CLASS} ${
+                section.id === activeId
+                  ? TOC_LINK_ACTIVE_CLASS
+                  : TOC_LINK_IDLE_CLASS
+              }`}
+              href={section.url}
+              onClick={(event) => handleClick(event, section.id)}
             >
-              <path
-                d={pathD}
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="1"
-              />
-            </svg>
-            <svg
-              aria-hidden="true"
-              className="text-foreground duration-slow pointer-events-none absolute top-0 left-0 transition-[clip-path] ease-out"
-              height={containerHeight}
-              preserveAspectRatio="none"
-              style={{ clipPath }}
-              viewBox={`0 0 ${TOC_PATH_TRACK_WIDTH} ${containerHeight}`}
-              width={TOC_PATH_TRACK_WIDTH}
-            >
-              <path
-                d={pathD}
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="1.5"
-              />
-            </svg>
-          </>
-        ) : null}
-        <ul className="flex flex-col" ref={listRef}>
-          {items.map((item) => {
-            const id = getHeadingId(item);
-            const isActive = id === activeId;
-            const indent = item.depth === 3 ? "pl-7" : "pl-4";
-            return (
-              <li key={item.url}>
-                <a
-                  className={`block py-1.5 font-sans text-sm leading-snug transition-colors ${indent} ${
-                    isActive
-                      ? "text-foreground"
-                      : "hover:text-foreground text-neutral-500 dark:text-neutral-400"
-                  }`}
-                  href={item.url}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    lockScrollSpy();
-                    setActiveId(id);
-                    scrollToHeading(id);
-                  }}
-                  ref={(node) => {
-                    if (node) {
-                      linkRefs.current.set(id, node);
-                    } else {
-                      linkRefs.current.delete(id);
-                    }
-                  }}
-                >
-                  {item.title}
-                </a>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
+              {section.title}
+            </a>
+            {section.children.length > 0 ? (
+              <div
+                className={`grid motion-reduce:transition-none ${
+                  expandedId === section.id
+                    ? "visible grid-rows-[1fr] opacity-100 transition-[grid-template-rows,opacity] duration-200 ease-out"
+                    : "invisible grid-rows-[0fr] opacity-0 transition-[grid-template-rows,opacity,visibility] [transition-delay:0s,0s,200ms] duration-200 ease-out focus-within:visible focus-within:grid-rows-[1fr] focus-within:opacity-100"
+                }`}
+              >
+                <ol className="flex min-h-0 flex-col overflow-hidden pl-4.5">
+                  {section.children.map((child) => (
+                    <li key={child.id}>
+                      <a
+                        className={`${TOC_LINK_CLASS} ${
+                          child.id === activeId
+                            ? TOC_LINK_ACTIVE_CLASS
+                            : TOC_LINK_IDLE_CLASS
+                        }`}
+                        href={child.url}
+                        onClick={(event) => handleClick(event, child.id)}
+                      >
+                        {child.title}
+                      </a>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
+          </li>
+        ))}
+      </ol>
       {hasScrolled ? (
         <button
           className="border-border/70 text-muted-foreground hover:text-foreground mt-6 flex w-full cursor-pointer items-center gap-2 border-t pt-4 font-sans text-sm font-medium transition-colors"

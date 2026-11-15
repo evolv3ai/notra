@@ -1,66 +1,99 @@
 import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { appendFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { pathToFileURL } from "node:url";
+
+import { requireReleaseCI } from "./utils/release-ci.mjs";
+import { waitForReleaseGates } from "./utils/release-gates.mjs";
 
 const projects = [
   {
     name: "notra",
     directory: "apps/dashboard",
+    // Site builds use the snapshot env this deployment pins, so builder
+    // changes redeploy the dashboard until it is live with them. apps/ui is
+    // a workspace dependency (registry components and Tailwind sources).
+    alsoBuilds: ["apps/sites-builder", "apps/ui"],
     productionAlias: "notra-notra.vercel.app",
+    // apps/dashboard/scripts/vercel-build.sh runs db:migrate in production.
+    migratesDatabase: true,
   },
   {
     name: "notra-web",
     directory: "apps/web",
+    alsoBuilds: ["apps/ui"],
     productionAlias: "notra-web-notra.vercel.app",
+  },
+  {
+    name: "notra-console",
+    directory: "apps/console",
+    productionAlias: "notra-console-notra.vercel.app",
+    initialDeployment: {
+      repositoryId: "1352247576",
+      sha: "c868f26714dd4e7daa31dd0ff489485b72b21648",
+    },
   },
   {
     name: "notra-ui",
     directory: "apps/ui",
     productionAlias: "notra-ui-notra.vercel.app",
   },
-];
-// Railway services follow the Vercel release instead of auto-deploying every
-// push to main, so the demo and the ingest never run ahead of production.
-const railwayServices = [
   {
-    name: "demo-dashboard",
-    directory: "apps/dashboard",
-    projectId: "48abcb3c-19e1-4c81-a7d3-e2c697c86832",
-    environmentId: "2c9756ae-90db-4606-b420-470fd23151a3",
-    serviceId: "9cb261a4-7d94-446f-8523-84a4b75cbb3d",
+    name: "notra-agent",
+    directory: "apps/agent",
+    productionAlias: "notra-agent-notra.vercel.app",
   },
   {
-    name: "demo-api",
+    name: "notra-onboarding-agent",
+    directory: "apps/onboarding-agent",
+    productionAlias: "notra-onboarding-agent-notra.vercel.app",
+  },
+];
+const unkeyServices = [
+  {
+    name: "API",
+    domain: "api.usenotra.com",
     directory: "apps/api",
-    projectId: "48abcb3c-19e1-4c81-a7d3-e2c697c86832",
-    environmentId: "2c9756ae-90db-4606-b420-470fd23151a3",
-    serviceId: "17ba5ec0-ec2e-412d-aa2c-61b23f37b40a",
   },
   {
     name: "ai-traffic-ingest",
+    domain: "ingest.usenotra.com",
     directory: "apps/ai-traffic-ingest",
-    projectId: "557ca18d-9de8-40ad-9fca-cf3d165f3c44",
-    environmentId: "276f8b24-ccd7-4bf3-a6b6-1dbe9f7fe5c6",
-    serviceId: "2d259982-cccc-488d-b2ba-77b12fd3e854",
+  },
+  // The demo apps share their own database. Unkey has no pre-deploy hook, so
+  // the release migrates it before the first demo build.
+  {
+    name: "demo-api",
+    domain: "demo-api.usenotra.com",
+    directory: "apps/api",
+    demoDatabase: true,
+  },
+  {
+    name: "demo-dashboard",
+    domain: "demo.usenotra.com",
+    directory: "apps/dashboard",
+    alsoBuilds: ["apps/ui"],
+    demoDatabase: true,
   },
 ];
-const railwayActiveStates = [
-  "WAITING",
-  "QUEUED",
-  "INITIALIZING",
-  "BUILDING",
-  "DEPLOYING",
-];
-const railwayLiveStates = ["SUCCESS", "SLEEPING"];
-const requiredWorkflows = ["code-quality.yml", "knip.yml"];
+// Site builds run the toolchain baked into an Upstash Box snapshot, not the
+// dashboard's code. The dashboard must only go live with a snapshot built from
+// the same commit, or new site settings fail validation inside the sandbox.
+const sitesToolchain = {
+  project: "notra",
+  directory: "apps/sites-builder",
+  snapshotKey: "SITES_BUILDER_SNAPSHOT_ID",
+  versionKey: "SITES_BUILDER_TOOLCHAIN_VERSION",
+};
 const activeStates = new Set(["QUEUED", "INITIALIZING", "BUILDING"]);
 
 function deploymentSha(deployment) {
   return deployment?.gitSource?.sha ?? deployment?.meta?.githubCommitSha;
 }
 
-// Shared packages and root inputs conservatively affect every application.
 export function hasBuildChanges(directory, previousSha, sha) {
   if (!previousSha) {
     return true;
@@ -81,22 +114,42 @@ export function hasBuildChanges(directory, previousSha, sha) {
         (file && !file.startsWith("apps/"))
     );
   } catch {
-    // A deleted or unavailable historical commit cannot prove a build is safe to skip.
     return true;
   }
+}
+
+export function buildSitesToolchain(directory, liveVersion) {
+  const resultFile = join(
+    mkdtempSync(join(tmpdir(), "sites-toolchain-")),
+    "result.json"
+  );
+  execFileSync(
+    "bun",
+    [
+      "scripts/create-box-snapshot.ts",
+      "--result-file",
+      resultFile,
+      ...(liveVersion ? ["--skip-version", liveVersion] : []),
+    ],
+    { cwd: directory, stdio: "inherit" }
+  );
+  return JSON.parse(readFileSync(resultFile, "utf8"));
 }
 
 export async function release({
   env = process.env,
   fetchImpl = fetch,
   buildChanged = hasBuildChanges,
+  buildToolchain = buildSitesToolchain,
+  execFile = execFileSync,
   sleep = delay,
+  preflightOnly = false,
+  waitForGates = waitForReleaseGates,
 } = {}) {
   for (const key of [
     "GH_TOKEN",
     "VERCEL_TOKEN",
     "VERCEL_TEAM_ID",
-    "RAILWAY_TOKEN",
     "GITHUB_SHA",
     "GITHUB_REPOSITORY_ID",
   ]) {
@@ -110,7 +163,20 @@ export async function release({
   ) {
     throw new Error("Production releases must run from usenotra/notra main");
   }
-  const sha = env.GITHUB_SHA;
+  if (env.DRY_RUN !== "true") {
+    for (const key of [
+      "RELEASE_DIR",
+      "UPSTASH_BOX_API_KEY",
+      "CLOUDFLARE_API_TOKEN",
+      "CLOUDFLARE_ACCOUNT_ID",
+    ]) {
+      if (!env[key]) {
+        throw new Error(`${key} is required to release the sites toolchain`);
+      }
+    }
+  }
+  // RELEASE_SHA is the commit selectReleaseCommit picked; it may trail main.
+  const sha = env.RELEASE_SHA || env.GITHUB_SHA;
   const repositoryId = Number(env.GITHUB_REPOSITORY_ID);
   if (!Number.isSafeInteger(repositoryId) || repositoryId <= 0) {
     throw new Error("GITHUB_REPOSITORY_ID must be a positive safe integer");
@@ -121,7 +187,37 @@ export async function release({
       await appendFile(env.GITHUB_STEP_SUMMARY, `${message}\n\n`);
     }
   };
-  const request = async (provider, path, body) => {
+  // Reads are retried so a slow or flaky provider cannot fail a release;
+  // creations run once so a lost response cannot start a second build.
+  const send = async (label, url, init, { retry }) => {
+    for (let attempt = 1; ; attempt += 1) {
+      const canRetry = retry && attempt < 3;
+      let response;
+      try {
+        response = await fetchImpl(url, {
+          ...init,
+          signal: AbortSignal.timeout(30_000),
+        });
+        if (response.ok) {
+          return await response.json();
+        }
+      } catch (error) {
+        if (!canRetry || error instanceof SyntaxError) {
+          throw new Error(`${label}: ${error.message}`);
+        }
+        await report(`${label}: ${error.message}; retrying`);
+        await sleep(5000 * attempt);
+        continue;
+      }
+      if (canRetry && (response.status === 429 || response.status >= 500)) {
+        await report(`${label}: HTTP ${response.status}; retrying`);
+        await sleep(5000 * attempt);
+        continue;
+      }
+      throw new Error(`${label}: HTTP ${response.status}`);
+    }
+  };
+  const request = (provider, path, body) => {
     const github = provider === "github";
     const url = new URL(
       path,
@@ -130,65 +226,21 @@ export async function release({
     if (!github) {
       url.searchParams.set("teamId", env.VERCEL_TEAM_ID);
     }
-    const response = await fetchImpl(url, {
-      method: body ? "POST" : "GET",
-      headers: {
-        Authorization: `Bearer ${github ? env.GH_TOKEN : env.VERCEL_TOKEN}`,
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        ...(github ? { "X-GitHub-Api-Version": "2022-11-28" } : {}),
-      },
-      body: body ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (!response.ok) {
-      // Do not log response bodies or retry deployment creation: a timed-out
-      // POST might already have started a billable build.
-      throw new Error(`${provider} ${url.pathname}: HTTP ${response.status}`);
-    }
-    return response.json();
-  };
-  const railway = async (query, variables) => {
-    const response = await fetchImpl(
-      "https://backboard.railway.com/graphql/v2",
+    return send(
+      `${provider} ${url.pathname}`,
+      url,
       {
-        method: "POST",
+        method: body ? "POST" : "GET",
         headers: {
-          Authorization: `Bearer ${env.RAILWAY_TOKEN}`,
+          Authorization: `Bearer ${github ? env.GH_TOKEN : env.VERCEL_TOKEN}`,
+          Accept: "application/json",
           "Content-Type": "application/json",
+          ...(github ? { "X-GitHub-Api-Version": "2022-11-28" } : {}),
         },
-        body: JSON.stringify({ query, variables }),
-        signal: AbortSignal.timeout(30_000),
-      }
+        body: body ? JSON.stringify(body) : undefined,
+      },
+      { retry: !body }
     );
-    if (!response.ok) {
-      throw new Error(`railway: HTTP ${response.status}`);
-    }
-    const result = await response.json();
-    if (result.errors?.length) {
-      throw new Error(
-        `railway: ${result.errors.map((error) => error.message).join(", ")}`
-      );
-    }
-    return result.data;
-  };
-  const latestRailwayDeployment = async (service, states) => {
-    const data = await railway(
-      `query ($input: DeploymentListInput!) {
-        deployments(input: $input, first: 1) {
-          edges { node { id status meta } }
-        }
-      }`,
-      {
-        input: {
-          projectId: service.projectId,
-          environmentId: service.environmentId,
-          serviceId: service.serviceId,
-          status: { in: states },
-        },
-      }
-    );
-    return data.deployments.edges[0]?.node;
   };
   const assertAheadOf = async (name, previousSha) => {
     if (previousSha === sha) {
@@ -205,24 +257,134 @@ export async function release({
     }
   };
 
-  // Require the latest push run for this exact SHA, including any rerun.
-  for (const workflow of requiredWorkflows) {
-    const result = await request(
-      "github",
-      `/repos/${env.GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?head_sha=${sha}&branch=main&event=push&per_page=1`
+  await requireReleaseCI({ env, sha, fetchImpl, sleep, report });
+  await report(`Release commit: \`${sha}\``);
+
+  const unkey = async (path, body) => {
+    const result = await send(
+      `unkey ${path}`,
+      `https://api.unkey.com/${path}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.UNKEY_DEPLOY_ROOT_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      },
+      { retry: path !== "v3/deployments.createDeployment" }
     );
-    const run = result.workflow_runs[0];
+    if (result.error || result.data === undefined) {
+      throw new Error(`unkey ${path}: invalid response`);
+    }
+    return result.data;
+  };
+  const unkeyActiveStates = [
+    "pending",
+    "starting",
+    "building",
+    "deploying",
+    "network",
+    "finalizing",
+    "awaiting_approval",
+  ];
+  const planUnkeyRelease = async (service) => {
+    const domains = await unkey("v2/domains.listDomains", {
+      search: service.domain,
+      limit: 100,
+    });
+    const matches = domains.filter(
+      (domain) => domain.domain === service.domain
+    );
+    if (matches.length !== 1 || matches[0].status !== "verified") {
+      throw new Error(
+        `unkey: cannot identify verified ${service.domain} domain`
+      );
+    }
+    const domain = matches[0];
+    const target = {
+      project: domain.projectId,
+      app: domain.appId,
+      environment: domain.environmentId,
+    };
+    const app = await unkey("v2/apps.getApp", {
+      project: target.project,
+      app: target.app,
+    });
+    const environment = await unkey("v2/environments.getEnvironment", target);
     if (
-      run?.head_sha !== sha ||
-      run.status !== "completed" ||
-      run.conclusion !== "success"
+      app.id !== target.app ||
+      app.git?.repository !== env.GITHUB_REPOSITORY ||
+      app.git?.defaultBranch !== "main" ||
+      app.isRolledBack ||
+      environment.id !== target.environment ||
+      environment.kind !== "production"
     ) {
       throw new Error(
-        `${workflow} has not passed for ${sha}; no builds started`
+        `unkey: ${service.name} must track this repository's main in production without rollback`
+      );
+    }
+    if (environment.build?.autoDeploy !== false) {
+      if (env.DRY_RUN !== "true") {
+        throw new Error(
+          "unkey: disable production auto deploy before scheduled releases"
+        );
+      }
+      await report(
+        "unkey: disable production auto deploy before enabling real releases"
+      );
+    }
+    const active = await unkey("v2/deployments.listDeployments", {
+      ...target,
+      status: unkeyActiveStates,
+      limit: 1,
+    });
+    if (active.length > 0) {
+      throw new Error(
+        `unkey: ${service.name} already has an active production deployment`
+      );
+    }
+    if (!app.currentDeploymentId) {
+      throw new Error(
+        `unkey: ${service.name} has no current production deployment`
+      );
+    }
+    const live = await unkey("v2/deployments.getDeployment", {
+      deploymentId: app.currentDeploymentId,
+    });
+    if (
+      live.id !== app.currentDeploymentId ||
+      live.status !== "ready" ||
+      live.isCurrent !== true ||
+      live.app !== app.slug ||
+      live.environment !== environment.slug ||
+      !live.git?.commitSha
+    ) {
+      throw new Error(
+        `unkey: cannot identify ${service.name}'s live production commit`
+      );
+    }
+    await assertAheadOf(`unkey ${service.name}`, live.git.commitSha);
+    return {
+      target,
+      live,
+      changed:
+        live.git.commitSha !== sha &&
+        [service.directory, ...(service.alsoBuilds ?? [])].some((directory) =>
+          buildChanged(directory, live.git.commitSha, sha)
+        ),
+    };
+  };
+  const unkeyPlans = [];
+  for (const service of unkeyServices) {
+    if (env.UNKEY_DEPLOY_ROOT_KEY) {
+      unkeyPlans.push({ service, ...(await planUnkeyRelease(service)) });
+    } else {
+      await report(
+        `unkey: ${service.name} release disabled; configure UNKEY_DEPLOY_ROOT_KEY to enable`
       );
     }
   }
-  await report(`Release commit: \`${sha}\``);
 
   const plans = [];
   for (const project of projects) {
@@ -236,6 +398,15 @@ export async function release({
     const latest = await request("vercel", `/v9/projects/${project.name}`);
     if (latest.link?.productionBranch !== "main") {
       throw new Error(`${project.name} production branch must remain main`);
+    }
+    if (
+      project.initialDeployment &&
+      (Number(latest.link?.repoId) !== repositoryId ||
+        latest.rootDirectory !== project.directory)
+    ) {
+      throw new Error(
+        `${project.name}: connect the monorepo and set rootDirectory to ${project.directory} before releasing; no builds started`
+      );
     }
     const alias = await request(
       "vercel",
@@ -256,191 +427,438 @@ export async function release({
         `${project.name}: cannot identify the current production commit; no builds started`
       );
     }
-    await assertAheadOf(project.name, previousSha);
-    const changed = buildChanged(project.directory, previousSha, sha);
+    const importingStandalone =
+      project.initialDeployment?.sha === previousSha &&
+      project.initialDeployment.repositoryId ===
+        String(
+          production.gitSource?.repoId ??
+            production.meta?.githubCommitRepoId ??
+            ""
+        );
+    if (!importingStandalone) {
+      await assertAheadOf(project.name, previousSha);
+    }
+    const changed =
+      importingStandalone ||
+      [project.directory, ...(project.alsoBuilds ?? [])].some((directory) =>
+        buildChanged(directory, previousSha, sha)
+      );
     plans.push({ ...project, changed });
   }
 
-  const railwayPlans = [];
-  for (const service of railwayServices) {
-    if (await latestRailwayDeployment(service, railwayActiveStates)) {
-      throw new Error(
-        `${service.name} already has an active Railway deployment`
+  if (preflightOnly) {
+    await report("Production preflight passed; no builds started");
+    return;
+  }
+
+  if (env.DRY_RUN === "true") {
+    await report("sites toolchain: snapshot is checked during real releases");
+  } else {
+    const { envs } = await request(
+      "vercel",
+      `/v10/projects/${sitesToolchain.project}/env`
+    );
+    const liveVar = envs.find(
+      (variable) =>
+        variable.key === sitesToolchain.versionKey &&
+        variable.target?.includes("production")
+    );
+    const liveVersion = liveVar
+      ? ((
+          await request(
+            "vercel",
+            `/v1/projects/${sitesToolchain.project}/env/${liveVar.id}`
+          )
+        ).value ?? null)
+      : null;
+    const toolchain = buildToolchain(
+      join(env.RELEASE_DIR, sitesToolchain.directory),
+      liveVersion
+    );
+    if (toolchain.snapshotId) {
+      const result = await request(
+        "vercel",
+        `/v10/projects/${sitesToolchain.project}/env?upsert=true`,
+        [
+          {
+            key: sitesToolchain.snapshotKey,
+            value: toolchain.snapshotId,
+            type: "sensitive",
+            target: ["production"],
+          },
+          {
+            key: sitesToolchain.versionKey,
+            value: toolchain.version,
+            type: "plain",
+            target: ["production"],
+          },
+        ]
       );
-    }
-    const live = await latestRailwayDeployment(service, railwayLiveStates);
-    const previousSha = live?.meta?.commitHash;
-    if (!previousSha) {
-      throw new Error(
-        `${service.name}: cannot identify the current Railway commit; no builds started`
+      if (result.failed?.length > 0) {
+        throw new Error(
+          `sites toolchain: could not update ${sitesToolchain.project} env (${result.failed.map((failure) => failure.error?.code).join(", ")}); no builds started`
+        );
+      }
+      // The new snapshot only reaches site builds through a new deployment.
+      const dashboard = plans.find(
+        (project) => project.name === sitesToolchain.project
       );
+      dashboard.changed = true;
+      await report(
+        `sites toolchain: snapshot ${toolchain.version} built, ${sitesToolchain.project} will redeploy`
+      );
+    } else {
+      await report(`sites toolchain: ${toolchain.version} unchanged`);
     }
-    await assertAheadOf(service.name, previousSha);
-    const changed = buildChanged(service.directory, previousSha, sha);
-    railwayPlans.push({ ...service, changed });
+  }
+
+  // Everything above only prepares; the first live change waits for the gates.
+  if (env.DRY_RUN !== "true") {
+    await waitForGates({ env, fetchImpl, sleep, report });
+  }
+
+  if (env.DRY_RUN === "true") {
+    await report(`sites worker: would deploy ${sha}`);
+  } else {
+    execFile(
+      "bun",
+      [
+        "run",
+        "deploy",
+        "--env",
+        "",
+        "--keep-vars",
+        "--tag",
+        `prod-${sha.slice(0, 12)}`,
+        "--message",
+        `Production release ${sha}`,
+      ],
+      {
+        cwd: join(env.RELEASE_DIR, "apps/sites"),
+        env,
+        stdio: "inherit",
+        timeout: 5 * 60_000,
+      }
+    );
+    await report(`sites worker: deployed ${sha}`);
   }
 
   const failures = [];
+  const builds = [];
   for (const project of plans) {
     if (!project.changed) {
       await report(
         `${project.name}: skipped, no build changes since production`
       );
-      continue;
-    }
-    if (env.DRY_RUN === "true") {
+    } else if (env.DRY_RUN === "true") {
       await report(`${project.name}: would deploy ${sha}`);
-      continue;
+    } else {
+      builds.push(project);
     }
+  }
+  const deployVercel = async (project) => {
     try {
-      const deployment = await request("vercel", "/v13/deployments", {
-        name: project.name,
-        project: project.name,
-        target: "production",
-        gitSource: {
-          type: "github",
-          repoId: repositoryId,
-          ref: "main",
-          sha,
-        },
-      });
-      if (!deployment.id) {
-        throw new Error(`${project.name}: deployment creation returned no ID`);
+      for (let buildAttempt = 0; buildAttempt < 2; buildAttempt += 1) {
+        const deployment = await request(
+          "vercel",
+          `/v13/deployments${buildAttempt > 0 ? "?forceNew=1" : ""}`,
+          {
+            name: project.name,
+            project: project.name,
+            target: "production",
+            gitSource: {
+              type: "github",
+              repoId: repositoryId,
+              ref: "main",
+              sha,
+            },
+          }
+        );
+        if (!deployment.id) {
+          throw new Error(
+            `${project.name}: deployment creation returned no ID`
+          );
+        }
+        await report(`${project.name}: started https://${deployment.url}`);
+        let completed = false;
+        let retry = false;
+        const deadline = Date.now() + 10 * 60_000;
+        for (
+          let attempt = 0;
+          attempt < 120 && Date.now() < deadline;
+          attempt += 1
+        ) {
+          const status = await request(
+            "vercel",
+            `/v13/deployments/${deployment.id}`
+          );
+          if (status.readyState === "READY") {
+            if (deploymentSha(status) !== sha) {
+              throw new Error(`${project.name}: built a different commit`);
+            }
+            let alias;
+            try {
+              alias = await request(
+                "vercel",
+                `/v4/aliases/${project.productionAlias}`
+              );
+            } catch (error) {
+              await report(
+                `${project.name}: waiting for production alias (${error.message})`
+              );
+            }
+            if (alias?.deploymentId === deployment.id) {
+              await report(`${project.name}: READY https://${status.url}`);
+              completed = true;
+              break;
+            }
+          } else if (!activeStates.has(status.readyState)) {
+            if (
+              status.readyState === "ERROR" &&
+              status.errorCode === "out_of_memory" &&
+              buildAttempt === 0
+            ) {
+              await report(
+                `${project.name}: out_of_memory at https://${status.url ?? deployment.url}; retrying once at ${sha}`
+              );
+              await sleep(10_000);
+              retry = true;
+              break;
+            }
+            const reason = [status.errorCode, status.readyStateReason]
+              .filter(Boolean)
+              .join(": ");
+            throw new Error(
+              `${project.name}: deployment ended ${status.readyState}${reason ? ` (${reason})` : ""}`
+            );
+          }
+          const remaining = deadline - Date.now();
+          if (remaining > 0) {
+            await sleep(Math.min(5000, remaining));
+          }
+        }
+        if (retry) {
+          continue;
+        }
+        if (!completed) {
+          throw new Error(
+            `${project.name}: deployment did not finish in 10 minutes`
+          );
+        }
+        break;
       }
-      await report(`${project.name}: started https://${deployment.url}`);
+    } catch (error) {
+      failures.push(error.message);
+      await report(error.message);
+    }
+  };
+  // Re-runs the planning checks (rollback, active deployment, ancestry) right
+  // before a target changes, since planning happened before the gates.
+  const refreshUnkeyPlan = async (plan) => {
+    const refreshed = await planUnkeyRelease(plan.service);
+    if (
+      Object.keys(plan.target).some(
+        (key) => plan.target[key] !== refreshed.target[key]
+      )
+    ) {
+      throw new Error(
+        "unkey: production domain target changed during Vercel releases"
+      );
+    }
+    return { ...plan, ...refreshed };
+  };
+  let demoMigration;
+  const migrateDemoDatabase = () => {
+    demoMigration ??= (async () => {
+      // Every demo app shares the database, so all of them must still pass
+      // their checks before it moves ahead, including unchanged ones.
+      await Promise.all(
+        unkeyPlans
+          .filter((plan) => plan.service.demoDatabase)
+          .map(refreshUnkeyPlan)
+      );
+      execFile(
+        "bun",
+        ["packages/db/src/scripts/migrate.ts", "packages/db/migrations"],
+        {
+          cwd: env.RELEASE_DIR,
+          env: {
+            PATH: env.PATH,
+            HOME: env.HOME,
+            MIGRATION_DATABASE_URL: env.DEMO_MIGRATION_DATABASE_URL,
+          },
+          stdio: "inherit",
+          timeout: 5 * 60_000,
+        }
+      );
+      await report(`unkey: demo database migrated to ${sha}`);
+    })();
+    return demoMigration;
+  };
+  const unkeyDeployed = new Set();
+  const deployUnkey = async (initialPlan) => {
+    const { service } = initialPlan;
+    let plan = initialPlan;
+    if (env.DRY_RUN !== "true") {
+      plan = await refreshUnkeyPlan(initialPlan);
+    }
+    if (!plan.changed) {
+      await report(
+        `unkey: skipped, no ${service.name} build changes since production`
+      );
+    } else if (service.demoDatabase && !env.DEMO_MIGRATION_DATABASE_URL) {
+      // Demo code must never run ahead of its schema; the live demo keeps
+      // its current build until the secret exists.
+      await report(
+        `unkey: skipped ${service.name}, configure DEMO_MIGRATION_DATABASE_URL to migrate the demo database`
+      );
+    } else if (env.DRY_RUN === "true") {
+      await report(
+        `unkey: would ${service.demoDatabase ? "migrate the demo database and " : ""}deploy ${service.name} at ${sha}`
+      );
+    } else {
+      if (service.demoDatabase) {
+        await migrateDemoDatabase();
+      }
+      const deployment = await unkey("v3/deployments.createDeployment", {
+        ...plan.target,
+        git: { branch: "main", commitSha: sha },
+      });
+      if (!deployment.deploymentId) {
+        throw new Error("unkey: deployment creation returned no ID");
+      }
+      await report(
+        `unkey: started ${service.name} deployment ${deployment.deploymentId}`
+      );
+      const deadline = Date.now() + 20 * 60_000;
       let completed = false;
-      const deadline = Date.now() + 10 * 60_000;
       for (
         let attempt = 0;
-        attempt < 60 && Date.now() < deadline;
+        attempt < 240 && Date.now() < deadline;
         attempt += 1
       ) {
-        const status = await request(
-          "vercel",
-          `/v13/deployments/${deployment.id}`
-        );
-        if (status.readyState === "READY") {
-          if (deploymentSha(status) !== sha) {
-            throw new Error(`${project.name}: built a different commit`);
+        const status = await unkey("v2/deployments.getDeployment", {
+          deploymentId: deployment.deploymentId,
+        });
+        if (
+          status.id !== deployment.deploymentId ||
+          status.app !== plan.live.app ||
+          status.project !== plan.live.project ||
+          status.environment !== plan.live.environment
+        ) {
+          throw new Error(`unkey: ${service.name} deployment target changed`);
+        }
+        if (status.status === "ready") {
+          if (status.git?.commitSha !== sha) {
+            throw new Error(`unkey: ${service.name} built a different commit`);
           }
-          let alias;
-          try {
-            alias = await request(
-              "vercel",
-              `/v4/aliases/${project.productionAlias}`
-            );
-          } catch (error) {
-            await report(
-              `${project.name}: waiting for production alias (${error.message})`
-            );
-          }
-          if (alias?.deploymentId === deployment.id) {
-            await report(`${project.name}: READY https://${status.url}`);
+          if (status.isCurrent === true) {
+            await report(`unkey: ${service.name} ready and current at ${sha}`);
+            unkeyDeployed.add(service.name);
             completed = true;
             break;
           }
-        } else if (!activeStates.has(status.readyState)) {
+        } else if (!unkeyActiveStates.includes(status.status)) {
           throw new Error(
-            `${project.name}: deployment ended ${status.readyState}`
+            `unkey: ${service.name} deployment ended ${status.status}`
           );
         }
         const remaining = deadline - Date.now();
         if (remaining > 0) {
-          await sleep(Math.min(10_000, remaining));
+          await sleep(Math.min(5000, remaining));
         }
       }
       if (!completed) {
         throw new Error(
-          `${project.name}: deployment did not finish in 10 minutes`
+          `unkey: ${service.name} deployment did not become current in 20 minutes`
         );
       }
-    } catch (error) {
-      failures.push(error.message);
-      await report(error.message);
     }
-  }
-  if (failures.length > 0) {
-    // Keep Railway on the previous commit while production did not move.
-    await report("Railway: skipped, a Vercel production deployment failed");
-    throw new Error(failures.join("\n"));
-  }
+  };
+  // The demo apps share a database that is migrated once before either builds;
+  // after that every service ships independently.
+  const releaseUnkey = () =>
+    Promise.all(
+      unkeyPlans.map(async (plan) => {
+        try {
+          await deployUnkey(plan);
+        } catch (error) {
+          failures.push(error.message);
+          await report(error.message);
+        }
+      })
+    );
 
-  const started = [];
-  for (const service of railwayPlans) {
-    if (!service.changed) {
-      await report(
-        `${service.name}: skipped, no build changes since production`
-      );
-      continue;
-    }
-    if (env.DRY_RUN === "true") {
-      await report(`${service.name}: would deploy ${sha}`);
-      continue;
-    }
+  // The dashboard build migrates the production database, so everything else,
+  // Unkey included, starts only once it is live; the rest then ships together.
+  await Promise.all(
+    builds.filter((project) => project.migratesDatabase).map(deployVercel)
+  );
+  const migrated = failures.length === 0;
+  if (!migrated && unkeyPlans.length > 0) {
+    await report("unkey: skipped, the dashboard deployment failed");
+  }
+  // The migrator runs synchronously, so it finishes before any concurrent
+  // request is in flight instead of stalling their timeouts.
+  if (
+    migrated &&
+    env.DRY_RUN !== "true" &&
+    env.DEMO_MIGRATION_DATABASE_URL &&
+    unkeyPlans.some((plan) => plan.service.demoDatabase && plan.changed)
+  ) {
+    // A failure is reported by each demo deployment, which then stops.
+    await migrateDemoDatabase().catch(() => {});
+  }
+  await Promise.all([
+    ...builds.filter((project) => !project.migratesDatabase).map(deployVercel),
+    ...(migrated ? [releaseUnkey()] : []),
+  ]);
+
+  // Unkey's probe only proves the dashboard boots. Visitors also need the
+  // migrated schema to be readable through the demo's own database role.
+  // Unchanged demo builds are checked too, so a retry cannot skip a failure,
+  // and an unrelated failed deployment does not hide one.
+  if (
+    migrated &&
+    env.DRY_RUN !== "true" &&
+    unkeyPlans.some((plan) => plan.service.demoDatabase)
+  ) {
     try {
-      const data = await railway(
-        `mutation ($serviceId: String!, $environmentId: String!, $commitSha: String!) {
-          serviceInstanceDeployV2(serviceId: $serviceId, environmentId: $environmentId, commitSha: $commitSha)
-        }`,
-        {
-          serviceId: service.serviceId,
-          environmentId: service.environmentId,
-          commitSha: sha,
+      const expectedSha = unkeyDeployed.has("demo-dashboard") ? sha : null;
+      // A shallow response (demo mode off) has no table count.
+      const passed = (health) =>
+        health.ok === true &&
+        health.tables > 0 &&
+        (!expectedSha || health.commitSha === expectedSha);
+      let health;
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        try {
+          const response = await fetchImpl(
+            "https://demo.usenotra.com/api/healthcheck?deep=1",
+            { signal: AbortSignal.timeout(30_000) }
+          );
+          health = await response.json();
+        } catch (error) {
+          health = { ok: false, error: error.message };
         }
-      );
-      const deploymentId = data.serviceInstanceDeployV2;
-      if (!deploymentId) {
-        throw new Error(`${service.name}: deployment creation returned no ID`);
+        if (passed(health) || attempt === 5) {
+          break;
+        }
+        await sleep(10_000);
       }
-      await report(
-        `${service.name}: started Railway deployment ${deploymentId}`
-      );
-      started.push({ ...service, deploymentId });
+      if (!passed(health)) {
+        throw new Error(
+          `demo: database check failed (${health.error ?? (health.tables > 0 ? `serving ${health.commitSha}` : "no deep check, is demo mode on?")})`
+        );
+      }
+      await report(`demo: database check passed (${health.tables} tables)`);
     } catch (error) {
       failures.push(error.message);
       await report(error.message);
     }
   }
-
-  // Railway builds run in parallel; Docker builds take longer than Vercel's.
-  const deadline = Date.now() + 20 * 60_000;
-  let pending = started;
-  while (pending.length > 0) {
-    const stillPending = [];
-    for (const service of pending) {
-      try {
-        const { deployment } = await railway(
-          `query ($id: String!) { deployment(id: $id) { status meta } }`,
-          { id: service.deploymentId }
-        );
-        if (railwayLiveStates.includes(deployment.status)) {
-          if (deployment.meta?.commitHash !== sha) {
-            throw new Error(`${service.name}: built a different commit`);
-          }
-          await report(`${service.name}: ${deployment.status}`);
-        } else if (!railwayActiveStates.includes(deployment.status)) {
-          throw new Error(
-            `${service.name}: deployment ended ${deployment.status}`
-          );
-        } else if (Date.now() >= deadline) {
-          throw new Error(
-            `${service.name}: deployment did not finish in 20 minutes`
-          );
-        } else {
-          stillPending.push(service);
-        }
-      } catch (error) {
-        failures.push(error.message);
-        await report(error.message);
-      }
-    }
-    pending = stillPending;
-    if (pending.length > 0) {
-      await sleep(Math.min(15_000, Math.max(0, deadline - Date.now())));
-    }
-  }
   if (failures.length > 0) {
-    throw new Error(failures.join("\n"));
+    throw new Error([...new Set(failures)].join("\n"));
   }
 }
 
@@ -448,5 +866,5 @@ if (
   process.argv[1] &&
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
-  await release();
+  await release({ preflightOnly: process.argv.includes("--preflight") });
 }

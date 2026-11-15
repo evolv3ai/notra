@@ -7,6 +7,13 @@ export const webhookEventTypeSchema = z.enum([
   "brand_identity.generation.completed",
   "brand_identity.generation.failed",
   "post.published",
+  "post.created",
+  "post.updated",
+  "post.deleted",
+  "post.unpublished",
+  "geo.scan.completed",
+  "geo.scan.failed",
+  "geo.alert.triggered",
 ]);
 export const webhookStatusFilterSchema = z.enum([
   "all",
@@ -20,7 +27,7 @@ export const webhookStatusFilterSchema = z.enum([
 export const webhookEventsInputSchema = z
   .array(webhookEventTypeSchema)
   .min(1)
-  .max(6);
+  .max(webhookEventTypeSchema.options.length);
 export const webhookUrlInputSchema = z.string().url().max(2048);
 export const createWebhookRequestSchema = z.object({
   url: webhookUrlInputSchema,
@@ -36,7 +43,7 @@ export const webhookDeliveryQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).max(100000).default(0),
   status: webhookStatusFilterSchema.default("all"),
 });
-export const webhookEndpointSchema = z.object({
+const webhookEndpointSchema = z.object({
   id: z.string(),
   organizationId: z.string(),
   url: z.string(),
@@ -45,7 +52,7 @@ export const webhookEndpointSchema = z.object({
   createdAt: z.string(),
 });
 export const webhookIdentifierSchema = z.object({ id: z.string() });
-export const webhookDeliverySchema = z.object({
+const webhookDeliverySchema = z.object({
   id: z.string(),
   eventId: z.string(),
   endpointId: z.string(),
@@ -65,7 +72,7 @@ export const webhookDeliverySchema = z.object({
   statusCode: z.number().nullable(),
   error: z.string().nullable(),
 });
-export const webhookAttemptSchema = z.object({
+const webhookAttemptSchema = z.object({
   id: z.string(),
   deliveryId: z.string(),
   attemptNumber: z.number(),

@@ -18,7 +18,6 @@ export const CHATGPT_PLAYBACK_TIMING = {
   tokenMs: 28,
 } as const;
 
-/** Where each burst particle ends up, as an offset from the thumb center in px, plus size in px and delay in ms. */
 export const CHATGPT_PRO_SPARKLES = [
   { delay: 0, size: 4, x: -30, y: -26 },
   { delay: 30, size: 3, x: 0, y: -34 },
@@ -32,7 +31,6 @@ export const CHATGPT_PRO_SPARKLES = [
   { delay: 70, size: 2, x: 18, y: 16 },
 ] as const;
 
-/** Stars inside the Pro track: position in % of the track, size in px, and animation timing in ms. */
 export const CHATGPT_PRO_TWINKLES = [
   { delay: 0, duration: 3000, size: 2, x: 6, y: 32 },
   { delay: 900, duration: 3600, size: 3, x: 15, y: 66 },

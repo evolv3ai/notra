@@ -1,0 +1,18 @@
+---
+title: App call
+description: The "Used Notra" line ChatGPT shows when an app answers part of a turn.
+---
+
+<Component path="chatgpt/examples/chatgpt-app-call" />
+
+<RegistryInstall name="chatgpt-app-call" />
+
+`ChatgptAppCall` is the muted line above an answer that names the app ChatGPT called. Pass the app's `logo` and `name`; the logo sits in a small rounded tile and any `img` or `svg` fills it.
+
+| Prop | Default | Description |
+| --- | --- | --- |
+| `name` | | The app name, shown in the foreground color. |
+| `logo` | | An image or icon shown before the label. |
+| `label` | `Used` | The muted verb before the name. |
+
+<include>./_used-in.mdx</include>

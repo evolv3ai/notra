@@ -5,13 +5,13 @@ import {
   GEO_MARKDOWN_NEGOTIATION_AGENT,
 } from "./geo-accept";
 
-export const GEO_HIDDEN_TRAFFIC_CONFIDENCE = "heuristic";
+const GEO_HIDDEN_TRAFFIC_CONFIDENCE = "heuristic";
 
 const HEURISTIC_SIGNATURE_AGENTS = AI_AGENT_SIGNATURES.filter(
   (signature) => signature.confidence === GEO_HIDDEN_TRAFFIC_CONFIDENCE
 ).map((signature) => signature.agent);
 
-export const GEO_HIDDEN_TRAFFIC_SOURCES: readonly string[] = [
+const GEO_HIDDEN_TRAFFIC_SOURCES: readonly string[] = [
   GEO_MARKDOWN_NEGOTIATION_AGENT,
   GEO_BROWSER_IMITATION_AGENT,
   ...HEURISTIC_SIGNATURE_AGENTS,

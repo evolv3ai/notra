@@ -14,7 +14,6 @@ import { cn } from "@notra/ui/lib/utils";
 import { useEnterComplete } from "@notra/ui/lib/charts/use-enter-complete";
 import { useMountProgress } from "@notra/ui/lib/charts/use-mount-progress";
 
-// ─── Public types ───────────────────────────────────────────────────
 
 export interface FunnelGradientStop {
   offset: string | number;
@@ -108,20 +107,13 @@ export interface FunnelChartProps {
       };
 }
 
-// ─── Defaults ───────────────────────────────────────────────────────
 
 import { intFmt } from "@notra/ui/lib/charts/chart-formatters";
 
 const fmtPct = (p: number) => `${Math.round(p)}%`;
 const fmtVal = intFmt;
 
-// ─── SVG helpers ────────────────────────────────────────────────────
 
-/**
- * Builds a single segment path for one stage in the funnel.
- * Each segment is a smooth trapezoid-like shape transitioning from
- * the height of the current norm to the next norm.
- */
 function hSegmentPath(
   normStart: number,
   normEnd: number,
@@ -166,7 +158,6 @@ function vSegmentPath(
   return `${left} ${right} Z`;
 }
 
-// ─── Animated Segment ───────────────────────────────────────────────
 
 function HRing({
   d,
@@ -590,9 +581,7 @@ function VSegment({
   );
 }
 
-// ─── Label overlay ──────────────────────────────────────────────────
 
-// Map align to flexbox alignment on the cross axes
 const justifyMap = {
   start: "justify-start",
   center: "justify-center",
@@ -657,7 +646,6 @@ function SegmentLabel({
     </span>
   );
 
-  // ── Spread layout (default): items pushed to edges with center element ──
   if (layout === "spread") {
     return (
       <motion.div
@@ -698,20 +686,15 @@ function SegmentLabel({
     );
   }
 
-  // ── Grouped layout: items stacked tightly together ──
   const resolvedOrientation =
     orientation ?? (isHorizontal ? "vertical" : "horizontal");
   const isVerticalStack = resolvedOrientation === "vertical";
 
-  // The outer container uses the chart orientation to position the group,
-  // and the inner group uses the label orientation for stacking.
   return (
     <motion.div
       animate={{ opacity: 1 }}
       className={cn(
         "absolute inset-0 flex",
-        // For horizontal funnel, align controls vertical placement
-        // For vertical funnel, align controls horizontal placement
         isHorizontal
           ? cn("flex-col items-center", justifyMap[align])
           : cn("flex-row items-center", justifyMap[align])
@@ -738,7 +721,6 @@ function SegmentLabel({
   );
 }
 
-// ─── Main Component ─────────────────────────────────────────────────
 
 export function FunnelChart({
   data,
@@ -820,7 +802,6 @@ export function FunnelChart({
   const segW = (W - (horiz ? totalGap : 0)) / n;
   const segH = (H - (horiz ? 0 : totalGap)) / n;
 
-  // Resolve grid config
   const gridEnabled = gridProp !== false;
   const gridCfg = typeof gridProp === "object" ? gridProp : {};
   const showBands = gridEnabled && (gridCfg.bands ?? true);
@@ -841,7 +822,6 @@ export function FunnelChart({
     >
       {W > 0 && H > 0 && (
         <>
-          {/* Grid layer: background bands + grid lines */}
           {gridEnabled && (
             <svg
               aria-hidden="true"
@@ -850,7 +830,6 @@ export function FunnelChart({
               role="presentation"
               viewBox={`0 0 ${W} ${H}`}
             >
-              {/* Background bands — alternating on even segments */}
               {showBands &&
                 data.map((stage, i) => {
                   if (i % 2 !== 0) {
@@ -884,7 +863,6 @@ export function FunnelChart({
             </svg>
           )}
 
-          {/* Segments container — overflow-visible so hover scale is not clipped */}
           <div
             className={cn(
               "absolute inset-0 flex overflow-visible",
@@ -940,7 +918,6 @@ export function FunnelChart({
             })}
           </div>
 
-          {/* Grid lines — rendered above segments so they're visible */}
           {gridEnabled && showGridLines && (
             <svg
               aria-hidden="true"
@@ -984,8 +961,6 @@ export function FunnelChart({
             </svg>
           )}
 
-          {/* Label overlays — one per segment, positioned over each segment cell.
-              These are the hover triggers for each segment. */}
           {data.map((stage, i) => {
             const pct = (stage.value / max) * 100;
             const posStyle: CSSProperties = horiz

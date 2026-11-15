@@ -7,6 +7,7 @@ import type {
   SharedV4ProviderMetadata,
   SharedV4ProviderOptions,
 } from "@ai-sdk/provider";
+import { ROUTER_METADATA_KEY } from "@notra/ai/constants/router";
 import type {
   ModelRouter,
   RouterLogger,
@@ -25,6 +26,12 @@ import {
   buildOpenRouterProviderOptions,
   buildVercelProviderOptions,
 } from "./provider-options";
+
+export function metadataOf(result: {
+  providerMetadata?: SharedV4ProviderMetadata;
+}) {
+  return result.providerMetadata?.[ROUTER_METADATA_KEY];
+}
 
 export function createFakeAdapter(options: FakeAdapterOptions): FakeAdapter {
   const calls: RecordedRouterCall[] = [];
@@ -53,11 +60,11 @@ export function createFakeAdapter(options: FakeAdapterOptions): FakeAdapter {
       provider: `fake-${options.id}`,
       modelId,
       supportedUrls: {},
-      doGenerate(callOptions): Promise<LanguageModelV4GenerateResult> {
+      async doGenerate(callOptions): Promise<LanguageModelV4GenerateResult> {
         const call = { gateway: options.id, modelId, options: callOptions };
         calls.push(call);
-        options.onCall?.(call);
-        return Promise.resolve({
+        await options.onCall?.(call);
+        return {
           content: [{ type: "text", text: `${options.id}:${modelId}` }],
           finishReason: { unified: "stop", raw: "stop" },
           usage: {
@@ -66,12 +73,12 @@ export function createFakeAdapter(options: FakeAdapterOptions): FakeAdapter {
           },
           warnings: [],
           providerMetadata: providerMetadata(),
-        });
+        };
       },
-      doStream(callOptions): Promise<LanguageModelV4StreamResult> {
+      async doStream(callOptions): Promise<LanguageModelV4StreamResult> {
         const call = { gateway: options.id, modelId, options: callOptions };
         calls.push(call);
-        options.onCall?.(call);
+        await options.onCall?.(call);
         const parts: LanguageModelV4StreamPart[] = [
           { type: "stream-start", warnings: [] },
           {
@@ -100,7 +107,7 @@ export function createFakeAdapter(options: FakeAdapterOptions): FakeAdapter {
               : {}),
           },
         ];
-        return Promise.resolve({
+        return {
           stream: new ReadableStream<LanguageModelV4StreamPart>({
             start(controller) {
               for (const part of parts) {
@@ -109,7 +116,7 @@ export function createFakeAdapter(options: FakeAdapterOptions): FakeAdapter {
               controller.close();
             },
           }),
-        });
+        };
       },
     };
   };
@@ -121,6 +128,7 @@ export function createFakeAdapter(options: FakeAdapterOptions): FakeAdapter {
     createdModels,
     balanceCalls: 0,
     supportsModel: options.supportedModels ?? (() => true),
+    supportsTools: options.supportedTools ?? (() => true),
     mapModelId: (modelId) => modelId,
     createModel,
     buildProviderOptions,

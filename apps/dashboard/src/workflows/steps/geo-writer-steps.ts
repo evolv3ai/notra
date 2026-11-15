@@ -1,6 +1,9 @@
 import { runGeoWriter } from "@notra/ai/agents/geo-writer";
+
+import "@/workflows/runtime";
 import { getValidToneProfile } from "@notra/ai/schemas/tone";
 import type { GeoWriterResult } from "@notra/ai/types/geo-writer";
+import { logError } from "@notra/ai/utils/server-log";
 import { db } from "@notra/db/drizzle";
 import {
   brandSettings,
@@ -104,6 +107,32 @@ export async function loadGeoWriterContext(input: {
   };
 }
 
+/** Settles the brief only while this run still owns it in `writing`. */
+async function settleWritingBrief(
+  input: {
+    organizationId: string;
+    projectId: string;
+    briefId: string;
+    runId: string;
+  },
+  set: Partial<typeof geoContentBriefs.$inferInsert>
+) {
+  const [updated] = await db
+    .update(geoContentBriefs)
+    .set(set)
+    .where(
+      and(
+        eq(geoContentBriefs.organizationId, input.organizationId),
+        eq(geoContentBriefs.projectId, input.projectId),
+        eq(geoContentBriefs.id, input.briefId),
+        eq(geoContentBriefs.runId, input.runId),
+        eq(geoContentBriefs.status, "writing")
+      )
+    )
+    .returning({ startedAt: geoContentBriefs.startedAt });
+  return updated?.startedAt ?? null;
+}
+
 export async function runGeoWriterStep(
   context: GeoWriterContext,
   runId: string
@@ -153,30 +182,18 @@ export async function finishGeoWriter(input: {
   humanized: boolean;
 }): Promise<void> {
   "use step";
-  const updated = await db
-    .update(geoContentBriefs)
-    .set({
-      status: "completed",
-      postId: input.postId,
-      humanized: input.humanized,
-      error: null,
-      completedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(geoContentBriefs.organizationId, input.organizationId),
-        eq(geoContentBriefs.projectId, input.projectId),
-        eq(geoContentBriefs.id, input.briefId),
-        eq(geoContentBriefs.runId, input.runId),
-        eq(geoContentBriefs.status, "writing")
-      )
-    )
-    .returning({ startedAt: geoContentBriefs.startedAt });
+  const startedAt = await settleWritingBrief(input, {
+    status: "completed",
+    postId: input.postId,
+    humanized: input.humanized,
+    error: null,
+    completedAt: new Date(),
+  });
 
   try {
     await Effect.runPromise(refreshGeoContentGaps(input));
   } catch (error) {
-    console.error("[GEO] Could not refresh content gaps after writing:", error);
+    logError("[GEO] Could not refresh content gaps after writing", error);
   }
 
   await completeActiveGeneration(input.organizationId, {
@@ -197,7 +214,7 @@ export async function finishGeoWriter(input: {
     runId: input.runId,
     postId: input.postId,
     humanized: input.humanized,
-    startedAt: updated[0]?.startedAt ?? null,
+    startedAt,
   });
 }
 
@@ -210,24 +227,16 @@ export async function failGeoWriter(input: {
   failureReason: GeoWriterFailureReason;
 }): Promise<void> {
   "use step";
-  const updated = await db
-    .update(geoContentBriefs)
-    .set({ status: "failed", error: input.reason, completedAt: new Date() })
-    .where(
-      and(
-        eq(geoContentBriefs.organizationId, input.organizationId),
-        eq(geoContentBriefs.projectId, input.projectId),
-        eq(geoContentBriefs.id, input.briefId),
-        eq(geoContentBriefs.runId, input.runId),
-        eq(geoContentBriefs.status, "writing")
-      )
-    )
-    .returning({ startedAt: geoContentBriefs.startedAt });
+  const startedAt = await settleWritingBrief(input, {
+    status: "failed",
+    error: input.reason,
+    completedAt: new Date(),
+  });
 
   try {
     await Effect.runPromise(refreshGeoContentGaps(input));
   } catch (error) {
-    console.error("[GEO] Could not refresh content gaps after failure:", error);
+    logError("[GEO] Could not refresh content gaps after failure", error);
   }
 
   await completeActiveGeneration(input.organizationId, {
@@ -247,7 +256,7 @@ export async function failGeoWriter(input: {
     briefId: input.briefId,
     runId: input.runId,
     reason: input.failureReason,
-    startedAt: updated[0]?.startedAt ?? null,
+    startedAt,
   });
 }
 

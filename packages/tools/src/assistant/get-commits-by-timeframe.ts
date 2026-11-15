@@ -1,3 +1,4 @@
+import { GITHUB_API_VERSION_HEADERS } from "@notra/ai/constants/github";
 import { getGitHubToolRepositoryContextByIntegrationId } from "@notra/ai/integrations/github";
 import { createOctokit } from "@notra/ai/utils/octokit";
 import { defineTool } from "eve/tools";
@@ -47,9 +48,7 @@ export function createGetCommitsByTimeframeTool() {
           ...(resolved.defaultBranch ? { sha: resolved.defaultBranch } : {}),
           until: effectiveUntil,
           per_page: GITHUB_COMMITS_PER_PAGE,
-          headers: {
-            "X-GitHub-Api-Version": "2022-11-28",
-          },
+          headers: GITHUB_API_VERSION_HEADERS,
         })
       );
 
@@ -78,7 +77,7 @@ export function createGetCommitsByTimeframeTool() {
           page,
           perPage: GITHUB_COMMITS_PER_PAGE,
           hasNextPage,
-          nextPage: hasNextPage ? (nextPage ?? null) : null,
+          nextPage: hasNextPage ? nextPage : null,
         },
       };
     },

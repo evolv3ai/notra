@@ -16,7 +16,7 @@ import { Playwright } from "@notra/ui/components/ui/svgs/playwright";
 import { Vercel } from "@notra/ui/components/ui/svgs/vercel";
 import { Windsurf } from "@notra/ui/components/ui/svgs/windsurf";
 import { cn } from "@notra/ui/lib/utils";
-import { useTranslations } from "next-intl";
+import { useTranslations } from "use-intl";
 
 import type {
   AgentFeedbackAgentIconProps,
@@ -82,7 +82,7 @@ function AgentBrandMark({
   return <Gemini className={cn(className, "overflow-visible")} />;
 }
 
-function AgentFeedbackAgentIcon({
+export function AgentFeedbackAgentIcon({
   client,
   className,
 }: AgentFeedbackAgentIconProps) {

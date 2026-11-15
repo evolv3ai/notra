@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ImageResponse } from "@vercel/og";
 import type { OgContributor } from "~types/github";
 
 import logoSvg from "@/../public/notra-mark.svg?raw";
@@ -9,6 +8,7 @@ import {
   OG_MAX_LOGIN_LENGTH,
 } from "@/utils/constants";
 import { fetchContributorsData } from "@/utils/github";
+import { ImageResponse } from "@/utils/image-response";
 import { loadInterFont, truncate } from "@/utils/og";
 
 const size = { width: 1200, height: 630 };

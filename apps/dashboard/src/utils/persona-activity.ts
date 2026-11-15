@@ -3,13 +3,11 @@ import type {
   GeoPersonaActivityPoint,
   GeoPersonaActivityResponse,
 } from "@notra/geo-core/types/geo-personas";
-import { todayIsoDate } from "@notra/geo-core/utils/day-label";
 
 import {
   GEO_PERSONA_CHART_MAX_STEP,
   GEO_PERSONA_CHART_MIN_MAX,
-  GEO_PERSONA_FORECAST_DAYS,
-  GEO_PERSONA_FORECAST_SAMPLE_DAYS,
+  GEO_PERSONA_ROLLING_DAYS,
 } from "@/constants/geo-personas";
 import type { PersonaActivitySeries } from "@/types/geo-personas";
 import { chartKey } from "@/utils/chart-keys";
@@ -22,12 +20,8 @@ function activityPointKey(
   return `${day}:${personaId}:${snapshotVersion}`;
 }
 
-export function personaActivityKey(personaId: string, snapshotVersion: string) {
+function personaActivityKey(personaId: string, snapshotVersion: string) {
   return chartKey(`${personaId}:${snapshotVersion}`);
-}
-
-export function personaForecastKey(personaId: string, snapshotVersion: string) {
-  return chartKey(`${personaId}:${snapshotVersion}:forecast`);
 }
 
 export function buildPersonaActivitySeries(
@@ -63,49 +57,51 @@ export function buildPersonaActivitySeries(
   });
 }
 
-function mentionRate(point: GeoPersonaActivityPoint | undefined) {
-  return point && point.checks > 0
-    ? (point.mentions / point.checks) * 100
-    : null;
+function addDays(day: string, amount: number) {
+  const date = new Date(`${day}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + amount);
+  return date.toISOString().slice(0, 10);
 }
 
-function lastScanDayByKey(points: readonly GeoPersonaActivityPoint[]) {
-  const lastDay = new Map<string, string>();
-  for (const point of points) {
-    if (point.checks <= 0) {
-      continue;
-    }
-    const key = personaActivityKey(point.personaId, point.snapshotVersion);
-    const current = lastDay.get(key);
-    if (!current || point.day > current) {
-      lastDay.set(key, point.day);
-    }
+function activityDays(from: string, to: string) {
+  const days: string[] = [];
+  for (let day = from; day < to; day = addDays(day, 1)) {
+    days.push(day);
   }
-  return lastDay;
+  return days;
 }
 
 /**
- * A day without checks reads as 0% so the line stays on the baseline instead
- * of breaking. Two exceptions stay empty: today before its scan has landed
- * (the forecast bridges it), and days after a previous snapshot was replaced.
+ * Start of the fetch window: the selected range plus the days before it that
+ * the first day's rolling rate needs.
  */
-function missingDayRate(
-  item: PersonaActivitySeries,
-  day: string,
-  today: string,
-  lastScanDay: ReadonlyMap<string, string>
-) {
-  if (item.isCurrent) {
-    return day < today ? 0 : null;
-  }
-  const last = lastScanDay.get(item.dataKey);
-  return last !== undefined && day <= last ? 0 : null;
+export function personaActivityFetchFrom(from: string) {
+  return addDays(from, -(GEO_PERSONA_ROLLING_DAYS - 1));
 }
 
+/** Narrows a response fetched from `personaActivityFetchFrom` back to the selected range. */
+export function personaActivityWithin(
+  activity: GeoPersonaActivityResponse,
+  from: string
+): GeoPersonaActivityResponse {
+  return {
+    ...activity,
+    from,
+    points: activity.points.filter((point) => point.day >= from),
+  };
+}
+
+/**
+ * One row per selected day with each series' mention rate over the last
+ * `GEO_PERSONA_ROLLING_DAYS` days. A day holds only a few checks per persona,
+ * so the daily rate jumps between 0% and 50% and hides the actual trend.
+ * `activity` starts `GEO_PERSONA_ROLLING_DAYS - 1` days before `from`, so the
+ * first day has a full window. Days without checks stay null.
+ */
 export function buildPersonaActivityRows(
   activity: GeoPersonaActivityResponse,
   series: readonly PersonaActivitySeries[],
-  today = todayIsoDate()
+  from: string
 ) {
   const points = new Map(
     activity.points.map((point) => [
@@ -113,90 +109,94 @@ export function buildPersonaActivityRows(
       point,
     ])
   );
-  const lastScanDay = lastScanDayByKey(activity.points);
+  const days = activityDays(activity.from, activity.to);
   const rows: Record<string, string | number | null>[] = [];
-  const date = new Date(`${activity.from}T00:00:00Z`);
-  while (date.toISOString().slice(0, 10) < activity.to) {
-    const day = date.toISOString().slice(0, 10);
-    const row: Record<string, string | number | null> = { day };
-    for (const item of series) {
-      const rate = mentionRate(
-        points.get(activityPointKey(day, item.personaId, item.snapshotVersion))
-      );
-      row[item.dataKey] = rate ?? missingDayRate(item, day, today, lastScanDay);
+  const rowsByDay = new Map<string, Record<string, string | number | null>>();
+  for (const day of days) {
+    if (day >= from) {
+      const row = { day };
+      rows.push(row);
+      rowsByDay.set(day, row);
     }
-    rows.push(row);
-    date.setUTCDate(date.getUTCDate() + 1);
   }
-
-  const last = rows.at(-1);
-  if (last?.day !== today) {
-    return rows;
-  }
-
-  const forecasts = new Map<string, number>();
   for (const item of series) {
-    if (!item.isCurrent) {
-      continue;
-    }
-    const samples = activity.points
-      .filter(
-        (point) =>
-          point.personaId === item.personaId &&
-          point.snapshotVersion === item.snapshotVersion &&
-          point.checks > 0 &&
-          point.day >= activity.from &&
-          point.day <= today
-      )
-      .toSorted((left, right) => right.day.localeCompare(left.day))
-      .slice(0, GEO_PERSONA_FORECAST_SAMPLE_DAYS);
     let checks = 0;
     let mentions = 0;
-    for (const sample of samples) {
-      checks += sample.checks;
-      mentions += sample.mentions;
-    }
-    if (!checks) {
-      continue;
-    }
-    const key = personaForecastKey(item.personaId, item.snapshotVersion);
-    const forecast = Math.max(0, Math.min(100, (mentions / checks) * 100));
-    forecasts.set(key, forecast);
-    // Start the dashed line on the latest actual value so it continues the
-    // solid one; while today's scan is pending, today already shows the forecast.
-    const todayRate = last[item.dataKey];
-    if (typeof todayRate === "number") {
-      last[key] = todayRate;
-      continue;
-    }
-    last[key] = forecast;
-    const previous = rows.at(-2);
-    if (previous) {
-      previous[key] = previous[item.dataKey] ?? null;
-    }
-  }
-  if (!forecasts.size) {
-    return rows;
-  }
-
-  for (let offset = 0; offset < GEO_PERSONA_FORECAST_DAYS; offset++) {
-    const row: Record<string, string | number | null> = {
-      day: date.toISOString().slice(0, 10),
-    };
-    for (const item of series) {
-      row[item.dataKey] = null;
-      if (item.isCurrent) {
-        const forecastKey = personaForecastKey(
-          item.personaId,
-          item.snapshotVersion
+    for (const [index, day] of days.entries()) {
+      const entering = points.get(
+        activityPointKey(day, item.personaId, item.snapshotVersion)
+      );
+      checks += entering?.checks ?? 0;
+      mentions += entering?.mentions ?? 0;
+      const leavingDay = days[index - GEO_PERSONA_ROLLING_DAYS];
+      if (leavingDay) {
+        const leaving = points.get(
+          activityPointKey(leavingDay, item.personaId, item.snapshotVersion)
         );
-        row[forecastKey] = forecasts.get(forecastKey) ?? null;
+        checks -= leaving?.checks ?? 0;
+        mentions -= leaving?.mentions ?? 0;
+      }
+      const row = rowsByDay.get(day);
+      if (row) {
+        row[item.dataKey] =
+          entering && entering.checks > 0 && checks > 0
+            ? (mentions / checks) * 100
+            : null;
       }
     }
-    rows.push(row);
-    date.setUTCDate(date.getUTCDate() + 1);
   }
   return rows;
+}
+
+function rateBetween(
+  activity: GeoPersonaActivityResponse,
+  personaId: string,
+  snapshotVersion: string,
+  from: string,
+  to: string
+) {
+  let mentions = 0;
+  let checks = 0;
+  for (const point of activity.points) {
+    if (
+      point.personaId === personaId &&
+      point.snapshotVersion === snapshotVersion &&
+      point.day >= from &&
+      point.day < to
+    ) {
+      mentions += point.mentions;
+      checks += point.checks;
+    }
+  }
+  return checks ? (mentions / checks) * 100 : null;
+}
+
+/** Rate change in points between the first and second half of the range. */
+export function personaMentionRateDelta(
+  activity: GeoPersonaActivityResponse,
+  personaId: string,
+  snapshotVersion: string | undefined
+) {
+  const days = activityDays(activity.from, activity.to);
+  const middle = days[Math.floor(days.length / 2)];
+  if (!(snapshotVersion && middle)) {
+    return null;
+  }
+  const first = rateBetween(
+    activity,
+    personaId,
+    snapshotVersion,
+    activity.from,
+    middle
+  );
+  const second = rateBetween(
+    activity,
+    personaId,
+    snapshotVersion,
+    middle,
+    activity.to
+  );
+  return first === null || second === null ? null : second - first;
 }
 
 export function personaMentionRate(

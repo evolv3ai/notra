@@ -9,10 +9,6 @@ import { useGeoSequencesDb } from "@/lib/hooks/use-geo-db";
 import { useGeoPromptTranslations } from "@/lib/hooks/use-geo-prompt-translations";
 import type { GeoScanEstimateInput } from "@/types/geo-scan-size";
 
-/**
- * Prompts each translated language will scan. A single-prompt scan asks a
- * language only when that language picked the prompt.
- */
 function translatedPromptCounts(
   translations: GeoPromptTranslationsResponse,
   promptCount: number,

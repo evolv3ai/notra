@@ -1,0 +1,16 @@
+---
+title: Workflow Builder
+description: A workflow builder with a block palette, a playable canvas, a run log and a node sheet.
+---
+
+<Component path="workflow/examples/workflow-builder" />
+
+A workflow builder on [React Flow](https://reactflow.dev), composed from the [Workflow components](/components/workflow/canvas). It opens on a listicle outreach workflow: a weekly trigger searches best-of pages with Browserbase and pulls competitor backlinks from Ahrefs in parallel, a deterministic step dedupes and scores them, Claude classifies the fit, and an if/else sends the pages you're missing from to Firecrawl, a GPT draft, a human approval and Resend.
+
+Press Run workflow to play it. Steps light up as they run, edges march between them, the toolbar timer counts the whole run and each step counts its own. Switch templates in the picker, drag blocks in from the palette, drag from an output handle to an input handle to connect steps, and click a step to open its sheet.
+
+## Installation
+
+<RegistryInstall name="workflow-builder" />
+
+This adds the workflow components to `components/workflow` and the block to `components/workflow/examples/workflow-builder.tsx`.

@@ -1,22 +1,21 @@
 "use client";
 
 import { MinusSignIcon, Tick02Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import { GEO_SCAN_RESULTS_PAGE_SIZE } from "@notra/geo-core/constants/geo-scan-history";
-import { TablePagination } from "@notra/ui/components/shared/table-pagination";
-import { Badge } from "@notra/ui/components/ui/badge";
+import { StatusBadge } from "@notra/ui/components/status-badge";
 import { useState } from "react";
+import { DataTable, type TableColumn } from "ui/table";
 
 import { DesignSystemFrame } from "@/components/design-system/design-system-frame";
 import { EngineIcon } from "@/components/geo/engine-icon";
 import { ScanRunFilters } from "@/components/geo/scan-run-detail";
-import { Table, type TableColumn } from "@/components/motion/table";
 import {
   DESIGN_SYSTEM_SCAN_ANSWERS,
   DESIGN_SYSTEM_SCAN_MISSING,
   DESIGN_SYSTEM_SCAN_MODELS,
 } from "@/constants/design-system-scans";
 import { TABLE_ROW_HEIGHT } from "@/constants/table";
+import type { GeoScanRunView } from "@/types/geo-scan-activity";
 import { formatEngineFamily } from "@/utils/geo-charts";
 import { paginatedTableHeightFor } from "@/utils/table";
 
@@ -58,15 +57,16 @@ const answerColumns: TableColumn<
   {
     key: "mention",
     header: "Mention",
-    width: "9.5rem",
+    width: "11rem",
     cell: (row) => (
-      <Badge variant={row.mentioned ? "success" : "secondary"}>
-        <HugeiconsIcon
-          aria-hidden="true"
-          icon={row.mentioned ? Tick02Icon : MinusSignIcon}
-        />
-        {row.mentioned ? "Mentioned" : "Not mentioned"}
-      </Badge>
+      <StatusBadge
+        appearance={
+          row.mentioned
+            ? { variant: "success", icon: Tick02Icon }
+            : { variant: "secondary", icon: MinusSignIcon }
+        }
+        label={row.mentioned ? "Mentioned" : "Not mentioned"}
+      />
     ),
   },
   {
@@ -102,28 +102,28 @@ const missingColumns: TableColumn<
 ];
 
 export default function ScanFiltersDesignSystemClientPage() {
-  const [view, setView] = useState<"answers" | "pending">("answers");
+  const [view, setView] = useState<GeoScanRunView>("answers");
   const [engine, setEngine] = useState("");
   const [page, setPage] = useState(1);
-  const answers = DESIGN_SYSTEM_SCAN_ANSWERS.filter(
+  const engineAnswers = DESIGN_SYSTEM_SCAN_ANSWERS.filter(
     (row) => !engine || row.engine === engine
   );
+  const answers =
+    view === "mentioned"
+      ? engineAnswers.filter((row) => row.mentioned)
+      : engineAnswers;
   const missing = DESIGN_SYSTEM_SCAN_MISSING.filter(
     (row) => !engine || row.engine === engine
   );
-  const rows = view === "answers" ? answers : missing;
-  const pageCount = Math.max(
-    1,
-    Math.ceil(rows.length / GEO_SCAN_RESULTS_PAGE_SIZE)
-  );
-  const pageRows = rows.slice(
-    (page - 1) * GEO_SCAN_RESULTS_PAGE_SIZE,
-    page * GEO_SCAN_RESULTS_PAGE_SIZE
+  const rows = view === "pending" ? missing : answers;
+  const pageRowCount = Math.min(
+    GEO_SCAN_RESULTS_PAGE_SIZE,
+    rows.length - (page - 1) * GEO_SCAN_RESULTS_PAGE_SIZE
   );
 
   return (
     <DesignSystemFrame
-      description="Try the Scans table with sample data. Choose Answers or Missing, filter by model, and paginate the results."
+      description="Try the Scans table with sample data. Choose Answers, Mentioned or Failed, filter by model, and paginate the results."
       title="Scans table"
     >
       <section className="space-y-3">
@@ -133,28 +133,22 @@ export default function ScanFiltersDesignSystemClientPage() {
             Answers from the last scan · sample data
           </p>
         </div>
-        <Table
-          className="rounded-2xl"
-          columns={view === "answers" ? answerColumns : missingColumns}
-          data={pageRows}
+        <DataTable
+          columns={view === "pending" ? missingColumns : answerColumns}
+          data={rows}
           emptyState="No results for this model."
-          footer={
-            <TablePagination
-              itemLabel={view === "answers" ? "answers" : "missing"}
-              page={page}
-              pageCount={pageCount}
-              pageRowCount={pageRows.length}
-              pageSize={GEO_SCAN_RESULTS_PAGE_SIZE}
-              setPage={setPage}
-              totalItems={rows.length}
-            />
-          }
+          pagination={{
+            page,
+            pageSize: GEO_SCAN_RESULTS_PAGE_SIZE,
+            onPageChange: setPage,
+            itemLabel: view === "pending" ? "failed" : "answers",
+          }}
           getRowId={(row) => row.id}
-          height={paginatedTableHeightFor(pageRows.length)}
+          height={paginatedTableHeightFor(pageRowCount)}
           rowHeight={TABLE_ROW_HEIGHT}
           toolbar={
             <ScanRunFilters
-              answerCount={answers.length}
+              answerCount={engineAnswers.length}
               engine={engine}
               engines={[...DESIGN_SYSTEM_SCAN_MODELS]}
               onEngineChange={(next) => {
@@ -165,6 +159,9 @@ export default function ScanFiltersDesignSystemClientPage() {
                 setView(next);
                 setPage(1);
               }}
+              mentionedCount={
+                engineAnswers.filter((row) => row.mentioned).length
+              }
               pendingCount={missing.length}
               running={false}
               view={view}

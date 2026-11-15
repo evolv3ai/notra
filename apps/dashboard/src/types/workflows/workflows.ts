@@ -21,7 +21,7 @@ export interface WorkflowTriggerData {
 export interface ScheduleTriggerData extends WorkflowTriggerData {
   sourceType: string;
   sourceConfig: unknown;
-  targets: { repositoryIds: string[] };
+  targets: { repositoryIds: string[]; linearIntegrationIds?: string[] };
 }
 
 export interface WorkflowRepositoryData {
@@ -30,7 +30,7 @@ export interface WorkflowRepositoryData {
   name: string;
 }
 
-export interface WorkflowBrandSettings {
+interface WorkflowBrandSettings {
   id: string;
   name: string;
   toneProfile: string | null;
@@ -90,7 +90,3 @@ export type EventGenerationResult =
   | { status: "skipped"; reason: string }
   | { status: "generation_failed"; reason: string }
   | { status: "unsupported_output_type"; outputType: string };
-
-export type EventHandler = (
-  ctx: EventGenerationContext
-) => Promise<EventGenerationResult>;

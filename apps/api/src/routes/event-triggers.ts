@@ -16,8 +16,6 @@ import {
   listEventTriggers,
   updateEventTrigger,
 } from "../programs/event-triggers";
-import type { DbClient } from "../types/db";
-import { getOrganizationId } from "../utils/auth";
 import {
   runEventTriggerProgram,
   safeSerializeEventTrigger,
@@ -26,65 +24,31 @@ import {
 import { logError } from "../utils/logging";
 import { createOpenApiApp } from "../utils/openapi-app";
 import { errorResponse } from "../utils/openapi-responses";
-import { getOrganizationResponse } from "../utils/organizations";
+import { resolveRequestOrganization } from "../utils/organizations";
 import {
   ORGANIZATION_EVENT_TRIGGER_PATH_REGEX,
   ORGANIZATION_EVENT_TRIGGERS_PATH_REGEX,
 } from "../utils/regex";
+import { redirectLegacyOrganizationPath } from "./legacy-redirects";
 
 export const eventTriggersRoutes = createOpenApiApp();
 
 eventTriggersRoutes.on(
   ["GET", "POST"],
   "/:organizationId/event-triggers",
-  (c) => {
-    const orgId = getOrganizationId(c);
-    if (!orgId) {
-      return c.json(
-        { error: "Forbidden: API key must be scoped to an organization" },
-        403
-      );
-    }
-
-    const pathOrg = c.req.param("organizationId");
-    if (orgId !== pathOrg) {
-      return c.json({ error: "Forbidden: organization access denied" }, 403);
-    }
-
-    const url = new URL(c.req.url);
-    const canonicalPath = url.pathname.replace(
-      ORGANIZATION_EVENT_TRIGGERS_PATH_REGEX,
-      "/event-triggers"
-    );
-    return c.redirect(`${canonicalPath}${url.search}`, 308);
-  }
+  redirectLegacyOrganizationPath(
+    ORGANIZATION_EVENT_TRIGGERS_PATH_REGEX,
+    () => "/event-triggers"
+  )
 );
 
 eventTriggersRoutes.on(
   ["GET", "PATCH", "DELETE"],
   "/:organizationId/event-triggers/:triggerId",
-  (c) => {
-    const orgId = getOrganizationId(c);
-    if (!orgId) {
-      return c.json(
-        { error: "Forbidden: API key must be scoped to an organization" },
-        403
-      );
-    }
-
-    const pathOrg = c.req.param("organizationId");
-    if (orgId !== pathOrg) {
-      return c.json({ error: "Forbidden: organization access denied" }, 403);
-    }
-
-    const triggerId = c.req.param("triggerId");
-    const url = new URL(c.req.url);
-    const canonicalPath = url.pathname.replace(
-      ORGANIZATION_EVENT_TRIGGER_PATH_REGEX,
-      `/event-triggers/${triggerId}`
-    );
-    return c.redirect(`${canonicalPath}${url.search}`, 308);
-  }
+  redirectLegacyOrganizationPath(
+    ORGANIZATION_EVENT_TRIGGER_PATH_REGEX,
+    (param) => `/event-triggers/${param("triggerId")}`
+  )
 );
 
 const getEventTriggersRoute = createRoute({
@@ -239,29 +203,12 @@ const deleteEventTriggerRoute = createRoute({
   },
 });
 
-async function requireOrganization(
-  c: {
-    get: (key: "db") => DbClient;
-  },
-  orgId: string
-) {
-  const organization = await getOrganizationResponse(c.get("db"), orgId);
-  return organization ?? null;
-}
-
 eventTriggersRoutes.openapi(getEventTriggersRoute, async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
   }
-
-  const organization = await requireOrganization(c, orgId);
-  if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
+  const { orgId, organization } = scope;
 
   const { repositoryIds } = c.req.valid("query");
   const result = await runEventTriggerProgram(
@@ -284,18 +231,11 @@ eventTriggersRoutes.openapi(getEventTriggersRoute, async (c) => {
 });
 
 eventTriggersRoutes.openapi(createEventTriggerRoute, async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
   }
-
-  const organization = await requireOrganization(c, orgId);
-  if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
+  const { orgId, organization } = scope;
 
   const body = c.req.valid("json");
   const result = await runEventTriggerProgram(
@@ -326,18 +266,11 @@ eventTriggersRoutes.openapi(createEventTriggerRoute, async (c) => {
 });
 
 eventTriggersRoutes.openapi(getEventTriggerRoute, async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
   }
-
-  const organization = await requireOrganization(c, orgId);
-  if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
+  const { orgId, organization } = scope;
 
   const { triggerId } = c.req.valid("param");
   const result = await runEventTriggerProgram(
@@ -364,18 +297,11 @@ eventTriggersRoutes.openapi(getEventTriggerRoute, async (c) => {
 });
 
 eventTriggersRoutes.openapi(patchEventTriggerRoute, async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
   }
-
-  const organization = await requireOrganization(c, orgId);
-  if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
+  const { orgId, organization } = scope;
 
   const { triggerId } = c.req.valid("param");
   const body = c.req.valid("json");
@@ -415,18 +341,11 @@ eventTriggersRoutes.openapi(patchEventTriggerRoute, async (c) => {
 });
 
 eventTriggersRoutes.openapi(deleteEventTriggerRoute, async (c) => {
-  const orgId = getOrganizationId(c);
-  if (!orgId) {
-    return c.json(
-      { error: "Forbidden: API key must be scoped to an organization" },
-      403
-    );
+  const scope = await resolveRequestOrganization(c);
+  if (scope.response) {
+    return scope.response;
   }
-
-  const organization = await requireOrganization(c, orgId);
-  if (!organization) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
+  const { orgId, organization } = scope;
 
   const { triggerId } = c.req.valid("param");
   const result = await runEventTriggerProgram(

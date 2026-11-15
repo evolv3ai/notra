@@ -16,10 +16,10 @@ import { Input } from "@notra/ui/components/ui/input";
 import { Label } from "@notra/ui/components/ui/label";
 import { Granola } from "@notra/ui/components/ui/svgs/granola";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
 import type React from "react";
 import { isValidElement, useId, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 import * as z from "zod";
 
 import { Button } from "@/components/button";
@@ -55,7 +55,7 @@ export function AddGranolaIntegrationDialog({
             t("apiKeyInvalid", { prefix: GRANOLA_API_KEY_PREFIX })
           ),
       }),
-    [t]
+    [t, tIntegrationsShared]
   );
   const queryClient = useQueryClient();
   const displayNameId = useId();
@@ -195,7 +195,11 @@ export function AddGranolaIntegrationDialog({
           >
             {tCommon("actions.cancel")}
           </ResponsiveDialogClose>
-          <Button loading={createMutation.isPending} onClick={handleSubmit}>
+          <Button
+            data-dialog-confirm
+            loading={createMutation.isPending}
+            onClick={handleSubmit}
+          >
             {tIntegrationsShared("addIntegration")}
           </Button>
         </ResponsiveDialogFooter>

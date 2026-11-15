@@ -5,7 +5,7 @@ const ITALIC_RE = /\*(.+?)\*/g;
 const HASHTAG_RE = /(^|\s)(#\w+)/g;
 const BULLET_RE = /^[-*]\s+/;
 
-export function highlightHashtags(text: string, startKey: number): ReactNode[] {
+function highlightHashtags(text: string, startKey: number): ReactNode[] {
   const parts: ReactNode[] = [];
   let lastIndex = 0;
   let keyIdx = startKey;
@@ -36,7 +36,7 @@ export function highlightHashtags(text: string, startKey: number): ReactNode[] {
   return parts;
 }
 
-export function inlineMarkdown(text: string): ReactNode[] {
+function inlineMarkdown(text: string): ReactNode[] {
   const parts: ReactNode[] = [];
   let remaining = text;
   let keyIdx = 0;

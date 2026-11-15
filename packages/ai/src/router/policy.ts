@@ -1,3 +1,4 @@
+import { GATEWAY_FALLBACK_ORDER } from "@notra/ai/constants/router";
 import type {
   DecideGatewayInput,
   GatewayDecision,
@@ -26,6 +27,6 @@ export function decideGateway(input: DecideGatewayInput): GatewayDecision {
   return { gateway: policy.freeGateway, reason: "free" };
 }
 
-export function otherGateway(gateway: GatewayId): GatewayId {
-  return gateway === "vercel" ? "openrouter" : "vercel";
+export function fallbackGateways(gateway: GatewayId): GatewayId[] {
+  return GATEWAY_FALLBACK_ORDER.filter((candidate) => candidate !== gateway);
 }

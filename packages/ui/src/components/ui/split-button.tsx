@@ -16,16 +16,14 @@ const TRIGGER_SIZES = {
 
 type SplitButtonSize = keyof typeof TRIGGER_SIZES;
 
-// Segments keep their own Button variant; the group only flattens the inner
-// corners, drops the doubled border so the seam reads as a single divider,
-// and turns off the press scale so one half never shrinks out of the seam.
 // Siblings are matched by data-slot because the open menu inserts unslotted
-// focus guards next to the trigger, which breaks :last-child.
+// focus guards next to the trigger, which breaks :last-child. Filled segments
+// share one drop shadow on the group so neither casts a seam onto the other.
 function SplitButton({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "inline-flex w-fit items-stretch [&>*:focus-visible]:relative [&>*:focus-visible]:z-10 [&>[data-slot]~[data-slot]]:rounded-l-none [&>[data-slot]~[data-slot]]:border-l-0 [&>[data-slot]:has(~[data-slot])]:rounded-r-none [&>*:active]:scale-100",
+        "inline-flex w-fit items-stretch [&>*:focus-visible]:relative [&>*:focus-visible]:z-10 [&>[data-slot]~[data-slot]]:rounded-l-none [&>[data-slot]~[data-slot]]:border-l-0 [&>[data-slot]:has(~[data-slot])]:rounded-r-none has-[>[data-variant=default]]:drop-shadow-[0_1px_2px_rgba(0,0,0,0.18)] [&>[data-variant=default]]:shadow-[inset_0_1px_0_rgba(255,255,255,0.28)] [&>[data-variant=default]:has(~[data-slot])]:border-r-0 [&>*:active]:scale-100",
         className
       )}
       data-slot="split-button"
@@ -49,7 +47,6 @@ function SplitButtonTrigger({
   }) {
   return (
     <DropdownMenuTrigger
-      // Custom children name themselves; only the bare chevron needs a fallback.
       aria-label={label ?? (children ? undefined : "More options")}
       className={className}
       render={<Button size={TRIGGER_SIZES[size]} variant={variant} />}

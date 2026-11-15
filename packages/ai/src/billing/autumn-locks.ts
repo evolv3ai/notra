@@ -84,7 +84,8 @@ export async function checkAutumnFeature(input: {
 
 /**
  * Settles a lock: `confirm` deducts `overrideValue` instead of what was held,
- * `release` gives it back. A lock that is already gone was settled before.
+ * `release` gives it back. A missing lock is safe to release, but confirming
+ * one may mean it expired before usage was charged and must surface an error.
  */
 export async function finalizeAutumnLock(
   lockId: string,
@@ -106,7 +107,10 @@ export async function finalizeAutumnLock(
       { headers: { "Idempotency-Key": `${lockId}:${action}` } }
     );
   } catch (error) {
-    if (GONE_STATUS_CODES.has(getErrorStatus(error) ?? 0)) {
+    if (
+      action === "release" &&
+      GONE_STATUS_CODES.has(getErrorStatus(error) ?? 0)
+    ) {
       return;
     }
     throw error;

@@ -8,6 +8,7 @@ import {
   trackAccountInputSchema,
   untrackAccountInputSchema,
 } from "@notra/schemas/dashboard/analytics";
+import { os } from "@orpc/server";
 
 import { assertAnalyticsAccess } from "@/lib/analytics/access";
 import { trackServerEvent } from "@/lib/analytics/posthog-server";
@@ -36,17 +37,24 @@ import type {
   TopPostsResponse,
   TrackAccountPreviewResponse,
 } from "@/types/analytics";
+import type { ORPCContext } from "@/types/orpc/context";
+
+const withAnalyticsAccess = os
+  .$context<ORPCContext>()
+  .middleware(async ({ context, next }, input: { organizationId: string }) => {
+    await assertAnalyticsAccess({
+      headers: context.headers,
+      organizationId: input.organizationId,
+      user: context.user ?? undefined,
+    });
+    return next();
+  });
 
 export const analyticsRouter = {
   overview: authorizedProcedure
     .input(analyticsOrganizationInputSchema)
-    .handler(async ({ context, input }): Promise<SocialOverviewResponse> => {
-      await assertAnalyticsAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
-
+    .use(withAnalyticsAccess)
+    .handler(async ({ input }): Promise<SocialOverviewResponse> => {
       return await runOrpcEffect(
         loadSocialOverview(input.organizationId),
         toAnalyticsOrpcError
@@ -54,34 +62,22 @@ export const analyticsRouter = {
     }),
   engagementTimeseries: authorizedProcedure
     .input(analyticsTimeseriesInputSchema)
-    .handler(
-      async ({ context, input }): Promise<EngagementTimeseriesResponse> => {
-        await assertAnalyticsAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-          user: context.user,
-        });
-
-        return await runOrpcEffect(
-          loadEngagementTimeseries(input.organizationId, {
-            days: input.days,
-            timezone: input.timezone,
-            dateFrom: input.dateFrom,
-            dateTo: input.dateTo,
-          }),
-          toAnalyticsOrpcError
-        );
-      }
-    ),
+    .use(withAnalyticsAccess)
+    .handler(async ({ input }): Promise<EngagementTimeseriesResponse> => {
+      return await runOrpcEffect(
+        loadEngagementTimeseries(input.organizationId, {
+          days: input.days,
+          timezone: input.timezone,
+          dateFrom: input.dateFrom,
+          dateTo: input.dateTo,
+        }),
+        toAnalyticsOrpcError
+      );
+    }),
   topPosts: authorizedProcedure
     .input(analyticsTopPostsInputSchema)
-    .handler(async ({ context, input }): Promise<TopPostsResponse> => {
-      await assertAnalyticsAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
-
+    .use(withAnalyticsAccess)
+    .handler(async ({ input }): Promise<TopPostsResponse> => {
       return await runOrpcEffect(
         loadTopPosts(input.organizationId, input.limit, {
           timezone: input.timezone,
@@ -93,13 +89,8 @@ export const analyticsRouter = {
     }),
   adoption: authorizedProcedure
     .input(analyticsOrganizationInputSchema)
-    .handler(async ({ context, input }): Promise<NotraAdoptionResponse> => {
-      await assertAnalyticsAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
-
+    .use(withAnalyticsAccess)
+    .handler(async ({ input }): Promise<NotraAdoptionResponse> => {
       return await runOrpcEffect(
         loadNotraAdoption(input.organizationId),
         toAnalyticsOrpcError
@@ -107,34 +98,22 @@ export const analyticsRouter = {
     }),
   postingPerformance: authorizedProcedure
     .input(analyticsPostingPerformanceInputSchema)
-    .handler(
-      async ({ context, input }): Promise<PostingPerformanceResponse> => {
-        await assertAnalyticsAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-          user: context.user,
-        });
-
-        return await runOrpcEffect(
-          loadPostingPerformance(input.organizationId, {
-            days: input.days,
-            timezone: input.timezone,
-            dateFrom: input.dateFrom,
-            dateTo: input.dateTo,
-          }),
-          toAnalyticsOrpcError
-        );
-      }
-    ),
+    .use(withAnalyticsAccess)
+    .handler(async ({ input }): Promise<PostingPerformanceResponse> => {
+      return await runOrpcEffect(
+        loadPostingPerformance(input.organizationId, {
+          days: input.days,
+          timezone: input.timezone,
+          dateFrom: input.dateFrom,
+          dateTo: input.dateTo,
+        }),
+        toAnalyticsOrpcError
+      );
+    }),
   leaderboard: authorizedProcedure
     .input(leaderboardInputSchema)
-    .handler(async ({ context, input }): Promise<LeaderboardResponse> => {
-      await assertAnalyticsAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
-
+    .use(withAnalyticsAccess)
+    .handler(async ({ input }): Promise<LeaderboardResponse> => {
       return await runOrpcEffect(
         loadLeaderboard(input.organizationId, input.days, {
           timezone: input.timezone,
@@ -146,29 +125,17 @@ export const analyticsRouter = {
     }),
   previewTrackAccount: authorizedProcedure
     .input(trackAccountInputSchema)
-    .handler(
-      async ({ context, input }): Promise<TrackAccountPreviewResponse> => {
-        await assertAnalyticsAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-          user: context.user,
-        });
-
-        return await runOrpcEffect(
-          previewTrackedAccount(input.username),
-          toAnalyticsOrpcError
-        );
-      }
-    ),
+    .use(withAnalyticsAccess)
+    .handler(async ({ input }): Promise<TrackAccountPreviewResponse> => {
+      return await runOrpcEffect(
+        previewTrackedAccount(input.username),
+        toAnalyticsOrpcError
+      );
+    }),
   trackAccount: authorizedProcedure
     .input(trackAccountInputSchema)
-    .handler(async ({ context, input }) => {
-      await assertAnalyticsAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
-
+    .use(withAnalyticsAccess)
+    .handler(async ({ input }) => {
       return await runOrpcEffect(
         trackTwitterAccount(input.organizationId, input.username),
         toAnalyticsOrpcError
@@ -176,13 +143,8 @@ export const analyticsRouter = {
     }),
   untrackAccount: authorizedProcedure
     .input(untrackAccountInputSchema)
+    .use(withAnalyticsAccess)
     .handler(async ({ context, input }) => {
-      await assertAnalyticsAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
-
       const result = await runOrpcEffect(
         untrackTwitterAccount(input.organizationId, input.trackedAccountId),
         toAnalyticsOrpcError
@@ -204,13 +166,8 @@ export const analyticsRouter = {
     }),
   followerGrowth: authorizedProcedure
     .input(analyticsTimeseriesInputSchema)
-    .handler(async ({ context, input }): Promise<FollowerGrowthResponse> => {
-      await assertAnalyticsAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
-
+    .use(withAnalyticsAccess)
+    .handler(async ({ input }): Promise<FollowerGrowthResponse> => {
       return await runOrpcEffect(
         loadFollowerGrowth(input.organizationId, {
           days: input.days,

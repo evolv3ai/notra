@@ -1,7 +1,10 @@
 import { defineTool } from "eve/tools";
 
 import { getBrandReferencesInputSchema } from "../schemas/assistant-tools";
-import { getFilteredBrandReferences } from "../utils/brand-references";
+import {
+  getFilteredBrandReferences,
+  toWriterBrandReference,
+} from "../utils/brand-references";
 import { requireOrganizationId } from "../utils/organization";
 import { getSessionAttribute } from "../utils/session";
 
@@ -23,11 +26,7 @@ export function createGetBrandReferencesTool() {
       }
 
       return {
-        references: references.map((reference) => ({
-          type: reference.type,
-          content: reference.content,
-          note: reference.note,
-        })),
+        references: references.map(toWriterBrandReference),
         count: references.length,
       };
     },

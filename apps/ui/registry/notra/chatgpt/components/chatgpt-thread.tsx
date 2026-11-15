@@ -40,7 +40,6 @@ export const ChatgptThread = ({
       stickRef.current = nearBottom;
       setAtBottom(nearBottom);
     };
-    // Measure only: the initial position must not clear the stick-to-bottom flag.
     setAtBottom(
       distanceFromBottom(viewport) <= CHATGPT_SCROLL_STICK_THRESHOLD_PX
     );

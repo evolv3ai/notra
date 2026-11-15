@@ -16,7 +16,7 @@ import { Effect } from "effect";
 
 import { trackServerEvent } from "@/lib/analytics/posthog-server";
 import { assertOrganizationAccess } from "@/lib/auth/organization";
-import { authorizedProcedure } from "@/lib/orpc/base";
+import { authorizedProcedure, withOrganizationAccess } from "@/lib/orpc/base";
 import { runSocialConnect } from "@/lib/orpc/utils/social-connect";
 import {
   beginSocialConnect,
@@ -28,19 +28,36 @@ import {
 } from "@/lib/social-connect/linkedin-selection";
 import { publishSocialPost } from "@/lib/social-connect/publish";
 import { refreshConnectedAccounts } from "@/lib/social-connect/refresh";
+import type { AuthenticatedUser } from "@/types/auth/organization";
 
 import { notFound } from "../utils/errors";
+
+async function loadOwnLinkedInSelection(
+  context: { headers: Headers; user: AuthenticatedUser },
+  token: string
+) {
+  const stash = await runSocialConnect(getLinkedInSelection(token), {
+    logLabel: "Failed to load LinkedIn selection",
+  });
+
+  await assertOrganizationAccess({
+    headers: context.headers,
+    organizationId: stash.organizationId,
+    user: context.user,
+  });
+
+  if (stash.userId !== context.user.id) {
+    throw notFound("Connection attempt not found");
+  }
+
+  return stash;
+}
 
 export const socialAccountsRouter = {
   list: authorizedProcedure
     .input(socialAccountsOrganizationInputSchema)
-    .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
-
+    .use(withOrganizationAccess)
+    .handler(async ({ input }) => {
       const accounts = await db.query.connectedSocialAccounts.findMany({
         columns: {
           createdAt: true,
@@ -65,13 +82,8 @@ export const socialAccountsRouter = {
     }),
   disconnect: authorizedProcedure
     .input(disconnectSocialAccountInputSchema)
+    .use(withOrganizationAccess)
     .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
-
       const existing = await db.query.connectedSocialAccounts.findFirst({
         columns: { id: true, providerAccountId: true, provider: true },
         where: and(
@@ -116,13 +128,8 @@ export const socialAccountsRouter = {
     }),
   refresh: authorizedProcedure
     .input(refreshSocialAccountsInputSchema)
-    .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
-
+    .use(withOrganizationAccess)
+    .handler(async ({ input }) => {
       const result = await runSocialConnect(
         refreshConnectedAccounts(input.organizationId, input.accountId),
         { logLabel: "Failed to refresh connected accounts" }
@@ -132,18 +139,14 @@ export const socialAccountsRouter = {
     }),
   publish: authorizedProcedure
     .input(publishSocialPostInputSchema)
+    .use(withOrganizationAccess)
     .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
-
       const result = await runSocialConnect(
         publishSocialPost({
           organizationId: input.organizationId,
           accountId: input.accountId,
           content: input.content,
+          mediaUrls: input.mediaUrls,
         }),
         { logLabel: "Failed to publish post", reconnectHint: true }
       );
@@ -157,6 +160,7 @@ export const socialAccountsRouter = {
           platform: result.platform,
           from: input.from ?? null,
           account_id: input.accountId,
+          has_video: (input.mediaUrls?.length ?? 0) > 0,
         },
       });
 
@@ -170,19 +174,7 @@ export const socialAccountsRouter = {
   linkedinSelectionGet: authorizedProcedure
     .input(linkedinSelectionGetInputSchema)
     .handler(async ({ context, input }) => {
-      const stash = await runSocialConnect(getLinkedInSelection(input.token), {
-        logLabel: "Failed to load LinkedIn selection",
-      });
-
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: stash.organizationId,
-        user: context.user,
-      });
-
-      if (stash.userId !== context.user.id) {
-        throw notFound("Connection attempt not found");
-      }
+      const stash = await loadOwnLinkedInSelection(context, input.token);
 
       return {
         accounts: stash.accounts,
@@ -193,19 +185,7 @@ export const socialAccountsRouter = {
   linkedinSelectionComplete: authorizedProcedure
     .input(linkedinSelectionCompleteInputSchema)
     .handler(async ({ context, input }) => {
-      const stash = await runSocialConnect(getLinkedInSelection(input.token), {
-        logLabel: "Failed to load LinkedIn selection",
-      });
-
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: stash.organizationId,
-        user: context.user,
-      });
-
-      if (stash.userId !== context.user.id) {
-        throw notFound("Connection attempt not found");
-      }
+      const stash = await loadOwnLinkedInSelection(context, input.token);
 
       const result = await runSocialConnect(
         completeLinkedInSelection({
@@ -230,13 +210,8 @@ export const socialAccountsRouter = {
     }),
   beginConnect: authorizedProcedure
     .input(beginConnectInputSchema)
+    .use(withOrganizationAccess)
     .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-        user: context.user,
-      });
-
       const result = await runSocialConnect(
         beginSocialConnect({
           organizationId: input.organizationId,

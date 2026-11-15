@@ -5,18 +5,19 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
 import { Skeleton } from "@notra/ui/components/ui/skeleton";
 import { cn } from "@notra/ui/lib/utils";
-import { useTranslations } from "next-intl";
-import Link from "next/link";
-import { useParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { buttonVariants } from "@/components/button";
 import { Confetti } from "@/components/confetti";
+import Link from "@/components/framework/link";
 import { CHECKOUT_SURFACES } from "@/constants/analytics-events";
+import { billingInterval } from "@/lib/analytics/billing-events";
 import { trackEvent } from "@/lib/analytics/posthog-client";
 import { useBillingCustomer } from "@/lib/hooks/use-billing-customer";
-import { planDisplayName } from "@/utils/billing-plans";
+import { useParams } from "@/lib/navigation";
+import { isAnnualPlanId, planDisplayName } from "@/utils/billing-plans";
 
 function BillingSuccessPageContent() {
   const t = useTranslations("settings.billingSuccess");
@@ -46,6 +47,7 @@ function BillingSuccessPageContent() {
     completedRef.current = true;
     trackEvent(POSTHOG_EVENTS.CHECKOUT_COMPLETED, {
       plan_id: activePlanId,
+      interval: billingInterval(isAnnualPlanId(activePlanId ?? undefined)),
       is_trial: isTrial,
     });
   }, [activeSubscription, activePlanId, isTrial]);

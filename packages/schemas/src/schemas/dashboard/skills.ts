@@ -15,10 +15,11 @@ export const createSkillSchema = z.object({
   content: skillContentSchema,
 });
 
-export const skillImportUrlSchema = z
+const skillImportUrlSchema = z
   .string()
   .trim()
   .min(1, "URL is required")
+  .max(2048)
   .refine((value) => {
     try {
       const url = new URL(value);
@@ -28,14 +29,13 @@ export const skillImportUrlSchema = z
     }
   }, "Only skills.sh links are supported");
 
-export const updateSkillSchema = z.object({
+const updateSkillSchema = z.object({
   name: skillNameSchema.optional(),
   description: skillDescriptionSchema,
   content: skillContentSchema,
 });
 
 export type CreateSkillInput = z.infer<typeof createSkillSchema>;
-export type UpdateSkillInput = z.infer<typeof updateSkillSchema>;
 
 export const listSkillsInputSchema = z.object({
   organizationId: organizationIdSchema,
@@ -64,4 +64,12 @@ export const deleteSkillInputSchema = z.object({
 
 export const importSkillFromUrlInputSchema = z.object({
   url: skillImportUrlSchema,
+});
+
+export const syncSystemSkillInputSchema = z.object({
+  organizationId: organizationIdSchema,
+  name: skillNameSchema,
+  keepCustomizations: z.boolean(),
+  reviewedVersion: z.number().int().positive(),
+  reviewedUpdatedAt: z.coerce.date(),
 });

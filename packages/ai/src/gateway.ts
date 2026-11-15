@@ -4,6 +4,7 @@ import { resolveOrganizationZdrMode } from "@notra/ai/billing/zdr";
 import { AGENT_DEFAULT_MODEL } from "@notra/ai/constants/models";
 import { ROUTER_POLICY } from "@notra/ai/constants/router";
 import { log } from "@notra/ai/evlog";
+import { createNeonAdapter } from "@notra/ai/router/adapters/neon";
 import { createOpenRouterAdapter } from "@notra/ai/router/adapters/openrouter";
 import { createVercelAdapter } from "@notra/ai/router/adapters/vercel";
 import { createModelRouter } from "@notra/ai/router/create-router";
@@ -23,6 +24,7 @@ import type {
   RouterLogFields,
   RouterLogger,
 } from "@notra/ai/types/router";
+import { getOperationalContext } from "@notra/ai/utils/operational-context";
 import { isDemoMode } from "@notra/utils/demo-mode";
 
 const APP_URL = "https://www.usenotra.com";
@@ -42,15 +44,26 @@ let router: ModelRouter | null = null;
 
 const routerLogger: RouterLogger = {
   info: (event: string, fields?: RouterLogFields) =>
-    log.info({ event, ...fields }),
+    log.info({ ...getOperationalContext(), event, ...fields }),
   warn: (event: string, fields?: RouterLogFields) =>
-    log.warn({ event, ...fields }),
+    log.warn({ ...getOperationalContext(), event, ...fields }),
   error: (event: string, fields?: RouterLogFields) =>
-    log.error({ event, ...fields }),
+    log.error({ ...getOperationalContext(), event, ...fields }),
 };
 
 function buildAdapters(): Partial<Record<GatewayId, GatewayAdapter>> {
   const adapters: Partial<Record<GatewayId, GatewayAdapter>> = {};
+
+  const neonApiKey =
+    process.env.NEON_AI_GATEWAY_API_KEY?.trim() ||
+    process.env.NEON_AI_GATEWAY_TOKEN?.trim();
+  const neonBaseURL = process.env.NEON_AI_GATEWAY_BASE_URL?.trim();
+  if (neonApiKey && neonBaseURL) {
+    adapters.neon = createNeonAdapter({
+      apiKey: neonApiKey,
+      baseURL: neonBaseURL,
+    });
+  }
 
   // On Vercel the gateway also authenticates via OIDC without an explicit key.
   const vercelApiKey = process.env.AI_GATEWAY_API_KEY?.trim();
@@ -75,7 +88,6 @@ function buildAdapters(): Partial<Record<GatewayId, GatewayAdapter>> {
 }
 
 function createRouter(): ModelRouter {
-  // The public demo has no provider keys; answer every call in-process.
   if (isDemoMode()) {
     return createDemoModelRouter();
   }
@@ -88,30 +100,23 @@ function createRouter(): ModelRouter {
   });
 }
 
-/** Process-wide router singleton with the product's fixed routing policy. */
-export function getModelRouter(): ModelRouter {
+function getModelRouter(): ModelRouter {
   router ??= createRouter();
   return router;
 }
 
-/**
- * Test/ops hook: replace the singleton (pass `null` to rebuild from env on
- * next access).
- */
+/** Test hook: replace the singleton (`null` rebuilds it from env on next access). */
 export function setModelRouter(next: ModelRouter | null): void {
   router = next;
 }
 
 /**
- * Create a routed language model. Backwards compatible with the previous
- * Vercel-only `gateway(modelId)` signature: without options the route falls
- * back to the configured default gateway. Pass `organizationId` to route by
- * plan and `gateway` to pin a specific gateway.
+ * Create a routed language model. Without options the route falls back to
+ * the configured default gateway. Pass `organizationId` to route by plan and
+ * `gateway` to pin a specific gateway.
  */
-export const gateway = (...args: GatewayArgs): GatewayResult => {
-  const [modelId, options] = args;
-  return getModelRouter().model(modelId, options);
-};
+export const gateway = (...[modelId, options]: GatewayArgs): GatewayResult =>
+  getModelRouter().model(modelId, options);
 
 export function resolveModelRoute(
   request: RouteRequest
@@ -122,7 +127,7 @@ export function resolveModelRoute(
 /**
  * Route-aware credit check. Resolves the route the given request would take
  * and verifies the selected gateway still has credits. Falls back to the
- * other gateway when allowed and throws `GatewayCreditBalanceError` when no
+ * remaining gateways when allowed and throws `GatewayCreditBalanceError` when no
  * funded route exists.
  */
 export function assertRouteHasCredits(
@@ -132,6 +137,8 @@ export function assertRouteHasCredits(
     modelId: options.modelId ?? AGENT_DEFAULT_MODEL,
     organizationId: options.organizationId,
     gateway: options.gateway,
+    zdr: options.zdr,
+    logContext: options.logContext,
   });
 }
 
@@ -142,7 +149,8 @@ export function getRouteMetadata(
 }
 
 export function enrichRouteMetadata(
-  metadata: RouteMetadata
+  metadata: RouteMetadata,
+  signal?: AbortSignal
 ): Promise<RouteMetadata> {
-  return getModelRouter().enrichRouteMetadata(metadata);
+  return getModelRouter().enrichRouteMetadata(metadata, signal);
 }

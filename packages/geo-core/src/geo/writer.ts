@@ -1,5 +1,4 @@
 import { generateGeoContentBrief } from "@notra/ai/agents/geo-writer";
-import { describeContentBillingDenial } from "@notra/ai/billing/content-billing";
 import { GEO_WRITER_PLANNER_MODEL } from "@notra/ai/constants/models";
 import { POST_SLUG_MAX_LENGTH } from "@notra/ai/schemas/post";
 import type {
@@ -7,6 +6,7 @@ import type {
   GeoPlannerSitemapPage,
   GeoWriterBrief,
 } from "@notra/ai/types/geo-writer";
+import { describeContentBillingDenial } from "@notra/ai/utils/content-billing-messages";
 import {
   createPostRecord,
   updatePostRecord,
@@ -52,6 +52,7 @@ import type {
   GeoWriterUpdateInput,
 } from "../types/geo";
 import { REUSABLE_BRIEF_STATUSES } from "../utils/geo-gaps";
+import { logGeoFailure } from "../utils/geo-log";
 import {
   geoBriefToMarkdown,
   markdownToGeoBrief,
@@ -123,6 +124,17 @@ const createBriefDraftPost = Effect.fn("geo.writer.draftPost")(
     );
     const brandVoiceName = brand?.name ?? brand?.companyName ?? "the brand";
 
+    const sourceMetadata = {
+      triggerId: GEO_WRITER_TRIGGER_ID,
+      triggerSourceType: "geo" as const,
+      prompt: input.brief.targetPrompt,
+      brandVoiceId: input.brandVoiceId,
+      brandVoiceName,
+      briefId: input.briefId,
+      projectId: input.projectId,
+      ...provenance,
+    };
+
     const now = new Date();
     const collectionId = input.collectionId ?? crypto.randomUUID();
     if (!input.collectionId) {
@@ -136,16 +148,7 @@ const createBriefDraftPost = Effect.fn("geo.writer.draftPost")(
           name: buildPostCollectionName([BLOG_POST_CONTENT_TYPE], now),
           nameSource: "generated",
           contentTypes: [BLOG_POST_CONTENT_TYPE],
-          sourceMetadata: {
-            triggerId: GEO_WRITER_TRIGGER_ID,
-            triggerSourceType: "geo",
-            prompt: input.brief.targetPrompt,
-            brandVoiceId: input.brandVoiceId,
-            brandVoiceName,
-            briefId: input.briefId,
-            projectId: input.projectId,
-            ...provenance,
-          },
+          sourceMetadata,
           expectedPostCount: 1,
           completedPostCount: 0,
           createdAt: now,
@@ -165,16 +168,7 @@ const createBriefDraftPost = Effect.fn("geo.writer.draftPost")(
           slug: toArticleSlug(input.brief.workingTitle),
           markdown: geoBriefToMarkdown(input.brief),
           autoPublish: false,
-          sourceMetadata: {
-            triggerId: GEO_WRITER_TRIGGER_ID,
-            triggerSourceType: "geo",
-            prompt: input.brief.targetPrompt,
-            brandVoiceId: input.brandVoiceId,
-            brandVoiceName,
-            briefId: input.briefId,
-            projectId: input.projectId,
-            ...provenance,
-          },
+          sourceMetadata,
         }),
       catch: (cause) =>
         new GeoWriterPlanError({
@@ -367,11 +361,15 @@ export const getGeoContentBrief = Effect.fn("geo.writer.briefGet")(function* (
 
 const REVISABLE_BRIEF_STATUSES = ["draft", "failed"] as const;
 
+function isRevisableBrief(status: BriefRow["status"]): boolean {
+  return REVISABLE_BRIEF_STATUSES.some((revisable) => revisable === status);
+}
+
 export const updateGeoContentBrief = Effect.fn("geo.writer.briefUpdate")(
   function* (input: GeoScopeInput & GeoWriterUpdateInput) {
     const scope = yield* requireGeoProject(input);
     const row = yield* requireBriefRow(scope, input.briefId);
-    if (!REVISABLE_BRIEF_STATUSES.some((status) => status === row.status)) {
+    if (!isRevisableBrief(row.status)) {
       return yield* Effect.fail(
         new GeoContentBriefStateError({
           briefId: input.briefId,
@@ -452,7 +450,7 @@ export const updateGeoContentBrief = Effect.fn("geo.writer.briefUpdate")(
     });
     if (!updated) {
       const current = yield* requireBriefRow(scope, input.briefId);
-      if (current.status === "draft" || current.status === "failed") {
+      if (isRevisableBrief(current.status)) {
         return yield* Effect.fail(
           new GeoContentBriefConflictError({
             briefId: input.briefId,
@@ -521,7 +519,7 @@ const approveAndStartGeoWriterInScope = Effect.fn("geo.writer.startInScope")(
             eq(geoContentBriefs.organizationId, scope.organizationId),
             eq(geoContentBriefs.projectId, scope.projectId),
             eq(geoContentBriefs.id, briefId),
-            inArray(geoContentBriefs.status, ["draft", "failed"])
+            inArray(geoContentBriefs.status, [...REVISABLE_BRIEF_STATUSES])
           )
         )
         .returning()
@@ -567,9 +565,13 @@ const approveAndStartGeoWriterInScope = Effect.fn("geo.writer.startInScope")(
         source: "dashboard",
       })
       .pipe(
-        Effect.mapError((cause) => new GeoWriterStartError({ cause })),
-        Effect.catch((error) => {
-          console.error("[GEO] writer tracking failed:", error.cause);
+        Effect.catch((cause) => {
+          logGeoFailure(
+            "geo.writer.tracking_failed",
+            "Writer generation tracking failed",
+            cause,
+            { runId, projectId: scope.projectId }
+          );
           return Effect.void;
         })
       );
@@ -582,7 +584,9 @@ const approveAndStartGeoWriterInScope = Effect.fn("geo.writer.startInScope")(
         runId,
       })
       .pipe(
-        Effect.mapError((cause) => new GeoWriterStartError({ cause })),
+        Effect.mapError(
+          (error) => new GeoWriterStartError({ cause: error.cause })
+        ),
         Effect.catch((error) =>
           markBriefFailed(
             scope,
@@ -603,7 +607,7 @@ const reuseOpenBrief = Effect.fn("geo.writer.reuseOpenBrief")(function* (
   open: BriefRow,
   autoApprove: boolean | undefined
 ) {
-  const isReviewable = open.status === "draft" || open.status === "failed";
+  const isReviewable = isRevisableBrief(open.status);
   let postId = open.postId;
   if (!postId && isReviewable) {
     const repairedDraft = yield* createBriefDraftPost({
@@ -709,8 +713,6 @@ export const planGeoContentBrief = Effect.fn("geo.writer.plan")(function* (
       : Effect.succeed(null),
   ]);
 
-  // Brands the engines named for this prompt rank first, then the ones they
-  // recommend most often overall.
   const competitorSelection = yield* geoDb("competitors lookup failed", () =>
     selectGeoContextCompetitors(scope, {
       ids: input.competitorIds,
@@ -735,10 +737,10 @@ export const planGeoContentBrief = Effect.fn("geo.writer.plan")(function* (
     })
     .pipe(
       Effect.mapError(
-        (cause) =>
+        (error) =>
           new GeoWriterPlanError({
             message: "Failed to reserve AI credits for planning",
-            cause,
+            cause: error.cause,
           })
       )
     );
@@ -754,6 +756,10 @@ export const planGeoContentBrief = Effect.fn("geo.writer.plan")(function* (
     try: () =>
       generateGeoContentBrief({
         organizationId: scope.organizationId,
+        telemetryMetadata: {
+          runId: planningRunId,
+          projectId: scope.projectId,
+        },
         input: {
           topic,
           contentSubtype: input.contentSubtype,
@@ -792,10 +798,7 @@ export const planGeoContentBrief = Effect.fn("geo.writer.plan")(function* (
     Effect.mapError(
       (cause) =>
         new GeoWriterPlanError({
-          message:
-            cause instanceof Error
-              ? cause.message
-              : "Failed to plan the article",
+          message: "Failed to plan the article",
           cause,
         })
     ),
@@ -809,8 +812,9 @@ export const planGeoContentBrief = Effect.fn("geo.writer.plan")(function* (
         .pipe(
           Effect.catch((releaseError) =>
             Effect.sync(() => {
-              console.error(
-                "[GEO] planner credit release failed:",
+              logGeoFailure(
+                "geo.writer.planner_release_failed",
+                "Planner credit release failed",
                 releaseError
               );
             })
@@ -864,25 +868,16 @@ export const planGeoContentBrief = Effect.fn("geo.writer.plan")(function* (
     postId: null,
   });
 
-  if (!input.autoApprove) {
-    const response: GeoWriterPlanResponse = {
-      briefId,
-      brief,
-      status: "draft",
-      runId: null,
-      postId: draft.postId,
-    };
-    return response;
-  }
-
-  const started = yield* approveAndStartGeoWriterInScope(scope, briefId, {
-    autoApproved: true,
-  });
+  const started = input.autoApprove
+    ? yield* approveAndStartGeoWriterInScope(scope, briefId, {
+        autoApproved: true,
+      })
+    : null;
   const response: GeoWriterPlanResponse = {
     briefId,
     brief,
-    status: "writing",
-    runId: started.runId,
+    status: started ? "writing" : "draft",
+    runId: started?.runId ?? null,
     postId: draft.postId,
   };
   return response;
@@ -925,7 +920,6 @@ const resolveWriterTopic = Effect.fn("geo.writer.topic")(function* (
         new GeoPromptNotFoundError({ promptId: sourceId })
       );
     }
-    // Keep the suggestion as the reuse key, but honor edits to its topic.
     return input.topic;
   }
 

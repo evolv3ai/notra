@@ -1,4 +1,4 @@
-import { Data } from "effect";
+import { Data, Effect } from "effect";
 
 export class AuthSessionError extends Data.TaggedError("AuthSessionError")<{
   readonly message: string;
@@ -21,3 +21,9 @@ export class SocialConnectionError extends Data.TaggedError(
 export class WorkOSAuthError extends Data.TaggedError("WorkOSAuthError")<{
   readonly error: unknown;
 }> {}
+
+export const tryWorkOSAuth = <T>(run: () => Promise<T>) =>
+  Effect.tryPromise({
+    try: run,
+    catch: (error) => new WorkOSAuthError({ error }),
+  });

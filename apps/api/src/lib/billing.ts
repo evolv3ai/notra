@@ -8,7 +8,7 @@ import type {
   GeoEntitlementCheckInput,
   SubscriptionAccessInput,
 } from "../types/billing";
-import { makeGeoEntitlementCache } from "./geo-entitlement-cache";
+import { makeBillingAccessCache } from "./billing-access-cache";
 
 export interface BillingOperations {
   readonly checkSubscriptionAccess: (
@@ -24,58 +24,63 @@ export class BillingService extends Context.Service<
   BillingOperations
 >()("api/Billing") {}
 
-export interface BillingMiddlewareOptions {
-  billingLayer?: Layer.Layer<BillingService>;
-}
-
-export function billingLayer(secretKey: string) {
+function billingLayer(secretKey: string) {
   const autumn = new Autumn({ secretKey });
   let geoEntitlements:
     | Cache.Cache<string, boolean, GeoBillingError>
     | undefined;
+  let subscriptionAccess:
+    | Cache.Cache<string, boolean, SubscriptionBillingError>
+    | undefined;
+
+  const lookupSubscriptionAccess = Effect.fnUntraced(function* (
+    organizationId: string
+  ) {
+    const customer = yield* Effect.tryPromise({
+      try: () => autumn.customers.getOrCreate({ customerId: organizationId }),
+      catch: (cause) => new SubscriptionBillingError({ cause }),
+    });
+
+    const hasPaidPlan = customer.subscriptions.some(
+      (subscription) =>
+        !subscription.addOn &&
+        subscription.status === "active" &&
+        PAID_OR_LEGACY_PLAN_IDS.has(subscription.planId)
+    );
+
+    if (hasPaidPlan) {
+      return true;
+    }
+
+    return yield* Effect.tryPromise({
+      try: async () => {
+        const check = await autumn.check({
+          customerId: organizationId,
+          featureId: AI_CREDITS_FEATURE_ID,
+          requiredBalance: 1,
+        });
+        return check.allowed === true;
+      },
+      catch: (cause) => new SubscriptionBillingError({ cause }),
+    });
+  });
 
   return Layer.succeed(
     BillingService,
     BillingService.of({
       checkSubscriptionAccess: Effect.fn("Billing.checkSubscriptionAccess")(
         function* (input: SubscriptionAccessInput) {
-          const customer = yield* Effect.tryPromise({
-            try: () =>
-              autumn.customers.getOrCreate({
-                customerId: input.organizationId,
-              }),
-            catch: (cause) => new SubscriptionBillingError({ cause }),
-          });
-
-          const hasPaidPlan = customer.subscriptions.some(
-            (subscription) =>
-              !subscription.addOn &&
-              subscription.status === "active" &&
-              PAID_OR_LEGACY_PLAN_IDS.has(subscription.planId)
+          subscriptionAccess ??= Effect.runSync(
+            makeBillingAccessCache(lookupSubscriptionAccess)
           );
-
-          if (hasPaidPlan) {
-            return true;
-          }
-
-          return yield* Effect.tryPromise({
-            try: async () => {
-              const check = await autumn.check({
-                customerId: input.organizationId,
-                featureId: AI_CREDITS_FEATURE_ID,
-                requiredBalance: 1,
-              });
-              return check.allowed === true;
-            },
-            catch: (cause) => new SubscriptionBillingError({ cause }),
-          });
+          return yield* Cache.get(subscriptionAccess, input.organizationId);
         }
       ),
       checkGeoEntitlement: Effect.fn("Billing.checkGeoEntitlement")(function* (
         input: GeoEntitlementCheckInput
       ) {
         geoEntitlements ??= Effect.runSync(
-          makeGeoEntitlementCache((organizationId) =>
+          makeBillingAccessCache((organizationId) =>
             Effect.tryPromise({
               try: async () => {
                 const data = await autumn.check({
@@ -92,4 +97,15 @@ export function billingLayer(secretKey: string) {
       }),
     })
   );
+}
+
+let sharedBillingLayer:
+  | { secretKey: string; layer: ReturnType<typeof billingLayer> }
+  | undefined;
+
+export function getBillingLayer(secretKey: string) {
+  if (sharedBillingLayer?.secretKey !== secretKey) {
+    sharedBillingLayer = { secretKey, layer: billingLayer(secretKey) };
+  }
+  return sharedBillingLayer.layer;
 }

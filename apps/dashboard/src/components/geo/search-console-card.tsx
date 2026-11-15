@@ -39,13 +39,13 @@ import {
   SelectValue,
 } from "@notra/ui/components/ui/select";
 import { Skeleton } from "@notra/ui/components/ui/skeleton";
+import { Spinner } from "@notra/ui/components/ui/spinner";
 import { Google } from "@notra/ui/components/ui/svgs/google";
-import { useLocale, useTranslations } from "next-intl";
 import { type MouseEvent, type ReactNode, useId, useState } from "react";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { ProjectLogo } from "@/components/geo/project-logo";
-import { StatusSpinner } from "@/components/geo/status-spinner";
 import { useGeoProjectScope } from "@/components/providers/geo-project-provider";
 import { GSC_SETUP_EXAMPLES } from "@/constants/geo-prompts";
 import { flushTrackEvent } from "@/lib/analytics/posthog-client";
@@ -163,13 +163,11 @@ export function SearchConsolePropertyPicker({
         className={cn("w-full", selectSite.isPending && "disabled:opacity-100")}
         disabled={siteUrl.length === 0 || selectSite.isPending}
         onClick={() => {
-          // Progress and the result are reported by toasts, so the caller can
-          // close its dialog instead of blocking on the first sync.
           selectSite.mutate({ siteUrl });
           onSelected?.();
         }}
       >
-        {selectSite.isPending ? <StatusSpinner /> : null}
+        {selectSite.isPending ? <Spinner className="size-3.5" /> : null}
         {selectSite.isPending
           ? tCommon("labels.connecting")
           : t("connectProperty")}
@@ -205,7 +203,7 @@ function ConnectedState({
   if (sites.isPending) {
     changeDialogBody = (
       <div className="text-muted-foreground flex items-center gap-2 px-4 py-3 text-sm md:px-0">
-        <StatusSpinner />
+        <Spinner className="size-3.5" />
         {tCommon("labels.loadingProperties")}
       </div>
     );
@@ -288,7 +286,7 @@ function ConnectedState({
             size="sm"
             variant="outline"
           >
-            {sync.isPending ? <StatusSpinner /> : null}
+            {sync.isPending ? <Spinner className="size-3.5" /> : null}
             {sync.isPending
               ? tCommon("labels.syncing")
               : tCommon("labels.syncNow")}
@@ -398,7 +396,6 @@ function ReconnectButton({
   );
 }
 
-/** Empty state for every Search Console step before a property is synced. */
 function SetupState({
   organizationId,
   callbackPath,
@@ -543,7 +540,6 @@ export function SearchConsoleToolbar({
       websiteUrl={websiteUrl}
     />
   );
-  // Suggestions from an earlier sync stay actionable while Google is disconnected.
   if (!action) {
     return setup;
   }

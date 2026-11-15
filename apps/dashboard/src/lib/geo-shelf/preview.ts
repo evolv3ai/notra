@@ -5,6 +5,7 @@ import {
   fetchWebpage,
   isContextDevConfigured,
 } from "@notra/ai/utils/context-dev";
+import { logWarn } from "@notra/ai/utils/server-log";
 import { GEO_SHELF_TITLE_MAX_LENGTH } from "@notra/schemas/constants/dashboard/geo-shelf";
 import {
   canonicalizeShelfUrl,
@@ -69,27 +70,12 @@ async function assertStablePublicShelfUrl(rawUrl: string): Promise<void> {
   }
 }
 
-function cleanTitle(value: string | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-  const collapsed = value.replace(WHITESPACE_RUN, " ").trim();
-  if (collapsed.length === 0) {
-    return null;
-  }
-  return collapsed.slice(0, GEO_SHELF_TITLE_MAX_LENGTH);
-}
-
-function cleanDescription(value: string | undefined): string | null {
+function cleanText(value: string | undefined): string | null {
   if (!value) {
     return null;
   }
   const collapsed = value.replace(WHITESPACE_RUN, " ").trim();
   return collapsed.length > 0 ? collapsed : null;
-}
-
-function hasContextDevKey(): boolean {
-  return isContextDevConfigured();
 }
 
 export async function previewGeoShelfUrl(
@@ -106,7 +92,7 @@ export async function previewGeoShelfUrl(
     available: false,
   };
 
-  if (!hasContextDevKey()) {
+  if (!isContextDevConfigured()) {
     return unavailable;
   }
 
@@ -114,8 +100,6 @@ export async function previewGeoShelfUrl(
     const fetchUrl = shelfFetchUrl(rawUrl);
     await assertStablePublicShelfUrl(fetchUrl);
     const page = await fetchWebpage({
-      // Hash and tracking params stripped so variants share a cache entry, but
-      // the host is kept as typed because not every site serves the apex domain.
       url: fetchUrl,
       includeImages: false,
       includeLinks: false,
@@ -125,21 +109,20 @@ export async function previewGeoShelfUrl(
     });
     const finalUrl = page.metadata?.finalUrl ?? page.url ?? null;
     if (finalUrl) {
-      // Context.dev follows redirects remotely and does not expose each hop. At
-      // minimum, reject an unsafe or unstable final destination before trusting
-      // any metadata returned for it.
       await assertStablePublicShelfUrl(finalUrl);
     }
     return {
       url,
       finalUrl,
       domain,
-      title: cleanTitle(page.metadata?.title),
-      description: cleanDescription(page.metadata?.description),
+      title:
+        cleanText(page.metadata?.title)?.slice(0, GEO_SHELF_TITLE_MAX_LENGTH) ??
+        null,
+      description: cleanText(page.metadata?.description),
       available: true,
     };
   } catch (error) {
-    console.warn("[GEO] shelf preview failed", {
+    logWarn("[GEO] shelf preview failed", {
       url,
       error: error instanceof Error ? error.message : "Unknown error",
     });

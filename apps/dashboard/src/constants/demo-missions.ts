@@ -1,6 +1,5 @@
 import type { DemoMissionId } from "@/types/demo";
 
-/** Order shown in the playground's mission checklist. */
 export const DEMO_MISSION_IDS: readonly DemoMissionId[] = [
   "scan",
   "apiPrompt",

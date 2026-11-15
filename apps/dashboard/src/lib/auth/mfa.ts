@@ -1,27 +1,21 @@
 import { db } from "@notra/db/drizzle";
 import { users } from "@notra/db/schema";
 import type { AuthFlowResult } from "@notra/schemas/types/dashboard/auth";
-import { getWorkOS } from "@workos-inc/authkit-nextjs";
+import { getWorkOS } from "@workos/authkit-session";
 import { eq } from "drizzle-orm";
 import { Effect } from "effect";
 
 import { MFA_ERROR_CODES, TOTP_FACTOR_TYPE } from "@/constants/security";
 import { clearBackupCodes } from "@/lib/auth/backup-codes";
-import { WorkOSAuthError } from "@/lib/auth/errors";
+import { tryWorkOSAuth } from "@/lib/auth/errors";
 import { storeMfaAttempt } from "@/lib/auth/mfa-cookies";
 import { createTotpFactor } from "@/lib/auth/workos-mfa";
 import type { WorkOSErrorInfo } from "@/types/auth/workos-error";
 
-const tryWorkOS = <T>(run: () => Promise<T>) =>
-  Effect.tryPromise({
-    try: run,
-    catch: (error) => new WorkOSAuthError({ error }),
-  });
-
 const createMfaChallenge = Effect.fn("auth.mfa.createChallenge")(function* (
   authenticationFactorId: string
 ) {
-  const challenge = yield* tryWorkOS(() =>
+  const challenge = yield* tryWorkOSAuth(() =>
     getWorkOS().multiFactorAuth.challengeFactor({ authenticationFactorId })
   );
   return challenge.id;
@@ -53,7 +47,7 @@ async function forgetFactorState(workosUserId: string) {
 export const beginTotpEnrollment = Effect.fn("auth.mfa.beginEnrollment")(
   function* (workosUserId: string, email: string) {
     yield* Effect.promise(() => forgetFactorState(workosUserId));
-    const enrollment = yield* tryWorkOS(() =>
+    const enrollment = yield* tryWorkOSAuth(() =>
       createTotpFactor(workosUserId, email)
     );
     yield* rememberAttempt(workosUserId, enrollment.authenticationChallengeId);

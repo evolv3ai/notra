@@ -18,7 +18,6 @@ export async function seedDemoWorkspace(
   context: DemoSeedContext
 ): Promise<void> {
   await seedDemoBrand(context);
-  // GEO needs the brand identity; content and personas hang off the project.
   const [projectId] = await Promise.all([
     seedDemoGeo(context),
     seedDemoTeam(context),

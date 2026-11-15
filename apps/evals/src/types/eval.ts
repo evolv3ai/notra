@@ -1,8 +1,6 @@
 export type ContenderKind = "llm" | "jev";
 
-/** One model (plus how to call it) that competes in a suite. */
 export interface Contender {
-  /** Stable key, unique within a run. Usually the model id. */
   readonly key: string;
   readonly modelId: string;
   readonly kind: ContenderKind;
@@ -15,12 +13,34 @@ export interface TokenUsage {
   cachedInputTokens: number;
 }
 
-export interface CallResult<OUTPUT> {
+export interface UsageLike {
+  inputTokens?: number;
+  outputTokens?: number;
+  cachedInputTokens?: number;
+  inputTokenDetails?: { cacheReadTokens?: number };
+}
+
+export interface EvalCostStep {
+  providerMetadata?: unknown;
+  usage?: UsageLike;
+}
+
+export type CostSource = "reported" | "estimated" | "mixed" | "unknown";
+
+export interface EvalCost {
+  costUsd?: number;
+  costSource: CostSource;
+  reportedCostUsd: number;
+  estimatedCostUsd: number;
+}
+
+export interface JudgeVerdict extends Partial<EvalCost> {
+  readonly values: Record<string, number>;
+}
+
+export interface CallResult<OUTPUT> extends Partial<EvalCost> {
   output: OUTPUT;
   usage: TokenUsage;
-  /** USD reported by the gateway, if any. */
-  costUsd?: number;
-  /** Raw text worth showing in the case drill-down (prompt answer, post). */
   transcript?: string;
 }
 
@@ -30,7 +50,6 @@ export interface CallContext {
   readonly demo: boolean;
 }
 
-/** Score of a single field (classification) or check (generation), 0..1. */
 export interface FieldScore {
   readonly field: string;
   readonly score: number;
@@ -40,22 +59,18 @@ export interface FieldScore {
 }
 
 export interface CaseScore {
-  /** Mean of field scores, 0..1. */
   readonly score: number;
   readonly pass: boolean;
   readonly fields: readonly FieldScore[];
-  /** Spend of an LLM/Jev judge used while scoring, not billed to the contender. */
   readonly judgeCostUsd?: number;
+  readonly judgeCostSource?: CostSource;
 }
 
 export interface DemoContext {
   readonly contender: Contender;
-  /** Probability that this model gets a field right. */
   readonly skill: number;
   readonly rng: () => number;
-  /** True with probability `skill`. */
   hit(): boolean;
-  /** Returns `correct` with probability `skill`, otherwise a different option. */
   pick<T>(correct: T, options: readonly T[]): T;
 }
 
@@ -63,7 +78,6 @@ export interface EvalCase<INPUT, EXPECTED> {
   readonly id: string;
   readonly input: INPUT;
   readonly expected: EXPECTED;
-  /** Short line shown in tables. */
   readonly title: string;
   readonly tags?: readonly string[];
 }
@@ -83,16 +97,12 @@ export interface EvalSuite<
   readonly id: string;
   readonly name: string;
   readonly kind: SuiteKind;
-  /** Which part of the content harness this mirrors (file reference). */
   readonly stage: string;
   readonly description: string;
   readonly cases: readonly EvalCase<INPUT, EXPECTED>[];
   readonly defaultContenders: readonly string[];
-  /** Model prod uses for this stage today (the picker's baseline). */
   readonly productionModel: string;
-  /** Field names whose confusion matrix the results view can show. */
   readonly labelFields?: readonly string[];
-  /** Per-call timeout. */
   readonly timeoutMs: number;
   run(input: INPUT, ctx: CallContext): Promise<CallResult<OUTPUT>>;
   score(
@@ -100,9 +110,7 @@ export interface EvalSuite<
     testCase: EvalCase<INPUT, EXPECTED>,
     ctx: ScoreContext
   ): Promise<CaseScore> | CaseScore;
-  /** Produces a plausible output for the demo mode without calling a model. */
   demoOutput(testCase: EvalCase<INPUT, EXPECTED>, demo: DemoContext): OUTPUT;
-  /** Human-readable rendering of an output (demo runs and the case view). */
   transcript?(output: OUTPUT): string;
 }
 
@@ -110,18 +118,16 @@ export type AnySuite = EvalSuite<any, any, any>;
 
 export type TaskStatus = "queued" | "running" | "done" | "error";
 
-export interface TaskResult {
+export interface TaskResult extends Partial<EvalCost> {
   readonly contenderKey: string;
   readonly caseId: string;
   readonly repeat: number;
   status: TaskStatus;
-  /** The model call finished; a retry only re-runs scoring. */
   called?: boolean;
   startedAt?: number;
   durationMs?: number;
   score?: CaseScore;
   usage?: TokenUsage;
-  costUsd?: number;
   output?: unknown;
   transcript?: string;
   error?: string;
@@ -133,7 +139,6 @@ export interface RunConfig {
   readonly repeats: number;
   readonly concurrency: number;
   readonly demo: boolean;
-  /** Restrict to these case ids (empty = all). */
   readonly caseIds?: readonly string[];
 }
 
@@ -157,13 +162,15 @@ export interface ContenderSummary {
   readonly done: number;
   readonly errors: number;
   readonly running: number;
-  /** Mean score of finished tasks, 0..1. */
   readonly accuracy: number;
   readonly passRate: number;
   readonly p50Ms: number;
   readonly p95Ms: number;
-  readonly costUsd: number;
-  readonly judgeCostUsd: number;
+  readonly costUsd?: number;
+  readonly costSource: CostSource;
+  readonly knownCostUsd: number;
+  readonly judgeCostUsd?: number;
+  readonly judgeCostSource?: CostSource;
   readonly inputTokens: number;
   readonly outputTokens: number;
   readonly fieldAccuracy: Readonly<Record<string, number>>;

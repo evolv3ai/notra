@@ -9,8 +9,8 @@ import {
   GEO_JOURNEY_HASH_LENGTH,
   GEO_JOURNEY_IPV4_OCTETS,
   GEO_JOURNEY_IPV6_GROUPS,
-  GEO_JOURNEY_PARAM,
 } from "@notra/geo-core/constants/geo";
+import { ISO_DATE_LENGTH } from "@notra/geo-core/constants/web-analytics";
 import { getGeoIngestSecret } from "@notra/geo-core/geo/ingest";
 import { getJourneyId } from "@usenotra/geo/markdown";
 
@@ -21,7 +21,6 @@ import type {
 } from "../types/ingest";
 
 const MS_PER_SECOND = 1000;
-const ISO_DATE_LENGTH = 10;
 
 function toTuning(category: string): GeoJourneyTuning {
   if (category === GEO_JOURNEY_BROWSE_CATEGORY) {
@@ -75,20 +74,12 @@ function toFingerprint(input: GeoJourneyInput): string {
   return `${GEO_JOURNEY_FINGERPRINT_PREFIX}${digest.slice(0, GEO_JOURNEY_HASH_LENGTH)}`;
 }
 
-function toCleanPath(url: URL): string {
-  const cleaned = new URL(url.toString());
-  cleaned.searchParams.delete(GEO_JOURNEY_PARAM);
-  return cleaned.pathname;
-}
-
 export function resolveJourneyId(input: GeoJourneyInput): GeoJourneyResolution {
+  const path = input.url.pathname;
   const explicit = getJourneyId(input.url);
   if (explicit) {
-    return {
-      journeyId: `${GEO_JOURNEY_EXPLICIT_PREFIX}${explicit}`,
-      path: toCleanPath(input.url),
-    };
+    return { journeyId: `${GEO_JOURNEY_EXPLICIT_PREFIX}${explicit}`, path };
   }
   const journeyId = input.visitorType === "crawler" ? toFingerprint(input) : "";
-  return { journeyId, path: toCleanPath(input.url) };
+  return { journeyId, path };
 }

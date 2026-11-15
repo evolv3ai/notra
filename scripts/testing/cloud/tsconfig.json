@@ -1,0 +1,16 @@
+{
+  "extends": "../../../packages/typescript-config/base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node", "bun-types/test"]
+  },
+  "include": [
+    "run.ts",
+    "account.test.ts",
+    "prepared-bucket.test.ts",
+    "cleanup.test.ts",
+    "utils/**/*.ts",
+    "types/**/*.ts"
+  ]
+}

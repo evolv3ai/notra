@@ -8,7 +8,7 @@ import {
 import { Label } from "@notra/ui/components/ui/label";
 import { Textarea } from "@notra/ui/components/ui/textarea";
 import { TitleCard } from "@notra/ui/components/ui/title-card";
-import { useTranslations } from "next-intl";
+import { useTranslations } from "use-intl";
 
 import type { CompanyProfileFieldsProps } from "@/types/brand-identity";
 
@@ -63,7 +63,7 @@ export function CompanyProfileFields({ form }: CompanyProfileFieldsProps) {
                 {tCommon("labels.description")}
               </Label>
               <Textarea
-                className="min-h-30"
+                className="max-h-60 min-h-24"
                 id={field.name}
                 onBlur={field.handleBlur}
                 onChange={(e) => field.handleChange(e.target.value)}

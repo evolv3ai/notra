@@ -12,17 +12,19 @@ import {
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
 } from "@notra/ui/components/shared/responsive-dialog";
-import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { useTranslations } from "use-intl";
 
 import { AgentFeedbackSetup } from "@/components/agent-feedback/feedback-setup";
 import { Button } from "@/components/button";
+import { CopyPromptButton } from "@/components/geo/code-snippet";
 import { trackEvent } from "@/lib/analytics/posthog-client";
 import { useAgentFeedbackSetup } from "@/lib/hooks/use-agent-feedback";
 import type { AgentFeedbackSetupDialogProps } from "@/types/agent-feedback";
 
 export function AgentFeedbackSetupDialog({
   organizationId,
+  triggerVariant = "outline",
 }: AgentFeedbackSetupDialogProps) {
   const t = useTranslations("feedback.setup");
   const tCommon = useTranslations("common");
@@ -40,7 +42,7 @@ export function AgentFeedbackSetupDialog({
           setOpen(true);
         }}
         size="sm"
-        variant="outline"
+        variant={triggerVariant}
       >
         <HugeiconsIcon className="size-4" icon={Settings01Icon} />
         {t("trigger")}
@@ -53,11 +55,14 @@ export function AgentFeedbackSetupDialog({
               {t("dialogDescription")}
             </ResponsiveDialogDescription>
           </ResponsiveDialogHeader>
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
             <AgentFeedbackSetup setup={setup} />
           </div>
-          <ResponsiveDialogFooter className="bg-muted/50 mx-0 mb-0 shrink-0 rounded-b-xl border-t p-4">
-            <ResponsiveDialogClose render={<Button variant="outline" />}>
+          <ResponsiveDialogFooter className="bg-muted/50 mx-0 mb-0 shrink-0 rounded-b-xl border-t p-4 sm:justify-between">
+            <CopyPromptButton disabled={!setup} prompt={setup?.prompt ?? ""} />
+            <ResponsiveDialogClose
+              render={<Button size="sm" variant="outline" />}
+            >
               {tCommon("actions.done")}
             </ResponsiveDialogClose>
           </ResponsiveDialogFooter>

@@ -8,7 +8,7 @@ import type {
   StandaloneInboxSurface,
 } from "../types/chat-surface";
 
-export function chatSurfaceFromChannelSource(
+function chatSurfaceFromChannelSource(
   source: string | null | undefined
 ): ChatSurface {
   if (

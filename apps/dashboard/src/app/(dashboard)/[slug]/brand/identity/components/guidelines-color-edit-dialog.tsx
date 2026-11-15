@@ -17,15 +17,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@notra/ui/components/ui/select";
-import { useTranslations } from "next-intl";
 import { useReducer } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { COLOR_ROLE_OPTIONS } from "@/constants/brand-guideline-ui";
 import { useBrandColorRoleLabels } from "@/lib/hooks/use-brand-color-role-labels";
 import {
   useCreateGuidelineColor,
+  useDeleteGuidelineColor,
   useUpdateGuidelineColor,
 } from "@/lib/hooks/use-brand-guidelines";
 import type { GuidelinesColorEditDialogProps } from "@/types/brand-identity";
@@ -62,6 +63,7 @@ export function GuidelinesColorEditDialog({
   const tCommon = useTranslations("common.actions");
   const update = useUpdateGuidelineColor(organizationId, voiceId);
   const create = useCreateGuidelineColor(organizationId, voiceId);
+  const remove = useDeleteGuidelineColor(organizationId, voiceId);
   const isCreate = color === null;
   const [state, setState] = useReducer(updateColorDialogState, {
     darkValue: color?.darkValue ?? "",
@@ -71,7 +73,8 @@ export function GuidelinesColorEditDialog({
     usage: color?.usage ?? "",
   });
   const { darkValue, lightValue, name, role, usage } = state;
-  const isPending = isCreate ? create.isPending : update.isPending;
+  const isSaving = isCreate ? create.isPending : update.isPending;
+  const isPending = isSaving || remove.isPending;
 
   const handleSave = async () => {
     const payload = {
@@ -97,6 +100,22 @@ export function GuidelinesColorEditDialog({
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : t("colorDialog.saveFailed")
+      );
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!color) {
+      return;
+    }
+
+    try {
+      await remove.mutateAsync(color.id);
+      toast.success(t("colorDialog.deleted"));
+      onOpenChange(false);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : t("colorDialog.deleteFailed")
       );
     }
   };
@@ -218,6 +237,16 @@ export function GuidelinesColorEditDialog({
         </div>
 
         <ResponsiveDialogFooter>
+          {isCreate ? null : (
+            <Button
+              className="sm:mr-auto"
+              disabled={isPending}
+              onClick={handleDelete}
+              variant="destructive"
+            >
+              {remove.isPending ? tCommon("deleting") : tCommon("delete")}
+            </Button>
+          )}
           <Button
             disabled={isPending}
             onClick={() => onOpenChange(false)}
@@ -225,8 +254,8 @@ export function GuidelinesColorEditDialog({
           >
             {tCommon("cancel")}
           </Button>
-          <Button disabled={isPending} onClick={handleSave}>
-            {isPending ? tCommon("saving") : tCommon("save")}
+          <Button data-dialog-confirm disabled={isPending} onClick={handleSave}>
+            {isSaving ? tCommon("saving") : tCommon("save")}
           </Button>
         </ResponsiveDialogFooter>
       </ResponsiveDialogContent>

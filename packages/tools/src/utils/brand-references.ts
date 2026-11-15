@@ -34,6 +34,14 @@ async function resolveSettingsId(filter: BrandReferenceFilter) {
   return defaultVoice?.id;
 }
 
+export function toWriterBrandReference(reference: BrandReferenceRecord) {
+  return {
+    type: reference.type,
+    content: reference.content,
+    note: reference.note,
+  };
+}
+
 export async function getFilteredBrandReferences(
   filter: BrandReferenceFilter
 ): Promise<{

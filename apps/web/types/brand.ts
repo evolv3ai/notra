@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 export interface BrandColor {
   name: string;
   hex: string;
@@ -26,6 +24,7 @@ interface BrandAssetFile {
 
 export interface BrandAssetPaths {
   mark: BrandAssetFile;
+  markDark: BrandAssetFile;
   wordmark: BrandAssetFile;
   wordmarkDark: BrandAssetFile;
   zip: string;
@@ -36,5 +35,6 @@ export interface BrandAssetCardProps {
   asset: BrandAssetFile;
   downloadName: string;
   copyLabel: string;
-  children: ReactNode;
+  previewAlt: string;
+  previewClassName: string;
 }

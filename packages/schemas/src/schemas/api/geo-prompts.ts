@@ -12,6 +12,8 @@ import {
 import { organizationResponseSchema } from "./content";
 import { geoPromptTextSchema } from "./geo-fields";
 import { geoImportIssueSchema } from "./geo-import";
+import { projectParamsSchema } from "./geo-params";
+import { resourceIdSchema } from "./ids";
 
 const promptTagsSchema = z
   .array(z.string().trim().min(1).max(GEO_PROMPT_TAG_MAX_LENGTH))
@@ -107,3 +109,46 @@ export const importPromptsResponseSchema = z
     organization: organizationResponseSchema,
   })
   .openapi("ImportGeoPromptsResponse");
+
+const promptSuggestionSchema = z
+  .object({
+    id: z.string(),
+    prompt: z.string(),
+    title: z.string().nullable(),
+    source: z.literal("search_console"),
+    keywords: z
+      .array(
+        z.object({
+          query: z.string(),
+          clicks: z.number(),
+          impressions: z.number(),
+          position: z.number(),
+        })
+      )
+      .openapi({
+        description: "Search Console queries the suggestion was derived from.",
+      }),
+    createdAt: z.string(),
+  })
+  .openapi("GeoPromptSuggestion");
+
+export const promptSuggestionParamsSchema = projectParamsSchema.extend({
+  suggestionId: resourceIdSchema("suggestionId").openapi({
+    param: { name: "suggestionId", in: "path" },
+  }),
+});
+
+export const listPromptSuggestionsResponseSchema = z
+  .object({
+    suggestions: z.array(promptSuggestionSchema),
+    organization: organizationResponseSchema,
+  })
+  .openapi("ListGeoPromptSuggestionsResponse");
+
+export const dismissPromptSuggestionResponseSchema = z
+  .object({
+    id: z.string(),
+    dismissed: z.boolean(),
+    organization: organizationResponseSchema,
+  })
+  .openapi("DismissGeoPromptSuggestionResponse");

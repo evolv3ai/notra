@@ -10,7 +10,6 @@ import {
   buildGeoOverviewChart,
   buildGeoTimeseriesChart,
 } from "@notra/ai/utils/chart-artifact";
-import { GEO_CHECK_ENGLISH_LANGUAGES } from "@notra/db/constants/geo-checks";
 import { GEO_CONTEXT_COMPETITOR_LIMIT } from "@notra/db/constants/geo-context-competitors";
 import { db } from "@notra/db/drizzle";
 import {
@@ -21,6 +20,7 @@ import {
   projects,
 } from "@notra/db/schema";
 import {
+  geoCheckInPromptLanguage,
   queryGeoCheckCompetitorShare,
   queryGeoCheckOverview,
   queryGeoCheckPromptResults,
@@ -28,17 +28,7 @@ import {
   toGeoCheckWindow,
 } from "@notra/db/utils/geo-checks";
 import { selectGeoContextCompetitors } from "@notra/db/utils/geo-context-competitors";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gte,
-  ilike,
-  inArray,
-  isNull,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, isNull, sql } from "drizzle-orm";
 
 const LIKE_SPECIAL_CHARS_REGEX = /[%_\\]/g;
 
@@ -108,8 +98,7 @@ export async function loadGeoOverviewForTool(
     queryGeoCheckCompetitorShare(
       scope,
       window,
-      GEO_TOOL_DEFAULT_COMPETITOR_LIMIT,
-      { sequences: "single", englishOnly: true }
+      GEO_TOOL_DEFAULT_COMPETITOR_LIMIT
     ),
   ]);
 
@@ -146,14 +135,7 @@ export async function loadGeoTimeseriesForTool(
   days: number
 ) {
   const scope = geoScope(organizationId, projectId);
-  const rows = await queryGeoCheckTimeseries(
-    scope,
-    toGeoCheckWindow({ days }),
-    {
-      sequences: "single",
-      englishOnly: true,
-    }
-  );
+  const rows = await queryGeoCheckTimeseries(scope, toGeoCheckWindow({ days }));
 
   const points = rows.map((row) => ({
     day: row.day,
@@ -235,8 +217,7 @@ export async function loadGeoCompetitorShareForTool(
   const competitors = await queryGeoCheckCompetitorShare(
     scope,
     toGeoCheckWindow({ days }),
-    limit,
-    { sequences: "single", englishOnly: true }
+    limit
   );
 
   const competitorRows = competitors.map((row) => ({
@@ -263,8 +244,6 @@ function searchTrackedCompetitors(
   const normalized = search.toLowerCase();
   const pattern = escapeLikePattern(normalized);
   const lowerName = sql`lower(${geoCompetitors.name})`;
-  // Exact names first, then prefixes, so the limit never hides the one
-  // competitor the agent asked for by its full name.
   return db
     .select({
       id: geoCompetitors.id,
@@ -302,7 +281,8 @@ export async function loadGeoProjectContextForTool(
     eq(geoMentionChecks.projectId, projectId),
     eq(geoMentionChecks.organizationId, organizationId),
     isNull(geoMentionChecks.sequenceId),
-    inArray(geoMentionChecks.language, [...GEO_CHECK_ENGLISH_LANGUAGES]),
+    isNull(geoMentionChecks.personaId),
+    geoCheckInPromptLanguage,
     eq(geoMentionChecks.turn, 0),
     gte(geoMentionChecks.capturedAt, since)
   );
@@ -327,7 +307,6 @@ export async function loadGeoProjectContextForTool(
         eq(geoSettings.organizationId, organizationId)
       ),
     }),
-    // The ones engines recommend most; a search reaches the rest.
     selectGeoContextCompetitors({ organizationId, projectId }),
     db
       .select({ id: geoPrompts.id, prompt: geoPrompts.prompt })

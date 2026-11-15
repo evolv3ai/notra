@@ -16,10 +16,6 @@ export const REUSABLE_BRIEF_STATUSES = [
 const AI_SEARCH_TOKEN_SPLIT_REGEX = /[^\p{L}\p{N}\p{M}]+/u;
 const AI_SEARCH_YEAR_REGEX = /^(?:19|20)\d{2}$/;
 
-const OPEN_BRIEF_STATUSES = new Set<GeoContentBriefStatus>(
-  REUSABLE_BRIEF_STATUSES
-);
-
 export function isMissingMajority(
   missingCount: number,
   total: number
@@ -65,10 +61,6 @@ export function searchGapPosition(
       0
     ) / weight;
   return Number(weighted.toFixed(1));
-}
-
-export function isReusableBriefStatus(status: GeoContentBriefStatus): boolean {
-  return OPEN_BRIEF_STATUSES.has(status);
 }
 
 export function searchGapImpressions(

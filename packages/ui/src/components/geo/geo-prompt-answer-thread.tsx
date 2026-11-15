@@ -1,5 +1,6 @@
 "use client";
 
+import { type RefObject, useEffect, useRef, useState } from "react";
 import { MessageResponse } from "@notra/ui/components/ai-elements/message";
 import { ChatgptActions } from "@notra/ui/components/ai-skins/chatgpt/chatgpt-actions";
 import { ChatgptComposer } from "@notra/ui/components/ai-skins/chatgpt/chatgpt-composer";
@@ -40,14 +41,33 @@ import type {
 const ANSWER_MARKDOWN_CLASS =
   "[&_h1]:mt-0 [&_h1]:mb-2 [&_h1]:text-[1.15em] [&_h1]:font-semibold [&_h2]:mt-3 [&_h2]:mb-1.5 [&_h2]:text-[1.05em] [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:mb-1 [&_h3]:text-[1em] [&_h3]:font-semibold [&_p]:my-2.5 [&_ul]:my-2.5 [&_ol]:my-2.5";
 
+const THREAD_COMPOSER_GAP_PX = 24;
+
+function useElementHeight(ref: RefObject<HTMLElement | null>): number {
+  const [height, setHeight] = useState(0);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) {
+      return;
+    }
+    const update = () => setHeight(element.offsetHeight);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref]);
+  return height;
+}
+
 const SKIN_SURFACE: Record<GeoChatSkin, string> = {
   claude: "bg-[#faf9f5] dark:bg-[#1c1b18]",
   chatgpt: "bg-background",
   gemini: "bg-white dark:bg-[#1f1f1f]",
   perplexity: "bg-white dark:bg-[#111]",
-  opencode: "bg-[var(--opencode-tui-background,#090909)]",
-  "claude-code": "bg-[#0f0f0f]",
-  codex: "bg-[#0f0f0f]",
+  opencode:
+    "dark bg-[var(--opencode-tui-background,#090909)] text-foreground scheme-dark",
+  "claude-code": "dark bg-[#0f0f0f] text-foreground scheme-dark",
+  codex: "dark bg-[#0f0f0f] text-foreground scheme-dark",
 };
 
 function ignoreFollowUp(_text: string): void {
@@ -319,6 +339,16 @@ function SkinComposer({ engine, skin }: { engine: string; skin: GeoChatSkin }) {
     );
   }
   if (skin === "opencode") {
+    if (engine.startsWith("fx/")) {
+      return (
+        <OpencodeComposer
+          agent="fx"
+          model={engine.slice("fx/".length)}
+          placeholder="Ask fx to do anything"
+          provider="AI Gateway"
+        />
+      );
+    }
     return <OpencodeComposer placeholder='Ask anything... "Draft a launch post"' />;
   }
   if (skin === "claude-code") {
@@ -423,10 +453,13 @@ export function GeoPromptAnswerThread({
   result,
   timestamp,
   labels,
+  fitContentBelowLg = false,
 }: GeoPromptAnswerThreadProps) {
   const skin = geoChatSkin(result.engine);
   const excerpt = result.excerpt.trim();
   const resolvedLabels = { ...DEFAULT_GEO_ANSWER_THREAD_LABELS, ...labels };
+  const composerRef = useRef<HTMLDivElement>(null);
+  const composerHeight = useElementHeight(composerRef);
   const emptyText = result.mentioned
     ? resolvedLabels.mentionedWithoutExcerpt
     : resolvedLabels.notMentioned;
@@ -435,11 +468,24 @@ export function GeoPromptAnswerThread({
     <div
       className={cn(
         "relative flex h-full min-h-0 flex-1 flex-col overflow-hidden",
+        fitContentBelowLg &&
+          "max-lg:h-auto max-lg:flex-none max-lg:overflow-visible",
         SKIN_SURFACE[skin]
       )}
     >
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 py-8">
+      <div
+        className={cn(
+          "min-h-0 flex-1 overflow-y-auto overscroll-contain",
+          fitContentBelowLg && "max-lg:flex-none max-lg:overflow-visible"
+        )}
+      >
+        <div
+          className={cn(
+            "mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 pt-8",
+            fitContentBelowLg && "max-lg:gap-8 max-lg:px-5 max-lg:pt-6 max-lg:pb-6!"
+          )}
+          style={{ paddingBottom: composerHeight + THREAD_COMPOSER_GAP_PX }}
+        >
           <ThreadMessages
             excerpt={excerpt}
             emptyText={emptyText}
@@ -449,8 +495,27 @@ export function GeoPromptAnswerThread({
           />
         </div>
       </div>
-      <div className="mx-auto w-full max-w-3xl shrink-0 px-6 pt-1 pb-4">
-        <SkinComposer engine={result.engine} key={result.engine} skin={skin} />
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-x-0 bottom-0",
+          fitContentBelowLg && "max-lg:static"
+        )}
+      >
+        <div
+          className={cn(
+            "mx-auto w-full max-w-3xl px-6 pb-4",
+            fitContentBelowLg && "max-lg:px-4"
+          )}
+          ref={composerRef}
+        >
+          <div className="pointer-events-auto">
+            <SkinComposer
+              engine={result.engine}
+              key={result.engine}
+              skin={skin}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

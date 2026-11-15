@@ -3,7 +3,7 @@
 import { FileUpIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "../../button/components/button";
 
 const TICK_MS = 280;
 

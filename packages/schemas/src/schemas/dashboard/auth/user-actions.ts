@@ -8,8 +8,6 @@ const USER_NAME_MAX_LENGTH = 100;
 const USER_IMAGE_URL_MAX_LENGTH = 2048;
 const PROVIDER_ID_MAX_LENGTH = 64;
 
-export const userNameSchema = z.string().trim().min(1, "Name cannot be empty");
-
 export const updateUserInputSchema = z.object({
   name: z
     .string()
@@ -28,8 +26,6 @@ export const updateUserInputSchema = z.object({
   showAgentStats: z.boolean().optional(),
   locale: z.enum(DASHBOARD_LOCALES).nullable().optional(),
 });
-
-export const dashboardLocaleSchema = z.enum(DASHBOARD_LOCALES);
 
 export const unlinkAccountInputSchema = z.object({
   providerId: z.string().trim().min(1).max(PROVIDER_ID_MAX_LENGTH),

@@ -2,22 +2,19 @@ import type { FontSpec } from "@notra/ai/types/repo-image";
 
 export const AGENT_TIMEOUT_MS = 960_000;
 export const RECOVERY_AGENT_TIMEOUT_MS = 180_000;
+export const RUN_CANCEL_CONFIRMATION_ATTEMPTS = 5;
+export const RUN_CANCEL_CONFIRMATION_INTERVAL_MS = 250;
 export const REPO_IMAGE_OUTPUT_HTML_PATH = "output.html";
 export const MIN_REPO_IMAGE_HTML_BYTES = 1500;
 export const IMAGE_GEN_AGENT_SKILLS_INSTALL_COMMAND =
   "npx skills add usenotra/skills --skill brand-logos --skill satori --skill marketing-image-generation --yes";
 export const IMAGE_GEN_MODEL_ID = "vercel/anthropic/claude-opus-5.5";
 export const IMAGE_REVIEW_MODEL_ID = "vercel/anthropic/claude-sonnet-5";
-export const BOX_BASE_URL =
-  process.env.UPSTASH_BOX_BASE_URL?.trim() ||
-  "https://us-east-1.box.upstash.com";
+export const BOX_BASE_URL = "https://us-east-1.box.upstash.com";
 export const TRAILING_SLASH_RE = /\/$/;
 
 export const REPO_IMAGE_WIDTH = 1200;
 export const REPO_IMAGE_HEIGHT = 630;
-
-export const GOOGLE_FONT_URL_REGEX =
-  /src: url\((.+?)\) format\('(opentype|truetype)'\)/;
 
 export const FONT_SPECS = [
   { name: "Inter", weight: 400, family: "Inter" },

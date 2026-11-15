@@ -1,9 +1,10 @@
+import { qstashRouteUrlCandidates } from "@notra/ai/qstash/triggers";
 import { Receiver } from "@upstash/qstash";
 
 export async function verifyQstashSignature(params: {
   request: Request;
   rawBody: string;
-  url: string;
+  path: string;
 }): Promise<boolean> {
   const currentSigningKey = process.env.QSTASH_CURRENT_SIGNING_KEY;
   const nextSigningKey = process.env.QSTASH_NEXT_SIGNING_KEY;
@@ -15,13 +16,14 @@ export async function verifyQstashSignature(params: {
     return false;
   }
   const receiver = new Receiver({ currentSigningKey, nextSigningKey });
-  try {
-    return await receiver.verify({
-      signature,
-      body: params.rawBody,
-      url: params.url,
-    });
-  } catch {
-    return false;
+  for (const url of qstashRouteUrlCandidates(params.path)) {
+    try {
+      if (await receiver.verify({ signature, body: params.rawBody, url })) {
+        return true;
+      }
+    } catch {
+      // Signature or URL mismatch; try the next candidate.
+    }
   }
+  return false;
 }

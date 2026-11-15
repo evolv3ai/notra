@@ -2,6 +2,8 @@ import {
   GEO_COMMERCE_AUDIENCE_ENGINE_IDS,
   GEO_DEFAULT_ENGINE_IDS,
   GEO_GENERAL_AUDIENCE_ENGINE_IDS,
+  GEO_META_SEARCH_MODEL_IDS,
+  GEO_MODEL_BATCH_SUFFIX,
   GEO_MODEL_CATALOG_SEED,
   GEO_MODEL_CATALOG_STATIC,
   GEO_MODEL_EXCLUDED_ID_PATTERN,
@@ -10,6 +12,7 @@ import {
   GEO_MODEL_EXCLUDED_TAGS,
   GEO_MODEL_HIDDEN_ID_PATTERN,
   GEO_MODEL_PROVIDERS,
+  GEO_MODEL_STALE_LINE_DAYS,
   GEO_STATIC_ENGINE_ENV,
 } from "../constants/geo-model-catalog";
 import type {
@@ -21,7 +24,9 @@ import type {
 } from "../types/geo";
 
 const MS_PER_SECOND = 1000;
+const MS_PER_DAY = 86_400_000;
 const DAY_LENGTH = 10;
+const VERSION_PATTERN = /\d+(?:\.\d+)*/g;
 const DEFAULT_ENGINE_SET = new Set<string>(GEO_DEFAULT_ENGINE_IDS);
 const SEED_RELEASE_DATES = new Map(
   GEO_MODEL_CATALOG_SEED.map((entry) => [entry.id, entry.released])
@@ -33,6 +38,8 @@ function isEligibleFeedModel(model: GeoGatewayModel): boolean {
   }
   if (
     GEO_MODEL_EXCLUDED_IDS.has(model.id) ||
+    // Gateway batches cannot run GEO's web-search tools or enforce ZDR.
+    model.id.endsWith(GEO_MODEL_BATCH_SUFFIX) ||
     GEO_MODEL_EXCLUDED_ID_PATTERN.test(model.id) ||
     GEO_MODEL_EXCLUDED_SLUG_PATTERN.test(model.id)
   ) {
@@ -49,7 +56,7 @@ function toCatalogEntry(
     id: model.id,
     provider,
     label: model.name,
-    zdr: model.zdr,
+    zdr: GEO_META_SEARCH_MODEL_IDS.has(model.id) ? "none" : model.zdr,
     released:
       toDayString(model.released) || (SEED_RELEASE_DATES.get(model.id) ?? ""),
     default: DEFAULT_ENGINE_SET.has(model.id),
@@ -64,12 +71,6 @@ function toDayString(seconds: number | undefined): string {
   return new Date(seconds * MS_PER_SECOND).toISOString().slice(0, DAY_LENGTH);
 }
 
-/**
- * True when a static (non-gateway) engine can actually run, i.e. its provider
- * credential is configured. Server-side only — the catalog is built in
- * `lib/geo/model-catalog.ts`. Per-organization exposure (feature flags) is
- * applied on top of this by `withoutGeoModelCatalogEntries`.
- */
 function isGeoStaticEngineAvailable(entry: GeoModelCatalogEntry): boolean {
   const envKeys = GEO_STATIC_ENGINE_ENV[entry.id];
   if (!envKeys) {
@@ -81,18 +82,20 @@ function isGeoStaticEngineAvailable(entry: GeoModelCatalogEntry): boolean {
 }
 
 function staticEntriesForProvider(
-  providerId: GeoModelProviderId
+  providerId: GeoModelProviderId,
+  requireCredentials: boolean
 ): GeoModelCatalogEntry[] {
   return GEO_MODEL_CATALOG_STATIC.filter(
     (entry) =>
       entry.provider === providerId &&
       !GEO_MODEL_EXCLUDED_IDS.has(entry.id) &&
-      isGeoStaticEngineAvailable(entry)
+      (!requireCredentials || isGeoStaticEngineAvailable(entry))
   );
 }
 
 export function buildGeoModelCatalogFromFeed(
-  feed: readonly GeoGatewayModel[]
+  feed: readonly GeoGatewayModel[],
+  requireCredentials = true
 ): GeoModelCatalog {
   const models: GeoModelCatalogEntry[] = [];
   for (const provider of GEO_MODEL_PROVIDERS) {
@@ -116,7 +119,7 @@ export function buildGeoModelCatalogFromFeed(
         : [];
     models.push(
       ...markHiddenGeoModels([...entries, ...fallback]),
-      ...staticEntriesForProvider(provider.id)
+      ...staticEntriesForProvider(provider.id, requireCredentials)
     );
   }
   const providers = GEO_MODEL_PROVIDERS.filter((provider) =>
@@ -132,20 +135,63 @@ function byReleaseDescending(
   return right.released.localeCompare(left.released);
 }
 
+/** `openai/gpt-6.1-sol` → `gpt-sol`: every release of one model line. */
+function geoModelLine(id: string): string {
+  return id
+    .slice(id.indexOf("/") + 1)
+    .split("-")
+    .map((part) => part.replace(VERSION_PATTERN, ""))
+    .filter(Boolean)
+    .join("-");
+}
+
+function releasedAt(entry: GeoModelCatalogEntry): number {
+  return Date.parse(entry.released) || 0;
+}
+
 /**
- * Hide niche variants from the picker. Defaults are never hidden. Hidden
- * models stay in the catalog so stored selections keep resolving.
+ * Hide niche variants and superseded releases from the picker: per model line
+ * only the newest release stays, and lines that went stale disappear.
+ * Defaults are never hidden. Hidden models stay in the catalog so stored
+ * selections keep resolving.
  */
 function markHiddenGeoModels(
   entries: readonly GeoModelCatalogEntry[]
 ): GeoModelCatalogEntry[] {
+  const candidates = entries.filter(
+    (entry) => !GEO_MODEL_HIDDEN_ID_PATTERN.test(entry.id)
+  );
+  // Without a release date neither recency rule can judge a model, so it stays.
+  const undated = candidates.filter((entry) => releasedAt(entry) === 0);
+  const newestByLine = new Map<string, GeoModelCatalogEntry>();
+  for (const entry of candidates.filter((model) => releasedAt(model) > 0)) {
+    const line = geoModelLine(entry.id);
+    const newest = newestByLine.get(line);
+    if (!newest || releasedAt(entry) > releasedAt(newest)) {
+      newestByLine.set(line, entry);
+    }
+  }
+  const providerNewest = Math.max(0, ...candidates.map(releasedAt));
+  const staleBefore = providerNewest - GEO_MODEL_STALE_LINE_DAYS * MS_PER_DAY;
+  const listed = new Set(
+    [
+      ...[...newestByLine.values()].filter(
+        (entry) => releasedAt(entry) >= staleBefore
+      ),
+      ...undated,
+    ].map((entry) => entry.id)
+  );
+  const isListed = (entry: GeoModelCatalogEntry) =>
+    entry.default || STATIC_ENGINE_IDS.has(entry.id) || listed.has(entry.id);
   return entries.map((entry) => {
-    const hidden = !entry.default && GEO_MODEL_HIDDEN_ID_PATTERN.test(entry.id);
+    const hidden = !isListed(entry);
     return hidden ? { ...entry, hidden } : entry;
   });
 }
 
-export function seedGeoModelCatalog(): GeoModelCatalog {
+export function seedGeoModelCatalog(
+  requireCredentials = true
+): GeoModelCatalog {
   const models: GeoModelCatalogEntry[] = [];
   for (const provider of GEO_MODEL_PROVIDERS) {
     models.push(
@@ -156,7 +202,7 @@ export function seedGeoModelCatalog(): GeoModelCatalog {
             !GEO_MODEL_EXCLUDED_IDS.has(entry.id)
         )
       ),
-      ...staticEntriesForProvider(provider.id)
+      ...staticEntriesForProvider(provider.id, requireCredentials)
     );
   }
   const providers = GEO_MODEL_PROVIDERS.filter((provider) =>
@@ -228,12 +274,15 @@ export function geoModelsForProvider(
 
 export function geoDefaultEngines(catalog: GeoModelCatalog): string[] {
   const defaults = catalog.models
-    .filter((model) => model.default)
+    .filter((model) => model.default && !model.hidden)
     .map((model) => model.id);
   if (defaults.length > 0) {
     return defaults;
   }
-  return catalog.models.slice(0, 1).map((model) => model.id);
+  return catalog.models
+    .filter((model) => !model.hidden)
+    .slice(0, 1)
+    .map((model) => model.id);
 }
 
 /**
@@ -250,7 +299,9 @@ export function geoEnginesForAudience(
   if (audienceType !== "general" && audienceType !== "commerce") {
     return geoDefaultEngines(catalog);
   }
-  const known = new Set(catalog.models.map((model) => model.id));
+  const known = new Set(
+    catalog.models.filter((model) => !model.hidden).map((model) => model.id)
+  );
   if (!GEO_GENERAL_AUDIENCE_ENGINE_IDS.every((id) => known.has(id))) {
     return geoDefaultEngines(catalog);
   }

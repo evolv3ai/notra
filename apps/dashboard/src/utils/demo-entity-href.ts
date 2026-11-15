@@ -16,9 +16,9 @@ export function demoEntityHref(
     case "geo.competitor":
       return `/${slug}/geo/competitors`;
     case "schedule":
-      return `/${slug}/automation/schedules`;
+      return `/${slug}/automation`;
     case "event-trigger":
-      return `/${slug}/automation/events`;
+      return `/${slug}/automation`;
     case "skill":
       return `/${slug}/skills`;
     default:

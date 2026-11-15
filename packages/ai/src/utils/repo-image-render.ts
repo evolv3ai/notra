@@ -1,7 +1,6 @@
 import {
   DISPLAY_STYLE_RE,
   FONT_SPECS,
-  GOOGLE_FONT_URL_REGEX,
   LEADING_STYLE_SEPARATOR_RE,
   REPO_IMAGE_HEIGHT,
   REPO_IMAGE_WIDTH,
@@ -9,44 +8,9 @@ import {
   STYLE_ATTR_RE,
 } from "@notra/ai/constants/repo-image";
 import type { VNode } from "@notra/ai/types/repo-image-render";
-import { Resvg } from "@resvg/resvg-js";
+import { loadRenderFont } from "@notra/ai/utils/render-font";
+import { logWarn } from "@notra/ai/utils/server-log";
 import { createElement, Fragment, type ReactNode } from "react";
-import satori from "satori";
-import { html as parseHtml } from "satori-html";
-
-const fontCache = new Map<string, ArrayBuffer>();
-
-async function loadGoogleFont(familySpec: string): Promise<ArrayBuffer> {
-  const cached = fontCache.get(familySpec);
-  if (cached) {
-    return cached;
-  }
-
-  const url = `https://fonts.googleapis.com/css2?family=${familySpec.replace(
-    / /g,
-    "+"
-  )}`;
-
-  const cssResponse = await fetch(url);
-  if (!cssResponse.ok) {
-    throw new Error(`Failed to fetch Google Font CSS for ${familySpec}`);
-  }
-
-  const css = await cssResponse.text();
-  const fontUrl = css.match(GOOGLE_FONT_URL_REGEX)?.[1];
-  if (!fontUrl) {
-    throw new Error(`Failed to resolve font URL for ${familySpec}`);
-  }
-
-  const fontResponse = await fetch(fontUrl);
-  if (!fontResponse.ok) {
-    throw new Error(`Failed to fetch font file for ${familySpec}`);
-  }
-
-  const buffer = await fontResponse.arrayBuffer();
-  fontCache.set(familySpec, buffer);
-  return buffer;
-}
 
 async function loadAllFonts() {
   const results = await Promise.allSettled(
@@ -54,7 +18,7 @@ async function loadAllFonts() {
       name: spec.name,
       weight: spec.weight,
       style: "normal" as const,
-      data: await loadGoogleFont(spec.family),
+      data: await loadRenderFont(spec.family),
     }))
   );
   const loaded = results
@@ -67,7 +31,12 @@ async function loadAllFonts() {
 
   for (const result of results) {
     if (result.status === "rejected") {
-      console.warn("Failed to load repo-image font", result.reason);
+      logWarn("[repo-image] Failed to load font", {
+        error:
+          result.reason instanceof Error
+            ? result.reason.message
+            : String(result.reason),
+      });
     }
   }
 
@@ -127,15 +96,10 @@ function enforceSatoriDisplay(node: unknown) {
     return;
   }
 
-  if (!node.props) {
-    node.props = {};
-  }
-  const props = node.props;
-  if (!props.style) {
-    props.style = {};
-  }
-  const style = props.style;
-  const display = style.display;
+  node.props ??= {};
+  node.props.style ??= {};
+  const { style } = node.props;
+  const { display } = style;
   if (typeof display !== "string" || !SATORI_VALID_DISPLAY.has(display)) {
     style.display = "flex";
   }
@@ -176,11 +140,20 @@ function toReactNode(value: unknown): ReactNode {
 }
 
 export async function renderHtmlToImages(htmlSource: string) {
+  const { html: parseHtml } = await import("satori-html");
   const safeHtml = injectDisplayFlexInHtml(htmlSource);
   const rawTree = parseHtml(safeHtml);
   enforceSatoriDisplay(rawTree);
-  const tree = toReactNode(rawTree);
-  const fonts = await loadAllFonts();
+  return await renderElementToImages(toReactNode(rawTree));
+}
+
+/** Renders a ready element tree (fixed templates), skipping the HTML parser. */
+export async function renderElementToImages(tree: ReactNode) {
+  const [{ default: satori }, { Resvg }, fonts] = await Promise.all([
+    import("satori"),
+    import("@resvg/resvg-js"),
+    loadAllFonts(),
+  ]);
 
   const svg = await satori(tree, {
     width: REPO_IMAGE_WIDTH,

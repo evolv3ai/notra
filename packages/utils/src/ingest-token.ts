@@ -1,7 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import type {
-  BuildIngestTokenInput,
   IngestTokenIdentity,
   VerifyIngestTokenInput,
 } from "./types/ingest-token";
@@ -13,34 +12,12 @@ function sign(payload: string, secret: string): string {
   return createHmac("sha256", secret).update(payload).digest("hex");
 }
 
-export function hasIngestTokenPrefix(token: string, prefix: string): boolean {
-  return token.startsWith(prefix);
-}
-
-export function buildIngestToken({
-  secret,
-  prefix,
-  organizationId,
-  projectId,
-  generation,
-}: BuildIngestTokenInput): string {
-  const segments = [organizationId];
-  if (projectId) {
-    segments.push(projectId);
-  }
-  if (generation > 1) {
-    segments.push(`g${generation}`);
-  }
-  const payload = segments.join(SEPARATOR);
-  return `${prefix}${payload}${SEPARATOR}${sign(payload, secret)}`;
-}
-
 export function verifyIngestToken({
   secret,
   prefix,
   token,
 }: VerifyIngestTokenInput): IngestTokenIdentity | null {
-  if (!hasIngestTokenPrefix(token, prefix)) {
+  if (!token.startsWith(prefix)) {
     return null;
   }
 

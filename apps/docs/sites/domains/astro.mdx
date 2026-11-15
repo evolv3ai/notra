@@ -1,0 +1,81 @@
+---
+title: "Serve your site under a path with Astro"
+sidebarTitle: "Astro"
+description: "Forward acme.com/blog to Notra from an Astro site, with platform rewrites for static sites or a proxy route with an adapter."
+authors:
+  - handle: jan
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/sites/domains/astro
+  type: how-to
+  applies_to:
+    - notra
+  language: en
+  status: stable
+---
+
+This guide forwards `acme.com/blog` to Notra from an Astro site. Read [the steps on every platform](/sites/domains/subpath#the-steps-on-every-platform) first, and replace `acme.notra.site` with the Notra address on your site's **Domains** page. The [Fernhill example](https://github.com/usenotra/sites-examples/tree/main/hosts/astro) is a complete Astro site set up this way.
+
+## Static Astro sites
+
+A fully static Astro site has no server to forward requests, so the rewrite goes into your host's config. Follow the guide for [Vercel](/sites/domains/vercel), [Netlify](/sites/domains/netlify) or [Cloudflare](/sites/domains/cloudflare), and delete any `src/pages/blog` and `src/pages/changelog` pages.
+
+## With an adapter
+
+With an adapter like `@astrojs/node`, a catch-all route forwards both sections from your own server. Add the proxy once:
+
+```typescript src/lib/notra-proxy.ts
+import type { APIRoute } from "astro";
+
+const NOTRA_SITE = "https://acme.notra.site";
+
+// Headers for this hop only, plus your visitors' sessions.
+const DROPPED_REQUEST_HEADERS = [
+  "host", "connection", "keep-alive", "transfer-encoding", "upgrade",
+  "te", "trailer", "proxy-authorization", "content-length",
+  "cookie", "authorization",
+];
+// fetch() decodes compressed bodies, so these no longer match.
+const DROPPED_RESPONSE_HEADERS = ["content-encoding", "content-length", "transfer-encoding", "connection"];
+
+export const proxyToNotra: APIRoute = async ({ request, clientAddress }) => {
+  const url = new URL(request.url);
+  const headers = new Headers(request.headers);
+  for (const name of DROPPED_REQUEST_HEADERS) headers.delete(name);
+  // Overwritten, so visitors can't send their own.
+  headers.set("x-forwarded-for", clientAddress);
+
+  const hasBody = request.method !== "GET" && request.method !== "HEAD";
+  const upstream = await fetch(`${NOTRA_SITE}${url.pathname}${url.search}`, {
+    method: request.method,
+    headers,
+    body: hasBody ? await request.arrayBuffer() : undefined,
+    redirect: "manual",
+  });
+
+  const responseHeaders = new Headers(upstream.headers);
+  for (const name of DROPPED_RESPONSE_HEADERS) responseHeaders.delete(name);
+  // Keep Notra's 404 pages instead of src/pages/404.astro.
+  responseHeaders.set("X-Astro-Reroute", "no");
+
+  return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
+};
+```
+
+Then route each section to it, in `src/pages/blog/[...path].ts` and `src/pages/changelog/[...path].ts`:
+
+```typescript src/pages/blog/[...path].ts
+import { proxyToNotra } from "../../lib/notra-proxy";
+
+export const prerender = false;
+export const ALL = proxyToNotra;
+```
+
+`[...path]` also matches `/blog` itself, and the rest of your site stays static.
+
+## Limits to keep in mind
+
+- **Trailing slashes.** `trailingSlash: "always"` redirects `/blog` to `/blog/`, which fails the domain check, so keep the default `"ignore"`.
+- **Origin check.** Site analytics posts time on page to `/blog/_notra/e`, and `security.checkOrigin` can reject it behind a proxy that rewrites the host. Turn it off if the proxy routes are your only on-demand routes, or check that the endpoint answers.
+- **Your own middleware.** `src/middleware.ts` runs for the section paths too, so make sure it doesn't redirect them or ask for a login.

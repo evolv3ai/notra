@@ -23,14 +23,6 @@ export interface GitHubMentionSender {
   type?: string;
 }
 
-export interface GitHubMentionRepository {
-  id: number;
-  name: string;
-  fullName: string;
-  defaultBranch: string;
-  owner: string;
-}
-
 /** Set when the mention was written in a review thread under "Files changed". */
 export interface GitHubMentionReviewThread {
   path: string;
@@ -45,6 +37,9 @@ export interface GitHubMentionReviewThread {
 }
 
 export interface GitHubMentionComment {
+  /** Edits can update Autopilot feedback, but must never trigger repository writes. */
+  edited?: boolean;
+  updatedAt?: string;
   id: number;
   body: string;
   htmlUrl: string;
@@ -61,6 +56,7 @@ export interface GitHubMentionPullRequest {
   headRepoFullName: string | null;
   baseRef: string;
   draft: boolean;
+  authorLogin: string | null;
 }
 
 export interface GitHubMentionPublication extends ContentPublication {}
@@ -96,6 +92,8 @@ export interface GitHubMentionContext {
 
 /** Brand voice fields the mention agent writes in. */
 export interface GitHubMentionVoice {
+  /** Brand identity id, also used for the brand's OG image template. */
+  id: string;
   name: string;
   companyName: string | null;
   companyDescription: string | null;
@@ -248,7 +246,9 @@ export interface GitHubMentionToolState extends GitHubMentionWriteState {
 
 export interface GitHubMentionFileChange {
   path: string;
+  /** Text, or base64 when `encoding` is "base64" (images and other binary files). */
   contents: string;
+  encoding?: "utf8" | "base64";
 }
 
 export interface GitHubMentionContentFinding {

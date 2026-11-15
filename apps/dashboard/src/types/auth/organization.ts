@@ -1,5 +1,3 @@
-import type { NextResponse } from "next/server";
-
 import type { getServerSession } from "@/lib/auth/session";
 
 export type AuthSession = Awaited<ReturnType<typeof getServerSession>>;
@@ -15,6 +13,9 @@ export interface OrganizationMembership {
   role: string;
 }
 
+/** A membership a page loader already resolved for the signed-in user. */
+export type LoadedMembership = OrganizationMembership & { userId: string };
+
 export interface OrganizationAuthDependencies {
   getServerSession: typeof getServerSession;
   findMembership: (params: {
@@ -24,7 +25,7 @@ export interface OrganizationAuthDependencies {
   hasDatabaseUrl: () => boolean;
 }
 
-export interface OrganizationContext {
+interface OrganizationContext {
   user: User;
   organizationId: string;
   membership: {
@@ -33,14 +34,14 @@ export interface OrganizationContext {
   };
 }
 
-export interface OrganizationAuthResult {
+interface OrganizationAuthResult {
   success: true;
   context: OrganizationContext;
 }
 
-export interface OrganizationAuthError {
+interface OrganizationAuthError {
   success: false;
-  response: NextResponse;
+  response: Response;
 }
 
 export type OrganizationAuth = OrganizationAuthResult | OrganizationAuthError;

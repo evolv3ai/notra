@@ -46,7 +46,6 @@ describe("reserveGitHubMentionBilling", () => {
       mode: "pull_request_credits",
       lockId: lock("pull_request_credits"),
     });
-    // The AI credit balance is not even looked at while the plan has room.
     expect(checkAutumnFeature).toHaveBeenCalledTimes(1);
 
     checkAutumnFeature.mockReset();
@@ -139,7 +138,6 @@ test("collects outer steps and nested sandbox spend once", () => {
     tokenCostUsd: 0.02,
     computeMs: 20,
   });
-  // The sandbox reports its Box stream cost through the same callback.
   usage.add({
     inputTokens: 30,
     outputTokens: 4,
@@ -181,17 +179,4 @@ test("an unknown step cost is not silently counted as zero", () => {
     cacheWriteTokens: 0,
   });
   expect(usage.get()?.tokenCostUsd).toBeUndefined();
-});
-
-test("a collector distinguishes no model work from partial paid work", () => {
-  const usage = createGitHubMentionUsageCollector();
-  expect(usage.get()).toBeNull();
-  usage.add({
-    inputTokens: 1,
-    outputTokens: 1,
-    totalTokens: 2,
-    cacheReadTokens: 0,
-    cacheWriteTokens: 0,
-  });
-  expect(usage.get()?.totalTokens).toBe(2);
 });

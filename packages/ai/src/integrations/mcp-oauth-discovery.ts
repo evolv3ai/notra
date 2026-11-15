@@ -27,9 +27,9 @@ export async function discoverMcpOAuthServerConfiguration(
     }
   );
   if (!authorizationServerMetadata) {
-    throw new McpOAuthAuthorizationError(
-      "This MCP server does not support OAuth discovery."
-    );
+    throw new McpOAuthAuthorizationError({
+      message: "This MCP server does not support OAuth discovery.",
+    });
   }
   const resource = getValidatedMcpOAuthResource(serverUrl, resourceMetadata);
   return {

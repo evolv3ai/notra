@@ -40,15 +40,10 @@ export function scansPerMonth(frequency: PromptCalculatorFrequencyId) {
 
 const LAST_STOP = PROMPT_CALCULATOR_STOPS.length - 1;
 
-/** Where a stop sits on the track, 0–1; stops are evenly spaced. */
 function stopRatio(index: number) {
   return index / LAST_STOP;
 }
 
-/**
- * Where `prompts` sits on the stepped slider, 0–1. Amounts between two stops
- * are placed on a log scale between them.
- */
 export function promptsToStopRatio(prompts: number) {
   const upper = PROMPT_CALCULATOR_STOPS.findIndex((stop) => prompts <= stop);
   if (upper === -1) {
@@ -64,7 +59,6 @@ export function promptsToStopRatio(prompts: number) {
   return stopRatio(upper - 1 + within);
 }
 
-/** The caption for `prompts`: the first milestone at or above it. */
 export function milestoneFor(prompts: number) {
   const last = PROMPT_CALCULATOR_MILESTONES.at(
     -1
@@ -121,7 +115,6 @@ export function buildPromptCalculatorSearch({
   models,
   frequency,
 }: PromptCalculatorInput) {
-  // Built by hand so the model list keeps readable commas instead of `%2C`.
   const params = [
     `${PROMPT_CALCULATOR_PARAMS.prompts}=${prompts}`,
     `${PROMPT_CALCULATOR_PARAMS.models}=${models.join(",")}`,
@@ -130,11 +123,6 @@ export function buildPromptCalculatorSearch({
   return `?${params.join("&")}#${PROMPT_CALCULATOR_ANCHOR}`;
 }
 
-/**
- * When an estimate lands on Enterprise, the most frequent slower cadence that
- * brings it back under a self-serve plan, or `null` when even monthly scans
- * don't fit.
- */
 export function findFittingCadence(input: PromptCalculatorInput) {
   const current = PROMPT_CALCULATOR_FREQUENCIES.findIndex(
     (option) => option.id === input.frequency
@@ -149,11 +137,6 @@ export function findFittingCadence(input: PromptCalculatorInput) {
   return null;
 }
 
-/**
- * Turns the raw `models` param into catalog model ids: engine names like
- * `claude` become that engine's default model, unknown ids drop out, and the
- * result keeps catalog order. Falls back to the defaults when nothing is left.
- */
 export function normalizeModelIds(raw: readonly string[]) {
   const wanted = new Set<string>();
   for (const id of raw) {

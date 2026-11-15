@@ -3,9 +3,8 @@
 import { SquareLock02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
-import { useTranslations } from "next-intl";
-import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useTranslations } from "use-intl";
 
 import { GeoPageSkeleton } from "@/app/(dashboard)/[slug]/geo/skeleton";
 import { GeoUpgradeDialog } from "@/components/billing/geo-upgrade-dialog";
@@ -14,11 +13,14 @@ import { EmptyStateAnalyticsPreview } from "@/components/empty-state-preview";
 import { PageContainer } from "@/components/layout/container";
 import { useOrganizationsContext } from "@/components/providers/organization-provider";
 import { PAYWALL_KINDS } from "@/constants/analytics-events";
+import { FEATURED_PLAN_TIER } from "@/constants/billing";
 import { localStorageKeys } from "@/constants/storage";
 import { trackEvent } from "@/lib/analytics/posthog-client";
 import { toAnalyticsRoute } from "@/lib/analytics/route";
-import { useHasGeoFeature } from "@/lib/hooks/use-plan";
+import { useGeoAccess } from "@/lib/hooks/use-geo-access";
+import { usePaywallVariant } from "@/lib/hooks/use-paywall-variant";
 import { pickSidebarMode } from "@/lib/hooks/use-sidebar-mode";
+import { usePathname, useRouter } from "@/lib/navigation";
 import type { GeoUpgradeGateProps } from "@/types/components/geo";
 import { sidebarRouteFromPathname } from "@/utils/nav";
 
@@ -30,6 +32,7 @@ function subscribeToStorage(callback: () => void) {
 export function GeoUpgradeGate({
   slug,
   children,
+  initialAccess,
   fallback,
 }: GeoUpgradeGateProps) {
   const t = useTranslations("geo.geoUpgradeGate");
@@ -42,9 +45,11 @@ export function GeoUpgradeGate({
       ? activeOrganization
       : getOrganization(slug)
     )?.id ?? "";
-  const { isLocked, isLoading, isUnavailable, isFetching, refetch } =
-    useHasGeoFeature();
+  const { level, isLoading, isUnavailable, isFetching, refetch } =
+    useGeoAccess(organizationId);
+  const isLocked = level === "locked";
   const route = toAnalyticsRoute(pathname, slug);
+  const paywall = usePaywallVariant();
   const [dismissedOrganizationId, setDismissedOrganizationId] = useState<
     string | null
   >(null);
@@ -68,10 +73,11 @@ export function GeoUpgradeGate({
     () => true
   );
   const dialogOpen =
-    isLocked &&
     Boolean(organizationId) &&
     (reopenedOrganizationId === organizationId ||
-      (dismissedOrganizationId !== organizationId && !dismissedInStorage));
+      (isLocked &&
+        dismissedOrganizationId !== organizationId &&
+        !dismissedInStorage));
   const shownForOrganizationRef = useRef<string | null>(null);
   const navigateAfterCloseRef = useRef(false);
 
@@ -83,35 +89,41 @@ export function GeoUpgradeGate({
     trackEvent(POSTHOG_EVENTS.PAYWALL_SHOWN, {
       kind: PAYWALL_KINDS.GEO_LOCKED,
       route,
+      plan_shown: FEATURED_PLAN_TIER,
+      paywall_variant: paywall.variant,
     });
-  }, [dialogOpen, organizationId, route]);
+  }, [dialogOpen, organizationId, paywall.variant, route]);
 
   if (isLoading) {
-    return fallback ?? <GeoPageSkeleton />;
+    return initialAccess && initialAccess !== "locked"
+      ? children
+      : (fallback ?? <GeoPageSkeleton />);
   }
 
   if (isUnavailable) {
     return (
-      <PageContainer className="flex flex-1 flex-col gap-4 p-6">
-        <p className="text-muted-foreground text-sm" role="status">
-          {t("verifyFailed")}
-        </p>
-        <Button
-          className="w-fit"
-          disabled={isFetching}
-          onClick={() => {
-            void refetch();
-          }}
-          type="button"
-          variant="outline"
-        >
-          {tCommon("actions.tryAgain")}
-        </Button>
+      <PageContainer className="flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
+        <div className="w-full space-y-4 px-4 lg:px-6">
+          <p className="text-muted-foreground text-sm" role="status">
+            {t("verifyFailed")}
+          </p>
+          <Button
+            className="w-fit"
+            disabled={isFetching}
+            onClick={() => {
+              void refetch();
+            }}
+            type="button"
+            variant="outline"
+          >
+            {tCommon("actions.tryAgain")}
+          </Button>
+        </div>
       </PageContainer>
     );
   }
 
-  if (!isLocked) {
+  if (level === "full") {
     return children;
   }
 
@@ -131,11 +143,53 @@ export function GeoUpgradeGate({
     if (wasReopened) {
       return;
     }
-    // The org root restores a stored "geo" mode by redirecting straight back
-    // here, which would reopen this paywall in a loop. Switch the sidebar to
-    // Studio first so the redirect lets the user land on the Studio home.
     pickSidebarMode("studio", sidebarRouteFromPathname(pathname));
     navigateAfterCloseRef.current = true;
+  }
+
+  const dialog = (
+    <GeoUpgradeDialog
+      onOpenChangeComplete={(open) => {
+        if (!open && navigateAfterCloseRef.current) {
+          navigateAfterCloseRef.current = false;
+          router.push(`/${slug}`);
+        }
+      }}
+      onOpenChange={(open) => {
+        if (!open) {
+          handleDismiss();
+        }
+      }}
+      open={dialogOpen}
+      slug={slug}
+    />
+  );
+
+  if (level === "readOnly") {
+    return (
+      <>
+        <div className="px-4 pt-4 lg:px-6">
+          <div className="flex items-center gap-3 rounded-lg border px-3 py-2">
+            <HugeiconsIcon
+              className="text-muted-foreground size-4 shrink-0"
+              icon={SquareLock02Icon}
+            />
+            <p className="text-muted-foreground flex-1 text-sm text-pretty">
+              {t("readOnly")}
+            </p>
+            <Button
+              onClick={() => setReopenedOrganizationId(organizationId)}
+              size="sm"
+              type="button"
+            >
+              {tCommon("actions.upgrade")}
+            </Button>
+          </div>
+        </div>
+        {children}
+        {dialog}
+      </>
+    );
   }
 
   return (
@@ -169,21 +223,7 @@ export function GeoUpgradeGate({
           </Button>
         </div>
       </div>
-      <GeoUpgradeDialog
-        onOpenChangeComplete={(open) => {
-          if (!open && navigateAfterCloseRef.current) {
-            navigateAfterCloseRef.current = false;
-            router.push(`/${slug}`);
-          }
-        }}
-        onOpenChange={(open) => {
-          if (!open) {
-            handleDismiss();
-          }
-        }}
-        open={dialogOpen}
-        slug={slug}
-      />
+      {dialog}
     </PageContainer>
   );
 }

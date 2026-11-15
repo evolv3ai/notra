@@ -1,7 +1,10 @@
 "use client";
 
+import {
+  AnalyticsUpIcon,
+  FilterHorizontalIcon,
+} from "@hugeicons/core-free-icons";
 import { useQuery } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
 import {
   parseAsInteger,
   parseAsString,
@@ -9,17 +12,20 @@ import {
   useQueryState,
 } from "nuqs";
 import { useState } from "react";
+import type { SortState } from "ui/table";
+import { normalizePageSize } from "ui/table/lib";
+import { useTranslations } from "use-intl";
 
 import { useLogColumns } from "@/app/(dashboard)/[slug]/settings/logs/columns";
-import { DataTable } from "@/app/(dashboard)/[slug]/settings/logs/data-table";
+import { LogsDataTable } from "@/app/(dashboard)/[slug]/settings/logs/data-table";
 import { LogsPageSkeleton } from "@/app/(dashboard)/[slug]/settings/logs/skeleton";
 import { Button } from "@/components/button";
 import { LogDetailsSheet } from "@/components/logs/log-details-sheet";
 import { LogFilters } from "@/components/logs/log-filters";
 import { LogRetentionHint } from "@/components/logs/log-retention-hint";
-import type { SortState } from "@/components/motion/table/types";
 import { useOrganizationsContext } from "@/components/providers/organization-provider";
 import { SettingsPane } from "@/components/settings/settings-pane";
+import { SettingsTableEmpty } from "@/components/settings/settings-table-empty";
 import {
   SOURCE_VALUES,
   STATUS_VALUES,
@@ -37,6 +43,11 @@ export function LogsSettingsPane() {
   const { activeOrganization } = useOrganizationsContext();
   const organizationId = activeOrganization?.id ?? "";
   const [page, setPage] = useQueryState("page", parseAsInteger.withDefault(1));
+  const [rawPageSize, setPageSize] = useQueryState(
+    "pageSize",
+    parseAsInteger.withDefault(LOGS_PAGE_SIZE)
+  );
+  const pageSize = normalizePageSize(rawPageSize, LOGS_PAGE_SIZE);
   const [search, setSearch] = useQueryState("q", parseAsString.withDefault(""));
   const [source, setSource] = useQueryState(
     "source",
@@ -68,7 +79,7 @@ export function LogsSettingsPane() {
   });
   const result = getLogPage(logsQuery.data?.logs ?? [], {
     page,
-    pageSize: LOGS_PAGE_SIZE,
+    pageSize,
     source,
     status,
     search,
@@ -117,7 +128,7 @@ export function LogsSettingsPane() {
       ) : null}
       {organizationId && logsQuery.isPending ? <LogsPageSkeleton /> : null}
       {logsQuery.data ? (
-        <DataTable
+        <LogsDataTable
           columns={columns}
           data={result.logs}
           getRowId={(log) => log.id}
@@ -127,23 +138,29 @@ export function LogsSettingsPane() {
             resetPage();
           }}
           emptyState={
-            filtersActive
-              ? {
-                  title: t("noMatchTitle"),
-                  description: t("noMatchDescription"),
-                  actionLabel: t("resetFilters"),
-                  onActionClick: resetFilters,
-                }
-              : {
-                  title: t("emptyTitle"),
-                  description: t("emptyDescription"),
-                }
+            filtersActive ? (
+              <SettingsTableEmpty
+                description={t("noMatchDescription")}
+                icon={FilterHorizontalIcon}
+                title={t("noMatchTitle")}
+              >
+                <Button onClick={resetFilters} size="sm" variant="outline">
+                  {t("resetFilters")}
+                </Button>
+              </SettingsTableEmpty>
+            ) : (
+              <SettingsTableEmpty
+                description={t("emptyDescription")}
+                icon={AnalyticsUpIcon}
+                title={t("emptyTitle")}
+              />
+            )
           }
           onPageChange={setPage}
           onRowClick={(log) => setSelection({ organizationId, log })}
           page={result.page}
-          pageSize={LOGS_PAGE_SIZE}
-          totalPages={result.totalPages}
+          pageSize={pageSize}
+          onPageSizeChange={setPageSize}
           totalCount={result.totalCount}
           isLoading={logsQuery.isFetching && Boolean(logsQuery.data)}
         />

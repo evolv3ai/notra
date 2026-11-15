@@ -4,17 +4,18 @@ import type {
   WebhookEventType,
 } from "@notra/schemas/dashboard/integrations";
 
-export type TriggerSourceType =
+type TriggerSourceType =
   | "github_webhook"
   | "linear_webhook"
   | "cron"
   | "manual";
 
-export interface TriggerTarget {
+interface TriggerTarget {
   repositoryIds: string[];
+  linearIntegrationIds?: string[];
 }
 
-export interface TriggerSourceConfig {
+interface TriggerSourceConfig {
   eventTypes?: WebhookEventType[];
   includePreReleases?: boolean;
   ignoreCommitPatterns?: string[];
@@ -29,10 +30,11 @@ export interface TriggerSourceConfig {
   };
 }
 
-export interface TriggerOutputConfig {
+interface TriggerOutputConfig {
   publishDestination?: "webflow" | "framer" | "custom";
   brandVoiceId?: string;
   instructions?: string;
+  notify?: { slack: boolean; email: boolean };
 }
 
 export interface Trigger {

@@ -16,7 +16,7 @@ import { type RefObject, useImperativeHandle } from "react";
 
 import { EDITOR_TRANSFORMERS } from "../markdown-transformers";
 
-export interface SelectionInfo {
+interface SelectionInfo {
   text: string;
   anchor: { offset: number };
   focus: { offset: number };

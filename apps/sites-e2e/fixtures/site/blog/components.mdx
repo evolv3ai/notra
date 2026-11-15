@@ -1,0 +1,57 @@
+---
+title: "Every built-in component"
+description: "The E2E content fixture: each built-in renders and behaves."
+date: 2026-10-02
+author: jan
+tags: [components]
+---
+
+<SiteAreas />
+
+<ThemeToggle />
+
+<Info title="Info callout">Info body text.</Info>
+
+<Warning title="Warning callout">Warning body text.</Warning>
+
+<Check title="Check callout">Check body text.</Check>
+
+<Danger title="Danger callout">Danger body text.</Danger>
+
+<Callout variant="tip" title="Generic callout">Callout body text.</Callout>
+
+<Columns cols={2}>
+  <Card title="Left column card">Left column body.</Card>
+  <Card title="Right column card">Right column body.</Card>
+</Columns>
+
+<AccordionGroup>
+  <Accordion title="First question">First answer text.</Accordion>
+  <Accordion title="Second question">Second answer text.</Accordion>
+</AccordionGroup>
+
+<Tabs>
+  <Tab title="First tab">First tab body.</Tab>
+  <Tab title="Second tab">Second tab body.</Tab>
+</Tabs>
+
+<Steps>
+  <Step title="Install the CLI">Step one body.</Step>
+  <Step title="Publish the site">Step two body.</Step>
+</Steps>
+
+<CodeGroup>
+
+```bash npm
+npm install acme-cloud
+```
+
+```bash bun
+bun add acme-cloud
+```
+
+</CodeGroup>
+
+<Video src="/images/demo.mp4" poster="/images/cover-flow.svg" title="Acme demo video" />
+
+<YouTube id="dQw4w9WgXcQ" title="Acme on YouTube" />

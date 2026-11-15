@@ -18,17 +18,33 @@ export interface SkillCardProps {
 
 export type SkillEditorView = (typeof SKILL_EDITOR_VIEWS)[number];
 
+export interface SkillUpstreamStatus {
+  version: number;
+  latestVersion: number;
+  customized: boolean;
+}
+
+interface SkillUpstreamDetail extends SkillUpstreamStatus {
+  latest: {
+    description: string;
+    content: string;
+    note: string | null;
+    publishedAt: string;
+  };
+}
+
 export interface SkillListItem {
   id: string;
   name: string;
   description: string;
   isSystem: boolean;
   updatedAt: string | Date;
+  upstream?: SkillUpstreamStatus | null;
 }
 
 export type SkillSortKey = (typeof SKILL_SORT_KEYS)[number];
 
-export type SkillSortDirection = "asc" | "desc";
+type SkillSortDirection = "asc" | "desc";
 
 export interface SkillSortState {
   key: SkillSortKey;
@@ -69,4 +85,14 @@ export interface SkillDeleteDialogProps {
 export interface SkillUnsavedChangesToastProps {
   onDiscard: () => void;
   onSave: () => void;
+}
+
+export interface SkillUpdateCardProps {
+  upstream: SkillUpstreamDetail;
+  description: string;
+  content: string;
+  disabled: boolean;
+  pending: boolean;
+  onKeep: () => void;
+  onApply: () => void;
 }

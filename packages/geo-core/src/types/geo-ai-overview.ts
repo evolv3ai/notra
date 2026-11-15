@@ -1,14 +1,12 @@
-/** Locale pair SerpApi's Google engine expects (`hl` language, `gl` country). */
+import type { GeoAnswerSource } from "./geo";
+
+/** Google locale pair (`hl` language, `gl` country). */
 export interface GeoAiOverviewLocale {
   hl: string;
   gl: string;
 }
 
-export interface GeoAiOverviewSource {
-  title: string;
-  url: string;
-  domain: string;
-}
+export type GeoAiOverviewSource = GeoAnswerSource;
 
 /**
  * Parsed Google AI Overview only. Organic results and other SERP modules are
@@ -31,9 +29,3 @@ export type GeoAiOverviewParse =
       status: "invalid";
       reason: string;
     };
-
-export interface GeoAiOverviewResult {
-  present: boolean;
-  text: string;
-  sources: GeoAiOverviewSource[];
-}

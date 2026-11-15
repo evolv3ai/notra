@@ -1,4 +1,5 @@
-import { Effect } from "effect";
+import { isDemoMode } from "@notra/utils/demo-mode";
+import { Duration, Effect, Schedule } from "effect";
 
 import {
   bumpAnalyticsVersions,
@@ -6,6 +7,8 @@ import {
 } from "../cache/query-cache";
 import type {
   PurgeGeoProjectInput,
+  PurgeOrganizationInput,
+  PurgeSiteInput,
   PurgeSocialAccountInput,
 } from "../types/purge";
 
@@ -16,8 +19,22 @@ const ACCOUNT_SCOPED_DATASOURCES = [
   "social_post_stats",
   "social_post_stats_latest",
   "social_account_stats_latest",
+  "social_post_sources",
 ];
-const GEO_DATASOURCES = ["geo_traffic_events"];
+// Rollups are MV targets: deleting from geo_traffic_events does not reach them.
+const GEO_DATASOURCES = [
+  "geo_traffic_events",
+  "geo_traffic_daily",
+  "geo_traffic_pages_by_host_daily",
+];
+const WEB_DATASOURCES = [
+  "web_page_views",
+  "web_page_engagement",
+  "web_pages_daily",
+  "web_sources_daily",
+  "web_audience_daily",
+];
+const MCP_DATASOURCES = ["mcp_events", "mcp_daily"];
 
 const JOB_POLL_INTERVAL_MS = 1000;
 const JOB_POLL_MAX_ATTEMPTS = 60;
@@ -44,36 +61,66 @@ function isRetryableJobPollError(error: unknown): boolean {
   );
 }
 
-async function waitForJob(jobId: string): Promise<void> {
-  for (let attempt = 0; attempt < JOB_POLL_MAX_ATTEMPTS; attempt += 1) {
-    try {
+type TinybirdJobPoll = "done" | "pending";
+
+function toError(cause: unknown): Error {
+  return cause instanceof Error ? cause : new Error(String(cause));
+}
+
+/**
+ * One job status read. Timed-out or aborted reads count as "still pending" so
+ * a slow poll costs an attempt instead of failing the purge.
+ */
+function pollJob(jobId: string): Effect.Effect<TinybirdJobPoll, Error> {
+  return Effect.tryPromise({
+    try: async (signal): Promise<TinybirdJobPoll> => {
       const response = await fetch(`${tinybirdBaseUrl()}/v0/jobs/${jobId}`, {
         headers: { Authorization: `Bearer ${process.env.TINYBIRD_TOKEN}` },
-        signal: AbortSignal.timeout(TINYBIRD_READ_TIMEOUT_MS),
+        signal: AbortSignal.any([
+          signal,
+          AbortSignal.timeout(TINYBIRD_READ_TIMEOUT_MS),
+        ]),
       });
       if (!response.ok) {
         throw new Error(`Tinybird job poll failed (${response.status})`);
       }
       const job: { status?: string; error?: string } = await response.json();
-      if (job.status === "done") {
-        return;
-      }
       if (job.status === "error") {
         throw new Error(
           `Tinybird delete job failed: ${job.error ?? "unknown"}`
         );
       }
-    } catch (error) {
-      if (!isRetryableJobPollError(error)) {
-        throw error;
-      }
-    }
-    await new Promise((resolve) => setTimeout(resolve, JOB_POLL_INTERVAL_MS));
-  }
-  throw new Error("Tinybird delete job timed out");
+      return job.status === "done" ? "done" : "pending";
+    },
+    catch: (cause) => cause,
+  }).pipe(
+    Effect.catchIf(isRetryableJobPollError, () =>
+      Effect.succeed<TinybirdJobPoll>("pending")
+    ),
+    Effect.mapError(toError)
+  );
 }
 
-async function runDelete(datasource: string, condition: string): Promise<void> {
+/** Polls the job every second, up to {@link JOB_POLL_MAX_ATTEMPTS} reads. */
+function waitForJob(jobId: string): Effect.Effect<void, Error> {
+  return pollJob(jobId).pipe(
+    Effect.repeat({
+      schedule: Schedule.spaced(Duration.millis(JOB_POLL_INTERVAL_MS)),
+      times: JOB_POLL_MAX_ATTEMPTS - 1,
+      until: (status) => status === "done",
+    }),
+    Effect.flatMap((status) =>
+      status === "done"
+        ? Effect.void
+        : Effect.fail(new Error("Tinybird delete job timed out"))
+    )
+  );
+}
+
+async function submitDelete(
+  datasource: string,
+  condition: string
+): Promise<string | undefined> {
   const response = await fetch(
     `${tinybirdBaseUrl()}/v0/datasources/${datasource}/delete`,
     {
@@ -93,10 +140,7 @@ async function runDelete(datasource: string, condition: string): Promise<void> {
     );
   }
   const payload: { job_id?: string; id?: string } = await response.json();
-  const jobId = payload.job_id ?? payload.id;
-  if (jobId) {
-    await waitForJob(jobId);
-  }
+  return payload.job_id ?? payload.id;
 }
 
 function deleteFromDatasource(
@@ -104,10 +148,42 @@ function deleteFromDatasource(
   condition: string
 ): Effect.Effect<void, Error> {
   return Effect.tryPromise({
-    try: () => runDelete(datasource, condition),
-    catch: (cause) =>
-      cause instanceof Error ? cause : new Error(String(cause)),
-  });
+    try: () => submitDelete(datasource, condition),
+    catch: toError,
+  }).pipe(Effect.flatMap((jobId) => (jobId ? waitForJob(jobId) : Effect.void)));
+}
+
+/**
+ * Deletes matching rows from every datasource. `waitForJobs` also waits for
+ * each Tinybird job so a failed job fails the purge and its caller can retry.
+ */
+async function submitDeletes(
+  datasources: string[],
+  condition: string,
+  waitForJobs: boolean
+): Promise<void> {
+  if (!process.env.TINYBIRD_TOKEN) {
+    if (process.env.NODE_ENV === "production" && !isDemoMode()) {
+      throw new Error("TINYBIRD_TOKEN is not set, deleted analytics remain");
+    }
+    return;
+  }
+  const results = await Promise.allSettled(
+    datasources.map((datasource) =>
+      waitForJobs
+        ? Effect.runPromise(deleteFromDatasource(datasource, condition))
+        : submitDelete(datasource, condition)
+    )
+  );
+  const errors = results.flatMap((result) =>
+    result.status === "rejected" ? [result.reason] : []
+  );
+  if (errors.length > 0) {
+    throw new AggregateError(
+      errors,
+      `Tinybird delete failed on ${errors.length} of ${datasources.length} datasources`
+    );
+  }
 }
 
 export function purgeSocialAccountData(
@@ -118,9 +194,11 @@ export function purgeSocialAccountData(
   }
   const condition = `organization_id = '${sanitize(input.organizationId)}' AND provider = '${sanitize(input.provider)}' AND provider_account_id = '${sanitize(input.providerAccountId)}'`;
   const program = Effect.gen(function* () {
-    for (const datasource of ACCOUNT_SCOPED_DATASOURCES) {
-      yield* deleteFromDatasource(datasource, condition);
-    }
+    yield* Effect.forEach(
+      ACCOUNT_SCOPED_DATASOURCES,
+      (datasource) => deleteFromDatasource(datasource, condition),
+      { discard: true }
+    );
     yield* Effect.tryPromise(() =>
       bumpAnalyticsVersions("social", [input.organizationId])
     );
@@ -136,17 +214,57 @@ export function purgeGeoProjectData(
   }
   const condition = `organization_id = '${sanitize(input.organizationId)}' AND project_id = '${sanitize(input.projectId)}'`;
   const program = Effect.gen(function* () {
-    for (const datasource of GEO_DATASOURCES) {
-      yield* deleteFromDatasource(datasource, condition);
-    }
-    // The geo scope is TTL-cached without a version to bump; advancing the
-    // purge generation orphans every entry written before the deletion,
-    // including writes from in-flight pre-purge reads that land afterwards.
-    // A failed bump fails the purge: otherwise deleted rows would stay
-    // readable until the next flush window.
+    yield* Effect.forEach(
+      GEO_DATASOURCES,
+      (datasource) => deleteFromDatasource(datasource, condition),
+      { discard: true }
+    );
     yield* Effect.tryPromise(() =>
       advancePurgeGeneration("geo", input.organizationId)
     );
   });
   return Effect.runPromise(program);
+}
+
+/**
+ * Removes every GEO and web analytics row of a deleted project. The immediate
+ * purge only submits the delete jobs: nothing reads a deleted project, so the
+ * request does not wait for Tinybird. The delayed purge waits for them.
+ */
+export function purgeDeletedProjectAnalytics(
+  input: PurgeGeoProjectInput,
+  waitForJobs = false
+): Promise<void> {
+  return submitDeletes(
+    [...GEO_DATASOURCES, ...WEB_DATASOURCES, ...MCP_DATASOURCES],
+    `organization_id = '${sanitize(input.organizationId)}' AND project_id = '${sanitize(input.projectId)}'`,
+    waitForJobs
+  );
+}
+
+export function purgeDeletedOrganizationAnalytics(
+  input: PurgeOrganizationInput,
+  waitForJobs = false
+): Promise<void> {
+  return submitDeletes(
+    [
+      ...ACCOUNT_SCOPED_DATASOURCES,
+      ...GEO_DATASOURCES,
+      ...WEB_DATASOURCES,
+      ...MCP_DATASOURCES,
+    ],
+    `organization_id = '${sanitize(input.organizationId)}'`,
+    waitForJobs
+  );
+}
+
+export function purgeDeletedSiteAnalytics(
+  input: PurgeSiteInput,
+  waitForJobs = false
+): Promise<void> {
+  return submitDeletes(
+    [...GEO_DATASOURCES, ...WEB_DATASOURCES],
+    `organization_id = '${sanitize(input.organizationId)}' AND site_id = '${sanitize(input.siteId)}'`,
+    waitForJobs
+  );
 }

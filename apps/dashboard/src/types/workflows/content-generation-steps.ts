@@ -72,6 +72,7 @@ export interface TrackContentOutcomeInput {
   source: DatabuddyWorkflowSource;
   postIds?: string[];
   reason?: string;
+  errorCode?: string;
   logPrefix: string;
 }
 
@@ -85,6 +86,12 @@ export interface NotificationData {
   ownerEmails: string[];
   organizationName: string;
   organizationSlug: string;
+}
+
+export interface ContentCreatedSlackInput {
+  organizationId: string;
+  automationName: string;
+  posts: Array<{ postId: string; title: string }>;
 }
 
 export interface EnqueueDigestInput {

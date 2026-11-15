@@ -30,7 +30,7 @@ function feedbackMdIssue(
   };
 }
 
-export function evaluateFeedbackMarkdown(
+function evaluateFeedbackMarkdown(
   status: number,
   contentType: string | null,
   body: string

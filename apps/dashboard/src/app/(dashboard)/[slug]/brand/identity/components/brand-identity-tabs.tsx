@@ -6,7 +6,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@notra/ui/components/ui/tabs";
-import { useTranslations } from "next-intl";
+import { useTranslations } from "use-intl";
 
 import type { BrandIdentityTabsProps, BrandTab } from "@/types/brand-identity";
 
@@ -17,6 +17,7 @@ import { SitemapList } from "./sitemap-list";
 
 export function BrandIdentityTabs({
   activeTab,
+  toolbar,
   addReferenceOpen,
   addSitemapOpen,
   initialData,
@@ -37,9 +38,9 @@ export function BrandIdentityTabs({
       onValueChange={(value) => onActiveTabChange(value as BrandTab)}
       value={activeTab}
     >
-      <div className="flex min-w-0 items-center justify-between gap-4">
-        <div className="min-w-0 overflow-x-auto pb-2">
-          <TabsList variant="line">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4">
+        <div className="max-w-full min-w-0 overflow-x-auto pb-2">
+          <TabsList aria-label={t("label")}>
             <TabsTrigger value="identity">
               {tCommon("labels.companyInfo")}
             </TabsTrigger>
@@ -52,15 +53,18 @@ export function BrandIdentityTabs({
             </TabsTrigger>
           </TabsList>
         </div>
-        {activeTab === "identity" && isSaving ? (
-          <span
-            aria-live="polite"
-            className="text-muted-foreground shrink-0 text-xs"
-            role="status"
-          >
-            {tStates("saving")}
-          </span>
-        ) : null}
+        <div className="flex min-w-0 flex-wrap items-center gap-3 pb-2">
+          {activeTab === "identity" && isSaving ? (
+            <span
+              aria-live="polite"
+              className="text-muted-foreground text-xs"
+              role="status"
+            >
+              {tStates("saving")}
+            </span>
+          ) : null}
+          {toolbar}
+        </div>
       </div>
 
       <TabsContent className="mt-6" value="identity">

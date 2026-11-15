@@ -16,7 +16,6 @@ export const chatStreamResumeSchema = z.object({
         return z.NEVER;
       }
     })
-    // Match the message ID accepted by uiMessageSchema on the chat POST route.
     .pipe(z.string().min(1).max(200))
     .nullable(),
   cursor: z

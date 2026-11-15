@@ -11,7 +11,7 @@ export interface OpencodeStoryActivity {
   duration?: string;
 }
 
-export interface OpencodeStoryTurn {
+interface OpencodeStoryTurn {
   id: string;
   prompt: string;
   /** Activity groups. Lines inside a group stack without a gap. */

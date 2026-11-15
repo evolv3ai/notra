@@ -1,8 +1,8 @@
 "use client";
 
-import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { usePathname } from "@/lib/navigation";
 import type {
   RightPanelContextValue,
   RightPanelId,
@@ -11,6 +11,7 @@ import type {
 const INITIAL_HAS_OPENED: Record<RightPanelId, boolean> = {
   agent: false,
   content: false,
+  preview: false,
 };
 
 export function useRightPanelState(): RightPanelContextValue {

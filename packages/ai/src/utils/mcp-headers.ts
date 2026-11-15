@@ -1,4 +1,8 @@
-import { decryptToken, encryptToken } from "../crypto/token-encryption";
+import {
+  decryptToken,
+  encryptToken,
+} from "@notra/db/utils/integration-encryption";
+
 import type { McpHeaderMap } from "../types/integrations";
 
 export function encryptMcpHeaders(headers: McpHeaderMap = {}) {

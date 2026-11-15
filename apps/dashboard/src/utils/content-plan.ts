@@ -123,7 +123,7 @@ export function removeAt<T>(items: T[], index: number): T[] {
   return items.filter((_, itemIndex) => itemIndex !== index);
 }
 
-export function anchorFromUrl(url: string): string {
+function anchorFromUrl(url: string): string {
   const trimmed = url.trim();
   if (!trimmed) {
     return "";

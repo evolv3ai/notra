@@ -1,14 +1,14 @@
 import { db } from "@notra/db/drizzle";
 import { organizations, socialConnections, users } from "@notra/db/schema";
+import { encryptToken } from "@notra/db/utils/integration-encryption";
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
-import { getWorkOS } from "@workos-inc/authkit-nextjs";
 import type { User } from "@workos-inc/node";
+import { getWorkOS } from "@workos/authkit-session";
 import { and, eq, inArray } from "drizzle-orm";
 import { Effect } from "effect";
-import { isFreeEmail } from "free-email-domains-list";
-import { isValid as isNotDisposableEmail } from "mailchecker";
 
 import { FIRST_LOGIN_WINDOW_MS } from "@/constants/analytics-events";
+import { runAfterResponse } from "@/lib/after-response";
 import { toAnalyticsAuthMethod } from "@/lib/analytics/auth-method";
 import {
   setPersonProperties,
@@ -18,7 +18,7 @@ import { readRequestHeaders } from "@/lib/analytics/request-headers";
 import { SocialConnectionError, UserSyncError } from "@/lib/auth/errors";
 import { upsertMembership } from "@/lib/auth/membership-upsert";
 import { isWorkOSNotFound } from "@/lib/auth/workos-error";
-import { sendWelcomeEmailAction } from "@/lib/email/actions";
+import { notifyInfoChannel } from "@/lib/slack/info-channel";
 import type {
   OAuthProviderTokens,
   SyncAuthenticatedUserInput,
@@ -140,7 +140,20 @@ const persistSocialConnection = Effect.fn("auth.sync.persistSocialConnection")(
       provider === "github"
         ? yield* fetchGitHubAccountId(tokens.accessToken)
         : "";
-    const accessTokenExpiresAt = toTokenExpiryDate(tokens.expiresAt);
+    const encryptedAccessToken = yield* Effect.try({
+      try: () => encryptToken(tokens.accessToken),
+      catch: (cause) =>
+        new SocialConnectionError({
+          message: "Failed to encrypt social connection token",
+          cause,
+        }),
+    });
+    const connection = {
+      providerAccountId,
+      encryptedAccessToken,
+      scope: tokens.scopes?.join(" ") ?? null,
+      accessTokenExpiresAt: toTokenExpiryDate(tokens.expiresAt),
+    };
 
     yield* Effect.tryPromise({
       try: () =>
@@ -150,21 +163,11 @@ const persistSocialConnection = Effect.fn("auth.sync.persistSocialConnection")(
             id: crypto.randomUUID(),
             userId,
             provider,
-            providerAccountId,
-            accessToken: tokens.accessToken,
-            refreshToken: tokens.refreshToken ?? null,
-            scope: tokens.scopes?.join(" ") ?? null,
-            accessTokenExpiresAt,
+            ...connection,
           })
           .onConflictDoUpdate({
             target: [socialConnections.userId, socialConnections.provider],
-            set: {
-              providerAccountId,
-              accessToken: tokens.accessToken,
-              refreshToken: tokens.refreshToken ?? null,
-              scope: tokens.scopes?.join(" ") ?? null,
-              accessTokenExpiresAt,
-            },
+            set: connection,
           }),
       catch: (cause) =>
         new SocialConnectionError({
@@ -228,6 +231,11 @@ export const ensureLocalUser = Effect.fn("auth.sync.ensureLocalUser")(
       return linked ?? byEmail;
     }
 
+    // Signup-only dependencies (multi-MB domain lists, email templates) load
+    // here, not with the module: every request's auth path imports this file.
+    const { isValid: isNotDisposableEmail } = yield* Effect.promise(
+      () => import("mailchecker")
+    );
     if (!isNotDisposableEmail(workosUser.email)) {
       return yield* Effect.fail(
         new UserSyncError({
@@ -286,11 +294,34 @@ export const ensureLocalUser = Effect.fn("auth.sync.ensureLocalUser")(
 
     yield* linkWorkOSExternalId(workosUser.id, created.id);
     yield* Effect.sync(() => {
-      sendWelcomeEmailAction({ userEmail: created.email });
+      runAfterResponse("[Signup] Welcome email failed", async () => {
+        const [{ sendWelcomeEmail }, { sendOnboardingSlackInvite }] =
+          await Promise.all([
+            import("@/lib/email/send"),
+            import("@/lib/onboarding-agent"),
+          ]);
+        const { invited } = await sendOnboardingSlackInvite({
+          email: created.email,
+        });
+        const { error } = await sendWelcomeEmail({
+          userEmail: created.email,
+          slackInvited: invited,
+        });
+        if (error) {
+          throw new Error(`${error.name}: ${error.message}`);
+        }
+      });
+      runAfterResponse("[BrewContacts] Sync failed", async () => {
+        const { syncBrewContacts } = await import("@/lib/email/brew-contacts");
+        await syncBrewContacts([created.id]);
+      });
     });
 
     const signupMethod = toAnalyticsAuthMethod(authenticationMethod);
     const requestHeaders = yield* Effect.promise(readRequestHeaders);
+    const { isFreeEmail } = yield* Effect.promise(
+      () => import("free-email-domains-list")
+    );
     yield* Effect.sync(() => {
       trackServerEvent({
         event: POSTHOG_EVENTS.SIGNUP_COMPLETED,
@@ -306,6 +337,15 @@ export const ensureLocalUser = Effect.fn("auth.sync.ensureLocalUser")(
         setOnce: {
           signup_method: signupMethod,
           signed_up_at: created.createdAt.toISOString(),
+        },
+      });
+      notifyInfoChannel({
+        emoji: ":wave:",
+        title: "New signup",
+        fields: {
+          Name: created.name,
+          Email: created.email,
+          Method: signupMethod,
         },
       });
     });

@@ -12,9 +12,9 @@ import {
 } from "@notra/ui/components/shared/responsive-dialog";
 import { Input } from "@notra/ui/components/ui/input";
 import { Label } from "@notra/ui/components/ui/label";
-import { useTranslations } from "next-intl";
 import { type KeyboardEvent, useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { useCreateSitemap } from "@/lib/hooks/use-brand-sitemaps";
@@ -85,7 +85,14 @@ export function AddSitemapDialog({
   };
 
   const handleKeyDown = (event: KeyboardEvent) => {
-    if (event.key === "Enter" && !createSitemap.isPending) {
+    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) {
+      return;
+    }
+    if (
+      event.key === "Enter" &&
+      !(event.metaKey || event.ctrlKey) &&
+      !createSitemap.isPending
+    ) {
       event.preventDefault();
       handleSubmit();
     }
@@ -156,6 +163,7 @@ export function AddSitemapDialog({
             disabled={!trimmedUrl || isOffHost}
             loading={createSitemap.isPending}
             onClick={handleSubmit}
+            data-dialog-confirm
           >
             {tBrandShared("addSitemap")}
           </Button>

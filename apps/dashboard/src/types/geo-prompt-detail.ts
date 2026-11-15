@@ -66,7 +66,7 @@ export interface PromptAnswerLanguageBarProps {
   onSelect: (language: string) => void;
 }
 
-export interface PromptAnswerTagsFooterProps {
+export interface PromptAnswerDetailsProps {
   tagsInputId: string;
   row: GeoPromptTableRow;
   tags: string[];
@@ -92,6 +92,7 @@ export interface PromptAnswerHeaderProps {
   active: GeoPromptResultSummary | null;
   view: GeoPromptReceiptView;
   onSelectEngine: (engine: string, direction: number) => void;
+  onPrefetchEngine: (engine: string) => void;
   onSelectView: (view: GeoPromptReceiptView) => void;
 }
 

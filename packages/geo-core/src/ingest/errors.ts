@@ -1,13 +1,23 @@
 import { Data } from "effect";
 import type { core } from "zod";
 
+import type {
+  GeoIngestAuthContext,
+  GeoIngestAuthLookupStage,
+  GeoIngestAuthRejectionReason,
+} from "../types/ingest";
+
 export class GeoIngestMissingTokenError extends Data.TaggedError(
   "GeoIngestMissingToken"
 )<Record<string, never>> {}
 
 export class GeoIngestInvalidTokenError extends Data.TaggedError(
   "GeoIngestInvalidToken"
-)<Record<string, never>> {}
+)<
+  GeoIngestAuthContext & {
+    readonly authReason: GeoIngestAuthRejectionReason;
+  }
+> {}
 
 export class GeoIngestRateLimitedError extends Data.TaggedError(
   "GeoIngestRateLimited"
@@ -27,9 +37,16 @@ export class GeoIngestUnparseableUrlError extends Data.TaggedError(
   readonly url: string;
 }> {}
 
-export class GeoIngestFailedError extends Data.TaggedError("GeoIngestFailed")<{
-  readonly cause: unknown;
-}> {}
+export class GeoIngestPayloadTooLargeError extends Data.TaggedError(
+  "GeoIngestPayloadTooLarge"
+)<Record<string, never>> {}
+
+export class GeoIngestFailedError extends Data.TaggedError("GeoIngestFailed")<
+  GeoIngestAuthContext & {
+    readonly cause: unknown;
+    readonly stage?: GeoIngestAuthLookupStage;
+  }
+> {}
 
 export type GeoIngestError =
   | GeoIngestMissingTokenError
@@ -37,4 +54,5 @@ export type GeoIngestError =
   | GeoIngestRateLimitedError
   | GeoIngestInvalidPayloadError
   | GeoIngestUnparseableUrlError
+  | GeoIngestPayloadTooLargeError
   | GeoIngestFailedError;

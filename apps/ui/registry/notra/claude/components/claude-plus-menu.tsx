@@ -12,6 +12,8 @@ import {
 import type { ComponentType, ReactNode, SVGProps } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Kbd, KbdGroup } from "@/components/ui/kbd";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,9 +24,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Kbd, KbdGroup } from "@/components/ui/kbd";
-
+} from "../../dropdown-menu/components/dropdown-menu";
 import {
   CLAUDE_MENU_ITEM_CLASS,
   CLAUDE_MENU_SURFACE_CLASS,

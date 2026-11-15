@@ -1,6 +1,9 @@
-import { EngineIcon } from "@notra/ui/components/geo/engine-icon";
 import { PurposeBadge } from "@notra/ui/components/geo/purpose-badge";
 import { StatTiles } from "@notra/ui/components/geo/stat-tiles";
+import { cn } from "@notra/ui/lib/utils";
+
+import { LandingEngineIcon } from "@/components/landing/landing-engine-icon";
+import { MockFrame } from "@/components/landing/mock-frame";
 import {
   Table,
   TableBody,
@@ -8,10 +11,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@notra/ui/components/ui/table";
-import { cn } from "@notra/ui/lib/utils";
-
-import { MockFrame } from "@/components/landing/mock-frame";
+} from "@/components/marketing-table";
 import {
   FEATURES_TABLE_OPTIONAL_COL,
   FEATURES_TRAFFIC_FRAME,
@@ -31,7 +31,7 @@ export function FeaturesCardTraffic() {
       subhead={FEATURES_TRAFFIC_FRAME.subhead}
     >
       <StatTiles
-        className="border-border border-b"
+        className="border-border grid-cols-3 divide-x divide-y-0 border-b max-sm:[&_span]:text-xl max-sm:[&>div]:px-3 max-sm:[&>div]:py-3"
         tiles={FEATURES_TRAFFIC_KPIS.map((kpi) => ({
           key: kpi.id,
           label: kpi.label,
@@ -72,7 +72,7 @@ export function FeaturesCardTraffic() {
             <TableRow key={row.id}>
               <TableCell className="min-w-0 overflow-hidden py-3">
                 <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
-                  <EngineIcon className="shrink-0" engine={row.engine} />
+                  <LandingEngineIcon className="shrink-0" engine={row.engine} />
                   <span className="truncate">{row.source}</span>
                 </span>
               </TableCell>

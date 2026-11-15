@@ -1,5 +1,6 @@
 import type {
   FallbackReason,
+  GatewayCheckContext,
   GatewayId,
   PlanLookup,
   ResolverContext,
@@ -16,28 +17,17 @@ import {
   NoCompliantRouteError,
   UnsupportedModelError,
 } from "./errors";
-import { decideGateway, otherGateway } from "./policy";
+import { decideGateway, fallbackGateways } from "./policy";
 
-export async function lookupPlan(
+async function lookupPlan(
   context: ResolverContext,
   organizationId: string
 ): Promise<PlanLookup> {
-  const cached = await context.planCache.get(organizationId);
-  if (cached) {
-    return { plan: cached, source: "cache" };
-  }
-
-  try {
-    const plan = await context.resolvePlan(organizationId);
-    await context.planCache.set(organizationId, plan, context.planCacheTtlMs);
-    return { plan, source: "resolver" };
-  } catch (error) {
-    context.logger.warn("ai.router.plan_lookup_failed", {
-      organizationId,
-      error: error instanceof Error ? error.message : String(error),
-    });
+  const result = await context.lookupPlan(organizationId);
+  if (!result) {
     return { plan: "free", source: "default" };
   }
+  return { plan: result.value, source: result.source };
 }
 
 /**
@@ -45,7 +35,7 @@ export async function lookupPlan(
  * caller choice wins; otherwise the organization's entitlement decides.
  * Requests without an organization and lookup failures fail closed.
  */
-export async function lookupZdrMode(
+async function lookupZdrMode(
   context: ResolverContext,
   request: RouteRequest
 ): Promise<ZdrMode> {
@@ -56,29 +46,22 @@ export async function lookupZdrMode(
   if (!organizationId) {
     return "required";
   }
-  const cached = await context.zdrCache.get(organizationId);
-  if (cached) {
-    return cached;
-  }
-  try {
-    const mode = await context.resolveZdr(organizationId);
-    await context.zdrCache.set(organizationId, mode, context.planCacheTtlMs);
-    return mode;
-  } catch (error) {
-    context.logger.warn("ai.router.zdr_lookup_failed", {
-      organizationId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return "required";
-  }
+  const result = await context.lookupZdr(organizationId);
+  return result?.value ?? "required";
 }
 
-function getUsableAdapter(
-  context: ResolverContext,
+/**
+ * Whether `gateway` can serve the request: configured, serves the model and
+ * its provider-defined tools, not marked unavailable, and privacy compliant.
+ * Shared by route resolution and the runtime fallback after a failed call.
+ */
+export function getUsableAdapter(
+  context: GatewayCheckContext,
   gateway: GatewayId,
-  modelId: string,
-  organizationId: string | undefined
+  request: Pick<RouteRequest, "modelId" | "organizationId" | "toolIds">,
+  zdr: ZdrMode
 ): UsableAdapter | { unavailable: FallbackReason } {
+  const { modelId, organizationId } = request;
   const adapter = context.adapters[gateway];
   if (!adapter) {
     return { unavailable: "not-configured" };
@@ -86,9 +69,18 @@ function getUsableAdapter(
   if (!adapter.supportsModel(modelId)) {
     return { unavailable: "unsupported-model" };
   }
+  if (!adapter.supportsTools(modelId, request.toolIds ?? [])) {
+    return { unavailable: "unsupported-tool" };
+  }
   const unavailableReason = context.credits.unavailableReason(gateway, modelId);
   if (unavailableReason) {
+    if (unavailableReason === "non-compliant" && zdr === "none") {
+      return { adapter, zdrEnforced: false, zdrRelaxed: true };
+    }
     return { unavailable: unavailableReason };
+  }
+  if (zdr === "none") {
+    return { adapter, zdrEnforced: false, zdrRelaxed: true };
   }
   if (adapter.enforcesZdr) {
     return { adapter, zdrEnforced: true };
@@ -104,21 +96,20 @@ function getUsableAdapter(
   return { unavailable: "non-compliant" };
 }
 
-/**
- * A request that accepts non-ZDR routes may still use a gateway that is only
- * marked non-compliant for this model: the ZDR flag is dropped up front.
- */
 function getRelaxedAdapter(
   context: ResolverContext,
   gateway: GatewayId,
-  modelId: string,
+  request: RouteRequest,
   unavailable: FallbackReason
 ): UsableAdapter | undefined {
   const adapter = context.adapters[gateway];
   if (unavailable !== "non-compliant" || !adapter) {
     return undefined;
   }
-  if (!adapter.supportsModel(modelId)) {
+  if (
+    !adapter.supportsModel(request.modelId) ||
+    !adapter.supportsTools(request.modelId, request.toolIds ?? [])
+  ) {
     return undefined;
   }
   const reason = context.credits.unavailableReason(gateway);
@@ -136,7 +127,6 @@ function toDecision(
   reason: RouteDecision["reason"],
   fallback?: { from: GatewayId; reason: FallbackReason }
 ): RouteDecision {
-  // `none` never sends the flag, so the route is relaxed from the start.
   const usable: UsableAdapter =
     zdr === "none"
       ? { adapter: candidate.adapter, zdrEnforced: false, zdrRelaxed: true }
@@ -166,7 +156,7 @@ function throwUnavailable(
   if (reason === "not-configured") {
     throw new GatewayNotConfiguredError(gateway);
   }
-  if (reason === "unsupported-model") {
+  if (reason === "unsupported-model" || reason === "unsupported-tool") {
     throw new UnsupportedModelError(gateway, modelId);
   }
   if (reason === "no-credits") {
@@ -180,7 +170,7 @@ function throwUnavailable(
 
 /**
  * Pick the gateway for a request, verify the adapter can serve it and that
- * the route is privacy compliant. Falls back to the other gateway when the
+ * the route is privacy compliant. Tries the remaining gateways when the
  * preferred one is unavailable for the model. A `preferred` request that
  * finds no ZDR-capable route anywhere runs relaxed on a gateway that only
  * lacks a ZDR host for the model.
@@ -205,12 +195,7 @@ export async function resolveRoute(
     pinned: request.gateway,
   });
 
-  const primary = getUsableAdapter(
-    context,
-    decision.gateway,
-    modelId,
-    organizationId
-  );
+  const primary = getUsableAdapter(context, decision.gateway, request, zdr);
   if ("adapter" in primary) {
     return toDecision(primary, request, planLookup, zdr, decision.reason);
   }
@@ -219,12 +204,11 @@ export async function resolveRoute(
   const canCrossGateway =
     context.policy.crossGatewayFallback && !request.gateway;
   if (!canCrossGateway) {
-    // Pinned routes never move, and fallback can be disabled by injected test policies.
     const relaxed = acceptsNonZdr
       ? getRelaxedAdapter(
           context,
           decision.gateway,
-          modelId,
+          request,
           primary.unavailable
         )
       : undefined;
@@ -235,92 +219,83 @@ export async function resolveRoute(
     throwUnavailable(decision.gateway, modelId, primary.unavailable);
   }
 
-  const fallbackGateway = otherGateway(decision.gateway);
-  const secondary = getUsableAdapter(
-    context,
-    fallbackGateway,
-    modelId,
-    organizationId
-  );
-  if ("adapter" in secondary) {
-    context.logger.info("ai.router.fallback", {
-      from: decision.gateway,
-      to: secondary.adapter.id,
-      fallbackReason: primary.unavailable,
-      modelId,
-      organizationId,
-    });
-    return toDecision(secondary, request, planLookup, zdr, "fallback", {
-      from: decision.gateway,
-      reason: primary.unavailable,
-    });
+  const alternatives = fallbackGateways(decision.gateway).map((gateway) => ({
+    gateway,
+    candidate: getUsableAdapter(context, gateway, request, zdr),
+  }));
+  for (const { candidate } of alternatives) {
+    if ("adapter" in candidate) {
+      context.logger.info("ai.router.fallback", {
+        from: decision.gateway,
+        to: candidate.adapter.id,
+        fallbackReason: primary.unavailable,
+        modelId,
+        organizationId,
+      });
+      return toDecision(candidate, request, planLookup, zdr, "fallback", {
+        from: decision.gateway,
+        reason: primary.unavailable,
+      });
+    }
   }
 
   if (acceptsNonZdr) {
-    const relaxedPrimary = getRelaxedAdapter(
-      context,
-      decision.gateway,
-      modelId,
-      primary.unavailable
-    );
-    if (relaxedPrimary) {
-      logRelaxedRoute(context, decision.gateway, modelId, organizationId);
-      return toDecision(
-        relaxedPrimary,
+    for (const { gateway, candidate } of [
+      { gateway: decision.gateway, candidate: primary },
+      ...alternatives,
+    ]) {
+      if ("adapter" in candidate) {
+        continue;
+      }
+      const relaxed = getRelaxedAdapter(
+        context,
+        gateway,
         request,
-        planLookup,
-        zdr,
-        decision.reason
+        candidate.unavailable
       );
-    }
-    const relaxedSecondary = getRelaxedAdapter(
-      context,
-      fallbackGateway,
-      modelId,
-      secondary.unavailable
-    );
-    if (relaxedSecondary) {
-      logRelaxedRoute(context, fallbackGateway, modelId, organizationId);
-      return toDecision(
-        relaxedSecondary,
-        request,
-        planLookup,
-        zdr,
-        "fallback",
-        {
-          from: decision.gateway,
-          reason: primary.unavailable,
-        }
-      );
+      if (relaxed) {
+        logRelaxedRoute(context, gateway, modelId, organizationId);
+        return toDecision(
+          relaxed,
+          request,
+          planLookup,
+          zdr,
+          gateway === decision.gateway ? decision.reason : "fallback",
+          gateway === decision.gateway
+            ? undefined
+            : { from: decision.gateway, reason: primary.unavailable }
+        );
+      }
     }
   }
 
-  if (
-    primary.unavailable === "non-compliant" ||
-    secondary.unavailable === "non-compliant"
-  ) {
+  const unavailable = [
+    { gateway: decision.gateway, reason: primary.unavailable },
+    ...alternatives.map(({ gateway, candidate }) => ({
+      gateway,
+      reason:
+        "unavailable" in candidate
+          ? candidate.unavailable
+          : ("not-configured" as const),
+    })),
+  ];
+  if (unavailable.some(({ reason }) => reason === "non-compliant")) {
     context.logger.error("ai.router.no_compliant_route", {
       modelId,
       organizationId,
-      primary: decision.gateway,
-      primaryReason: primary.unavailable,
-      secondaryReason: secondary.unavailable,
     });
     throw new NoCompliantRouteError(
       modelId,
-      `${decision.gateway}: ${primary.unavailable}, ${fallbackGateway}: ${secondary.unavailable}`
+      unavailable
+        .map(({ gateway, reason }) => `${gateway}: ${reason}`)
+        .join(", ")
     );
   }
-  if (
-    primary.unavailable === "not-configured" &&
-    secondary.unavailable === "not-configured"
-  ) {
+  const failure = unavailable.find(({ reason }) => reason !== "not-configured");
+  if (!failure) {
     throw new GatewayNotConfiguredError("any");
   }
-  if (primary.unavailable === "not-configured") {
-    throwUnavailable(fallbackGateway, modelId, secondary.unavailable);
-  }
-  throwUnavailable(decision.gateway, modelId, primary.unavailable);
+  throwUnavailable(failure.gateway, modelId, failure.reason);
 }
 
 function logRelaxedRoute(

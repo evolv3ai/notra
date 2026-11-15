@@ -3,6 +3,7 @@ import {
   editOperationSchema,
 } from "@notra/ai/schemas/tools";
 import type { EditMarkdownContext } from "@notra/ai/types/tools";
+import { logError, logInfo } from "@notra/ai/utils/server-log";
 import { type Tool, tool } from "ai";
 import z from "zod";
 
@@ -19,7 +20,27 @@ function getOperationLineNumber(op: EditOperation) {
   return 0;
 }
 
+function assertLineInRange(value: number, min: number, max: number) {
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new Error(
+      `Line ${value} is out of range; the document has ${max} lines.`
+    );
+  }
+}
+
+function assertOperationInRange(lines: string[], op: EditOperation) {
+  if (op.op === "replaceLine" || op.op === "deleteLine") {
+    assertLineInRange(op.line, 1, lines.length);
+  } else if (op.op === "replaceRange" || op.op === "deleteRange") {
+    assertLineInRange(op.startLine, 1, lines.length);
+    assertLineInRange(op.endLine, op.startLine, lines.length);
+  } else if (op.op === "insert") {
+    assertLineInRange(op.afterLine, 0, lines.length);
+  }
+}
+
 function applyOperation(lines: string[], op: EditOperation) {
+  assertOperationInRange(lines, op);
   if (op.op === "replaceLine") {
     lines[op.line - 1] = op.content;
   } else if (op.op === "replaceRange") {
@@ -48,7 +69,9 @@ export function createMarkdownTools(context: EditMarkdownContext): {
       const numberedContent = currentLines
         .map((line, i) => `${i + 1}: ${line}`)
         .join("\n");
-      console.log(`[getMarkdown] Returning ${currentLines.length} lines`);
+      logInfo("[getMarkdown] Returning markdown", {
+        lineCount: currentLines.length,
+      });
       return { content: numberedContent, lineCount: currentLines.length };
     },
   });
@@ -61,22 +84,27 @@ export function createMarkdownTools(context: EditMarkdownContext): {
     }),
     execute: ({ operations }) => {
       try {
-        console.log("[editMarkdown] Received:", JSON.stringify(operations));
-
         const previousMarkdown = currentLines.join("\n");
         const sortedOps = [...operations].sort(
           (a, b) => getOperationLineNumber(b) - getOperationLineNumber(a)
         );
 
+        const nextLines = [...currentLines];
         for (const op of sortedOps) {
-          console.log(`[editMarkdown] Applying: ${op.op}`);
-          applyOperation(currentLines, op);
+          applyOperation(nextLines, op);
+        }
+        currentLines.length = 0;
+        for (const line of nextLines) {
+          currentLines.push(line);
         }
 
         const updatedMarkdown = currentLines.join("\n");
         context.onUpdate(updatedMarkdown);
 
-        console.log(`[editMarkdown] Success. Lines: ${currentLines.length}`);
+        logInfo("[editMarkdown] Applied operations", {
+          operations: sortedOps.map((op) => op.op),
+          lineCount: currentLines.length,
+        });
         return {
           success: true,
           lineCount: currentLines.length,
@@ -85,7 +113,9 @@ export function createMarkdownTools(context: EditMarkdownContext): {
           updatedMarkdown,
         };
       } catch (err) {
-        console.error("[editMarkdown] Error:", err);
+        logError("[editMarkdown] Failed to apply operations", err, {
+          operationCount: operations.length,
+        });
         return { success: false, error: String(err) };
       }
     },

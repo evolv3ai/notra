@@ -40,6 +40,7 @@ import { lockGeoProject } from "./lock";
 import { toGeoSequence } from "./mappers";
 import { requireGeoProject } from "./projects";
 import { buildBrandTerms, promptMentionsBrand } from "./suggestion-keywords";
+import { geoTransaction } from "./transaction";
 
 /**
  * Keeps conversations with enough valid turns. Turns that are out of range or
@@ -115,6 +116,12 @@ export async function insertGeneratedConversationsIfEmpty(
   return rows.length;
 }
 
+function sequenceLimitError() {
+  return new GeoDiscoveryError({
+    message: `You already have ${GEO_MAX_SEQUENCES} conversations. Remove one to generate more.`,
+  });
+}
+
 export const generateGeoSequences = Effect.fn("geo.sequencesGenerate")(
   function* (input: GeoScopeInput) {
     const scope = yield* requireGeoProject(input);
@@ -164,11 +171,7 @@ export const generateGeoSequences = Effect.fn("geo.sequencesGenerate")(
 
     const room = GEO_MAX_SEQUENCES - existing.length;
     if (room <= 0) {
-      return yield* Effect.fail(
-        new GeoDiscoveryError({
-          message: `You already have ${GEO_MAX_SEQUENCES} conversations. Remove one to generate more.`,
-        })
-      );
+      return yield* Effect.fail(sequenceLimitError());
     }
 
     const companyName =
@@ -179,8 +182,6 @@ export const generateGeoSequences = Effect.fn("geo.sequencesGenerate")(
       companyName,
       companyDescription: brand?.companyDescription ?? null,
       audience: brand?.audience ?? null,
-      // Scans label conversation turns with the prompt language, so the steps
-      // must be written in it rather than in the brand identity's language.
       language: settings?.promptLanguage ?? DEFAULT_LANGUAGE,
       competitors: competitors.competitors.map((row) => row.name),
       prompts: prompts.map((row) => row.prompt),
@@ -229,40 +230,35 @@ export const generateGeoSequences = Effect.fn("geo.sequencesGenerate")(
       );
     }
 
-    // The capacity check above happened before a slow model call, so recount
-    // under the project lock: two generations in flight would otherwise both
-    // read the same room and push the project past the limit.
-    const rows = yield* geoDb("sequences insert failed", () =>
-      db.transaction(async (tx) => {
-        await Effect.runPromise(lockGeoProject(tx, scope.projectId));
-        const current = await tx
-          .select({ count: count() })
-          .from(geoPromptSequences)
-          .where(eq(geoPromptSequences.projectId, scope.projectId));
-        const remaining = GEO_MAX_SEQUENCES - (current.at(0)?.count ?? 0);
-        if (remaining <= 0) {
-          return [];
-        }
-        return await tx
-          .insert(geoPromptSequences)
-          .values(
-            conversations.slice(0, remaining).map((conversation) => ({
-              id: crypto.randomUUID(),
-              organizationId: scope.organizationId,
-              projectId: scope.projectId,
-              name: conversation.name,
-              steps: conversation.steps,
-            }))
-          )
-          .returning();
+    const rows = yield* geoTransaction("sequences insert failed", (tx) =>
+      Effect.gen(function* () {
+        yield* lockGeoProject(tx, scope.projectId);
+        return yield* geoDb("sequences insert failed", async () => {
+          const current = await tx
+            .select({ count: count() })
+            .from(geoPromptSequences)
+            .where(eq(geoPromptSequences.projectId, scope.projectId));
+          const remaining = GEO_MAX_SEQUENCES - (current.at(0)?.count ?? 0);
+          if (remaining <= 0) {
+            return [];
+          }
+          return await tx
+            .insert(geoPromptSequences)
+            .values(
+              conversations.slice(0, remaining).map((conversation) => ({
+                id: crypto.randomUUID(),
+                organizationId: scope.organizationId,
+                projectId: scope.projectId,
+                name: conversation.name,
+                steps: conversation.steps,
+              }))
+            )
+            .returning();
+        });
       })
     );
     if (rows.length === 0) {
-      return yield* Effect.fail(
-        new GeoDiscoveryError({
-          message: `You already have ${GEO_MAX_SEQUENCES} conversations. Remove one to generate more.`,
-        })
-      );
+      return yield* Effect.fail(sequenceLimitError());
     }
 
     const response: GeoSequencesGenerateResponse = {

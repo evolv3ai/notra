@@ -1,11 +1,7 @@
 import {
-  AI_CREDIT_LIMIT_MESSAGE,
-  AI_GENERATION_PLAN_REQUIRED_MESSAGE,
   CONTENT_BILLING_LOCK_PREFIX,
   CONTENT_BILLING_LOCK_TTL_MS,
-  CONTENT_PLAN_REQUIRED_MESSAGE,
   CONTENT_QUOTA_FEATURES,
-  CONTENT_QUOTA_LABELS,
   METERED_CONTENT_QUOTA_FEATURES,
 } from "../constants/content-billing";
 import { contentTypeSchema } from "../schemas/content";
@@ -44,17 +40,11 @@ const UNMETERED_RESERVATION: ContentBillingReservation = {
   useMarkup: false,
 };
 
-export function resolveContentQuotaFeature(
+function resolveContentQuotaFeature(
   outputType: string | null | undefined
 ): ContentQuotaFeatureId | null {
   const parsed = contentTypeSchema.safeParse(outputType);
   return parsed.success ? CONTENT_QUOTA_FEATURES[parsed.data] : null;
-}
-
-export function isMeteredContentQuotaFeature(
-  featureId: ContentQuotaFeatureId
-): boolean {
-  return METERED_CONTENT_QUOTA_FEATURES.has(featureId);
 }
 
 function buildLockId(executionId: string, featureId: string): string {
@@ -71,21 +61,6 @@ function normalizeReservation(
   };
 }
 
-async function hasPaidSubscription(organizationId: string): Promise<boolean> {
-  if (!autumn) {
-    return false;
-  }
-  const customer = await autumn.customers.getOrCreate({
-    customerId: organizationId,
-  });
-  return customer.subscriptions.some(
-    (subscription) =>
-      !subscription.addOn &&
-      subscription.status === "active" &&
-      PAID_OR_LEGACY_PLAN_IDS.has(subscription.planId)
-  );
-}
-
 async function buildDenial(input: {
   organizationId: string;
   reason: ContentBillingDenialReason;
@@ -95,7 +70,7 @@ async function buildDenial(input: {
   const shouldNotify =
     input.reason === "no_entitlement"
       ? false
-      : await hasPaidSubscription(input.organizationId);
+      : await hasActivePaidPlan(input.organizationId, PAID_OR_LEGACY_PLAN_IDS);
   return {
     allowed: false,
     mode: "ai_credits",
@@ -126,7 +101,7 @@ export async function reserveContentBilling(
   let quotaRemaining: number | null = null;
 
   if (quotaFeature) {
-    const metered = isMeteredContentQuotaFeature(quotaFeature);
+    const metered = METERED_CONTENT_QUOTA_FEATURES.has(quotaFeature);
     const quotaLockId =
       metered && countTowardQuota && input.executionId
         ? buildLockId(input.executionId, quotaFeature)
@@ -140,6 +115,7 @@ export async function reserveContentBilling(
     });
 
     if (quota.duplicateLock || quota.response?.allowed) {
+      const balance = quota.response?.balance;
       return {
         allowed: true,
         mode: "plan_quota",
@@ -147,6 +123,10 @@ export async function reserveContentBilling(
         reserved: quotaLockId !== null,
         lockId: quotaLockId,
         useMarkup: false,
+        balanceRemaining:
+          balance && !balance.unlimited && !balance.overageAllowed
+            ? balance.remaining
+            : null,
       };
     }
 
@@ -277,37 +257,4 @@ export async function releaseContentBilling(
     return;
   }
   await finalizeAutumnLock(reservation.lockId, "release");
-}
-
-export function getContentBillingLimitLabel(
-  reservation: ContentBillingReservation
-): string | undefined {
-  if (reservation.reason !== "quota_exhausted") {
-    return undefined;
-  }
-  const featureId = reservation.featureId;
-  if (!featureId || featureId === FEATURES.AI_CREDITS) {
-    return undefined;
-  }
-  return CONTENT_QUOTA_LABELS[featureId].plural;
-}
-
-export function describeContentBillingDenial(
-  reservation: ContentBillingReservation
-): string {
-  if (reservation.reason === "quota_exhausted") {
-    const label = getContentBillingLimitLabel(reservation) ?? "posts";
-    return `You've used all the ${label} included in your plan this month. Upgrade your plan or add AI credits to keep creating.`;
-  }
-  if (reservation.reason === "no_entitlement") {
-    const featureId = reservation.featureId;
-    if (featureId && featureId !== FEATURES.AI_CREDITS) {
-      return `Your plan doesn't include ${CONTENT_QUOTA_LABELS[featureId].plural}. Upgrade your plan or add AI credits to continue.`;
-    }
-    if (!featureId) {
-      return AI_GENERATION_PLAN_REQUIRED_MESSAGE;
-    }
-    return CONTENT_PLAN_REQUIRED_MESSAGE;
-  }
-  return AI_CREDIT_LIMIT_MESSAGE;
 }

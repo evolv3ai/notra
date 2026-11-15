@@ -54,6 +54,7 @@ export function createGetLinearIssuesTool(
   const cached = getAICachedTools({
     organizationId: config?.organizationId,
     namespace: "linear",
+    scope: config,
   });
   const resolveIntegrationContext = createLinearIntegrationContextResolver(
     config,
@@ -123,6 +124,7 @@ export function createGetLinearProjectsTool(
   const cached = getAICachedTools({
     organizationId: config?.organizationId,
     namespace: "linear",
+    scope: config,
   });
   const resolveIntegrationContext = createLinearIntegrationContextResolver(
     config,
@@ -208,6 +210,7 @@ export function createGetLinearCyclesTool(
   const cached = getAICachedTools({
     organizationId: config?.organizationId,
     namespace: "linear",
+    scope: config,
   });
   const resolveIntegrationContext = createLinearIntegrationContextResolver(
     config,

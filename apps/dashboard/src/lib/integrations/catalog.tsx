@@ -73,6 +73,7 @@ const OUTPUT_SOURCES: readonly IntegrationConfig[] = [
     href: "framer",
     available: true,
     category: "output",
+    connectLabelKey: "setupGuide",
   },
 ];
 

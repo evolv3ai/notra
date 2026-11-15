@@ -16,7 +16,7 @@ const heardAboutNotraSourceSchema = z.union([
   z.null(),
 ]);
 
-export const onboardingWorkspaceFieldsSchema = z.object({
+const onboardingWorkspaceFieldsSchema = z.object({
   name: organizationNameSchema,
   slug: organizationSlugSchema,
   websiteUrl: optionalPublicWebsiteUrlSchema,

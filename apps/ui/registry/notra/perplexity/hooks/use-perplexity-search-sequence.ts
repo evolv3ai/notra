@@ -24,10 +24,6 @@ interface PerplexitySearchSequenceOptions {
   queryCount: number;
 }
 
-/**
- * Plays the search step in: queries one by one, then the sources, then done.
- * `onStart` and `onDone` let the step open while it plays and close after.
- */
 export const usePerplexitySearchSequence = ({
   enabled,
   onDone,
@@ -41,7 +37,6 @@ export const usePerplexitySearchSequence = ({
     sources: false,
   });
 
-  // Latest callbacks live in refs so a new function identity never restarts the sequence.
   const onStartRef = useRef(onStart);
   const onDoneRef = useRef(onDone);
   useEffect(() => {

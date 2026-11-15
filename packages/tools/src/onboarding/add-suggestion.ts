@@ -11,11 +11,15 @@ import { requireOrganizationId } from "../utils/organization";
 export function createAddSuggestionTool() {
   return defineTool({
     description:
-      "Add one onboarding suggestion for the organization, typed by the automation page it belongs to: event_automation for event-triggered content (for example: they publish GitHub releases, so suggest changelog posts on release) or schedule_automation for recurring content (for example: they blog weekly, so suggest a weekly schedule). Only suggest what the research evidence supports; put the specific supporting finding in evidence.",
+      "Add one onboarding suggestion for the organization, typed by the automation page it belongs to: event_automation for event-triggered content (for example: they publish GitHub releases, so suggest changelog posts on release) or schedule_automation for recurring content (for example: they blog weekly, so suggest a weekly schedule). Only suggest what the research evidence supports; put the specific supporting finding in evidence. Always fill preset with the settings you would pick (output type, plus event type or cadence), so opening the suggestion pre-fills the automation editor.",
     inputSchema: addSuggestionInputSchema,
-    async execute({ type, title, description, evidence, data }, ctx) {
+    async execute({ type, title, description, evidence, preset, data }, ctx) {
       const organizationId = requireOrganizationId(ctx);
-      const payload = { ...data, ...(evidence ? { evidence } : {}) };
+      const payload = {
+        ...data,
+        ...(evidence ? { evidence } : {}),
+        ...(preset ? { preset } : {}),
+      };
       return db.transaction(async (tx) => {
         const [organization] = await tx
           .select({ id: organizations.id })

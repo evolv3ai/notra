@@ -1,4 +1,4 @@
-export type ReviewDiffKind = "equal" | "add" | "remove";
+type ReviewDiffKind = "equal" | "add" | "remove";
 
 export interface ReviewDiffSegment {
   kind: ReviewDiffKind;

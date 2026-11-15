@@ -106,7 +106,6 @@ export const CODEX_DEMO_EXEC_STATES: CodexDemoExec[] = [
   },
 ];
 
-/** Answers the demo plays back, one per prompt you send, in order. */
 export const CODEX_REPLIES: CodexReply[] = [
   {
     execs: [

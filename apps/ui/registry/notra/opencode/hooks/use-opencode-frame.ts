@@ -2,10 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-/**
- * Steps through `frameCount` animation frames every `intervalMs` while
- * `active`. Returns frame 0 when inactive, so paused animations rest.
- */
 export const useOpencodeFrame = (
   frameCount: number,
   intervalMs: number,

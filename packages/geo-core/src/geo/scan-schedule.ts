@@ -1,4 +1,4 @@
-import { describeContentBillingDenial } from "@notra/ai/billing/content-billing";
+import { describeContentBillingDenial } from "@notra/ai/utils/content-billing-messages";
 import { deleteStaleGeoOpenCodeBoxes } from "@notra/ai/utils/geo-opencode-box";
 import { db } from "@notra/db/drizzle";
 import { geoScans, geoSettings } from "@notra/db/schema";
@@ -48,7 +48,7 @@ function truncateToMinute(date: Date) {
  * Arms a schedule that has no usable anchor: one interval out from `from`, on
  * a whole minute (see `truncateToMinute`).
  */
-export function nextGeoScanAt(scanIntervalHours: number, from = new Date()) {
+function nextGeoScanAt(scanIntervalHours: number, from = new Date()) {
   return truncateToMinute(
     new Date(from.getTime() + geoScanIntervalMs(scanIntervalHours))
   );
@@ -132,7 +132,6 @@ const leaseDueGeoScanTick = Effect.fn("geo.leaseDueScanTick")(function* (
 ) {
   const now = new Date();
   const leaseUntil = new Date(now.getTime() + GEO_SCAN_START_LEASE_MS);
-  // Persist a migrated row's first slot with its lease, so retries keep it.
   const nextScanAt = row.nextScanAt ?? truncateToMinute(now);
   const leased = yield* geoDb("scan tick lease failed", () =>
     db
@@ -178,8 +177,6 @@ const advanceGeoScanSlot = Effect.fn("geo.advanceScanSlot")(function* (
   coveredAt?: Date,
   releaseClaimedAt?: Date
 ) {
-  // A historical finish only covers slots through that finish, not through
-  // this sweep. Leave later unserved slots due, even after a long outage.
   const nextScanAt = row.nextScanAt
     ? nextGeoScanAtAfter(
         row.scanIntervalHours,
@@ -307,9 +304,6 @@ export const runGeoScanCronSweep = Effect.fn("geo.runScanCronSweep")(
     let failed = 0;
     let advanceLost = 0;
 
-    // Advancing is the only write that can silently lose its row (another
-    // sweep leased it after our lease expired), so every call goes through
-    // this counter instead of assuming the slot moved.
     const advance = (
       row: DueGeoScanRow,
       leaseUntil: Date,
@@ -329,13 +323,8 @@ export const runGeoScanCronSweep = Effect.fn("geo.runScanCronSweep")(
             projectId: row.projectId,
           })
         );
-        // A database error was logged above; only a successful zero-row
-        // update proves that another sweep took ownership of the lease.
-        if (advanced === null) {
-          return null;
-        }
-        if (advanced) {
-          return true;
+        if (advanced !== false) {
+          return advanced;
         }
         advanceLost += 1;
         yield* geoLogWarn({
@@ -358,12 +347,6 @@ export const runGeoScanCronSweep = Effect.fn("geo.runScanCronSweep")(
       const { leaseUntil } = lease;
       const row = { ...candidate, nextScanAt: lease.nextScanAt };
 
-      // An attempt that finished after this slot became due already answers
-      // for it: starting another one would bill the organization twice for the
-      // same slot. `last_scan_at` marks the last *attempt* (failed runs stamp
-      // it too), which deliberately caps a slot at one scan. The check rides
-      // inside the claim statement, because a scan finishing between a
-      // separate read and the claim would free the slot and slip through.
       const anchor = row.nextScanAt;
       const claim = yield* claimGeoScanRun(row.projectId, {
         unlessFinishedAfter: anchor,
@@ -387,9 +370,6 @@ export const runGeoScanCronSweep = Effect.fn("geo.runScanCronSweep")(
           }
           continue;
         }
-        // Keep the lease: the row retries once it expires, by which time the
-        // running scan has either stamped `last_scan_at` past the anchor (the
-        // slot is then covered) or its ghost claim has gone stale.
         alreadyRunning += 1;
         yield* geoLogWarn({
           event: "geo.scan.skipped",
@@ -400,11 +380,6 @@ export const runGeoScanCronSweep = Effect.fn("geo.runScanCronSweep")(
         continue;
       }
 
-      // Checked only once this sweep owns the slot, so a scan that is still
-      // running keeps the slot on the already-running path above. A denied
-      // slot hands the claim back and moves on before a `geo_scans` row and a
-      // workflow run exist only to fail at the billing gate: retrying would
-      // deny it again.
       const denial = yield* findGeoScanBillingDenial(
         row.organizationId,
         row.projectId
@@ -417,9 +392,6 @@ export const runGeoScanCronSweep = Effect.fn("geo.runScanCronSweep")(
           claim.claimedAt
         );
         if (!advanced) {
-          // Nothing moved, so the slot is still due. Hand the claim back on
-          // its own as a best effort, so manual scans are not blocked while
-          // the next sweep retries the slot.
           yield* releaseGeoScanRun(row.projectId, claim.claimedAt).pipe(
             geoSkip("scan claim release failed", {
               event: "geo.scan.claim_release_failed",
@@ -455,16 +427,12 @@ export const runGeoScanCronSweep = Effect.fn("geo.runScanCronSweep")(
         )
       );
       if (startResult) {
-        // The scan is running and billed either way, so it counts as started
-        // even when another sweep took the row's schedule from under us.
         yield* advance(row, leaseUntil);
         started += 1;
         continue;
       }
 
       failed += 1;
-      // Only this scheduled slot's failures count. A manual stale scan or a
-      // late first cron tick cannot exhaust its 12-hour retry window.
       const firstFailureAt = row.scanFirstFailedAt ?? claim.claimedAt;
       if (!row.scanFirstFailedAt) {
         yield* geoDb("scan first failure stamp failed", () =>
@@ -501,9 +469,6 @@ export const runGeoScanCronSweep = Effect.fn("geo.runScanCronSweep")(
               orderBy: [desc(geoScans.startedAt)],
             })
           );
-          // Keep the exhausted slot visible to the monitoring cron. A one-off
-          // Slack request here would be lost if Slack rejects it after the
-          // schedule has already advanced.
           if (failedRow) {
             yield* geoDb("scan retry exhaustion stamp failed", () =>
               db

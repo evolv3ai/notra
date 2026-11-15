@@ -8,16 +8,6 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { BlogPostSubtype } from "@notra/db/types/content";
-import {
-  ResponsiveAlertDialog,
-  ResponsiveAlertDialogAction,
-  ResponsiveAlertDialogCancel,
-  ResponsiveAlertDialogContent,
-  ResponsiveAlertDialogDescription,
-  ResponsiveAlertDialogFooter,
-  ResponsiveAlertDialogHeader,
-  ResponsiveAlertDialogTitle,
-} from "@notra/ui/components/shared/responsive-alert-dialog";
 import { Badge } from "@notra/ui/components/ui/badge";
 import { Button } from "@notra/ui/components/ui/button";
 import {
@@ -27,27 +17,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@notra/ui/components/ui/dropdown-menu";
-import { useTranslations } from "next-intl";
-import Image from "next/image";
-import Link from "next/link";
 import { memo, useState } from "react";
+import { useTranslations } from "use-intl";
 
+import { ContentDeleteDialog } from "@/components/content/content-delete-dialog";
+import Image from "@/components/framework/image";
+import Link from "@/components/framework/link";
 import { useBlogPostSubtypeLabels } from "@/lib/hooks/use-blog-post-subtype-labels";
 import { usePostActions } from "@/lib/hooks/use-post-actions";
 import { cn } from "@/lib/utils";
-import type { ContentCardProps, ContentCardType } from "@/types/content/card";
+import type { ContentCardProps } from "@/types/content/card";
 import { isBlogPostSubtype } from "@/utils/content-subtype";
 import { formatSnakeCaseLabel } from "@/utils/format";
 import { OutputTypeIcon } from "@/utils/output-types";
-
-const CONTENT_TYPES = [
-  "changelog",
-  "blog_post",
-  "twitter_post",
-  "linkedin_post",
-  "investor_update",
-  "image",
-] as const satisfies readonly ContentCardType[];
 
 function getContentSubtypeLabel(
   contentSubtype: string | null | undefined,
@@ -145,8 +127,8 @@ const ContentCard = memo(function ContentCard({
   const { deletePost, isDeleting, isTogglingStatus, togglePostStatus } =
     usePostActions(organizationId);
 
-  async function handleDelete() {
-    const deleted = await deletePost(id);
+  async function handleDelete(remove: boolean) {
+    const deleted = await deletePost(id, remove);
     if (deleted) {
       setShowDeleteDialog(false);
     }
@@ -165,18 +147,24 @@ const ContentCard = memo(function ContentCard({
         className
       )}
     >
+      {href ? (
+        <Link
+          href={href}
+          aria-label={title}
+          className="focus-visible:ring-ring absolute inset-0 z-10 rounded-xl focus-visible:ring-2 focus-visible:outline-none"
+        />
+      ) : null}
       <div className="border-border/60 bg-background flex min-h-28 flex-1 flex-col overflow-hidden rounded-lg border">
         <div className="flex items-start justify-between gap-2 px-3 pt-2.5 pb-1.5">
           <p className="line-clamp-2 min-w-0 text-sm leading-snug font-medium wrap-anywhere">
             {title}
           </p>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="relative z-20 flex shrink-0 items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
                   <Button
                     className="text-muted-foreground hover:text-foreground -mt-0.5 -mr-1 size-7 p-0"
-                    onClick={(e) => e.preventDefault()}
                     variant="ghost"
                   >
                     <span className="sr-only">
@@ -189,8 +177,7 @@ const ContentCard = memo(function ContentCard({
               <DropdownMenuContent align="end" className="w-44">
                 <DropdownMenuItem
                   disabled={isTogglingStatus}
-                  onClick={(e) => {
-                    e.preventDefault();
+                  onClick={() => {
                     togglePostStatus(id, status);
                   }}
                 >
@@ -205,8 +192,7 @@ const ContentCard = memo(function ContentCard({
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   disabled={isDeleting}
-                  onClick={(e) => {
-                    e.preventDefault();
+                  onClick={() => {
                     setShowDeleteDialog(true);
                   }}
                   variant="destructive"
@@ -244,51 +230,19 @@ const ContentCard = memo(function ContentCard({
 
   return (
     <>
-      {href ? (
-        <Link
-          className="focus-visible:ring-ring block h-full w-full min-w-0 rounded-lg focus-visible:ring-2 focus-visible:outline-none"
-          href={href}
-        >
-          {cardContent}
-        </Link>
-      ) : (
-        cardContent
-      )}
+      {cardContent}
 
-      <ResponsiveAlertDialog
-        onOpenChange={(open) => {
-          if (!isDeleting) {
-            setShowDeleteDialog(open);
-          }
-        }}
+      <ContentDeleteDialog
+        contentId={id}
+        organizationId={organizationId}
+        onConfirm={handleDelete}
+        onOpenChange={setShowDeleteDialog}
         open={showDeleteDialog}
-      >
-        <ResponsiveAlertDialogContent>
-          <ResponsiveAlertDialogHeader>
-            <ResponsiveAlertDialogTitle>
-              {tCommon2("labels.deletePost")}
-            </ResponsiveAlertDialogTitle>
-            <ResponsiveAlertDialogDescription>
-              {tCommon2("messages.thisWillPermanentlyDeleteTitle", { title })}
-            </ResponsiveAlertDialogDescription>
-          </ResponsiveAlertDialogHeader>
-          <ResponsiveAlertDialogFooter>
-            <ResponsiveAlertDialogCancel disabled={isDeleting}>
-              {tCommon("cancel")}
-            </ResponsiveAlertDialogCancel>
-            <ResponsiveAlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={isDeleting}
-              onClick={handleDelete}
-            >
-              {isDeleting ? tCommon("deleting") : tCommon("delete")}
-            </ResponsiveAlertDialogAction>
-          </ResponsiveAlertDialogFooter>
-        </ResponsiveAlertDialogContent>
-      </ResponsiveAlertDialog>
+        pending={isDeleting}
+        title={title}
+      />
     </>
   );
 });
 
-export { ContentCard, CONTENT_TYPES };
-export type { ContentCardProps, ContentCardType } from "@/types/content/card";
+export { ContentCard };

@@ -71,13 +71,15 @@ export function ShelfTicketBadge({
   const statusLabels = useGeoShelfStatusLabels();
   return (
     <Badge
-      className={cn(
-        "rounded-sm text-[0.6875rem] whitespace-nowrap",
-        TICKET_BADGE[status],
-        className
-      )}
+      className={cn("whitespace-nowrap", TICKET_BADGE[status], className)}
       variant="outline"
     >
+      <HugeiconsIcon
+        aria-hidden="true"
+        className="size-3 shrink-0"
+        icon={TICKET_ICONS[status]}
+        strokeWidth={2}
+      />
       {statusLabels[status]}
     </Badge>
   );

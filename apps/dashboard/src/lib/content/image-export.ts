@@ -1,11 +1,17 @@
 import { toast } from "sonner";
 
-import type { ImageExportTarget } from "@/types/content/image-export";
+import { EXCALIDRAW_CLIPBOARD_TYPE } from "@/constants/image-export";
+import type {
+  DiagramExportTarget,
+  ImageExportTarget,
+} from "@/types/content/image-export";
+import { writeClipboardText } from "@/utils/copy-to-clipboard";
 import {
   buildImageDownloadFilename,
   downloadBlob,
   sanitizeDownloadFilename,
 } from "@/utils/download";
+import { isDiagramExportTarget } from "@/utils/image-export";
 import { sanitizeExportHtml } from "@/utils/sanitize-export-html";
 import {
   commonLabelToastMessage,
@@ -17,19 +23,14 @@ type CopyAsPaper = (typeof import("@notra/kiwi/paper"))["copyAsPaper"];
 type CopyAsFigmaImport = () => Promise<CopyAsFigma>;
 type CopyAsPaperImport = () => Promise<CopyAsPaper>;
 
-const defaultImportCopyAsFigma: CopyAsFigmaImport = async () => {
+const importCopyAsFigma: CopyAsFigmaImport = async () => {
   const kiwi = await import("@notra/kiwi");
-  // Inter (~1.17 MB) is a nested dynamic import. Warm it here so copy-ready
-  // means the click path will not wait on the font before clipboard.write.
   await kiwi.loadFallbackFont();
   return kiwi.copyAsFigma;
 };
-const defaultImportCopyAsPaper: CopyAsPaperImport = () =>
+const importCopyAsPaper: CopyAsPaperImport = () =>
   import("@notra/kiwi/paper").then((module) => module.copyAsPaper);
 
-// Kiwi (Figma/Paper paste + Inter payload) stays off `/content/[id]` initial JS.
-let importCopyAsFigma = defaultImportCopyAsFigma;
-let importCopyAsPaper = defaultImportCopyAsPaper;
 let copyAsFigmaPromise: Promise<CopyAsFigma> | null = null;
 let copyAsPaperPromise: Promise<CopyAsPaper> | null = null;
 let copyAsFigmaFn: CopyAsFigma | null = null;
@@ -61,30 +62,6 @@ function loadCopyAsPaper(): Promise<CopyAsPaper> {
   return copyAsPaperPromise;
 }
 
-/** True when the Figma/Paper chunk is already in memory for a click handler. */
-export function isImageExportCopyReady(target: ImageExportTarget): boolean {
-  if (target === "figma") {
-    return copyAsFigmaFn !== null;
-  }
-  if (target === "paper") {
-    return copyAsPaperFn !== null;
-  }
-  return false;
-}
-
-/** Test-only: drop copy caches so a later case can start a fresh import. */
-export function resetImageExportCopyForTests(next?: {
-  figma?: CopyAsFigmaImport;
-  paper?: CopyAsPaperImport;
-}): void {
-  copyAsFigmaPromise = null;
-  copyAsPaperPromise = null;
-  copyAsFigmaFn = null;
-  copyAsPaperFn = null;
-  importCopyAsFigma = next?.figma ?? defaultImportCopyAsFigma;
-  importCopyAsPaper = next?.paper ?? defaultImportCopyAsPaper;
-}
-
 /** Warm the Figma/Paper chunk on hover/focus so click keeps clipboard activation. */
 export function preloadImageExportCopy(
   target: ImageExportTarget
@@ -102,7 +79,7 @@ export function preloadImageExportCopy(
       .then(() => true)
       .catch(() => false);
   }
-  return Promise.resolve(false);
+  return Promise.resolve(isDiagramExportTarget(target));
 }
 
 function createExportElement(html: string): HTMLDivElement {
@@ -226,6 +203,56 @@ export async function copyImageAsPaper(
   } catch (error) {
     console.error("Failed to copy image for Paper", error);
     toast.error(imageExportToastMessage("paperCopyFailed"));
+  }
+}
+
+async function fetchExcalidrawClipboardBlob(sceneUrl: string): Promise<Blob> {
+  const response = await fetch(sceneUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch Excalidraw scene: ${response.status}`);
+  }
+  const scene: unknown = await response.json();
+  if (
+    typeof scene !== "object" ||
+    scene === null ||
+    !("elements" in scene) ||
+    !Array.isArray(scene.elements)
+  ) {
+    throw new Error("Excalidraw scene has no elements");
+  }
+  const files = "files" in scene ? scene.files : {};
+  const payload = JSON.stringify({
+    type: EXCALIDRAW_CLIPBOARD_TYPE,
+    elements: scene.elements,
+    files,
+  });
+  return new Blob([payload], { type: "text/plain" });
+}
+
+/** Copies the editable diagram scene so it pastes as native shapes in Excalidraw or tldraw. */
+export async function copyDiagramScene(
+  sceneUrl: string,
+  target: DiagramExportTarget
+): Promise<void> {
+  try {
+    // Hand the clipboard a pending blob so the write starts inside the click
+    // and keeps user activation while the scene downloads.
+    const blob = fetchExcalidrawClipboardBlob(sceneUrl);
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({ "text/plain": blob }),
+      ]);
+    } catch {
+      await writeClipboardText(await (await blob).text());
+    }
+    toast.success(
+      imageExportToastMessage(
+        target === "excalidraw" ? "excalidrawCopied" : "tldrawCopied"
+      )
+    );
+  } catch (error) {
+    console.error(`Failed to copy diagram for ${target}`, error);
+    toast.error(imageExportToastMessage("diagramCopyFailed"));
   }
 }
 

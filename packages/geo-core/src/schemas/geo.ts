@@ -2,11 +2,12 @@ import { GEO_BRIEF_MAX_TITLE_LENGTH } from "@notra/ai/constants/geo-writer";
 import { SUPPORTED_LANGUAGES } from "@notra/ai/constants/languages";
 import { geoContentSubtypeSchema } from "@notra/ai/schemas/geo-writer";
 import { POST_MARKDOWN_MAX_LENGTH } from "@notra/ai/schemas/limits";
+import { SITE_ENGAGEMENT_VIEW_ID_PATTERN } from "@notra/sites-core/constants/sites";
 import {
   array,
   boolean,
   enum as enumType,
-  iso,
+  literal,
   number,
   object,
   string,
@@ -22,6 +23,7 @@ import {
   GEO_DISCOVERY_MAX_PROMPTS,
   GEO_DISCOVERY_MIN_COMPETITORS,
   GEO_DISCOVERY_MIN_PROMPTS,
+  GEO_EXCERPT_MAX_LENGTH,
   GEO_EXISTING_PAGE_URL_MAX_LENGTH,
   GEO_GAP_TITLE_MAX_LENGTH,
   GEO_GENERATED_CONVERSATION_MAX_TURNS,
@@ -42,7 +44,19 @@ import {
   GEO_SCAN_MAX_INTERVAL_HOURS,
   GEO_SCAN_MIN_INTERVAL_HOURS,
   GEO_SHORT_FIELD_MAX_LENGTH,
+  GEO_TRAFFIC_SITES_MODES,
   GEO_SEQUENCE_MAX_TURNS,
+  MCP_EVENT_BATCH_MAX_EVENTS,
+  MCP_EVENT_CAPTURE_MAX_LENGTH,
+  MCP_EVENT_CONTEXT_MAX_LENGTH,
+  MCP_EVENT_MAX_DURATION_MS,
+  MCP_EVENT_MAX_ERROR_CODE,
+  MCP_EVENT_MAX_SEQUENCE,
+  MCP_EVENT_MIN_ERROR_CODE,
+  MCP_EVENT_MAX_RESPONSE_BYTES,
+  MCP_EVENT_MAX_TOOLS,
+  MCP_EVENT_STATUSES,
+  MCP_ELICITATION_OUTCOMES,
   GEO_WRITER_TOPIC_MAX_LENGTH,
   GEO_WRITER_TOPIC_MIN_LENGTH,
 } from "../constants/geo";
@@ -56,11 +70,11 @@ import {
   geoCompetitorImportRowSchema,
   geoPromptImportRowSchema,
 } from "./geo-import";
+import { geoOrganizationInputSchema } from "./geo-scope";
 import { publicWebsiteUrlSchema } from "./url";
 
 const GEO_SUPPORTED_LANGUAGE_SET = new Set<string>(SUPPORTED_LANGUAGES);
 const MAX_GEO_TRAFFIC_LOG_FILTER_VALUES = 3;
-const MAX_EXCERPT_LENGTH = 300;
 const MAX_DAYS = 365;
 const GEO_DAY_STRING_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const geoWindowFields = {
@@ -73,50 +87,12 @@ const MAX_AI_TRAFFIC_PAGES_LIMIT = 500;
 const MAX_AI_TRAFFIC_JOURNEYS_LIMIT = 100;
 const MAX_GEO_FIELD_LENGTH = 1024;
 const MAX_GEO_URL_LENGTH = 2048;
+/** Exact page path filter for traffic reads, empty for every page. */
+const geoTrafficPathField = string().trim().max(MAX_GEO_URL_LENGTH).optional();
+const geoTrafficSitesField = enumType(GEO_TRAFFIC_SITES_MODES).optional();
 const MAX_GEO_METHOD_LENGTH = 16;
 const MIN_PROMPT_LENGTH = GEO_PROMPT_MIN_LENGTH;
 const MAX_PROMPT_LENGTH = GEO_PROMPT_MAX_LENGTH;
-
-export const geoOrganizationInputSchema = object({
-  organizationId: string().min(1),
-  projectId: string().min(1).optional(),
-});
-
-/**
- * Payload of the GEO scan workflow.
- *
- * `claimedAt` is the ISO stamp of the scan-slot claim the trigger took before
- * handing off, and it travels as its own field rather than on
- * `geoOrganizationInputSchema` — a dozen unrelated inputs extend that one, and
- * none of them owns a scan claim. Optional so a workflow queued before the
- * token existed still parses; such a run falls back to the unconditional
- * stamps.
- *
- * `scanId` is the `geo_scans` row the trigger already inserted so its caller
- * could be handed a pollable id. The run adopts it instead of creating a row
- * of its own. Optional: the scheduled sweep starts a run with nobody waiting
- * on an id, and so does any workflow queued before this field existed.
- */
-export const geoScanWorkflowPayloadSchema = geoOrganizationInputSchema
-  .extend({
-    claimedAt: iso.datetime().optional(),
-    scanId: string().min(1).optional(),
-    promptIds: array(string().min(1)).min(1).optional(),
-    engines: array(string().min(1).max(GEO_SHORT_FIELD_MAX_LENGTH))
-      .min(1)
-      .max(GEO_MAX_ENGINES)
-      .optional(),
-  })
-  .refine(
-    (value) =>
-      value.projectId !== undefined ||
-      (value.claimedAt === undefined && value.scanId === undefined),
-    { message: "A scan claim or scan id requires projectId" }
-  )
-  .refine(
-    (value) => value.scanId === undefined || value.claimedAt !== undefined,
-    { message: "A pre-created scan id requires claimedAt" }
-  );
 
 export const geoModelCatalogInputSchema = object({
   organizationId: string().min(1),
@@ -148,7 +124,7 @@ export const geoSettingsLanguageAddInputSchema =
     language: geoSupportedLanguageSchema,
   });
 
-export const geoConversionPathSchema = string()
+const geoConversionPathSchema = string()
   .trim()
   .min(1)
   .max(GEO_CONVERSION_PATH_MAX_LENGTH)
@@ -156,7 +132,7 @@ export const geoConversionPathSchema = string()
     message: "Conversion paths must start with /",
   });
 
-export const geoProjectDomainSchema = string()
+const geoProjectDomainSchema = string()
   .trim()
   .min(1)
   .max(GEO_SHORT_FIELD_MAX_LENGTH)
@@ -172,19 +148,10 @@ export const geoSettingsUpsertInputSchema = geoOrganizationInputSchema.extend({
     .max(GEO_MAX_CONVERSION_PATHS)
     .optional(),
   domains: array(geoProjectDomainSchema).max(GEO_MAX_DOMAINS).optional(),
-  languages: array(string().min(1))
-    .min(1)
-    .max(GEO_MAX_LANGUAGES)
-    .refine(
-      (values) =>
-        values.every((value) => GEO_SUPPORTED_LANGUAGE_SET.has(value)),
-      {
-        message: "Unsupported language",
-      }
-    ),
-  engines: array(string().min(1).max(GEO_SHORT_FIELD_MAX_LENGTH))
-    .min(1)
-    .max(GEO_MAX_ENGINES),
+  languages: geoTrackingLanguagesSchema,
+  engines: array(string().min(1).max(GEO_SHORT_FIELD_MAX_LENGTH)).max(
+    GEO_MAX_ENGINES
+  ),
   enforceZdr: boolean(),
   nonZdrApprovedEngines: array(
     string().min(1).max(GEO_SHORT_FIELD_MAX_LENGTH)
@@ -227,6 +194,23 @@ export const geoCompetitorUpsertInputSchema = geoOrganizationInputSchema.extend(
 export const geoCompetitorDeleteInputSchema = geoOrganizationInputSchema.extend(
   {
     name: string().trim().min(1).max(GEO_SHORT_FIELD_MAX_LENGTH),
+  }
+);
+
+export const geoCompetitorDomainFillInputSchema =
+  geoOrganizationInputSchema.extend({
+    domains: array(
+      object({
+        name: string().trim().min(1).max(GEO_SHORT_FIELD_MAX_LENGTH),
+        domain: string().trim().min(1).max(GEO_SHORT_FIELD_MAX_LENGTH),
+      })
+    ).max(GEO_MAX_COMPETITORS),
+  });
+
+export const geoCompetitorIgnoreInputSchema = geoOrganizationInputSchema.extend(
+  {
+    name: string().trim().min(1).max(GEO_SHORT_FIELD_MAX_LENGTH),
+    ignored: boolean(),
   }
 );
 
@@ -324,7 +308,7 @@ export const geoCompetitorShareInputSchema = geoTimeseriesInputSchema.extend({
   summaryOnly: boolean().optional(),
 });
 
-export const geoPromptTagsSchema = array(
+const geoPromptTagsSchema = array(
   string().trim().min(1).max(GEO_PROMPT_TAG_MAX_LENGTH)
 )
   .max(GEO_PROMPT_MAX_TAGS)
@@ -448,7 +432,7 @@ export const geoBrandSearchInputSchema = geoOrganizationInputSchema.extend({
  * Lenient on purpose: generated conversations are filtered after the call, so
  * one badly sized turn never fails the whole website analysis.
  */
-export const geoGeneratedConversationSchema = object({
+const geoGeneratedConversationSchema = object({
   name: string().min(1),
   steps: array(string().min(1)).max(GEO_GENERATED_CONVERSATION_MAX_TURNS),
 });
@@ -489,12 +473,22 @@ export const geoJudgeResultSchema = object({
   position: number().nullable(),
   sentiment: enumType(["positive", "neutral", "negative"]).nullable(),
   competitors: array(string()).max(MAX_JUDGE_COMPETITORS),
-  excerpt: string().max(MAX_EXCERPT_LENGTH),
+  excerpt: string().max(GEO_EXCERPT_MAX_LENGTH),
 });
 
 export const aiTrafficInputSchema = geoOrganizationInputSchema.extend({
   ...geoWindowFields,
   limit: number().int().min(1).max(MAX_AI_TRAFFIC_LOG_LIMIT).optional(),
+  host: string().trim().max(GEO_SHORT_FIELD_MAX_LENGTH).optional(),
+  path: geoTrafficPathField,
+  sites: geoTrafficSitesField,
+});
+
+export const webAnalyticsInputSchema = geoOrganizationInputSchema.extend({
+  ...geoWindowFields,
+  host: string().trim().max(GEO_SHORT_FIELD_MAX_LENGTH).optional(),
+  path: geoTrafficPathField,
+  sites: geoTrafficSitesField,
 });
 
 export const geoTrafficLogInputSchema = geoOrganizationInputSchema.extend({
@@ -508,6 +502,8 @@ export const geoTrafficLogInputSchema = geoOrganizationInputSchema.extend({
     .max(MAX_GEO_TRAFFIC_LOG_FILTER_VALUES)
     .optional(),
   host: string().trim().max(GEO_SHORT_FIELD_MAX_LENGTH).optional(),
+  path: geoTrafficPathField,
+  sites: geoTrafficSitesField,
 });
 
 export const geoRequestPayloadSchema = object({
@@ -528,11 +524,84 @@ export const geoRequestPayloadSchema = object({
   accept: string().max(MAX_GEO_FIELD_LENGTH).optional(),
   acceptLanguage: string().max(MAX_GEO_FIELD_LENGTH).optional(),
   requestId: string().max(GEO_SHORT_FIELD_MAX_LENGTH).optional(),
+  status: number().int().min(100).max(599).optional(),
   signals: object({
     clientHints: boolean(),
     fetchMode: string().max(GEO_SHORT_FIELD_MAX_LENGTH).nullable(),
     tracing: boolean(),
+    prefetch: boolean().optional(),
   }).optional(),
+  visitorConsent: boolean().optional(),
+});
+
+export const webEngagementPayloadSchema = object({
+  type: literal("engagement"),
+  timestamp: string().max(GEO_SHORT_FIELD_MAX_LENGTH).optional(),
+  url: string().min(1).max(MAX_GEO_URL_LENGTH),
+  viewId: string().regex(SITE_ENGAGEMENT_VIEW_ID_PATTERN),
+  visibleMs: number().int().min(0),
+  scrollDepth: number().int().min(0).max(100),
+});
+
+const mcpPeerSchema = object({
+  name: string().max(GEO_SHORT_FIELD_MAX_LENGTH).optional(),
+  version: string().max(GEO_SHORT_FIELD_MAX_LENGTH).optional(),
+});
+
+export const mcpEventSchema = object({
+  timestamp: string().max(GEO_SHORT_FIELD_MAX_LENGTH).optional(),
+  sessionId: string().max(GEO_SHORT_FIELD_MAX_LENGTH).optional(),
+  protocolVersion: string().max(GEO_SHORT_FIELD_MAX_LENGTH).optional(),
+  server: mcpPeerSchema.optional(),
+  client: mcpPeerSchema.optional(),
+  method: string().min(1).max(GEO_SHORT_FIELD_MAX_LENGTH),
+  target: string().max(MAX_GEO_URL_LENGTH).optional(),
+  status: enumType(MCP_EVENT_STATUSES),
+  sequence: number().int().min(0).max(MCP_EVENT_MAX_SEQUENCE).optional(),
+  errorCode: number()
+    .int()
+    .min(MCP_EVENT_MIN_ERROR_CODE)
+    .max(MCP_EVENT_MAX_ERROR_CODE)
+    .optional(),
+  errorMessage: string().max(MAX_GEO_FIELD_LENGTH).optional(),
+  durationMs: number().int().min(0).max(MCP_EVENT_MAX_DURATION_MS),
+  responseBytes: number()
+    .int()
+    .min(0)
+    .max(MCP_EVENT_MAX_RESPONSE_BYTES)
+    .optional(),
+  userId: string().max(GEO_SHORT_FIELD_MAX_LENGTH).optional(),
+  intent: string().max(MCP_EVENT_CONTEXT_MAX_LENGTH).optional(),
+  model: string().max(GEO_SHORT_FIELD_MAX_LENGTH).optional(),
+  arguments: string().max(MCP_EVENT_CAPTURE_MAX_LENGTH).optional(),
+  response: string().max(MCP_EVENT_CAPTURE_MAX_LENGTH).optional(),
+  outcome: enumType(MCP_ELICITATION_OUTCOMES).optional(),
+  tools: array(
+    object({
+      name: string().min(1).max(GEO_SHORT_FIELD_MAX_LENGTH),
+      description: string().max(MCP_EVENT_CONTEXT_MAX_LENGTH).optional(),
+      uiResource: string().max(MAX_GEO_URL_LENGTH).optional(),
+    })
+  )
+    .max(MCP_EVENT_MAX_TOOLS)
+    .optional(),
+});
+
+export const mcpEventBatchSchema = object({
+  type: literal("mcp"),
+  events: array(mcpEventSchema).min(1).max(MCP_EVENT_BATCH_MAX_EVENTS),
+});
+
+export const mcpAnalyticsInputSchema = geoOrganizationInputSchema.extend({
+  ...geoWindowFields,
+});
+
+export const mcpToolDetailInputSchema = mcpAnalyticsInputSchema.extend({
+  tool: string().min(1).max(GEO_SHORT_FIELD_MAX_LENGTH),
+});
+
+export const mcpSessionInputSchema = mcpAnalyticsInputSchema.extend({
+  sessionId: string().min(1).max(GEO_SHORT_FIELD_MAX_LENGTH),
 });
 
 export const geoTrafficJourneysInputSchema = geoOrganizationInputSchema.extend({
@@ -554,6 +623,8 @@ export const geoTrafficPagesInputSchema = geoOrganizationInputSchema.extend({
   limit: number().int().min(1).max(MAX_AI_TRAFFIC_PAGES_LIMIT).optional(),
   visitorType: enumType(["crawler", "ai_referral"]).optional(),
   host: string().trim().max(GEO_SHORT_FIELD_MAX_LENGTH).optional(),
+  path: geoTrafficPathField,
+  sites: geoTrafficSitesField,
 });
 
 export const geoWriterPlanInputSchema = geoOrganizationInputSchema.extend({
@@ -589,13 +660,6 @@ export const geoWriterUpdateInputSchema = geoWriterBriefIdInputSchema.extend({
     .min(1)
     .max(GEO_BRIEF_MAX_TITLE_LENGTH)
     .optional(),
-});
-
-export const geoWriterWorkflowPayloadSchema = object({
-  organizationId: string().min(1),
-  projectId: string().min(1),
-  briefId: string().min(1),
-  runId: string().min(1),
 });
 
 export const geoSuggestionIdInputSchema = geoOrganizationInputSchema.extend({

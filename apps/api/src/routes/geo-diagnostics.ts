@@ -28,7 +28,11 @@ import {
   GEO_OPENAPI_TAG,
 } from "../constants/geo-openapi";
 import { runGeoEffect } from "../runtime/geo";
-import { attachGeoOrganization, geoErrorResponse } from "../utils/geo";
+import {
+  attachGeoOrganization,
+  geoErrorResponse,
+  geoOutcomeResponse,
+} from "../utils/geo";
 import {
   decodeGeoSentimentCursor,
   encodeGeoSentimentCursor,
@@ -37,13 +41,10 @@ import { createOpenApiApp } from "../utils/openapi-app";
 
 export const geoDiagnosticsRoutes = createOpenApiApp();
 
-const GEO_TAG = GEO_OPENAPI_TAG;
-const commonErrors = GEO_COMMON_ERROR_RESPONSES;
-
 const changesRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/changes",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "listGeoChanges",
   summary: "Compare the two latest GEO scans",
   request: { params: projectParamsSchema },
@@ -52,14 +53,14 @@ const changesRoute = createRoute({
       description: "GEO changes fetched successfully",
       content: { "application/json": { schema: geoChangesResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const promptHistoryRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/prompts/{promptId}/history",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "getGeoPromptHistory",
   summary: "Get the stored check history for one prompt",
   description:
@@ -75,14 +76,14 @@ const promptHistoryRoute = createRoute({
         "application/json": { schema: geoPromptHistoryResponseSchema },
       },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const sentimentRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/sentiment",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "getGeoSentiment",
   summary: "Get aggregate GEO sentiment",
   description:
@@ -93,14 +94,14 @@ const sentimentRoute = createRoute({
       description: "Sentiment fetched successfully",
       content: { "application/json": { schema: geoSentimentResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const sentimentAnalysisRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/sentiment/analysis",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "getGeoSentimentAnalysis",
   summary: "Get the stored GEO sentiment analysis",
   description:
@@ -113,14 +114,14 @@ const sentimentAnalysisRoute = createRoute({
         "application/json": { schema: geoSentimentAnalysisResponseSchema },
       },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const sentimentEvidenceRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/sentiment/evidence",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "listGeoSentimentEvidence",
   summary: "List answers used as sentiment evidence",
   request: {
@@ -134,7 +135,7 @@ const sentimentEvidenceRoute = createRoute({
         "application/json": { schema: geoSentimentEvidenceResponseSchema },
       },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
@@ -145,10 +146,7 @@ geoDiagnosticsRoutes.openapi(changesRoute, async (c) => {
     "changes",
     loadGeoChanges({ organizationId: base.organizationId, projectId })
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-  return c.json(attachGeoOrganization(base.organization, outcome.value), 200);
+  return geoOutcomeResponse(c, outcome, 200);
 });
 
 geoDiagnosticsRoutes.openapi(promptHistoryRoute, async (c) => {
@@ -164,10 +162,7 @@ geoDiagnosticsRoutes.openapi(promptHistoryRoute, async (c) => {
       scanId,
     })
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-  return c.json(attachGeoOrganization(base.organization, outcome.value), 200);
+  return geoOutcomeResponse(c, outcome, 200);
 });
 
 geoDiagnosticsRoutes.openapi(sentimentRoute, async (c) => {
@@ -181,10 +176,7 @@ geoDiagnosticsRoutes.openapi(sentimentRoute, async (c) => {
       geoWindow(query)
     )
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-  return c.json(attachGeoOrganization(base.organization, outcome.value), 200);
+  return geoOutcomeResponse(c, outcome, 200);
 });
 
 geoDiagnosticsRoutes.openapi(sentimentAnalysisRoute, async (c) => {
@@ -198,10 +190,7 @@ geoDiagnosticsRoutes.openapi(sentimentAnalysisRoute, async (c) => {
       geoWindow(query)
     )
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-  return c.json(attachGeoOrganization(base.organization, outcome.value), 200);
+  return geoOutcomeResponse(c, outcome, 200);
 });
 
 geoDiagnosticsRoutes.openapi(sentimentEvidenceRoute, async (c) => {
@@ -209,9 +198,6 @@ geoDiagnosticsRoutes.openapi(sentimentEvidenceRoute, async (c) => {
   const { projectId } = c.req.valid("param");
   const query = c.req.valid("query");
   const cursorSecret = c.env.INTEGRATION_ENCRYPTION_KEY;
-  if (!cursorSecret) {
-    return c.json({ error: "Sentiment evidence pagination unavailable" }, 503);
-  }
   const cursor = decodeGeoSentimentCursor(query.cursor, cursorSecret);
   const expectedScope = JSON.stringify([
     base.organizationId,

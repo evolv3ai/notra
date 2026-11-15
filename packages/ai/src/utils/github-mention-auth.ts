@@ -8,6 +8,13 @@ import {
 } from "@notra/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 
+const MENTION_INTEGRATION_COLUMNS = {
+  id: true,
+  owner: true,
+  repo: true,
+  defaultBranch: true,
+} as const;
+
 export async function resolveGitHubMentionAuth(params: {
   githubUserId: number;
   organizationId: string;
@@ -28,14 +35,7 @@ export async function resolveGitHubMentionAuth(params: {
     )
     .limit(1);
 
-  if (!row) {
-    return null;
-  }
-
-  return {
-    userId: row.userId,
-    organizationId: row.organizationId,
-  };
+  return row ?? null;
 }
 
 export async function listOrganizationsForGitHubInstallation(
@@ -68,12 +68,7 @@ export async function findGitHubIntegrationForMention(params: {
       eq(githubIntegrations.enabled, true),
       eq(githubIntegrations.repositoryEnabled, true)
     ),
-    columns: {
-      id: true,
-      owner: true,
-      repo: true,
-      defaultBranch: true,
-    },
+    columns: MENTION_INTEGRATION_COLUMNS,
   });
   if (byGithubId) {
     return byGithubId;
@@ -87,11 +82,6 @@ export async function findGitHubIntegrationForMention(params: {
       eq(githubIntegrations.enabled, true),
       eq(githubIntegrations.repositoryEnabled, true)
     ),
-    columns: {
-      id: true,
-      owner: true,
-      repo: true,
-      defaultBranch: true,
-    },
+    columns: MENTION_INTEGRATION_COLUMNS,
   });
 }

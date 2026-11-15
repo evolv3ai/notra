@@ -42,7 +42,6 @@ const acquireChatStream = Effect.fn("Chat.acquireStream")(function* (
   return { signal };
 });
 
-// The SDK owns the response after the handler returns; close this scope in onEnd.
 export async function createChatStreamLifecycle(
   input: ChatStreamLifecycleInput
 ) {

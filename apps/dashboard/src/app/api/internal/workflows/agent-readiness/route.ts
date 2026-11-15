@@ -4,7 +4,6 @@ import { verifyInternalWorkflowRequest } from "@/lib/workflows/internal-auth";
 import { startAgentReadinessRun } from "@/lib/workflows/start";
 import { ratelimit } from "@/utils/ratelimit";
 
-/** Starts the agent readiness workflow on behalf of the public API. */
 export async function POST(request: Request) {
   const authorized = await verifyInternalWorkflowRequest(request);
   if (!authorized) {

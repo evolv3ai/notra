@@ -1,0 +1,1 @@
+export const AUTOMATION_RUNS_PAGE_SIZE = 25;

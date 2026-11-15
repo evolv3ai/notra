@@ -1,6 +1,5 @@
 "use client";
 
-import { sourceMetadataSchema } from "@notra/schemas/dashboard/content";
 import {
   Avatar,
   AvatarFallback,
@@ -12,11 +11,16 @@ import {
   TooltipTrigger,
 } from "@notra/ui/components/ui/tooltip";
 import { useQuery } from "@tanstack/react-query";
-import { useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import { dashboardOrpc } from "@/lib/orpc/query";
+import type { ParsedSourceMetadata } from "@/types/content/detail";
 import { getBrandFaviconUrl } from "@/utils/brand";
-import { formatDateRange, formatLookbackWindow } from "@/utils/content-detail";
+import {
+  formatDateRange,
+  formatLookbackWindow,
+  parseSourceMetadata,
+} from "@/utils/content-detail";
 import { formatSnakeCaseLabel } from "@/utils/format";
 
 interface ContentDetailSourceMetadataProps {
@@ -31,15 +35,6 @@ interface SourceMetadataVoice {
   name: string;
   toneProfile?: string | null;
   websiteUrl?: string | null;
-}
-
-interface ParsedSourceMetadata {
-  brandVoiceId?: string | null;
-  brandVoiceName?: string | null;
-  lookbackRange: { end: string; start: string };
-  lookbackWindow: string;
-  repositories: Array<{ owner: string; repo: string }>;
-  triggerSourceType: string;
 }
 
 function SourceMetadataRepoLabel({
@@ -133,39 +128,6 @@ function SourceMetadataBrandVoiceLabel({
       </TooltipContent>
     </Tooltip>
   );
-}
-
-function parseSourceMetadata(
-  sourceMetadata: unknown
-): ParsedSourceMetadata | null {
-  if (!sourceMetadata) {
-    return null;
-  }
-
-  const parsed = sourceMetadataSchema.safeParse(sourceMetadata);
-  if (!parsed.success || !parsed.data) {
-    return null;
-  }
-
-  const meta = parsed.data;
-  const repositories = meta.repositories ?? [];
-  if (
-    repositories.length === 0 ||
-    !meta.triggerSourceType ||
-    !meta.lookbackWindow ||
-    !meta.lookbackRange
-  ) {
-    return null;
-  }
-
-  return {
-    brandVoiceId: meta.brandVoiceId,
-    brandVoiceName: meta.brandVoiceName,
-    lookbackRange: meta.lookbackRange,
-    lookbackWindow: meta.lookbackWindow,
-    repositories,
-    triggerSourceType: meta.triggerSourceType,
-  };
 }
 
 export function ContentDetailSourceMetadata({

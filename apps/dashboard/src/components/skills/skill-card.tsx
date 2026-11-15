@@ -1,12 +1,18 @@
 "use client";
 
+import { ArrowUp02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { Badge } from "@notra/ui/components/ui/badge";
-import { useLocale, useTranslations } from "next-intl";
-import Link from "next/link";
 import { useState } from "react";
+import { useLocale, useTranslations } from "use-intl";
 
+import Link from "@/components/framework/link";
 import type { SkillCardProps } from "@/types/skills/page";
-import { formatSkillUpdatedAt, skillDisplayName } from "@/utils/skills";
+import {
+  formatSkillUpdatedAt,
+  hasSkillUpdate,
+  skillDisplayName,
+} from "@/utils/skills";
 
 const SKILL_UPDATED_TITLE_OPTIONS: Intl.DateTimeFormatOptions = {
   year: "numeric",
@@ -19,6 +25,7 @@ const SKILL_UPDATED_TITLE_OPTIONS: Intl.DateTimeFormatOptions = {
 
 export function SkillCard({ skill, slug }: SkillCardProps) {
   const tCommon = useTranslations("common");
+  const tUpdate = useTranslations("skills.update");
   const locale = useLocale();
   const label = skillDisplayName(skill.name);
   const machineName =
@@ -27,11 +34,7 @@ export function SkillCard({ skill, slug }: SkillCardProps) {
   const updatedAtTime = updatedAt.getTime();
   const relative =
     formatSkillUpdatedAt(skill.updatedAt, locale) ?? tCommon("labels.justNow");
-  // Default Link prefetch runs when a card enters the viewport, so opening the
-  // list would fetch every detail route. Stay off until hover or focus.
   const [prefetch, setPrefetch] = useState<false | null>(false);
-  // The browser zone is only known on the client. Wait for a hover before
-  // formatting, then derive the tooltip so a later refresh cannot go stale.
   const [tooltipReady, setTooltipReady] = useState(false);
   const absoluteTitle = tooltipReady
     ? new Date(updatedAtTime).toLocaleString(
@@ -56,19 +59,30 @@ export function SkillCard({ skill, slug }: SkillCardProps) {
       <article className="border-border/80 border-b-border/40 bg-muted/80 hover:border-border flex h-full flex-col gap-1.5 rounded-xl border p-1.5 shadow-2xs transition-colors">
         <div className="border-border/60 bg-background flex min-h-28 flex-1 flex-col overflow-hidden rounded-lg border">
           <div className="px-3 pt-2.5 pb-1">
-            <h2
-              className="truncate text-sm leading-snug font-medium"
-              title={label}
-            >
-              {label}
-            </h2>
+            <div className="flex items-start justify-between gap-2">
+              <h2
+                className="min-w-0 truncate text-sm leading-snug font-medium"
+                title={label}
+              >
+                {label}
+              </h2>
+              {hasSkillUpdate(skill.upstream) ? (
+                <Badge className="shrink-0" variant="success">
+                  <HugeiconsIcon
+                    data-icon="inline-start"
+                    icon={ArrowUp02Icon}
+                  />
+                  {tUpdate("badge")}
+                </Badge>
+              ) : null}
+            </div>
             {machineName ? (
               <p className="text-muted-foreground truncate font-mono text-xs">
                 {machineName}
               </p>
             ) : null}
           </div>
-          <p className="text-muted-foreground line-clamp-3 px-3 pt-1 pb-3 text-sm wrap-anywhere">
+          <p className="text-muted-foreground mx-3 mt-1 mb-3 line-clamp-3 text-sm wrap-anywhere">
             {skill.description}
           </p>
         </div>

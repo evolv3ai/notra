@@ -6,16 +6,14 @@ import {
 } from "@notra/ai/billing/autumn";
 import { FEATURES } from "@notra/ai/billing/features";
 import type { BrandReferencesConfig } from "@notra/ai/types/brand-references";
-import { serializeBrandReference } from "@notra/ai/utils/brand-references";
+import { rankBrandReferences } from "@notra/ai/utils/brand-reference-ranking";
+import {
+  serializeBrandReference,
+  withReferenceBillingFlag,
+} from "@notra/ai/utils/brand-references";
 import { toolDescription } from "@notra/ai/utils/description";
 import { db } from "@notra/db/drizzle";
 import { brandReferences, brandSettings } from "@notra/db/schema";
-import {
-  buildBrandReferenceMemoryPayload,
-  createBrandReferenceMemory,
-  getBrandReferenceIdFromSearchResult,
-  searchBrandReferenceMemories,
-} from "@notra/db/utils/supermemory";
 import { type Tool, tool } from "ai";
 import { and, desc, eq } from "drizzle-orm";
 // biome-ignore lint/performance/noNamespaceImport: Zod recommended way of importing
@@ -58,7 +56,7 @@ async function getFilteredReferences(
   config: BrandReferencesConfig,
   voiceId?: string
 ) {
-  const settingsId = await resolveSettingsId(config, voiceId ?? config.voiceId);
+  const settingsId = await resolveSettingsId(config, voiceId);
 
   if (!settingsId) {
     return { settingsId: null, references: [] };
@@ -69,16 +67,23 @@ async function getFilteredReferences(
     orderBy: [desc(brandReferences.createdAt)],
   });
 
-  const agentType = config.agentType;
-
-  const filtered: BrandReferenceRecord[] = agentType
-    ? refs.filter((r: BrandReferenceRecord) => {
+  const { agentType } = config;
+  const references = agentType
+    ? refs.filter((r) => {
         const targets = r.applicableTo as string[];
         return targets.includes("all") || targets.includes(agentType);
       })
     : refs;
 
-  return { settingsId, references: filtered };
+  return { settingsId, references };
+}
+
+function toVoiceSample(reference: BrandReferenceRecord) {
+  return {
+    type: reference.type,
+    content: reference.content,
+    note: reference.note,
+  };
 }
 
 export function createGetBrandReferencesTool(
@@ -118,11 +123,7 @@ export function createGetBrandReferencesTool(
         }
 
         return {
-          references: filtered.map((r) => ({
-            type: r.type,
-            content: r.content,
-            note: r.note,
-          })),
+          references: filtered.map(toVoiceSample),
           count: filtered.length,
         };
       },
@@ -150,13 +151,13 @@ export function createSearchBrandReferencesTool(
       description: toolDescription({
         toolName: "searchBrandReferences",
         intro:
-          "Searches brand voice references semantically and returns the most relevant writing samples for the current content task.",
+          "Searches brand voice references by meaning and returns the most relevant writing samples for the current content task.",
         whenToUse:
           "Use this first when you need the most relevant brand references for a specific tweet angle, topic, launch, fix, or audience moment.",
         whenNotToUse:
           "Do not use this for factual product or GitHub data. Use GitHub tools for facts. Use getBrandReferences only when you need the full unranked set as fallback.",
         usageNotes:
-          "Pass a concise query describing the tweet angle or voice signal you need. The tool uses Supermemory for ranking and falls back to recent references if semantic search is unavailable. Pass brandIdentityId from listBrandIdentities when writing for a non-default brand.",
+          "Describe the tweet angle, topic or voice signal you need in a short phrase. References are ranked by relevance; if ranking is unavailable they are matched by keyword, then the most recent are returned. Pass brandIdentityId from listBrandIdentities when writing for a non-default brand.",
       }),
       inputSchema: z.object({
         query: z.string().min(1),
@@ -179,55 +180,16 @@ export function createSearchBrandReferencesTool(
           return { references: [], count: 0, source: "empty" };
         }
 
-        try {
-          const results = await searchBrandReferenceMemories({
-            voiceId: settingsId,
-            query,
-            applicableTo: config.agentType,
-            limit,
-          });
-
-          const orderedIds = results
-            .map(getBrandReferenceIdFromSearchResult)
-            .filter((value): value is string => Boolean(value));
-
-          if (orderedIds.length > 0) {
-            const byId = new Map(
-              references.map((reference: BrandReferenceRecord) => [
-                reference.id,
-                reference,
-              ])
-            );
-            const ranked = orderedIds
-              .map((id) => byId.get(id))
-              .filter((value): value is BrandReferenceRecord => Boolean(value));
-
-            if (ranked.length > 0) {
-              return {
-                references: ranked.map((r) => ({
-                  type: r.type,
-                  content: r.content,
-                  note: r.note,
-                })),
-                count: ranked.length,
-                source: "supermemory",
-              };
-            }
-          }
-        } catch {
-          // Fall back to recent references below.
-        }
-
-        const fallback = references.slice(0, limit);
-
+        const ranked = await rankBrandReferences({
+          query,
+          references,
+          limit,
+          organizationId: config.organizationId,
+        });
         return {
-          references: fallback.map((r) => ({
-            type: r.type,
-            content: r.content,
-            note: r.note,
-          })),
-          count: fallback.length,
-          source: "fallback",
+          references: ranked.references.map(toVoiceSample),
+          count: ranked.references.length,
+          source: ranked.source,
         };
       },
     }),
@@ -313,9 +275,11 @@ export function createAddBrandReferenceTool(config: {
         };
       }
 
-      if (autumn && !allowUnmeteredAiInDevelopment) {
+      const chargesReferenceQuota = Boolean(
+        autumn && !allowUnmeteredAiInDevelopment
+      );
+      if (autumn && chargesReferenceQuota) {
         let allowed = false;
-
         try {
           const check = await autumn.check({
             customerId: config.organizationId,
@@ -325,7 +289,7 @@ export function createAddBrandReferenceTool(config: {
           });
           allowed = check?.allowed === true;
         } catch {
-          allowed = false;
+          // Fail closed: an unreachable billing service must not grant quota.
         }
 
         if (!allowed) {
@@ -361,7 +325,10 @@ export function createAddBrandReferenceTool(config: {
           brandSettingsId: settingsId,
           type,
           content,
-          metadata: sourceUrl ? { url: sourceUrl } : null,
+          metadata: withReferenceBillingFlag(
+            sourceUrl ? { url: sourceUrl } : null,
+            { metered: chargesReferenceQuota }
+          ),
           note: note ?? null,
           sourceUrl: sourceUrl ?? null,
           sourceCapturedAt: sourceUrl ? new Date() : null,
@@ -373,33 +340,6 @@ export function createAddBrandReferenceTool(config: {
 
       if (!reference) {
         return { success: false, error: "Failed to save the reference." };
-      }
-
-      try {
-        const link = await createBrandReferenceMemory(
-          buildBrandReferenceMemoryPayload({
-            organizationId: config.organizationId,
-            voiceId: settingsId,
-            reference,
-          })
-        );
-        await db
-          .update(brandReferences)
-          .set({
-            supermemoryDocumentId: link.documentId,
-            supermemoryMemoryId: link.memoryId,
-            supermemorySyncedAt: new Date(),
-            supermemoryLastSyncError: null,
-          })
-          .where(eq(brandReferences.id, reference.id));
-      } catch (error) {
-        await db
-          .update(brandReferences)
-          .set({
-            supermemoryLastSyncError:
-              error instanceof Error ? error.message : "Failed to sync memory",
-          })
-          .where(eq(brandReferences.id, reference.id));
       }
 
       return {

@@ -39,4 +39,8 @@ export interface PublishSocialPostParams {
   organizationId: string;
   accountId: string;
   content: string;
+  /** How often to ask the provider for the platform result, 2 s apart. */
+  resultPollAttempts?: number;
+  /** Public URLs of media to attach; must live in the org's own storage. */
+  mediaUrls?: string[];
 }

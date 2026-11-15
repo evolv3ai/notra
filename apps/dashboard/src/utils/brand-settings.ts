@@ -3,7 +3,6 @@ import { brandSettings } from "@notra/db/schema";
 import { invalidateGeoIngestHostsCacheForBrand } from "@notra/geo-core/geo/ingest";
 import { and, eq } from "drizzle-orm";
 
-import { DEFAULT_BRAND_CONSTRAINT } from "@/constants/brand";
 import type {
   BrandAnalysisStep,
   DefaultBrandSettingsData,
@@ -12,42 +11,6 @@ import type {
   ProgressData,
   ProgressStatus,
 } from "@/types/hooks/brand-analysis";
-
-function getErrorCandidates(error: unknown) {
-  if (!(typeof error === "object" && error !== null)) {
-    return [];
-  }
-
-  return "cause" in error ? [error, error.cause] : [error];
-}
-
-export function isDefaultBrandConstraintViolation(error: unknown) {
-  return getErrorCandidates(error).some((candidate) => {
-    if (!(typeof candidate === "object" && candidate !== null)) {
-      return false;
-    }
-
-    if (
-      "constraint_name" in candidate &&
-      candidate.constraint_name === DEFAULT_BRAND_CONSTRAINT
-    ) {
-      return true;
-    }
-
-    if (
-      "constraint" in candidate &&
-      candidate.constraint === DEFAULT_BRAND_CONSTRAINT
-    ) {
-      return true;
-    }
-
-    if (candidate instanceof Error) {
-      return candidate.message.includes(DEFAULT_BRAND_CONSTRAINT);
-    }
-
-    return false;
-  });
-}
 
 export function getStepFromCurrentStep(
   data: ProgressData

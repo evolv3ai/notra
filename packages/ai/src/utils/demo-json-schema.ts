@@ -104,13 +104,11 @@ function fakeString(
   if (QUESTION_KEY.test(key)) {
     return clampText(pick(DEMO_FAKE_QUESTIONS[language], seed), schema);
   }
-  // Anything else reads as a plain sentence rather than a bare brand name.
   return clampText(pick(DEMO_FAKE_SENTENCES[language], seed), schema);
 }
 
 function fakeNumber(schema: DemoJsonSchema, key: string, seed: string) {
   const integer = schema.type === "integer";
-  // Exclusive bounds are not valid values themselves; step just inside them.
   const step = integer ? 1 : EXCLUSIVE_BOUND_EPSILON;
   const { exclusiveMinimum, exclusiveMaximum } = schema;
   const lowerExclusive =

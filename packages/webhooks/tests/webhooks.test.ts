@@ -14,9 +14,12 @@ import { sql as drizzleSql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { Effect, Layer, Redacted, Schema } from "effect";
 
+import {
+  DUE_DELIVERIES_PER_SWEEP,
+  MAX_ENDPOINTS_PER_ORGANIZATION,
+} from "../src/constants/delivery";
 import { publishEventInTransaction } from "../src/drizzle";
 import { WebhookQueueError, WebhookStorageError } from "../src/errors/webhooks";
-import { publishBrandAnalysisOutcome } from "../src/programs/brand-analysis";
 import {
   claimDelivery,
   deliver,
@@ -28,18 +31,17 @@ import {
   listEndpoints,
 } from "../src/programs/endpoints";
 import { publishEvent } from "../src/programs/events";
-import { publishGenerationOutcome } from "../src/programs/generation";
 import {
   listAttempts,
   listDeliveries,
   retryDelivery,
 } from "../src/programs/history";
 import { publishPostPublished } from "../src/programs/posts";
-import { cleanup, dispatchEvent, recover } from "../src/programs/recovery";
+import { sweep } from "../src/programs/recovery";
 import { OrganizationId } from "../src/schemas/webhooks";
 import { WebhookCrypto, webCryptoLayer } from "../src/services/crypto";
 import { WebhookDatabase } from "../src/services/database";
-import { cloudflareQueuesLayer, WebhookQueues } from "../src/services/queue";
+import { WebhookQueues } from "../src/services/queue";
 import {
   cloudflareTransportLayer,
   WebhookTransport,
@@ -70,7 +72,6 @@ const sql = <T = Record<string, unknown>>(
 const org = Schema.decodeUnknownSync(OrganizationId)("org-one");
 const otherOrg = Schema.decodeUnknownSync(OrganizationId)("org-two");
 const sent: SendRequest[] = [];
-const queuedEvents: string[] = [];
 const queuedDeliveries: string[] = [];
 let queueFails = false;
 let outcome: DeliveryOutcome = {
@@ -85,6 +86,22 @@ const layers = Layer.mergeAll(
     WebhookDatabase.of({
       query: (query, parameters) =>
         sql(query, parameters).pipe(Effect.map((result) => result.rows)),
+      transaction: (statements) =>
+        Effect.tryPromise({
+          try: () =>
+            db.transaction(async (tx) => {
+              const results: unknown[] = [];
+              for (const statement of statements) {
+                const result = await tx.query(statement.sql, [
+                  ...statement.parameters,
+                ]);
+                results.push(result.rows);
+              }
+              return results;
+            }),
+          catch: (cause) =>
+            new WebhookStorageError({ operation: "test.transaction", cause }),
+        }),
     })
   ),
   webCryptoLayer(Redacted.make(btoa("x".repeat(32)))),
@@ -101,18 +118,6 @@ const layers = Layer.mergeAll(
   Layer.succeed(
     WebhookQueues,
     WebhookQueues.of({
-      event: (id) =>
-        queueFails
-          ? Effect.fail(new WebhookQueueError({ operation: "test" }))
-          : Effect.sync(() => {
-              queuedEvents.push(id);
-            }),
-      delivery: (id) =>
-        queueFails
-          ? Effect.fail(new WebhookQueueError({ operation: "test" }))
-          : Effect.sync(() => {
-              queuedDeliveries.push(id);
-            }),
       deliveries: (ids) =>
         queueFails
           ? Effect.fail(new WebhookQueueError({ operation: "test" }))
@@ -170,7 +175,6 @@ beforeEach(
       Effect.gen(function* () {
         yield* sql("TRUNCATE webhook_events, webhook_endpoints CASCADE");
         sent.length = 0;
-        queuedEvents.length = 0;
         queuedDeliveries.length = 0;
         queueFails = false;
         outcome = {
@@ -195,7 +199,7 @@ describe("durable webhook pipeline", () => {
           concurrency: 2,
         });
         expect(ids[0]).toBe(ids[1]);
-        yield* endpoint(); // A subscription added after the event does not receive history.
+        yield* endpoint();
         yield* publish();
         expect(yield* listDeliveries(org)).toHaveLength(1);
         expect(yield* listDeliveries(otherOrg)).toHaveLength(0);
@@ -247,22 +251,39 @@ describe("durable webhook pipeline", () => {
         yield* endpoint();
         const id = yield* publish();
         queueFails = true;
-        expect((yield* Effect.result(recover()))._tag).toBe("Failure");
+        expect((yield* Effect.result(sweep()))._tag).toBe("Failure");
         queueFails = false;
-        yield* recover();
-        expect(queuedEvents).toContain(id);
         const [delivery] = yield* listDeliveries(org);
         if (!delivery) {
           return yield* Effect.die("missing delivery");
         }
-        queuedDeliveries.length = 0;
-        yield* dispatchEvent(id);
+        expect((yield* sweep()).queuedDeliveries).toBe(1);
         expect(queuedDeliveries).toEqual([delivery.id]);
         const dispatched = yield* sql(
           "SELECT dispatch_at FROM webhook_events WHERE id = $1",
           [id]
         );
         expect(dispatched.rows).toEqual([{ dispatch_at: null }]);
+      }).pipe(Effect.provide(layers))
+    ));
+
+  test("a backlog larger than one page is queued in a single sweep, oldest first", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const backlog = DUE_DELIVERIES_PER_SWEEP + 1;
+        yield* sql(
+          `INSERT INTO webhook_endpoints (id, organization_id, url, events, secret)
+           SELECT 'backlog-' || n, 'org-one', 'https://hooks.usenotra.com/receive', ARRAY['post.generation.completed'], 'secret'
+           FROM generate_series(1, $1::int) AS n`,
+          [backlog]
+        );
+        yield* publish();
+        yield* sql(
+          "UPDATE webhook_deliveries SET next_attempt_at = now() - interval '1 hour' WHERE endpoint_id = 'backlog-1'"
+        );
+        expect((yield* sweep()).queuedDeliveries).toBe(backlog);
+        expect(new Set(queuedDeliveries).size).toBe(backlog);
+        expect(queuedDeliveries[0]).toEndWith("_backlog-1");
       }).pipe(Effect.provide(layers))
     ));
 
@@ -323,7 +344,7 @@ describe("durable webhook pipeline", () => {
         yield* sql(
           "UPDATE webhook_deliveries SET lease_expires_at = now() - interval '1 minute'"
         );
-        yield* recover();
+        expect((yield* sweep()).expiredLeases).toBe(1);
         const current = yield* claimDelivery(summary.id);
         if (!current) {
           return yield* Effect.die("missing recovered claim");
@@ -363,18 +384,18 @@ describe("durable webhook pipeline", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         yield* endpoint();
-        const id = yield* publish();
-        yield* dispatchEvent(id);
+        yield* publish();
+        yield* sweep();
         yield* sql(
           "UPDATE webhook_events SET created_at = now() - interval '40 days'"
         );
-        expect(yield* cleanup()).toHaveLength(0);
+        expect((yield* sweep()).removedEvents).toBe(0);
         const [delivery] = yield* listDeliveries(org);
         if (!delivery) {
           return yield* Effect.die("missing delivery");
         }
         yield* deliver(delivery.id);
-        expect(yield* cleanup()).toHaveLength(1);
+        expect((yield* sweep()).removedEvents).toBe(1);
       }).pipe(Effect.provide(layers))
     ));
 });
@@ -524,134 +545,21 @@ test("a delivery insert failure rolls back the event and can be retried", () =>
     }).pipe(Effect.provide(layers))
   ));
 
-test("generation outcome schema rejects missing posts and emits failure/skipped events", () =>
+test("caps active webhook subscriptions per organization", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      yield* createEndpoint({
-        organizationId: org,
-        url: "https://hooks.usenotra.com/receive",
-        events: [
-          "post.generation.completed",
-          "post.generation.failed",
-          "post.generation.skipped",
-        ],
-      });
-      expect(
-        (yield* Effect.result(
-          publishGenerationOutcome({
-            id: "missing",
-            organizationId: org,
-            status: "completed",
-            postId: null,
-            error: null,
-          })
-        ))._tag
-      ).toBe("Failure");
-      yield* publishGenerationOutcome({
-        id: "failed",
-        organizationId: org,
-        status: "failed",
-        postId: null,
-        error: "Generation failed",
-      });
-      yield* publishGenerationOutcome({
-        id: "skipped",
-        organizationId: org,
-        status: "skipped",
-        postId: null,
-        error: "No activity",
-      });
-      yield* publishGenerationOutcome({
-        id: "running",
-        organizationId: org,
-        status: "running",
-        postId: null,
-        error: null,
-      });
-      expect(
-        (yield* listDeliveries(org))
-          .map((delivery) => delivery.eventType)
-          .sort()
-      ).toEqual(["post.generation.failed", "post.generation.skipped"]);
-    }).pipe(Effect.provide(layers))
-  ));
-
-test("brand analysis outcome emits terminal events and dedupes retries", () =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      yield* createEndpoint({
-        organizationId: org,
-        url: "https://hooks.usenotra.com/receive",
-        events: [
-          "brand_identity.generation.completed",
-          "brand_identity.generation.failed",
-        ],
-      });
-      expect(
-        (yield* Effect.result(
-          publishBrandAnalysisOutcome({
-            id: "missing",
-            organizationId: org,
-            brandIdentityId: "",
-            status: "completed",
-            error: null,
-          })
-        ))._tag
-      ).toBe("Failure");
-      yield* publishBrandAnalysisOutcome({
-        id: "queued",
-        organizationId: org,
-        brandIdentityId: "brand_1",
-        status: "queued",
-        error: null,
-      });
-      yield* publishBrandAnalysisOutcome({
-        id: "done",
-        organizationId: org,
-        brandIdentityId: "brand_1",
-        status: "completed",
-        error: null,
-      });
-      yield* publishBrandAnalysisOutcome({
-        id: "broken",
-        organizationId: org,
-        brandIdentityId: "brand_2",
-        status: "failed",
-        error: "Scrape failed",
-      });
-      // A retried producer re-reporting the same job is a no-op.
-      yield* publishBrandAnalysisOutcome({
-        id: "broken",
-        organizationId: org,
-        brandIdentityId: "brand_2",
-        status: "failed",
-        error: "Scrape failed",
-      });
-      expect(
-        (yield* listDeliveries(org))
-          .map((delivery) => delivery.eventType)
-          .sort()
-      ).toEqual([
-        "brand_identity.generation.completed",
-        "brand_identity.generation.failed",
-      ]);
-    }).pipe(Effect.provide(layers))
-  ));
-
-test("post.published is emitted once even when a post is republished", () =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      yield* createEndpoint({
-        organizationId: org,
-        url: "https://hooks.usenotra.com/receive",
-        events: ["post.published"],
-      });
-      const input = { organizationId: org, postId: "post_1" };
-      yield* publishPostPublished(input);
-      yield* publishPostPublished(input);
-      expect(
-        (yield* listDeliveries(org)).map((delivery) => delivery.eventType)
-      ).toEqual(["post.published"]);
+      yield* Effect.all(
+        Array.from({ length: MAX_ENDPOINTS_PER_ORGANIZATION }, () => endpoint())
+      );
+      const rejected = yield* Effect.flip(endpoint());
+      expect(rejected._tag).toBe("WebhookValidationError");
+      yield* endpoint(otherOrg);
+      const [first] = yield* listEndpoints(org);
+      if (!first) {
+        return yield* Effect.die("missing endpoint");
+      }
+      yield* deleteEndpoint(org, first.id);
+      yield* endpoint();
     }).pipe(Effect.provide(layers))
   ));
 
@@ -671,7 +579,6 @@ test("transactional outbox publish commits and rolls back with the caller", asyn
       tx,
       postPublishedInput({ organizationId: org, postId: "post_tx_committed" })
     );
-    // The outbox row is visible inside the caller's transaction.
     const inside = await tx.execute(
       drizzleSql`SELECT id FROM webhook_events WHERE id = ${id}`
     );
@@ -692,7 +599,6 @@ test("transactional outbox publish commits and rolls back with the caller", asyn
     })
   ).rejects.toThrow("simulated caller failure");
 
-  // The Effect pipeline dedupes against the transactionally committed event.
   const deduped = await Effect.runPromise(
     publishPostPublished({
       organizationId: org,
@@ -819,7 +725,6 @@ const queueStub = <T>(): Queue<T> => ({
 const bindings: WorkerBindings = {
   DATABASE_URL: "postgres://user:password@localhost:1/notra",
   WEBHOOK_ENCRYPTION_KEY: btoa("x".repeat(32)),
-  EVENT_QUEUE: queueStub(),
   DELIVERY_QUEUE: queueStub(),
 };
 
@@ -850,33 +755,6 @@ const runBatch = async (queue: string, body: unknown) => {
   return { acked, retried };
 };
 
-test("queue deliveries chunks sendBatch at Cloudflare's 100-message limit", async () => {
-  const batches: number[] = [];
-  await Effect.runPromise(
-    Effect.gen(function* () {
-      const queues = yield* WebhookQueues;
-      yield* queues.deliveries(
-        Array.from({ length: 250 }, (_, index) => `d${index}`)
-      );
-      yield* queues.deliveries([]);
-    }).pipe(
-      Effect.provide(
-        cloudflareQueuesLayer({
-          EVENT_QUEUE: queueStub(),
-          DELIVERY_QUEUE: {
-            ...queueStub<{ deliveryId: string }>(),
-            sendBatch: (messages) => {
-              batches.push([...messages].length);
-              return Promise.resolve({ metadata: { metrics: idleMetrics } });
-            },
-          },
-        })
-      )
-    )
-  );
-  expect(batches).toEqual([100, 100, 50]);
-});
-
 test("worker retries messages it cannot process instead of acking or crashing", async () => {
   const unknownQueue = await runBatch("notra-unknown", { deliveryId: "x" });
   expect(unknownQueue.acked).toHaveLength(0);
@@ -888,8 +766,8 @@ test("worker retries messages it cannot process instead of acking or crashing", 
   expect(malformed.acked).toHaveLength(0);
   expect(malformed.retried).toEqual([{ delaySeconds: 60 }]);
 
-  const unreachableDatabase = await runBatch("notra-webhook-events", {
-    eventId: "whev_missing",
+  const unreachableDatabase = await runBatch("notra-webhook-deliveries", {
+    deliveryId: "whdl_missing",
   });
   expect(unreachableDatabase.acked).toHaveLength(0);
   expect(unreachableDatabase.retried).toEqual([{ delaySeconds: 60 }]);

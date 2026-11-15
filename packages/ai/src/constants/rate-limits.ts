@@ -1,3 +1,5 @@
+import { Duration } from "effect";
+
 export const CHAT_GENERATION_RATE_LIMIT = {
   requests: 30,
   window: "1m",
@@ -19,3 +21,7 @@ export const GITHUB_MENTION_RATE_LIMIT = {
   windowMs: 10 * 60 * 1000,
   windowLabel: "10 minutes",
 } as const;
+
+export const RATE_LIMIT_RETRY_TIMES = 2;
+export const RATE_LIMIT_RETRY_BASE_DELAY = "2 seconds";
+export const RATE_LIMIT_RETRY_MAX_WAIT = Duration.seconds(30);

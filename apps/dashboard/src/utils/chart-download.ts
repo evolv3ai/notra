@@ -158,7 +158,7 @@ async function loadSvgImage(svg: string): Promise<HTMLImageElement> {
   const image = new Image();
   await new Promise<void>((resolve, reject) => {
     image.onload = () => resolve();
-    image.onerror = () => reject(new Error("Failed to load chart mark"));
+    image.onerror = () => reject(new Error("Failed to load chart SVG"));
     image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   });
   return image;
@@ -176,21 +176,57 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   });
 }
 
+async function chartExportImage(source: HTMLElement) {
+  const canvas = largestCanvas([...source.querySelectorAll("canvas")]);
+  if (canvas instanceof HTMLCanvasElement) {
+    return {
+      image: canvas,
+      width: canvas.width,
+      height: canvas.height,
+      pixelRatio: exportScale(canvas),
+    };
+  }
+
+  const svg = source.querySelector<SVGSVGElement>("[_echarts_instance_] svg");
+  if (!svg) {
+    throw new Error("Chart is not ready");
+  }
+
+  const { width, height } = svg.getBoundingClientRect();
+  if (width <= 0 || height <= 0) {
+    throw new Error("Chart is not ready");
+  }
+
+  const pixelRatio = Math.min(
+    Math.max(window.devicePixelRatio || 1, 1),
+    CHART_DOWNLOAD_PIXEL_RATIO
+  );
+  const chartWidth = Math.round(width * pixelRatio);
+  const chartHeight = Math.round(height * pixelRatio);
+  const clone = svg.cloneNode(true) as SVGSVGElement;
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  clone.setAttribute("width", String(chartWidth));
+  clone.setAttribute("height", String(chartHeight));
+  clone.style.width = `${chartWidth}px`;
+  clone.style.height = `${chartHeight}px`;
+  if (!clone.hasAttribute("viewBox")) {
+    clone.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  }
+
+  return {
+    image: await loadSvgImage(new XMLSerializer().serializeToString(clone)),
+    width: chartWidth,
+    height: chartHeight,
+    pixelRatio,
+  };
+}
+
 export async function renderChartPng(
   source: HTMLElement,
   title: string
 ): Promise<Blob> {
-  const canvas = largestCanvas([...source.querySelectorAll("canvas")]);
-  if (
-    !(canvas instanceof HTMLCanvasElement) ||
-    canvas.width === 0 ||
-    canvas.height === 0
-  ) {
-    throw new Error("Chart is not ready");
-  }
-
-  const pixelRatio = exportScale(canvas);
-  const frame = exportFrame(canvas.width, canvas.height, pixelRatio);
+  const { image, width, height, pixelRatio } = await chartExportImage(source);
+  const frame = exportFrame(width, height, pixelRatio);
   const output = document.createElement("canvas");
   output.width = frame.width;
   output.height = frame.height;
@@ -208,7 +244,7 @@ export async function renderChartPng(
   roundRect(ctx, 0, 0, frame.width, frame.height, radius);
   ctx.fill();
 
-  ctx.drawImage(canvas, frame.chartX, frame.chartY);
+  ctx.drawImage(image, frame.chartX, frame.chartY);
 
   const mark = await markPromise;
   paintExportLockup(

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import {
   CODE_RESEARCH_BOX_REUSE_MARGIN_SECONDS,
@@ -33,7 +34,6 @@ import { db } from "@notra/db/drizzle";
 import { githubIntegrations } from "@notra/db/schema";
 import { and, eq } from "drizzle-orm";
 
-// Without Redis (local dev) boxes are only reused within one process.
 const memoryStates = new Map<string, CodeResearchWorkspaceState>();
 const memorySessionIndex = new Map<string, Set<string>>();
 
@@ -41,7 +41,6 @@ function stateKey(sessionKey: string, integrationId: string) {
   return `code-research:box:${sessionKey}:${integrationId}`;
 }
 
-// Lists a session's state keys, so a finished run can delete its boxes.
 function sessionIndexKey(sessionKey: string) {
   return `code-research:session:${sessionKey}`;
 }
@@ -85,7 +84,6 @@ async function writeState(
     return;
   }
   const indexKey = sessionIndexKey(sessionKey);
-  // A full box TTL outlives every state the index points at.
   await redis
     .pipeline()
     .set(key, state, { ex: ttl })
@@ -102,7 +100,6 @@ async function clearState(key: string) {
   await redis.del(key);
 }
 
-// Without Redis (local dev) leases only guard callers in this process.
 const memoryLeases = new Set<string>();
 
 async function acquireLease(key: string, owner: string) {
@@ -120,8 +117,6 @@ async function acquireLease(key: string, owner: string) {
   return result === "OK";
 }
 
-// Compare and delete in one step, so an expired holder cannot release the
-// lease a later caller has taken over.
 const RELEASE_LEASE_SCRIPT = `if redis.call("get", KEYS[1]) == ARGV[1] then
   return redis.call("del", KEYS[1])
 end
@@ -170,10 +165,6 @@ async function withLeaseHeartbeat<T>(
   }
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 async function reuseWorkspace(params: {
   sessionKey: string;
   key: string;
@@ -203,7 +194,6 @@ async function reuseWorkspace(params: {
  * repository. Personal access tokens carry the user's full scopes, so they
  * never enter a box: public repositories are cloned anonymously instead.
  */
-// Returns null when GitHub could not answer, so nothing is stored.
 async function lookupRepositoryPrivate(
   repository: { owner: string; repo: string },
   token: string | undefined
@@ -251,9 +241,6 @@ async function resolveBoxToken(
   if (integration?.githubAppInstallationId) {
     return contextToken ?? null;
   }
-  // Manually connected integrations may lack the flag or hold a stale one,
-  // so ask GitHub unless the repository is already known to be public. Only
-  // a public answer is stored, so a repository made public later still works.
   let isPrivate = integration?.githubRepositoryPrivate ?? null;
   if (integration && isPrivate !== false) {
     isPrivate = await lookupRepositoryPrivate(repository, contextToken);

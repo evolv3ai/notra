@@ -16,7 +16,7 @@ export async function claimGitHubMentionDelivery(
     (await redis.eval(
       CLAIM_GITHUB_MENTION_DELIVERY,
       [`github-mention:delivery:${deliveryId}`],
-      [runId]
+      [runId, GITHUB_MENTION_DELIVERY_TTL_SECONDS]
     )) === 1
   );
 }

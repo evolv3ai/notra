@@ -72,6 +72,8 @@ export function createOpenRouterAdapter(
     id: "openrouter",
     enforcesZdr: true,
     supportsModel: (modelId) => isModelSupported("openrouter", modelId),
+    // The OpenRouter provider only sends function tools.
+    supportsTools: (_modelId, toolIds) => toolIds.length === 0,
     mapModelId: toOpenRouterModelId,
     createModel: (modelId) =>
       getClient().chat(toOpenRouterModelId(modelId), {
@@ -105,8 +107,39 @@ export function createOpenRouterAdapter(
         openrouter && typeof openrouter === "object"
           ? (openrouter as Record<string, unknown>)
           : {};
+      const usage =
+        record.usage && typeof record.usage === "object"
+          ? (record.usage as Record<string, unknown>)
+          : {};
+      const gatewayCost = readNumber(usage.cost);
+      const costDetails =
+        usage.costDetails && typeof usage.costDetails === "object"
+          ? (usage.costDetails as Record<string, unknown>)
+          : undefined;
+      // SDK usage.cost is the OpenRouter credit charge, not BYOK passthrough.
+      // Missing/null details do not establish that upstream inference was free.
+      const upstreamCost = readNumber(costDetails?.upstreamInferenceCost);
+      const costUsd =
+        gatewayCost !== undefined &&
+        gatewayCost >= 0 &&
+        upstreamCost !== undefined &&
+        upstreamCost >= 0
+          ? gatewayCost + upstreamCost
+          : undefined;
       return {
         ...(model ? { model } : {}),
+        ...(gatewayCost !== undefined && gatewayCost >= 0
+          ? { gatewayCostUsd: gatewayCost }
+          : {}),
+        ...(upstreamCost !== undefined && upstreamCost >= 0
+          ? {
+              upstreamInferenceCostUsd: upstreamCost,
+              byokInferenceCostUsd: upstreamCost,
+            }
+          : {}),
+        ...(costUsd !== undefined && Number.isFinite(costUsd)
+          ? { costUsd, costSource: "reported" as const }
+          : {}),
         upstreamProvider:
           typeof record.provider === "string" && record.provider.length > 0
             ? record.provider

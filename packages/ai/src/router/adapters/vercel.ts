@@ -1,3 +1,5 @@
+import { setTimeout as delay } from "node:timers/promises";
+
 import { createGateway } from "@ai-sdk/gateway";
 import type { SharedV4ProviderMetadata } from "@ai-sdk/provider";
 import type {
@@ -7,7 +9,11 @@ import type {
   VercelAdapterConfig,
 } from "@notra/ai/types/router";
 
-import { isModelSupported, toVercelModelId } from "../model-ids";
+import {
+  isModelSupported,
+  fromVercelServedModelId,
+  toVercelModelId,
+} from "../model-ids";
 import { buildVercelProviderOptions } from "../provider-options";
 
 function parseBalance(value: unknown): number | null {
@@ -41,9 +47,10 @@ export function createVercelAdapter(
 
   return {
     id: "vercel",
-    // Privacy flags are injected on every request by buildVercelProviderOptions.
     enforcesZdr: true,
     supportsModel: (modelId) => isModelSupported("vercel", modelId),
+    // Vercel forwards provider-defined tools to the model's own provider.
+    supportsTools: () => true,
     mapModelId: toVercelModelId,
     createModel: (modelId) => getClient()(toVercelModelId(modelId)),
     buildProviderOptions: buildVercelProviderOptions,
@@ -60,23 +67,75 @@ export function createVercelAdapter(
     },
     getBalance,
     extractRouteMetadata(
-      providerMetadata: SharedV4ProviderMetadata | undefined
+      providerMetadata: SharedV4ProviderMetadata | undefined,
+      servedModelId?: string
     ) {
       const gateway = providerMetadata?.gateway;
-      if (!gateway || typeof gateway !== "object") {
-        return {};
-      }
-      const record = gateway as Record<string, unknown>;
-      const generationId = readString(record.generationId);
-      return generationId ? { generationId } : {};
-    },
-    async lookupRouteMetadata(generationId) {
-      const generation = await getClient().getGenerationInfo({
-        id: generationId,
-      });
+      const generationId =
+        gateway && typeof gateway === "object"
+          ? readString(gateway.generationId)
+          : undefined;
+      const model = readString(servedModelId?.trim());
       return {
-        model: generation.model,
+        ...(generationId ? { generationId } : {}),
+        ...(model ? { model: fromVercelServedModelId(model) } : {}),
+      };
+    },
+    async lookupRouteMetadata(generationId, signal) {
+      const generation = await createGateway({
+        apiKey: config.apiKey,
+        headers: config.headers,
+        baseURL: config.baseURL,
+        async fetch(input, init) {
+          // Generation records are ingested asynchronously after completion.
+          // Retry only a not-yet-visible record, never auth or schema errors.
+          for (let attempt = 0; ; attempt += 1) {
+            const response = await (config.fetch ?? fetch)(input, {
+              ...init,
+              signal: AbortSignal.any([
+                AbortSignal.timeout(3000),
+                ...(init?.signal ? [init.signal] : []),
+                ...(signal ? [signal] : []),
+              ]),
+            });
+            if (response.status !== 404 || attempt === 9) {
+              return response;
+            }
+            await response.body?.cancel();
+            await delay(2000, undefined, {
+              signal: signal ?? init?.signal ?? undefined,
+            });
+          }
+        },
+      }).getGenerationInfo({ id: generationId });
+      const upstreamCost = generation.isByok
+        ? generation.upstreamInferenceCost
+        : 0;
+      const costUsd = generation.totalCost + upstreamCost;
+      const gatewayCostUsd =
+        Number.isFinite(generation.totalCost) && generation.totalCost >= 0
+          ? generation.totalCost
+          : undefined;
+      const upstreamInferenceCostUsd =
+        Number.isFinite(upstreamCost) && upstreamCost >= 0
+          ? upstreamCost
+          : undefined;
+      return {
+        model: fromVercelServedModelId(generation.model),
         upstreamProvider: generation.providerName,
+        isByok: generation.isByok,
+        ...(gatewayCostUsd === undefined ? {} : { gatewayCostUsd }),
+        ...(upstreamInferenceCostUsd === undefined
+          ? {}
+          : {
+              upstreamInferenceCostUsd,
+              byokInferenceCostUsd: upstreamInferenceCostUsd,
+            }),
+        ...(gatewayCostUsd !== undefined &&
+        upstreamInferenceCostUsd !== undefined &&
+        Number.isFinite(costUsd)
+          ? { costUsd, costSource: "reported" as const }
+          : {}),
       };
     },
   };

@@ -1,13 +1,10 @@
 import crypto from "node:crypto";
 
-import {
-  GITHUB_PULL_REQUEST_EVENT_TYPE,
-  GITHUB_PULL_REQUEST_MERGED_ACTION,
-} from "@notra/ai/constants/autonomy-signals";
-import { getWebhookSecretByRepositoryId } from "@notra/ai/integrations/github";
+import { getGitHubWebhookIntegrations } from "@notra/ai/integrations/github-webhooks";
 import { redis } from "@notra/ai/utils/redis";
 import { db } from "@notra/db/drizzle";
 import { contentTriggers } from "@notra/db/schema";
+import { decryptToken } from "@notra/db/utils/integration-encryption";
 import {
   type GitHubEventType,
   type GitHubWebhookPayload,
@@ -16,17 +13,15 @@ import {
 } from "@notra/schemas/dashboard/github-webhook";
 import { and, eq, sql } from "drizzle-orm";
 
-import { GITHUB_PULL_REQUEST_CLOSED_ACTION } from "@/constants/github";
 import { checkLogRetention } from "@/lib/billing/check-log-retention";
-import { dispatchIrisGithubSignal } from "@/lib/iris/record-github-signal";
 import { dispatchEventTriggers } from "@/lib/webhooks/dispatch-event-triggers";
 import { appendWebhookLog } from "@/lib/webhooks/logging";
 import type {
-  GithubCreateMemoryEntryProps,
-  GithubMemoryEventType,
   GithubProcessedEvent,
   WebhookContext,
+  WebhookLogInput,
 } from "@/types/webhooks/webhooks";
+import { authorizeWebhookIntegration } from "@/utils/webhook-integration";
 
 const DELIVERY_TTL_SECONDS = 60 * 60 * 24;
 const SHOULD_DEDUPE_DELIVERIES = process.env.NODE_ENV !== "development";
@@ -48,70 +43,6 @@ async function markDeliveryProcessed(deliveryId: string) {
   await redis.set(key, "1", { ex: DELIVERY_TTL_SECONDS });
 }
 
-function getRepositoryName(payload: GitHubWebhookPayload) {
-  return payload.repository?.full_name ?? "unknown";
-}
-
-const IRIS_SIGNAL_RETRY_STATUS = 500;
-
-function buildIrisSignalRetryResponse(event: string, delivery: string | null) {
-  return Response.json(
-    {
-      message: "Failed to record the Iris signal for this delivery",
-      event,
-      delivery,
-    },
-    { status: IRIS_SIGNAL_RETRY_STATUS }
-  );
-}
-
-async function createMemoryEntry({
-  organizationId,
-  eventType,
-  repository,
-  action,
-  data,
-  customId,
-}: GithubCreateMemoryEntryProps) {
-  const apiKey = process.env.SUPERMEMORY_API_KEY;
-  if (!apiKey) {
-    return null;
-  }
-
-  const content = JSON.stringify({ eventType, repository, action, data });
-  const context = `GitHub ${eventType} event for ${repository} (${action}).`;
-
-  if (!content.trim()) {
-    return null;
-  }
-
-  const response = await fetch("https://api.supermemory.ai/v3/documents", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      content: content.trim(),
-      context,
-      containerTag: organizationId,
-      customId,
-      metadata: {
-        source: "github_webhook",
-        eventType,
-        repository,
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`Failed to add memory: ${errorBody}`);
-  }
-
-  return response.json();
-}
-
 function verifySignature(payload: string, signature: string, secret: string) {
   const hmac = crypto.createHmac("sha256", secret);
   const digest = `sha256=${hmac.update(payload).digest("hex")}`;
@@ -121,10 +52,6 @@ function verifySignature(payload: string, signature: string, secret: string) {
     return false;
   }
   return crypto.timingSafeEqual(digestBuffer, signatureBuffer);
-}
-
-function isDefaultBranchRef(ref: string, defaultBranch: string) {
-  return ref === `refs/heads/${defaultBranch}`;
 }
 
 function processReleaseEvent(
@@ -141,7 +68,7 @@ function processReleaseEvent(
     return null;
   }
 
-  if (release.draft && action !== "created") {
+  if (release.draft) {
     return null;
   }
 
@@ -167,11 +94,7 @@ function processPushEvent(
   const defaultBranch = payload.repository?.default_branch;
   const commits = payload.commits;
 
-  if (!(ref && defaultBranch)) {
-    return null;
-  }
-
-  if (!isDefaultBranchRef(ref, defaultBranch)) {
+  if (!(ref && defaultBranch) || ref !== `refs/heads/${defaultBranch}`) {
     return null;
   }
 
@@ -202,54 +125,57 @@ function processPushEvent(
   };
 }
 
-function processPullRequestEvent(
-  action: string,
-  payload: GitHubWebhookPayload
-): GithubProcessedEvent | null {
-  if (action !== GITHUB_PULL_REQUEST_CLOSED_ACTION) {
-    return null;
-  }
-
-  const pullRequest = payload.pull_request;
-  if (!pullRequest?.merged) {
-    return null;
-  }
-
-  return {
-    type: GITHUB_PULL_REQUEST_EVENT_TYPE,
-    action: GITHUB_PULL_REQUEST_MERGED_ACTION,
-    data: {
-      number: pullRequest.number,
-      title: pullRequest.title,
-      body: pullRequest.body ?? null,
-      url: pullRequest.html_url,
-      mergedAt: pullRequest.merged_at ?? null,
-      mergeCommitSha: pullRequest.merge_commit_sha ?? null,
-      author: pullRequest.user?.login ?? null,
-      baseBranch: pullRequest.base?.ref ?? null,
-    },
-  };
-}
-
 export async function handleGitHubWebhook(
   context: WebhookContext
 ): Promise<Response> {
-  const { request, rawBody, repositoryId, organizationId, integrationId } =
-    context;
+  const { request, repositoryId, organizationId, integrationId } = context;
+
+  const records = await getGitHubWebhookIntegrations(
+    integrationId,
+    repositoryId
+  );
+  const integration = authorizeWebhookIntegration(
+    records.find((record) => record.id === integrationId),
+    organizationId
+  );
+  if (integration instanceof Response) {
+    return integration;
+  }
+  const repository = records.find((record) => record.id === repositoryId);
+  if (!repository) {
+    return Response.json({ error: "Repository not found" }, { status: 404 });
+  }
+  if (repository.id !== integration.id) {
+    return Response.json(
+      { error: "Repository does not belong to this integration" },
+      { status: 403 }
+    );
+  }
+
+  const rawBody = await request.text();
 
   const eventHeader = request.headers.get("x-github-event");
   const signature = request.headers.get("x-hub-signature-256");
   const delivery = request.headers.get("x-github-delivery");
-
-  if (!eventHeader) {
-    await appendWebhookLog({
+  const log = (
+    entry: Omit<
+      WebhookLogInput,
+      "organizationId" | "integrationId" | "integrationType" | "referenceId"
+    >
+  ) =>
+    appendWebhookLog({
       organizationId,
       integrationId,
       integrationType: "github",
+      referenceId: delivery ?? null,
+      ...entry,
+    });
+
+  if (!eventHeader) {
+    await log({
       title: "Missing webhook event header",
       status: "failed",
       statusCode: 400,
-      referenceId: delivery ?? null,
       errorMessage: "Missing X-GitHub-Event header",
     });
 
@@ -260,14 +186,10 @@ export async function handleGitHubWebhook(
   }
 
   if (!isGitHubEventType(eventHeader)) {
-    await appendWebhookLog({
-      organizationId,
-      integrationId,
-      integrationType: "github",
+    await log({
       title: `Unsupported event type: ${eventHeader}`,
       status: "success",
       statusCode: 200,
-      referenceId: delivery ?? null,
       payload: { event: eventHeader, ignored: true },
     });
 
@@ -293,16 +215,14 @@ export async function handleGitHubWebhook(
     });
   }
 
-  const secret = await getWebhookSecretByRepositoryId(repositoryId);
+  const secret = repository.encryptedWebhookSecret
+    ? decryptToken(repository.encryptedWebhookSecret)
+    : null;
   if (!secret) {
-    await appendWebhookLog({
-      organizationId,
-      integrationId,
-      integrationType: "github",
+    await log({
       title: "Webhook secret missing",
       status: "failed",
       statusCode: 400,
-      referenceId: delivery ?? null,
       errorMessage: "Webhook secret not configured",
     });
 
@@ -313,14 +233,10 @@ export async function handleGitHubWebhook(
   }
 
   if (!signature) {
-    await appendWebhookLog({
-      organizationId,
-      integrationId,
-      integrationType: "github",
+    await log({
       title: "Signature missing",
       status: "failed",
       statusCode: 400,
-      referenceId: delivery ?? null,
       errorMessage: "Missing X-Hub-Signature-256 header",
     });
 
@@ -331,14 +247,10 @@ export async function handleGitHubWebhook(
   }
 
   if (!verifySignature(rawBody, signature, secret)) {
-    await appendWebhookLog({
-      organizationId,
-      integrationId,
-      integrationType: "github",
+    await log({
       title: "Invalid webhook signature",
       status: "failed",
       statusCode: 401,
-      referenceId: delivery ?? null,
       errorMessage: "Invalid webhook signature",
     });
 
@@ -351,14 +263,10 @@ export async function handleGitHubWebhook(
   const logRetentionDays = await checkLogRetention(organizationId);
 
   if (event === "ping") {
-    await appendWebhookLog({
-      organizationId,
-      integrationId,
-      integrationType: "github",
+    await log({
       title: "Webhook ping received",
       status: "success",
       statusCode: 200,
-      referenceId: delivery ?? null,
       payload: { event: "ping" },
       retentionDays: logRetentionDays,
     });
@@ -374,14 +282,10 @@ export async function handleGitHubWebhook(
   try {
     parsedBody = JSON.parse(rawBody);
   } catch {
-    await appendWebhookLog({
-      organizationId,
-      integrationId,
-      integrationType: "github",
+    await log({
       title: "Invalid webhook payload",
       status: "failed",
       statusCode: 400,
-      referenceId: delivery ?? null,
       errorMessage: "Invalid JSON payload",
       retentionDays: logRetentionDays,
     });
@@ -391,14 +295,10 @@ export async function handleGitHubWebhook(
 
   const validation = githubWebhookPayloadSchema.safeParse(parsedBody);
   if (!validation.success) {
-    await appendWebhookLog({
-      organizationId,
-      integrationId,
-      integrationType: "github",
+    await log({
       title: "Invalid webhook payload structure",
       status: "failed",
       statusCode: 400,
-      referenceId: delivery ?? null,
       errorMessage: `Payload validation failed: ${validation.error.issues.map((i) => i.message).join(", ")}`,
       retentionDays: logRetentionDays,
     });
@@ -421,18 +321,11 @@ export async function handleGitHubWebhook(
     case "push":
       processedEvent = processPushEvent(payload);
       break;
-    case "pull_request":
-      processedEvent = processPullRequestEvent(action, payload);
-      break;
     default:
-      await appendWebhookLog({
-        organizationId,
-        integrationId,
-        integrationType: "github",
+      await log({
         title: `Ignored ${event} event`,
         status: "success",
         statusCode: 200,
-        referenceId: delivery ?? null,
         payload: { event, action, ignored: true },
         retentionDays: logRetentionDays,
       });
@@ -446,14 +339,10 @@ export async function handleGitHubWebhook(
   }
 
   if (!processedEvent) {
-    await appendWebhookLog({
-      organizationId,
-      integrationId,
-      integrationType: "github",
+    await log({
       title: `Filtered ${event} event`,
       status: "success",
       statusCode: 200,
-      referenceId: delivery ?? null,
       payload: { event, action, filtered: true },
       retentionDays: logRetentionDays,
     });
@@ -466,30 +355,10 @@ export async function handleGitHubWebhook(
     });
   }
 
-  const repositoryName = getRepositoryName(payload);
-  const shouldPersistMemory =
-    processedEvent.type === "release" || processedEvent.type === "push";
-
-  if (shouldPersistMemory) {
-    const customId = `github:${repositoryId}:${delivery ?? crypto.randomUUID()}`;
-    await createMemoryEntry({
-      organizationId,
-      eventType: processedEvent.type as GithubMemoryEventType,
-      repository: repositoryName,
-      action: processedEvent.action,
-      data: processedEvent.data,
-      customId,
-    });
-  }
-
-  await appendWebhookLog({
-    organizationId,
-    integrationId,
-    integrationType: "github",
+  await log({
     title: `Processed ${processedEvent.type} event`,
     status: "success",
     statusCode: 200,
-    referenceId: delivery ?? null,
     payload: {
       event,
       action: processedEvent.action,
@@ -497,37 +366,6 @@ export async function handleGitHubWebhook(
     },
     retentionDays: logRetentionDays,
   });
-
-  const irisSignalRecorded = await dispatchIrisGithubSignal({
-    organizationId,
-    repositoryId,
-    repositoryName,
-    eventType: processedEvent.type,
-    eventAction: processedEvent.action,
-    eventData: processedEvent.data,
-    deliveryId: delivery,
-  });
-
-  if (processedEvent.type === GITHUB_PULL_REQUEST_EVENT_TYPE) {
-    if (!irisSignalRecorded) {
-      return buildIrisSignalRetryResponse(event, delivery);
-    }
-
-    if (SHOULD_DEDUPE_DELIVERIES && delivery) {
-      await markDeliveryProcessed(delivery);
-    }
-
-    return Response.json({
-      message: `Processed ${processedEvent.type} event (${processedEvent.action})`,
-      event,
-      delivery,
-      processed: processedEvent,
-      repository: {
-        id: payload.repository?.id,
-        fullName: payload.repository?.full_name,
-      },
-    });
-  }
 
   const matchingTriggers = await db
     .select({
@@ -550,10 +388,6 @@ export async function handleGitHubWebhook(
     repositoryId,
     deliveryId: delivery ?? undefined,
   });
-
-  if (!irisSignalRecorded) {
-    return buildIrisSignalRetryResponse(event, delivery);
-  }
 
   if (SHOULD_DEDUPE_DELIVERIES && delivery) {
     await markDeliveryProcessed(delivery);

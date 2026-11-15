@@ -1,4 +1,5 @@
 import { formatDayLabel } from "@notra/geo-core/utils/day-label";
+import { formatCompactNumber } from "@notra/utils/format-compact-number";
 
 import {
   CURSOR_TOOLTIP_EDGE_PX,
@@ -33,10 +34,7 @@ export function formatMetric(
   if (value === null) {
     return notAvailableLabel;
   }
-  return new Intl.NumberFormat(locale, {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(value);
+  return formatCompactNumber(value, locale, 1);
 }
 
 export function formatEngagementRate(percent: number, locale: string): string {
@@ -116,7 +114,7 @@ function markerLabelForDate(
   return index === -1 ? null : formatDayLabel(day, locale);
 }
 
-export function sumMetric(
+function sumMetric(
   accounts: SocialOverviewAccount[],
   metric: (account: SocialOverviewAccount) => number | null
 ): number | null {

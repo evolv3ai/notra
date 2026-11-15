@@ -97,3 +97,18 @@ export interface IntegrationMarkdownEntry {
   title: string;
   description: string;
 }
+
+export interface IntegrationDraftCardProps {
+  title: string;
+  actionLabel: string;
+  secondaryActionLabel?: string;
+  headline: string;
+  body: string;
+  meta: string;
+}
+
+declare module "@tanstack/react-router" {
+  interface HistoryState {
+    integrationModal?: string;
+  }
+}

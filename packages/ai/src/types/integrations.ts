@@ -1,3 +1,7 @@
+import type { MCP_STORE_CATEGORIES } from "../constants/mcp-store-categories";
+
+export type McpStoreCategory = (typeof MCP_STORE_CATEGORIES)[number];
+
 export interface ErrorWithStatus {
   status?: number;
 }
@@ -51,6 +55,8 @@ export interface ConfigureOutputParams {
 }
 
 export interface SetRepositoryOutputConfigParams {
+  siteId?: string | null;
+  reviewProcess?: "pull_request" | "direct";
   contentPath?: string | null;
   directory?: string;
   imagePath?: string | null;
@@ -203,12 +209,9 @@ export interface UpdateMcpServerIntegrationParams {
   headers?: McpHeaderMap;
   enabled?: boolean;
 }
-
-export type McpBrandingAssetKind = "logo-light" | "logo-dark" | "banner";
-
 export interface UploadIntegrationBrandingAssetParams {
   organizationId: string;
-  kind: McpBrandingAssetKind;
+  kind: "logo-light" | "logo-dark" | "banner";
   body: Buffer;
   contentType: string;
   extension: string;

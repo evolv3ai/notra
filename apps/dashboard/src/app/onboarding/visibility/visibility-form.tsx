@@ -9,18 +9,18 @@ import { AuthFormHeader } from "@notra/ui/components/shared/auth/auth-form-heade
 import { CtaButton } from "@notra/ui/components/shared/cta-button";
 import { Input } from "@notra/ui/components/ui/input";
 import { Label } from "@notra/ui/components/ui/label";
-import { Loader2Icon } from "lucide-react";
-import { useTranslations } from "next-intl";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
+import Link from "@/components/framework/link";
 import { GeoLanguagePicker } from "@/components/geo/geo-language-picker";
 import { BrandReviewSkeleton } from "@/components/onboarding/brand-review-skeleton";
+import { OnboardingDashboardPreview } from "@/components/onboarding/dashboard-preview";
 import { OnboardingProgress } from "@/components/onboarding/progress";
 import { PromptChoiceRow } from "@/components/onboarding/prompt-choice-row";
 import { OnboardingStepViewTracker } from "@/components/onboarding/step-view-tracker";
+import { WebsiteDiscoveryStatus } from "@/components/onboarding/website-discovery-status";
 import { GeoProjectProvider } from "@/components/providers/geo-project-provider";
 import { ONBOARDING_STEPS } from "@/constants/analytics-events";
 import {
@@ -33,11 +33,16 @@ import {
   useGeoOnboardingBrand,
 } from "@/lib/hooks/use-geo";
 import { useLanguageLabel } from "@/lib/hooks/use-language-label";
+import { useRouter } from "@/lib/navigation";
 import type {
+  OnboardingPreviewFocus,
   VisibilityFormProps,
   VisibilityReviewProps,
 } from "@/types/onboarding";
-import { stripWebsitePrefix } from "@/utils/onboarding";
+import {
+  onboardingPreviewFocusProps,
+  stripWebsitePrefix,
+} from "@/utils/onboarding";
 import {
   selectedVisibilityPrompts,
   toVisibilityBrandInput,
@@ -52,9 +57,10 @@ function VisibilityReview({
   languages,
   nextHref,
   skipHref,
+  previewFocus,
+  previewWebsite,
 }: VisibilityReviewProps) {
   const t = useTranslations("onboarding.visibility");
-  const tOnboardingShared = useTranslations("onboarding.shared");
   const tCommon = useTranslations("common");
   const id = useId();
   const router = useRouter();
@@ -129,7 +135,14 @@ function VisibilityReview({
         handleSubmit();
       }}
     >
-      <div className="grid gap-2">
+      <OnboardingDashboardPreview
+        focus={previewFocus}
+        name={companyName}
+        defaultPage={selectedPrompts.length > 0 ? "prompts" : "overview"}
+        prompts={selectedPrompts.map((entry) => entry.prompt)}
+        website={previewWebsite}
+      />
+      <div className="grid gap-2" data-preview="brand">
         <Label htmlFor={`${id}-company`}>{t("brandName")}</Label>
         <Input
           aria-describedby={
@@ -154,7 +167,7 @@ function VisibilityReview({
       </div>
 
       {prompts.length > 0 ? (
-        <div className="grid gap-2">
+        <div className="grid gap-2" data-preview="prompts">
           <p className="text-sm font-medium">
             {t.rich(websiteHost ? "questionsFrom" : "questions", {
               host: websiteHost,
@@ -184,15 +197,8 @@ function VisibilityReview({
         </div>
       ) : null}
 
-      <CtaButton className="w-full" disabled={busy} type="submit">
-        {busy ? (
-          <>
-            <Loader2Icon className="size-4 animate-spin" />
-            {tOnboardingShared("saving")}
-          </>
-        ) : (
-          tCommon("actions.continue")
-        )}
+      <CtaButton className="w-full" loading={busy} type="submit">
+        {tCommon("actions.continue")}
       </CtaButton>
 
       <div className="text-center">
@@ -232,13 +238,11 @@ export function VisibilityForm({
   const tCommon2 = useTranslations("common");
   const languageLabel = useLanguageLabel();
   const id = useId();
-  const [websiteInput, setWebsiteInput] = useState(() =>
-    stripWebsitePrefix(websiteUrl)
-  );
-  const [analyzedUrl, setAnalyzedUrl] = useState(
-    () => normalizeWebsiteUrl(websiteUrl) ?? null
-  );
+  const [retryUrl, setRetryUrl] = useState<string | null>(null);
+  const analyzedUrl = retryUrl ?? normalizeWebsiteUrl(websiteUrl) ?? null;
   const [languages, setLanguages] = useState(initialLanguages);
+  const [previewFocus, setPreviewFocus] =
+    useState<OnboardingPreviewFocus | null>(null);
   const promptLanguage = languages[0] ?? DEFAULT_LANGUAGE;
   const discover = useGeoDiscoverWebsite(
     organizationId,
@@ -246,6 +250,7 @@ export function VisibilityForm({
     promptLanguage
   );
   const isAnalyzing = analyzedUrl !== null && discover.isPending;
+  const discoveredWebsite = analyzedUrl ?? websiteUrl;
   const analyzedHost = analyzedUrl ? stripWebsitePrefix(analyzedUrl) : "";
   const discoveryStartedAtRef = useRef<number | null>(null);
   const discoveryTrackedUrlRef = useRef<string | null>(null);
@@ -283,14 +288,6 @@ export function VisibilityForm({
     });
   }, [analyzedUrl, discover.isPending, discover.isError, discover.data]);
 
-  const commitWebsite = () => {
-    const normalized = normalizeWebsiteUrl(websiteInput);
-    if (normalized && normalized !== analyzedUrl) {
-      discoveryStartedAtRef.current = Date.now();
-      setAnalyzedUrl(normalized);
-    }
-  };
-
   return (
     <GeoProjectProvider projectId={projectId}>
       <div className="flex w-full flex-col gap-5">
@@ -307,53 +304,22 @@ export function VisibilityForm({
 
         <AuthFormHeader description={t("description")} title={t("title")} />
 
-        <div className="mt-2 space-y-5">
-          <div className="grid gap-2">
-            <Label htmlFor={`${id}-website`}>
-              {tCommon2("labels.website")}
-            </Label>
-            <div className="border-input focus-within:border-ring focus-within:ring-ring/50 flex h-11 w-full flex-row items-center overflow-hidden rounded-xl border transition-colors focus-within:ring-[3px]">
-              <label
-                className="border-input bg-muted/30 text-muted-foreground flex h-full items-center border-r px-3.5 text-sm"
-                htmlFor={`${id}-website`}
-              >
-                https://
-              </label>
-              <input
-                className="h-full flex-1 bg-transparent px-3.5 text-sm outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={isAnalyzing}
-                id={`${id}-website`}
-                onBlur={commitWebsite}
-                onChange={(event) => setWebsiteInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    commitWebsite();
-                  }
-                }}
-                placeholder="acme.com"
-                type="text"
-                value={websiteInput}
-              />
-              {isAnalyzing ? (
-                <span className="text-muted-foreground flex h-full items-center px-3.5">
-                  <Loader2Icon className="size-4 animate-spin" />
-                </span>
-              ) : null}
-            </div>
-            {isAnalyzing ? (
-              <p className="text-muted-foreground text-xs wrap-anywhere">
-                {t("reading", { host: analyzedHost })}
-              </p>
-            ) : null}
-            {discover.isError ? (
-              <p className="text-destructive text-sm wrap-anywhere">
-                {t("readFailed", { host: analyzedHost })}
-              </p>
-            ) : null}
-          </div>
+        <div
+          {...onboardingPreviewFocusProps(setPreviewFocus)}
+          className="mt-2 space-y-5"
+        >
+          <WebsiteDiscoveryStatus
+            failed={discover.isError}
+            host={analyzedHost}
+            isReading={isAnalyzing}
+            key={analyzedHost}
+            onRetry={(url) => {
+              discoveryStartedAtRef.current = Date.now();
+              setRetryUrl(url);
+            }}
+          />
 
-          <div className="grid gap-2">
+          <div className="grid gap-2" data-preview="prompts">
             <div className="space-y-1">
               <Label htmlFor={`${id}-languages`}>
                 {tCommon2("labels.languages")}
@@ -366,6 +332,7 @@ export function VisibilityForm({
             </div>
             <GeoLanguagePicker
               disabled={isAnalyzing}
+              inputClassName="h-11 rounded-xl"
               inputId={`${id}-languages`}
               labeled={false}
               lockedLanguage={lockedLanguage}
@@ -375,7 +342,14 @@ export function VisibilityForm({
           </div>
 
           {isAnalyzing ? (
-            <BrandReviewSkeleton />
+            <>
+              <OnboardingDashboardPreview
+                focus={previewFocus ?? "website"}
+                name={companyName ?? ""}
+                website={discoveredWebsite}
+              />
+              <BrandReviewSkeleton />
+            </>
           ) : (
             <VisibilityReview
               discovery={discover.data?.discovery ?? null}
@@ -384,8 +358,10 @@ export function VisibilityForm({
               languages={languages}
               nextHref={nextHref}
               organizationId={organizationId}
+              previewFocus={previewFocus}
+              previewWebsite={discoveredWebsite}
               skipHref={skipHref}
-              websiteUrl={analyzedUrl ?? websiteUrl}
+              websiteUrl={discoveredWebsite}
             />
           )}
         </div>

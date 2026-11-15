@@ -1,11 +1,3 @@
-/**
- * Live smoke test for the model router. Talks to the real gateways with the
- * keys from the environment but uses a fake plan resolver so no billing
- * customer is created.
- *
- *   bun packages/ai/evals/router/live-check.ts
- */
-
 import { withRouterDefaults } from "@notra/ai/provider-options";
 import { createOpenRouterAdapter } from "@notra/ai/router/adapters/openrouter";
 import { createVercelAdapter } from "@notra/ai/router/adapters/vercel";

@@ -2,6 +2,27 @@
   "name": "ui",
   "private": true,
   "type": "module",
+  "exports": {
+    "./table": "./registry/notra/table/components/data-table.tsx",
+    "./table/constants": "./registry/notra/table/constants/data-table.ts",
+    "./table/labels": "./registry/notra/table/components/data-table-labels.tsx",
+    "./table/lib": "./registry/notra/table/lib/data-table.ts",
+    "./table/types": "./registry/notra/table/types/data-table.ts",
+    "./table/hooks/*": "./registry/notra/table/hooks/*.ts",
+    "./card": "./registry/notra/card/components/instrument-module.tsx",
+    "./card/grid": "./registry/notra/card/components/instrument-grid.tsx",
+    "./card/labels": "./registry/notra/card/components/card-labels.tsx",
+    "./card/reveal": "./registry/notra/card/components/instrument-reveal.tsx",
+    "./card/types": "./registry/notra/card/types/card.ts",
+    "./chatgpt/*": "./registry/notra/chatgpt/components/*.tsx",
+    "./claude/*": "./registry/notra/claude/components/*.tsx",
+    "./styles/chatgpt.css": "./src/styles/chatgpt.css",
+    "./styles/claude.css": "./src/styles/claude.css",
+    "./workflow/canvas": "./registry/notra/workflow/components/workflow-canvas.tsx",
+    "./workflow/logo": "./registry/notra/workflow/components/workflow-logo.tsx",
+    "./workflow/node-sheet": "./registry/notra/workflow/components/workflow-node-sheet.tsx",
+    "./workflow/types": "./registry/notra/workflow/types/workflow.ts"
+  },
   "scripts": {
     "dev": "blume dev --port 3006",
     "build": "bun run registry:build && blume build",
@@ -11,23 +32,32 @@
     "registry:build": "shadcn build"
   },
   "dependencies": {
-    "@base-ui/react": "^1.8.0",
-    "@paper-design/shaders": "0.0.77",
+    "@base-ui/react": "catalog:",
+    "@hugeicons/core-free-icons": "catalog:",
+    "@hugeicons/react": "catalog:",
+    "@notra/ui": "workspace:*",
+    "@paper-design/shaders": "0.0.81",
+    "@rexa-developer/tiks": "^0.3.0",
     "@tanstack/hotkeys": "^0.8.0",
+    "@tanstack/react-virtual": "~3.14.20",
+    "@xyflow/react": "^12.12.0",
     "blume": "2.0.3",
     "class-variance-authority": "^0.7.1",
-    "cn": "^0.3.0",
-    "lucide-react": "^0.562.0",
-    "next-themes": "^0.4.6",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "sonner": "^2.0.8"
+    "cn": "~0.3.3",
+    "jotai": "~3.0.1",
+    "lucide-react": "catalog:",
+    "motion": "~13.4.6",
+    "next-themes": "catalog:",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "sonner": "catalog:",
+    "web-haptics": "^0.0.6"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "astro": "7.3.3",
-    "shadcn": "^4.12.0",
-    "tw-animate-css": "^1.4.0"
+    "@types/react-dom": "catalog:",
+    "astro": "7.3.6",
+    "shadcn": "^4.21.5",
+    "tw-animate-css": "catalog:"
   }
 }

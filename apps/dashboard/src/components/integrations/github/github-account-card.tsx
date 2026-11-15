@@ -1,6 +1,6 @@
 "use client";
 
-import { MoreHorizontalIcon } from "@hugeicons/core-free-icons";
+import { Settings01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Avatar,
@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@notra/ui/components/ui/dropdown-menu";
-import { useTranslations } from "next-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import type { GitHubAccountCardProps } from "@/types/integrations/github";
@@ -58,12 +58,14 @@ export function GitHubAccountCard({
     );
   }
   return (
-    <div className="flex items-center gap-3 py-3">
-      <Avatar className="size-8">
-        <AvatarImage alt="" src={account.avatarUrl} />
-        <AvatarFallback>{account.login.charAt(0).toUpperCase()}</AvatarFallback>
+    <div className="flex items-center gap-3 px-4 py-3">
+      <Avatar className="size-9 rounded-lg after:rounded-lg">
+        <AvatarImage alt="" className="rounded-lg" src={account.avatarUrl} />
+        <AvatarFallback className="rounded-lg">
+          {account.login.charAt(0).toUpperCase()}
+        </AvatarFallback>
       </Avatar>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 space-y-0.5">
         <p className="truncate text-sm font-medium">{account.login}</p>
         <p className="text-muted-foreground text-xs">
           {account.type === "Organization"
@@ -80,11 +82,11 @@ export function GitHubAccountCard({
               aria-label={t("manageAriaLabel", { login: account.login })}
               disabled={isDisconnecting}
               size="icon-sm"
-              variant="ghost"
+              variant="outline"
             />
           }
         >
-          <HugeiconsIcon icon={MoreHorizontalIcon} className="size-4" />
+          <HugeiconsIcon icon={Settings01Icon} className="size-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-56">
           <DropdownMenuItem onClick={onAddRepositories}>

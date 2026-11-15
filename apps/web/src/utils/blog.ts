@@ -18,6 +18,8 @@ export const listNotraBlogPosts = cache(async (): Promise<NotraBlogPost[]> => {
     blog.map(async (entry) => ({
       ...(await normalizeContentEntry(entry)),
       contentType: "blog_post",
+      hidden: entry.hidden,
+      image: entry.image ?? null,
       authors: BLOG_AUTHORS.filter((author) => author.slug === entry.author),
     }))
   );
@@ -26,6 +28,10 @@ export const listNotraBlogPosts = cache(async (): Promise<NotraBlogPost[]> => {
       Date.parse(second.createdAt) - Date.parse(first.createdAt)
   );
 });
+
+export async function listVisibleNotraBlogPosts() {
+  return (await listNotraBlogPosts()).filter((post) => !post.hidden);
+}
 
 export async function getNotraBlogPostBySlug(slug: string) {
   return (
@@ -74,7 +80,7 @@ function buildBlogPaginationLink(post: NotraBlogPost): BlogPaginationLink {
 }
 
 export async function getNotraBlogPostPagination(slug: string) {
-  const posts = await listNotraBlogPosts();
+  const posts = await listVisibleNotraBlogPosts();
   const index = posts.findIndex((post) => post.slug === slug);
 
   if (index === -1) {

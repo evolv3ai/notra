@@ -17,6 +17,7 @@ import type {
   BackupCodesOutcome,
   SecurityActionOutcome,
 } from "@notra/ui/types/security";
+import { sleep } from "@notra/utils/sleep";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -42,11 +43,6 @@ const SIMULATED_LATENCY_MS = 450;
 const BACKUP_CODE_COUNT = 10;
 const BACKUP_CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
 const MAX_LOG_ENTRIES = 40;
-
-const wait = (ms: number) =>
-  new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
 
 function randomId(prefix: string) {
   return `${prefix}_${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
@@ -97,7 +93,7 @@ export function useAuthFlowPlayground() {
 
   async function simulateLatency() {
     const generation = generationRef.current;
-    await wait(SIMULATED_LATENCY_MS);
+    await sleep(SIMULATED_LATENCY_MS);
     if (generation !== generationRef.current) {
       throw new Error("Playground was reset");
     }

@@ -1,6 +1,9 @@
 import type { GeoCompetitor } from "@notra/geo-core/types/geo";
 
-import { GEO_SHELF_EMPTY_BOARD_COUNTS } from "@/constants/geo-shelf";
+import {
+  GEO_SHELF_EMPTY_BOARD_COUNTS,
+  GEO_SHELF_RELEVANT_MIN_CITATIONS,
+} from "@/constants/geo-shelf";
 import type {
   GeoShelfBoardCounts,
   GeoShelfFilterState,
@@ -33,11 +36,17 @@ export function isShelfOpportunitySource(source: GeoShelfSource): boolean {
   );
 }
 
-export function matchesShelfSourceFilter(
+function matchesShelfSourceFilter(
   source: GeoShelfSource,
   shelf: GeoShelfFilterState["shelf"]
 ): boolean {
   switch (shelf) {
+    case "relevant":
+      return (
+        source.origin === "manual" ||
+        source.opportunity !== null ||
+        source.citations.windowCount >= GEO_SHELF_RELEVANT_MIN_CITATIONS
+      );
     case "opportunities":
       return isShelfOpportunitySource(source);
     case "on_shelf":
@@ -54,7 +63,7 @@ export function matchesShelfSourceFilter(
   }
 }
 
-export function matchesTicketSourceFilter(
+function matchesTicketSourceFilter(
   source: GeoShelfSource,
   ticket: GeoShelfFilterState["ticket"],
   currentMemberId: string | null
@@ -92,7 +101,7 @@ function competitorNameById(
   );
 }
 
-export function matchesSourceSearch(
+function matchesSourceSearch(
   source: GeoShelfSource,
   search: string,
   members: readonly GeoShelfMember[],

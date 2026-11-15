@@ -105,6 +105,12 @@ export interface ChatgptThinkingProps extends ComponentProps<"div"> {
   label?: ReactNode;
 }
 
+export interface ChatgptAppCallProps extends ComponentProps<"div"> {
+  label?: ReactNode;
+  logo?: ReactNode;
+  name: ReactNode;
+}
+
 export interface ChatgptActionsProps extends ComponentProps<"div"> {
   onMore?: () => void;
   onRedo?: () => void;

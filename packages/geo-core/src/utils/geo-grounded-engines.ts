@@ -3,6 +3,7 @@ import {
   GEO_GROUNDED_PROVIDERS,
   GEO_LEGACY_GROUNDED_MODELS,
 } from "../constants/geo";
+import { GEO_META_SEARCH_MODEL_IDS } from "../constants/geo-model-catalog";
 import type { GeoGroundedEngine, GeoModelCatalog } from "../types/geo";
 import { engineModelOf } from "./geo-engine-family";
 
@@ -15,6 +16,9 @@ const GATEWAY_GROUNDED_PROVIDER_IDS: ReadonlySet<string> = new Set(
 /** Whether the scan planner also runs this model as a web-search engine. */
 export function hasGroundedVariant(engine: string): boolean {
   const modelId = engineModelOf(engine);
+  if (modelId.startsWith("meta/")) {
+    return GEO_META_SEARCH_MODEL_IDS.has(modelId);
+  }
   const separator = modelId.indexOf("/");
   return (
     separator > 0 &&
@@ -36,6 +40,9 @@ export function resolveGroundedEngineByKey(
     return null;
   }
   const providerId = modelId.slice(0, separator);
+  if (providerId === "meta" && !GEO_META_SEARCH_MODEL_IDS.has(modelId)) {
+    return null;
+  }
   const direct = Boolean(legacyModel) || key.endsWith("-direct-grounded");
   const provider = GEO_GROUNDED_PROVIDERS.find(
     (entry) =>

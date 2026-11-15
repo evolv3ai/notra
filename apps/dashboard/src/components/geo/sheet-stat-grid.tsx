@@ -5,11 +5,6 @@ import { GEO_TRAFFIC_STAT_TREND_HINT } from "@notra/geo-core/constants/geo";
 import { GeoStatDelta } from "@/components/geo/geo-stat-delta";
 import type { SheetStatGridProps } from "@/types/geo";
 
-/**
- * The three-up stat header every GEO detail sheet opens with. Sheets that have
- * no comparison period leave `delta` off entirely; `null` means the period
- * exists but has nothing to compare against, so the pill stays hidden.
- */
 export function SheetStatGrid({ stats }: SheetStatGridProps) {
   return (
     <div className="bg-muted/30 @container/stats rounded-xl border p-4">

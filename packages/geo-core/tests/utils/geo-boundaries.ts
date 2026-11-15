@@ -31,6 +31,7 @@ export function withGscServices<A, E>(
         Effect.succeed([
           { query: "email tools", clicks: 4, impressions: 120, position: 6 },
         ]),
+      questionQueries: () => Effect.succeed([]),
     })
   );
 }

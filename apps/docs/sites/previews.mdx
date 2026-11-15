@@ -1,0 +1,103 @@
+---
+title: "Previews"
+description: "A private link for every pull request and branch, so you can review a post before it goes live."
+authors:
+  - handle: jan
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/sites/previews
+  type: how-to
+  applies_to:
+    - notra
+  language: en
+  status: stable
+---
+
+A preview is a full copy of your site that Notra builds from a pull request or a branch at its own address. Drafts (`draft: true`) also show in previews, so reviewers can read a post before it goes live.
+
+## Local development
+
+With Node.js 22.12 or newer, run the CLI without a global installation:
+
+```bash
+npx notra@latest dev
+```
+
+Or use [Bun](https://bun.sh) directly:
+
+```bash
+bunx --bun notra@latest dev
+```
+
+Run either command from the site folder containing `blog.json`, `blog/`, or
+`changelog/`. If you prefer a global installation:
+
+```bash
+npm i -g notra
+notra dev
+```
+
+Open `http://localhost:4321`. Both `/blog` and `/changelog` are available, and `/`
+redirects to `/blog`. Content, components, CSS, assets and configuration reload
+when you edit them. If a file has an error, the browser shows it in place of the
+page and reloads once you fix it. Drafts are included, and analytics integrations
+are disabled.
+No login, API key or deployment is required. The first run downloads the Sites
+renderer; later runs reuse npm's or Bun's package cache, depending on the
+selected runtime. Node users do not need Bun. Stop the server with Ctrl+C.
+
+If port 4321 is taken, the next free port is used and printed. For a site in a
+subfolder or a different local port:
+
+```bash
+notra dev --source ./hosted-site --port 4400
+```
+
+`--source` selects the site root, not its `blog/` directory. This command uses the
+same renderer as hosted Notra Sites; it does not run your repository's app or its
+build scripts.
+
+## Pull request previews
+
+Every pull request into the production branch gets a preview at `https://pr-<number>--<address>.notra.site`, which updates with every new commit and goes away when the pull request is closed. The **Notra Sites preview** check on the pull request links to it. Pull requests from forks don't get a preview, and if the site is in a subdirectory, a pull request that changes nothing in its folder doesn't get one either.
+
+## Branch previews
+
+To preview a branch without opening a pull request, open **Deployments → Preview a branch**, enter the branch name and click **Create preview**. Every push to the branch that changes the site updates the preview, and branch previews stay until you remove them with **Delete preview**.
+
+## Post previews
+
+Open a post's **Preview** tab to build it on a Notra site without changing the
+repository or the live site. Choose **Open for** (1 hour, 1 day, 3 days, or 7
+days) and optionally set a password. **Update preview** replaces the build at
+the same link. Changing the password or lifetime does not rebuild the site.
+
+The link closes when its lifetime ends. The daily cleanup then removes the
+preview reference and its saved post files, including files left by failed
+builds. Unreferenced site builds are removed at the next cleanup after the
+24-hour build safety window. **Delete** closes the preview and removes its
+saved post files without waiting for expiry; site builds follow the same cleanup
+policy. The original post and repository files are not deleted.
+
+Expiry cleanup does not remove open branch or pull request previews, the live
+production deployment, or the last ten production builds retained for rollback.
+
+## Who can open a preview
+
+Set this under **Settings → Previews**, or with the access button on the **Deployments** page, which shows the current mode, for example **Team only**:
+
+| Access | Who can open previews |
+| --- | --- |
+| **Team only** (default) | Members of your Notra workspace, signed in |
+| **Team or password** | Members, or anyone with the password (at least 8 characters) |
+| **Anyone with the link** | Anyone |
+| **Previews off** | Nobody, and turning previews off closes all open previews |
+
+For a reviewer outside your workspace, choose **Copy share link** on a preview, and the link works for seven days.
+
+## What's different in a preview
+
+- Search engines never index previews, because every response sends `X-Robots-Tag: noindex` and `robots.txt` blocks all crawlers.
+- Notra only serves previews on Notra addresses and never on your own domain.
+- Visits to previews don't count in built-in Analytics. [Analytics integrations](/sites/integrations/analytics/overview), including Google Analytics 4, PostHog, Plausible and Umami, are disabled in previews too. Verify incoming events on the live production site after publishing. Custom scripts still run in previews, so any tracking you install through them needs its own preview filter.

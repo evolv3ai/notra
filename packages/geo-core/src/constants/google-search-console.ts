@@ -18,6 +18,27 @@ export const GSC_SYNC_ROW_LIMIT = 2000;
 /** Queries below this are noise and waste model context. */
 export const GSC_SYNC_MIN_IMPRESSIONS = 5;
 export const GSC_SYNC_MAX_KEYWORDS_FOR_MODEL = 80;
+/**
+ * Leading question words in the languages our customers search in, plus a
+ * trailing "?". Sent to Search Console as an RE2 `includingRegex` filter and
+ * reused client-side, so it must stay inside the RE2/JS common subset: no
+ * lookarounds, no flags (Search Console lowercases queries), and `\s` instead
+ * of `\b`, which never matches after an accented letter such as "qué".
+ */
+export const GSC_QUESTION_QUERY_PATTERN =
+  "^(?:who|whom|whose|what|when|where|which|why|how|is|are|can|could|should|would|will|do|does|did|wer|wie|was|wann|wo|woher|wohin|welche|welcher|welches|warum|wieso|weshalb|kann|muss|soll|ist|sind|gibt|qué|que|cómo|como|cuál|cuáles|cuándo|dónde|por qué|quién|comment|pourquoi|quel|quelle|quels|quelles|quand|où|est-ce)\\s|\\?$";
+/**
+ * Question queries are long tail: a few impressions each, so they rarely make
+ * the click-sorted top rows. A separate pull finds them.
+ */
+export const GSC_QUESTION_ROW_LIMIT = 1000;
+/** A question is the searcher's own wording, so a lower floor still is signal. */
+export const GSC_QUESTION_MIN_IMPRESSIONS = 2;
+/**
+ * Model slots for questions: reserved so head terms cannot crowd them out, and
+ * capped so questions cannot crowd out the head terms either.
+ */
+export const GSC_SYNC_MAX_QUESTIONS_FOR_MODEL = 30;
 /** Head terms that share this many leading words count as one intent. */
 export const GSC_QUERY_CLUSTER_WORDS = 3;
 /** Near-duplicate queries of one head term that may reach the model. */

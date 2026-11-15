@@ -30,10 +30,16 @@ export interface LogPipeline {
   flush(): Promise<void>;
 }
 
+export interface CheckpointLogPipeline extends LogPipeline {
+  readonly pending: number;
+}
+
 export interface EvlogRuntimeState {
   aiDrain?: LogPipeline;
   geoDrain?: LogPipeline;
   flushScheduler?: LogFlushScheduler;
+  pendingAIUsage?: Set<Promise<void>>;
+  pendingAlerts?: Set<Promise<void>>;
 }
 
 export type EvlogGlobal = typeof globalThis & {

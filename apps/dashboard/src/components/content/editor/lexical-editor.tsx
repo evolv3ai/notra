@@ -27,6 +27,7 @@ import { ContentImageNode } from "./nodes/content-image-node";
 import { ContentVideoNode } from "./nodes/content-video-node";
 import { KiboCodeBlockNode } from "./nodes/kibo-code-block-node";
 import { EditorAutoLinkPlugin } from "./plugins/auto-link-plugin";
+import { CommentAnchorsPlugin } from "./plugins/comment-anchors-plugin";
 import { ComponentPickerPlugin } from "./plugins/component-picker-plugin";
 import { DraggableBlockPlugin } from "./plugins/draggable-block-plugin";
 import {
@@ -51,6 +52,7 @@ interface LexicalEditorProps {
   theme?: EditorThemeClasses;
   className?: string;
   cleanReviewMarks?: boolean;
+  mediaUploads?: boolean;
 }
 
 export function LexicalEditor({
@@ -63,6 +65,7 @@ export function LexicalEditor({
   theme = editorTheme,
   className,
   cleanReviewMarks = false,
+  mediaUploads = true,
 }: LexicalEditorProps) {
   const isProgrammaticUpdateRef = useRef(false);
   const [floatingAnchorElem, setFloatingAnchorElem] =
@@ -118,7 +121,7 @@ export function LexicalEditor({
   return (
     <LexicalComposer initialConfig={initialConfig}>
       <div className="lexical-editor relative" ref={onRef}>
-        <ImageUploadPlugin />
+        {mediaUploads && <ImageUploadPlugin />}
         <RichTextPlugin
           contentEditable={
             <ContentEditable
@@ -139,7 +142,7 @@ export function LexicalEditor({
           <MarkdownShortcutPlugin transformers={EDITOR_TRANSFORMERS} />
         )}
         {editable && <EditorAutoLinkPlugin />}
-        {editable && <ComponentPickerPlugin />}
+        {editable && <ComponentPickerPlugin mediaUploads={mediaUploads} />}
         <ClickableLinkPlugin newTab />
         <TabFocusPlugin />
         <MarkdownSyncPlugin
@@ -151,6 +154,7 @@ export function LexicalEditor({
           onSelectionChange={onSelectionChange}
           selectedExcerpt={selectedExcerpt}
         />
+        <CommentAnchorsPlugin />
         {editorRef && (
           <EditorRefPlugin
             editorRef={editorRef}

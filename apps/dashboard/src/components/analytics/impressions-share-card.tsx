@@ -1,15 +1,17 @@
 "use client";
 
-import { useTranslations } from "next-intl";
 import { useMemo } from "react";
+import { InstrumentEmpty, InstrumentModule } from "ui/card";
+import { useTranslations } from "use-intl";
 
 import { ChartColorScope } from "@/components/charts/chart-color-scope";
 import { EChartsPieChart } from "@/components/evilcharts/charts/echarts-pie-chart";
 import {
-  InstrumentEmpty,
-  InstrumentModule,
-} from "@/components/instrument/instrument-module";
-import { DONUT_INNER_RADIUS, DONUT_OUTER_RADIUS } from "@/constants/charts";
+  DONUT_CORNER_RADIUS,
+  DONUT_INNER_RADIUS,
+  DONUT_OUTER_RADIUS,
+  DONUT_PADDING_ANGLE,
+} from "@/constants/charts";
 import { useLeaderboard } from "@/lib/hooks/use-social-analytics";
 import type {
   ImpressionsShareCardProps,
@@ -93,6 +95,8 @@ export function ImpressionsShareCard({
               <EChartsPieChart.Pie
                 innerRadius={DONUT_INNER_RADIUS}
                 outerRadius={DONUT_OUTER_RADIUS}
+                cornerRadius={DONUT_CORNER_RADIUS}
+                paddingAngle={DONUT_PADDING_ANGLE}
               />
               <EChartsPieChart.Tooltip />
             </EChartsPieChart>

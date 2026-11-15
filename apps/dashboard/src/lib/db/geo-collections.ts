@@ -12,14 +12,9 @@ import { collectionOptions } from "@tanstack/react-db";
 import type { QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import {
-  rejectProjectCreateHandoff,
-  resolveProjectCreateHandoff,
-} from "@/lib/db/geo-project-create-handoff";
 import { dashboardOrpc } from "@/lib/orpc/query";
 import type { GeoCollectionSpec } from "@/types/geo-db";
 
-// Bounded retries instead of an unbounded error poll on every dashboard page.
 const GEO_PROJECTS_RETRY_COUNT = 3;
 
 function scopeKey(scope: GeoScopeInput): string {
@@ -67,7 +62,6 @@ function buildScopedCollection<T extends object>(
         try {
           return await spec.fetch(scope);
         } catch (error) {
-          // The upgrade gate handles entitlement denials, not load-error toasts.
           if (
             !(
               error instanceof ORPCError && error.code === "PAYMENT_REQUIRED"
@@ -81,18 +75,8 @@ function buildScopedCollection<T extends object>(
       },
       getKey: spec.getKey,
       onInsert: async ({ transaction }) => {
-        try {
-          for (const mutation of transaction.mutations) {
-            const result = await spec.insert?.(scope, mutation.modified);
-            if (spec.name === "projects" && result) {
-              resolveProjectCreateHandoff(transaction.id, result as GeoProject);
-            }
-          }
-        } catch (error) {
-          if (spec.name === "projects") {
-            rejectProjectCreateHandoff(transaction.id, error);
-          }
-          throw error;
+        for (const mutation of transaction.mutations) {
+          await spec.insert?.(scope, mutation.modified);
         }
       },
       onUpdate: async ({ transaction }) => {
@@ -176,13 +160,6 @@ export const geoProjectsCollection = createCollectionFactory<GeoProject>({
     return response.projects;
   },
   getKey: (item) => item.id,
-  insert: (scope, item) =>
-    dashboardOrpc.geo.projectsCreate.call({
-      organizationId: scope.organizationId,
-      name: item.name,
-      brandSettingsId: item.brandSettingsId,
-      languages: item.languages,
-    }),
   update: (scope, key, modified) =>
     dashboardOrpc.geo.projectsUpdate.call({
       organizationId: scope.organizationId,

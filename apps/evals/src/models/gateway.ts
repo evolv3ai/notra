@@ -1,5 +1,11 @@
 import { createGateway } from "@ai-sdk/gateway";
 import {
+  ROUTER_METADATA_KEY,
+  ROUTE_USAGE_LOOKUP_CONCURRENCY,
+} from "@notra/ai/constants/router";
+import { createVercelAdapter } from "@notra/ai/router/adapters/vercel";
+import { isRecord } from "@notra/utils/unknown-record";
+import {
   experimental_evaluate as evaluateWithModel,
   generateText,
   Output,
@@ -9,7 +15,14 @@ import {
 import type { z } from "zod";
 
 import { PROD_GATEWAY_CACHING } from "../constants/gateway";
-import type { CallResult, TokenUsage } from "../types/eval";
+import type {
+  CallResult,
+  EvalCost,
+  EvalCostStep,
+  TokenUsage,
+  UsageLike,
+} from "../types/eval";
+import { readGatewayCost, summarizeCosts } from "../utils/cost";
 import { priceFor } from "./pricing";
 
 let gatewayInstance: ReturnType<typeof createGateway> | undefined;
@@ -31,7 +44,6 @@ export function getGateway(): ReturnType<typeof createGateway> {
   return gatewayInstance;
 }
 
-// Same tags as prod calls so eval spend is visible separately in the gateway.
 const gatewayProviderOptions = (feature: string) => ({
   gateway: {
     disallowPromptTraining: true,
@@ -39,12 +51,6 @@ const gatewayProviderOptions = (feature: string) => ({
     caching: PROD_GATEWAY_CACHING,
   },
 });
-
-interface UsageLike {
-  inputTokens?: number | undefined;
-  outputTokens?: number | undefined;
-  inputTokenDetails?: { cacheReadTokens?: number | undefined } | undefined;
-}
 
 export function toUsage(usage: UsageLike | undefined): TokenUsage {
   return {
@@ -54,72 +60,69 @@ export function toUsage(usage: UsageLike | undefined): TokenUsage {
   };
 }
 
-/** Gateway cost, falling back to market cost (BYOK calls report cost 0). */
-function readGatewayCost(metadata: unknown): number | undefined {
-  const gateway = (
-    metadata as { gateway?: Record<string, unknown> } | undefined
-  )?.gateway;
-  for (const key of ["cost", "marketCost"] as const) {
-    const raw = gateway?.[key];
-    const value = typeof raw === "string" ? Number(raw) : raw;
-    if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-      return value;
-    }
-  }
-  return undefined;
-}
-
-/**
- * List-price estimate for calls without a gateway-reported cost. Undefined
- * when the model has no list price, so an unknown cost never reads as free.
- */
-async function estimateCost(
-  modelId: string,
-  usage: TokenUsage
-): Promise<number | undefined> {
-  const price = await priceFor(modelId);
-  if (!price) {
-    return undefined;
-  }
-  const uncached = Math.max(0, usage.inputTokens - usage.cachedInputTokens);
-  // Cache reads bill at roughly a tenth of the input price across providers.
-  return (
-    uncached * price.input +
-    usage.cachedInputTokens * price.input * 0.1 +
-    usage.outputTokens * price.output
-  );
-}
-
-/**
- * Agent loops: the gateway reports cost per step, so sum the steps. Falls back
- * to the list-price estimate if any step lacks a reported cost.
- */
-export async function runCost(
+export async function runCostDetails(
   modelId: string,
   usage: TokenUsage,
-  steps: readonly { providerMetadata?: unknown }[]
-): Promise<number | undefined> {
-  let total = 0;
-  for (const step of steps) {
-    const cost = readGatewayCost(step.providerMetadata);
-    if (cost === undefined) {
-      return estimateCost(modelId, usage);
+  steps: readonly EvalCostStep[]
+): Promise<EvalCost> {
+  const calls: EvalCostStep[] = [...(steps.length ? steps : [{ usage }])];
+  const apiKey = process.env.AI_GATEWAY_API_KEY?.trim();
+  if (apiKey) {
+    const adapter = createVercelAdapter({ apiKey });
+    for (
+      let offset = 0;
+      offset < calls.length;
+      offset += ROUTE_USAGE_LOOKUP_CONCURRENCY
+    ) {
+      const enriched = await Promise.all(
+        calls
+          .slice(offset, offset + ROUTE_USAGE_LOOKUP_CONCURRENCY)
+          .map(async (step) => {
+            const metadata = step.providerMetadata;
+            const gateway = isRecord(metadata) ? metadata.gateway : undefined;
+            if (
+              !isRecord(gateway) ||
+              typeof gateway.generationId !== "string" ||
+              !gateway.generationId
+            ) {
+              return step;
+            }
+            try {
+              const route = await adapter.lookupRouteMetadata?.(
+                gateway.generationId
+              );
+              return {
+                ...step,
+                providerMetadata: {
+                  ...(isRecord(metadata) ? metadata : {}),
+                  [ROUTER_METADATA_KEY]: route,
+                },
+              };
+            } catch {
+              return step;
+            }
+          })
+      );
+      calls.splice(offset, enriched.length, ...enriched);
     }
-    total += cost;
   }
-  return total;
+  const needsPrice = calls.some(
+    (step) => readGatewayCost(step.providerMetadata) === undefined
+  );
+  return summarizeCosts(
+    calls,
+    needsPrice ? await priceFor(modelId) : undefined
+  );
 }
 
 async function costFor(
   modelId: string,
-  usage: TokenUsage,
+  usage: UsageLike | undefined,
   metadata: unknown
-): Promise<number | undefined> {
-  const reported = readGatewayCost(metadata);
-  if (reported !== undefined) {
-    return reported;
-  }
-  return estimateCost(modelId, usage);
+): Promise<EvalCost> {
+  return runCostDetails(modelId, toUsage(usage), [
+    { usage, providerMetadata: metadata },
+  ]);
 }
 
 export interface ObjectCallParams<SCHEMA extends z.ZodType> {
@@ -131,6 +134,8 @@ export interface ObjectCallParams<SCHEMA extends z.ZodType> {
   messages?: ModelMessage[];
   abortSignal: AbortSignal;
   temperature?: number;
+  maxOutputTokens?: number;
+  reasoning?: Parameters<typeof generateText>[0]["reasoning"];
   providerOptions?: Record<string, Record<string, unknown>>;
 }
 
@@ -146,6 +151,8 @@ export async function callObject<SCHEMA extends z.ZodType>(
     output: Output.object({ schema: params.schema }),
     abortSignal: params.abortSignal,
     temperature: params.temperature,
+    maxOutputTokens: params.maxOutputTokens,
+    reasoning: params.reasoning,
     maxRetries: 0,
     providerOptions: {
       ...gatewayProviderOptions(params.feature),
@@ -157,7 +164,7 @@ export async function callObject<SCHEMA extends z.ZodType>(
   return {
     output: result.output as z.infer<SCHEMA>,
     usage,
-    costUsd: await costFor(params.modelId, usage, result.providerMetadata),
+    ...(await runCostDetails(params.modelId, usage, result.steps)),
     transcript: result.text,
   };
 }
@@ -179,7 +186,6 @@ export interface JevAnswer<QUESTIONS extends JevQuestions> {
   confidence: Record<string, number>;
 }
 
-/** Same call shape as packages/ai/src/evaluation/client.ts. */
 export async function callJev<QUESTIONS extends JevQuestions>(
   params: JevCallParams<QUESTIONS>
 ): Promise<CallResult<JevAnswer<QUESTIONS>>> {
@@ -215,7 +221,11 @@ export async function callJev<QUESTIONS extends JevQuestions>(
   return {
     output: { answers: result.answers, confidence },
     usage,
-    costUsd: await costFor(params.modelId, usage, result.providerMetadata),
+    ...(await costFor(
+      params.modelId,
+      result.usage as UsageLike,
+      result.providerMetadata
+    )),
     transcript: JSON.stringify(
       { answers: result.answers, confidence },
       null,

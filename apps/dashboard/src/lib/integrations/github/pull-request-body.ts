@@ -1,3 +1,6 @@
+import { getAppUrl } from "@notra/ai/utils/url";
+import { escapeRegExp } from "@notra/utils/escape";
+
 import {
   GITHUB_PULL_REQUEST_BODY_MAX_LENGTH,
   GITHUB_PULL_REQUEST_BODY_SECTION_END,
@@ -17,9 +20,7 @@ const OPEN_IN_NOTRA_BADGE_PATHS = {
 const PULL_REQUEST_BODY_TRUNCATION_NOTICE =
   "_Truncated to fit GitHub's pull request description limit. The full draft is in the committed file._";
 
-export type { OpenInNotraBadgeUrls };
-
-export interface BuildContentPullRequestBodyParams {
+interface BuildContentPullRequestBodyParams {
   contentType: GitHubPublishContentType;
   /** Repository path of the committed draft. */
   path: string;
@@ -37,15 +38,9 @@ function trimTrailingSlash(url: string) {
   return url.replace(/\/+$/, "");
 }
 
-/**
- * Resolves the public base URL of the Notra dashboard from the environment.
- * Returns `null` when no URL is configured so callers can omit deep links.
- */
-export function resolveNotraBaseUrl(
-  env: NodeJS.ProcessEnv = process.env
-): string | null {
-  const raw =
-    env.APP_URL ?? env.NEXT_PUBLIC_SITE_URL ?? env.NEXT_PUBLIC_APP_URL ?? "";
+/** `null` when no URL is configured, so callers can omit deep links. */
+export function resolveNotraBaseUrl(): string | null {
+  const raw = getAppUrl() ?? "";
   const trimmed = trimTrailingSlash(raw.trim());
   return trimmed.length > 0 ? trimmed : null;
 }
@@ -60,11 +55,6 @@ export function buildOpenInNotraBadgeUrls(
   };
 }
 
-/**
- * GitHub renders `<picture>` with `prefers-color-scheme` sources in Markdown,
- * so the badge follows the viewer's theme. The plain `<img>` is the fallback
- * for clients without `<picture>` support (e.g. notification emails).
- */
 function renderOpenInNotraButton(
   contentUrl: string,
   badgeUrls: OpenInNotraBadgeUrls
@@ -97,14 +87,6 @@ function joinParagraphs(parts: string[]) {
   return parts.filter((part) => part.length > 0).join("\n\n");
 }
 
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/**
- * Drops a previously rendered deep link so republishing can place one fresh
- * link after the file path, including after notes another app appended.
- */
 function stripOpenInNotraLink(
   body: string,
   params: BuildContentPullRequestBodyParams
@@ -130,11 +112,6 @@ function openInNotraTail(params: BuildContentPullRequestBodyParams) {
   return link ? `\n\n${link}` : "";
 }
 
-/**
- * Older pull requests only had this summary (and later the Open in Notra
- * button). Keep generating it so republishing can still find and replace
- * unmarked legacy bodies.
- */
 function buildManagedIntro(params: BuildContentPullRequestBodyParams) {
   return joinParagraphs([
     draftSummary(params.contentType),

@@ -2,10 +2,6 @@ import { cn } from "cn";
 
 import type { OpencodeMessageProps } from "../types/opencode";
 
-/**
- * Colors markup inside a reply the way the TUI renders markdown: headings
- * and strong text in orange, inline code in green, orange list dashes.
- */
 const REPLY_MARKUP_CLASS =
   "[&_:is(h1,h2,h3,h4)]:text-opencode-orange [&_:is(h1,h2,h3,h4)]:text-[length:inherit] [&_:is(h1,h2,h3,h4)]:font-bold [&_code]:text-opencode-green [&_code]:font-[inherit] [&_code]:text-[length:inherit] [&_li]:ps-[2ch] [&_li]:before:-ms-[2ch] [&_li]:before:inline-block [&_li]:before:w-[2ch] [&_li]:before:text-opencode-orange [&_li]:before:content-['-'] [&_ol]:list-none [&_strong]:text-opencode-orange [&_strong]:font-bold [&_ul]:list-none [&>*+*]:mt-[1lh]";
 

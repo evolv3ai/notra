@@ -6,6 +6,7 @@ import { isDemoMode } from "@notra/utils/demo-mode";
 import { Context, Effect, Layer, Schedule } from "effect";
 
 import {
+  QSTASH_DELETE_ATTEMPTS,
   QSTASH_DELETE_RETRY_DELAY_MS,
   QSTASH_DESTINATION_REJECTION_PATTERN,
   QSTASH_REQUEST_TIMEOUT_MS,
@@ -17,12 +18,6 @@ export class QstashService extends Context.Service<
   QstashOperations
 >()("api/Qstash") {}
 
-// Keep the existing platform fetch transport, but own cancellation and decoding
-// inside the adapter rather than leaking them into schedule transactions.
-/**
- * The public demo never schedules real QStash callbacks; schedules are saved
- * and can be run on demand from the dashboard instead.
- */
 const demoQstashLayer = Layer.succeed(
   QstashService,
   QstashService.of({
@@ -33,7 +28,32 @@ const demoQstashLayer = Layer.succeed(
   })
 );
 
-export function qstashLayer(env: QstashEnv, request: typeof fetch = fetch) {
+const missingTokenError = () =>
+  new QstashError({
+    kind: "configuration",
+    message: "QSTASH_TOKEN is not configured",
+  });
+
+const toQstashError = (cause: unknown) =>
+  cause instanceof QstashError
+    ? cause
+    : new QstashError({
+        kind: "transport",
+        message: "QStash request failed",
+      });
+
+const withQstashTimeout = Effect.timeoutOrElse({
+  duration: QSTASH_REQUEST_TIMEOUT_MS,
+  orElse: () =>
+    Effect.fail(
+      new QstashError({
+        kind: "timeout",
+        message: "QStash request timed out",
+      })
+    ),
+});
+
+export function qstashLayer(env: QstashEnv) {
   if (isDemoMode()) {
     return demoQstashLayer;
   }
@@ -42,12 +62,7 @@ export function qstashLayer(env: QstashEnv, request: typeof fetch = fetch) {
     QstashService.of({
       create: Effect.fn("Qstash.create")(function* (input) {
         if (!env.QSTASH_TOKEN) {
-          return yield* Effect.fail(
-            new QstashError({
-              kind: "configuration",
-              message: "QSTASH_TOKEN is not configured",
-            })
-          );
+          return yield* Effect.fail(missingTokenError());
         }
         if (!env.WORKFLOW_BASE_URL) {
           return yield* Effect.fail(
@@ -60,7 +75,7 @@ export function qstashLayer(env: QstashEnv, request: typeof fetch = fetch) {
         const destination = `${env.WORKFLOW_BASE_URL.replace(/\/$/, "")}/api/workflows/schedule`;
         return yield* Effect.tryPromise({
           try: async (signal) => {
-            const response = await request(
+            const response = await fetch(
               `https://qstash.upstash.io/v2/schedules/${encodeURIComponent(destination)}`,
               {
                 method: "POST",
@@ -101,38 +116,16 @@ export function qstashLayer(env: QstashEnv, request: typeof fetch = fetch) {
             }
             return id;
           },
-          catch: (cause) =>
-            cause instanceof QstashError
-              ? cause
-              : new QstashError({
-                  kind: "transport",
-                  message: "QStash request failed",
-                }),
-        }).pipe(
-          Effect.timeoutOrElse({
-            duration: QSTASH_REQUEST_TIMEOUT_MS,
-            orElse: () =>
-              Effect.fail(
-                new QstashError({
-                  kind: "timeout",
-                  message: "QStash request timed out",
-                })
-              ),
-          })
-        );
+          catch: toQstashError,
+        }).pipe(withQstashTimeout);
       }),
       delete: Effect.fn("Qstash.delete")(function* (scheduleId) {
         if (!env.QSTASH_TOKEN) {
-          return yield* Effect.fail(
-            new QstashError({
-              kind: "configuration",
-              message: "QSTASH_TOKEN is not configured",
-            })
-          );
+          return yield* Effect.fail(missingTokenError());
         }
         yield* Effect.tryPromise({
           try: async (signal) => {
-            const response = await request(
+            const response = await fetch(
               `https://qstash.upstash.io/v2/schedules/${encodeURIComponent(scheduleId)}`,
               {
                 method: "DELETE",
@@ -150,40 +143,20 @@ export function qstashLayer(env: QstashEnv, request: typeof fetch = fetch) {
               });
             }
           },
-          catch: (cause) =>
-            cause instanceof QstashError
-              ? cause
-              : new QstashError({
-                  kind: "transport",
-                  message: "QStash request failed",
-                }),
-        }).pipe(
-          Effect.timeoutOrElse({
-            duration: QSTASH_REQUEST_TIMEOUT_MS,
-            orElse: () =>
-              Effect.fail(
-                new QstashError({
-                  kind: "timeout",
-                  message: "QStash request timed out",
-                })
-              ),
-          })
-        );
+          catch: toQstashError,
+        }).pipe(withQstashTimeout);
       }),
     })
   );
 }
 
 export const deleteQstashWithRetry = Effect.fn("Qstash.deleteWithRetry")(
-  function* (scheduleId: string, attempts = 3) {
+  function* (scheduleId: string) {
     const service = yield* QstashService;
-    const totalAttempts = Number.isFinite(attempts)
-      ? Math.max(1, Math.floor(attempts))
-      : 3;
     yield* service.delete(scheduleId).pipe(
       Effect.retry({
         schedule: Schedule.addDelay(
-          Schedule.recurs(totalAttempts - 1),
+          Schedule.recurs(QSTASH_DELETE_ATTEMPTS - 1),
           (metadata) =>
             Effect.succeed(QSTASH_DELETE_RETRY_DELAY_MS * (metadata.output + 1))
         ),

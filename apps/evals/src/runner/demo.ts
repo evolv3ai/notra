@@ -1,8 +1,6 @@
 import type { AnySuite, CallResult, Contender, EvalCase } from "../types/eval";
 
-/** Rough per-model behaviour so demo runs look like real comparisons. */
 interface DemoProfile {
-  /** Probability of returning the expected answer. */
   skill: number;
   medianMs: number;
   errorRate: number;
@@ -17,7 +15,7 @@ const DEFAULT_PROFILE: DemoProfile = {
 };
 
 const PROFILES: Record<string, Partial<DemoProfile>> = {
-  "typesafe-ai/jev": {
+  "typesafe-ai/jev-1.14.0": {
     skill: 0.93,
     medianMs: 300,
     errorRate: 0.01,
@@ -90,7 +88,6 @@ export function profileFor(modelId: string): DemoProfile {
   return { ...DEFAULT_PROFILE, ...PROFILES[modelId] };
 }
 
-/** Mulberry32, seeded so the same case/model pair varies but stays stable-ish. */
 export function createRng(seed: number): () => number {
   let state = seed >>> 0;
   return () => {
@@ -137,7 +134,6 @@ export async function demoCall(
 ): Promise<CallResult<unknown>> {
   const profile = profileFor(contender.modelId);
   const rng = createRng(hash(`${contender.key}:${testCase.id}`) ^ Date.now());
-  // Log-normal-ish latency: most calls near the median, a long tail.
   const latency =
     profile.medianMs * Math.exp((rng() + rng() + rng() - 1.5) * 0.9);
   await sleep(Math.min(latency, suite.timeoutMs + 500), signal);
@@ -147,7 +143,6 @@ export async function demoCall(
   }
 
   const skillRng = createRng(hash(`${contender.modelId}:${testCase.id}:skill`));
-  // Mix a stable per-model component with noise so repeats mostly agree.
   const mixed = () => (rng() < 0.75 ? skillRng() : rng());
   const hit = () => mixed() < profile.skill;
   const output = suite.demoOutput(testCase, {
@@ -173,6 +168,7 @@ export async function demoCall(
     output,
     usage: { inputTokens, outputTokens, cachedInputTokens: 0 },
     costUsd: profile.usdPerCall * (0.7 + rng() * 0.6),
+    costSource: "estimated",
     transcript:
       suite.transcript?.(output) ??
       (typeof output === "string" ? output : JSON.stringify(output, null, 2)),

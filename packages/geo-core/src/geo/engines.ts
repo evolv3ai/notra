@@ -1,13 +1,13 @@
-import { anthropic, createAnthropic } from "@ai-sdk/anthropic";
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { google } from "@ai-sdk/google";
 import { createOpenAI, openai } from "@ai-sdk/openai";
 import { createPerplexity } from "@ai-sdk/perplexity";
+import { xai } from "@ai-sdk/xai";
 import { gateway } from "@notra/ai/gateway";
 import { requireApiKey } from "@notra/utils/require-api-key";
 
 import {
   GEO_ANTHROPIC_API_KEY_ENV,
-  GEO_GROUNDED_MAX_SEARCHES,
   GEO_OPENAI_API_KEY_ENV,
   GEO_PERPLEXITY_API_KEY_ENV,
 } from "../constants/geo";
@@ -16,40 +16,60 @@ import type {
   GeoGroundedInvocation,
   GeoGroundedInvocationOptions,
 } from "../types/geo";
+import { geoAnthropicWebSearch } from "../utils/geo-anthropic-web-search";
 
 export function buildGroundedInvocation(
   engine: GeoGroundedEngine,
   options: GeoGroundedInvocationOptions = {}
 ): GeoGroundedInvocation {
-  // Provider-defined web search tools are only available through the Vercel
-  // AI Gateway, so grounded engines are pinned to it.
-  const groundedGateway = {
+  // The router sends provider-defined search tools only to a gateway that
+  // serves them for the model (Neon: OpenAI and Gemini search, else Vercel).
+  const routed = {
     organizationId: options.organizationId,
-    gateway: "vercel",
     zdr: options.zdr,
+    logContext: options.logContext,
   } as const;
   switch (engine.provider) {
     case "gateway-openai":
       return {
-        model: gateway(engine.model, groundedGateway),
+        model: gateway(engine.model, routed),
         tools: { web_search: openai.tools.webSearch({}) },
       };
     case "gateway-anthropic":
       return {
-        model: gateway(engine.model, groundedGateway),
+        model: gateway(engine.model, routed),
         tools: {
-          web_search: anthropic.tools.webSearch_20250305({
-            maxUses: GEO_GROUNDED_MAX_SEARCHES,
-          }),
+          web_search: geoAnthropicWebSearch(
+            engine.model,
+            options.zdr === "none"
+          ),
         },
       };
     case "gateway-google":
       return {
-        model: gateway(engine.model, groundedGateway),
+        model: gateway(engine.model, routed),
         tools: { google_search: google.tools.googleSearch({}) },
       };
     case "gateway-perplexity":
-      return { model: gateway(engine.model, groundedGateway), tools: {} };
+      // Sonar searches on its own and has no tool to route by.
+      return {
+        model: gateway(engine.model, { ...routed, gateway: "vercel" }),
+        tools: {},
+      };
+    case "gateway-meta":
+      // Meta accepts the OpenAI-compatible search tool, but rejects it under ZDR.
+      if (options.zdr === "required") {
+        throw new Error("Meta web search does not support zero data retention");
+      }
+      return {
+        model: gateway(engine.model, { ...routed, zdr: "none" }),
+        tools: { web_search: openai.tools.webSearch({}) },
+      };
+    case "gateway-spacexai":
+      return {
+        model: gateway(engine.model, routed),
+        tools: { web_search: xai.tools.webSearch({}) },
+      };
     case "direct-openai": {
       const provider = createOpenAI({
         apiKey: requireApiKey(GEO_OPENAI_API_KEY_ENV),
@@ -66,9 +86,10 @@ export function buildGroundedInvocation(
       return {
         model: provider(engine.model),
         tools: {
-          web_search: provider.tools.webSearch_20250305({
-            maxUses: GEO_GROUNDED_MAX_SEARCHES,
-          }),
+          web_search: geoAnthropicWebSearch(
+            engine.model,
+            options.zdr === "none"
+          ),
         },
       };
     }

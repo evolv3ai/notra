@@ -25,11 +25,6 @@ const settle = (turn: OpencodeDemoTurn): OpencodeChatTurn => ({
   status: "done",
 });
 
-/**
- * Runs the demo conversation: `send` appends your prompt, thinks, plays the
- * reply's tool lines and renders the answer block by block. `stop` interrupts
- * the running turn like Escape does.
- */
 export const useOpencodeChat = (
   history: readonly OpencodeDemoTurn[],
   replies: readonly OpencodeReply[]

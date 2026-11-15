@@ -1,5 +1,6 @@
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
+import type { ExcalidrawScene } from "../types/excalidraw-diagram";
 import type { UploadIntegrationBrandingAssetParams } from "../types/integrations";
 
 interface R2Env {
@@ -95,22 +96,23 @@ export async function uploadIntegrationBrandingAsset(
   return `${env.publicUrl.replace(TRAILING_SLASHES_RE, "")}/${key}`;
 }
 
-export async function uploadGeneratedImageAsset(params: {
+async function uploadContentAsset(params: {
   organizationId: string;
-  pngBase64: string;
   postId: string;
+  extension: string;
+  body: Buffer;
+  contentType: string;
 }) {
   const env = getR2Env();
-  const key = `organization/${params.organizationId}/content/${params.postId}-${Date.now()}.png`;
-  const body = Buffer.from(params.pngBase64, "base64");
+  const key = `organization/${params.organizationId}/content/${params.postId}-${Date.now()}.${params.extension}`;
 
   await getR2Client().send(
     new PutObjectCommand({
-      Body: body,
+      Body: params.body,
       Bucket: env.bucketName,
       CacheControl: "public, max-age=31536000",
-      ContentLength: body.byteLength,
-      ContentType: "image/png",
+      ContentLength: params.body.byteLength,
+      ContentType: params.contentType,
       Key: key,
     })
   );
@@ -118,25 +120,44 @@ export async function uploadGeneratedImageAsset(params: {
   return `${env.publicUrl.replace(TRAILING_SLASHES_RE, "")}/${key}`;
 }
 
-export async function uploadGeneratedHtmlAsset(params: {
+export function uploadGeneratedImageAsset(params: {
+  organizationId: string;
+  pngBase64: string;
+  postId: string;
+}) {
+  return uploadContentAsset({
+    organizationId: params.organizationId,
+    postId: params.postId,
+    extension: "png",
+    body: Buffer.from(params.pngBase64, "base64"),
+    contentType: "image/png",
+  });
+}
+
+export function uploadGeneratedHtmlAsset(params: {
   organizationId: string;
   html: string;
   postId: string;
 }) {
-  const env = getR2Env();
-  const key = `organization/${params.organizationId}/content/${params.postId}-${Date.now()}.html`;
-  const body = Buffer.from(params.html, "utf-8");
+  return uploadContentAsset({
+    organizationId: params.organizationId,
+    postId: params.postId,
+    extension: "html",
+    body: Buffer.from(params.html, "utf-8"),
+    contentType: "text/html; charset=utf-8",
+  });
+}
 
-  await getR2Client().send(
-    new PutObjectCommand({
-      Body: body,
-      Bucket: env.bucketName,
-      CacheControl: "public, max-age=31536000",
-      ContentLength: body.byteLength,
-      ContentType: "text/html; charset=utf-8",
-      Key: key,
-    })
-  );
-
-  return `${env.publicUrl.replace(TRAILING_SLASHES_RE, "")}/${key}`;
+export function uploadGeneratedExcalidrawAsset(params: {
+  organizationId: string;
+  scene: ExcalidrawScene;
+  postId: string;
+}) {
+  return uploadContentAsset({
+    organizationId: params.organizationId,
+    postId: params.postId,
+    extension: "excalidraw",
+    body: Buffer.from(JSON.stringify(params.scene), "utf-8"),
+    contentType: "application/json; charset=utf-8",
+  });
 }

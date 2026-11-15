@@ -1,7 +1,6 @@
 /** Use ordinary URI encoding, with a tagged JSON fallback for lone surrogates. */
 export function encodeChatStreamId(id: string): string {
   try {
-    // Reserve the leading tilde for the fallback without changing the ID.
     return encodeURIComponent(id).replace(/^~/, "%7E");
   } catch {
     return `~${encodeURIComponent(JSON.stringify(id))}`;

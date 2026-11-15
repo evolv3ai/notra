@@ -6,7 +6,7 @@ export const ScheduledContentSkippedEmail = ({
   scheduleName = "Weekly Product Updates",
   reason = "No meaningful changes were found in the lookback window.",
   organizationSlug = "acme",
-  settingsLink = `https://app.usenotra.com/${organizationSlug}/automation/schedules`,
+  settingsLink = `https://app.usenotra.com/${organizationSlug}/automation`,
 }: ScheduledContentStatusEmailProps) => (
   <ScheduledContentStatusEmail
     organizationName={organizationName}

@@ -1,9 +1,9 @@
 export const FEATURES = {
   TEAM_MEMBERS: "team_members",
   AI_CREDITS: "ai_credits",
-  /** Monthly allowance the GitHub mention agent spends, in the same cents as `ai_credits`. */
   PULL_REQUEST_CREDITS: "pull_request_credits",
   AI_ANSWERS: "ai_answers",
+  AI_TRAFFIC_EVENTS: "ai_traffic_events",
   LONG_FORM_POSTS: "long_form_posts",
   SOCIAL_POSTS: "social_posts",
   IMAGE_GENERATIONS: "image_generations",
@@ -43,9 +43,7 @@ export const ACTIVE_PAID_PLAN_IDS: Set<string> = new Set([
   PLANS.SCALE_ANNUAL,
 ]);
 
-export const LEGACY_PLAN_IDS: Set<string> = new Set(
-  Object.values(LEGACY_PLANS)
-);
+const LEGACY_PLAN_IDS: Set<string> = new Set(Object.values(LEGACY_PLANS));
 
 export const PAID_OR_LEGACY_PLAN_IDS: Set<string> = new Set([
   ...ACTIVE_PAID_PLAN_IDS,
@@ -63,5 +61,3 @@ export const TOPUP_MIN_DOLLARS = 5;
 export const TOPUP_MAX_DOLLARS = 500;
 
 export const TOPUP_PRESETS = [5, 10, 25, 50] as const;
-
-export type FeatureId = (typeof FEATURES)[keyof typeof FEATURES];

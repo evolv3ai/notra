@@ -2,7 +2,6 @@ import { p } from "@tinybirdco/sdk";
 
 import { TRAILING_DAYS_PARAM } from "./analytics-params";
 
-// Shared project scope and date-window plumbing for GEO traffic endpoints.
 export const GEO_PROJECT_SCOPE_PARAMS = {
   project_id: p
     .string()
@@ -13,6 +12,24 @@ export const GEO_PROJECT_SCOPE_PARAMS = {
     .optional(0)
     .describe("Set to 1 to include rows captured before project scoping"),
 };
+
+export const GEO_SITES_MODE_PARAM = {
+  sites: p
+    .string()
+    .optional("")
+    .describe("Set to 'exclude' to drop Notra Sites traffic, empty keeps it"),
+};
+
+export const GEO_SITE_SCOPE_PARAMS = {
+  site_id: p
+    .string()
+    .optional("")
+    .describe("Site id filter, empty for every site and SDK host"),
+  ...GEO_SITES_MODE_PARAM,
+};
+
+export const GEO_SITE_SCOPE_SQL = `AND ({{String(site_id, '')}} = '' OR site_id = {{String(site_id, '')}})
+          AND ({{String(sites, '')}} != 'exclude' OR site_id = '')`;
 
 export const GEO_EXCLUDED_SOURCES_PARAMS = {
   excluded_sources: p
@@ -137,3 +154,35 @@ export const GEO_HOST_FILTER_SQL = `AND (
               concat('.', {{String(host, '')}})
             )
           )`;
+
+export const GEO_HOSTS_PARAMS = {
+  hosts: p
+    .string()
+    .optional("")
+    .describe(
+      "Comma-separated domains, empty for every host. Subdomains match."
+    ),
+};
+
+export const GEO_HOSTS_SQL = `AND (
+            {{String(hosts, '')}} = ''
+            OR arrayExists(
+              domain -> lowerUTF8(host) = domain
+                OR endsWith(lowerUTF8(host), concat('.', domain)),
+              splitByChar(',', {{String(hosts, '')}})
+            )
+          )`;
+
+export const GEO_HOSTS_SET = `{{String(hosts, '')}} != ''`;
+
+export const GEO_PATH_PARAMS = {
+  path: p
+    .string()
+    .optional("")
+    .describe("Exact page path, empty for every page"),
+};
+
+export const GEO_PATH_SQL = `AND ({{String(path, '')}} = '' OR path = {{String(path, '')}})`;
+
+/** Host or path filters need the per-page rollup instead of the per-source one. */
+export const GEO_PAGE_FILTER_SET = `(${GEO_HOSTS_SET} OR {{String(path, '')}} != '')`;

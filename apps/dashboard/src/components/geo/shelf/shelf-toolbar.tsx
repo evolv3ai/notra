@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@notra/ui/components/ui/select";
-import { useTranslations } from "next-intl";
+import { useTranslations } from "use-intl";
 
 import { useGeoShelfTicketFilterLabels } from "@/lib/hooks/use-geo-shelf-labels";
 import type {
@@ -64,7 +64,10 @@ export function ShelfToolbar({
         }
         value={filters.shelf}
       >
-        <SelectTrigger className="min-w-0 flex-1 sm:w-44 sm:flex-none">
+        <SelectTrigger
+          className="min-w-0 flex-1 sm:w-auto sm:flex-none"
+          size="sm"
+        >
           <SelectValue>
             {filters.shelf === "unknown"
               ? tGeoShared("notChecked")
@@ -98,7 +101,10 @@ export function ShelfToolbar({
         }
         value={filters.ticket}
       >
-        <SelectTrigger className="min-w-0 flex-1 sm:w-44 sm:flex-none">
+        <SelectTrigger
+          className="min-w-0 flex-1 sm:w-auto sm:flex-none"
+          size="sm"
+        >
           <SelectValue>{ticketFilterLabels[filters.ticket]}</SelectValue>
         </SelectTrigger>
         <SelectContent>

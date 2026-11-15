@@ -9,10 +9,11 @@ import {
   WEBHOOK_EVENT_TYPES,
 } from "@notra/schemas/dashboard/integrations";
 
+import { NO_AUTOMATION_NOTIFY } from "@/constants/automation-notify";
 import type { EventTriggerFormValues } from "@/types/automation/event-trigger";
 import type { Trigger } from "@/types/triggers/triggers";
 
-export const DEFAULT_EVENT_TRIGGER_VALUES: EventTriggerFormValues = {
+const DEFAULT_EVENT_TRIGGER_VALUES: EventTriggerFormValues = {
   eventType: "release",
   outputType: "changelog",
   repositoryIds: [],
@@ -20,6 +21,7 @@ export const DEFAULT_EVENT_TRIGGER_VALUES: EventTriggerFormValues = {
   autoPublish: false,
   includePreReleases: true,
   ignoreCommitPatternsText: "",
+  notify: NO_AUTOMATION_NOTIFY,
 };
 
 export function isAutomationOutputType(
@@ -57,6 +59,7 @@ export function getDefaultEventTriggerValues(
     ignoreCommitPatternsText: joinIgnoreCommitPatterns(
       trigger.sourceConfig.ignoreCommitPatterns ?? []
     ),
+    notify: trigger.outputConfig?.notify ?? NO_AUTOMATION_NOTIFY,
   };
 }
 

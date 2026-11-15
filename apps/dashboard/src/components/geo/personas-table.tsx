@@ -17,8 +17,10 @@ import {
   TooltipTrigger,
 } from "@notra/ui/components/ui/tooltip";
 import { useMutationState } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
+import { parseAsString, useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
+import { DataTable, type TableColumn } from "ui/table";
+import { useTranslations } from "use-intl";
 
 import { GeoRemoveDialog } from "@/components/geo/geo-remove-dialog";
 import { PersonaAvatar } from "@/components/geo/persona-avatar";
@@ -27,9 +29,9 @@ import {
   PersonaTableContextMenu,
   PersonaTableRowActions,
 } from "@/components/geo/persona-table-actions";
-import { Table, type TableColumn } from "@/components/motion/table";
 import { useGeoProjectScope } from "@/components/providers/geo-project-provider";
 import {
+  GEO_PERSONA_DETAIL_QUERY_KEY,
   GEO_PERSONAS_ACTIONS_COLUMN_WIDTH,
   GEO_PERSONAS_MEMORIES_COLUMN_WIDTH,
   GEO_PERSONAS_MIN_TABLE_ROWS,
@@ -37,12 +39,14 @@ import {
 } from "@/constants/geo-personas";
 import { TABLE_ROW_HEIGHT } from "@/constants/table";
 import { trackEvent } from "@/lib/analytics/posthog-client";
+import { useIsGeoConsumerRunBlocked } from "@/lib/hooks/use-geo";
 import {
   useGeoPersonaDelete,
   useGeoPersonaRestore,
   useGeoPersonaRun,
   useGeoPersonasGenerate,
   useGeoPersonaUpdate,
+  useIsGeoPersonaRunPending,
 } from "@/lib/hooks/use-geo-personas";
 import { cn } from "@/lib/utils";
 import type { PersonaTableProps } from "@/types/geo-personas-ui";
@@ -65,6 +69,9 @@ export function PersonasTable({
   const generatePersona = useGeoPersonasGenerate(organizationId);
   const restorePersona = useGeoPersonaRestore(organizationId);
   const runPersona = useGeoPersonaRun(organizationId);
+  const personaRunPending = useIsGeoPersonaRunPending(organizationId);
+  const consumerRunBlocked = useIsGeoConsumerRunBlocked(organizationId);
+  const runBlocked = personaRunPending || consumerRunBlocked;
   const activePersonaCount = personas.filter(
     (persona) => !persona.archivedAt
   ).length;
@@ -76,8 +83,11 @@ export function PersonasTable({
   const reactivatePersona = restorePersona.mutate;
   const [viewing, setViewing] = useState<GeoPersona | null>(null);
   const [removing, setRemoving] = useState<GeoPersona | null>(null);
+  const [linkedPersonaId, setLinkedPersonaId] = useQueryState(
+    GEO_PERSONA_DETAIL_QUERY_KEY,
+    parseAsString
+  );
 
-  // Prevent deleting a persona while its profile is being saved.
   const pendingPersonaIds = useMutationState({
     filters: {
       mutationKey: geoPersonaUpdateMutationKey(organizationId, projectId),
@@ -92,7 +102,9 @@ export function PersonasTable({
     : null;
   const autoOpenPersona =
     personas.find((persona) => persona.id === openPersonaId) ?? null;
-  const displayedPersona = autoOpenPersona ?? viewing;
+  const linkedPersona =
+    personas.find((persona) => persona.id === linkedPersonaId) ?? null;
+  const displayedPersona = autoOpenPersona ?? viewing ?? linkedPersona;
 
   const columns = useMemo<TableColumn<GeoPersona>[]>(
     () => [
@@ -231,13 +243,14 @@ export function PersonasTable({
       restoreAtLimit,
       restorePersona.isPending,
       t,
+      tCommon,
+      tGeoShared,
     ]
   );
 
   return (
     <section className="space-y-3">
-      <Table
-        className="rounded-2xl"
+      <DataTable
         columns={columns}
         data={personas}
         defaultSort={{ key: "name", direction: "asc" }}
@@ -288,7 +301,7 @@ export function PersonasTable({
             scanDisabled={
               !row.enabled ||
               row.conversationPrompts.length === 0 ||
-              runPersona.isPending ||
+              runBlocked ||
               generationPending ||
               deletePersona.isPending ||
               pendingPersonaIds.includes(row.id)
@@ -303,6 +316,9 @@ export function PersonasTable({
         onOpenChange={(next) => {
           if (!next) {
             setViewing(null);
+            if (linkedPersonaId) {
+              void setLinkedPersonaId(null);
+            }
             if (autoOpenPersona) {
               onAutoOpenClose();
             }
@@ -336,7 +352,6 @@ export function PersonasTable({
           }
         }}
         open={removing !== null}
-        pendingLabel={t("archiving")}
         title={t("archiveTitle")}
       />
     </section>

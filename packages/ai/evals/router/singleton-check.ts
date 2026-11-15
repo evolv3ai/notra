@@ -1,8 +1,3 @@
-/**
- * Exercise the product router singleton exactly like app code does.
- *
- *   bun packages/ai/evals/router/singleton-check.ts
- */
 import {
   gateway,
   getRouteMetadata,

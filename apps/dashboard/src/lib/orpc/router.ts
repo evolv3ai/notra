@@ -1,51 +1,117 @@
-import { agentFeedbackRouter } from "./routers/agent-feedback";
-import { analyticsRouter } from "./routers/analytics";
-import { apiKeysRouter } from "./routers/api-keys";
-import { attachmentsRouter } from "./routers/attachments";
-import { automationRouter } from "./routers/automation";
-import { brandRouter } from "./routers/brand";
-import { commentsRouter } from "./routers/comments";
-import { contentRouter } from "./routers/content";
-import { feedbackRouter } from "./routers/feedback";
-import { geoRouter } from "./routers/geo";
-import { githubRouter } from "./routers/github";
-import { integrationsRouter } from "./routers/integrations";
-import { irisRouter } from "./routers/iris";
-import { logsRouter } from "./routers/logs";
-import { notificationsRouter } from "./routers/notifications";
-import { onboardingRouter } from "./routers/onboarding";
-import { outboundWebhooksRouter } from "./routers/outbound-webhooks";
-import { searchRouter } from "./routers/search";
-import { skillsRouter } from "./routers/skills";
-import { socialAccountsRouter } from "./routers/social-accounts";
-import { uploadRouter } from "./routers/upload";
-import { usageAlertsRouter } from "./routers/usage-alerts";
-import { userRouter } from "./routers/user";
+import { lazy } from "@orpc/server";
 
+// Lazy so a cold function only loads the routers a request actually calls:
+// together they pull in most of the server bundle (AI SDKs, Linear, S3,
+// workflows), which cost seconds on the first request of every new instance.
 export const dashboardRouter = {
-  comments: commentsRouter,
-  outboundWebhooks: outboundWebhooksRouter,
-  agentFeedback: agentFeedbackRouter,
-  analytics: analyticsRouter,
-  apiKeys: apiKeysRouter,
-  attachments: attachmentsRouter,
-  automation: automationRouter,
-  brand: brandRouter,
-  content: contentRouter,
-  feedback: feedbackRouter,
-  geo: geoRouter,
-  github: githubRouter,
-  iris: irisRouter,
-  integrations: integrationsRouter,
-  logs: logsRouter,
-  notifications: notificationsRouter,
-  onboarding: onboardingRouter,
-  search: searchRouter,
-  skills: skillsRouter,
-  socialAccounts: socialAccountsRouter,
-  upload: uploadRouter,
-  usageAlerts: usageAlertsRouter,
-  user: userRouter,
+  comments: lazy(() =>
+    import("./routers/comments").then((m) => ({ default: m.commentsRouter }))
+  ),
+  outboundWebhooks: lazy(() =>
+    import("./routers/outbound-webhooks").then((m) => ({
+      default: m.outboundWebhooksRouter,
+    }))
+  ),
+  agentFeedback: lazy(() =>
+    import("./routers/agent-feedback").then((m) => ({
+      default: m.agentFeedbackRouter,
+    }))
+  ),
+  analytics: lazy(() =>
+    import("./routers/analytics").then((m) => ({ default: m.analyticsRouter }))
+  ),
+  apiKeys: lazy(() =>
+    import("./routers/api-keys").then((m) => ({ default: m.apiKeysRouter }))
+  ),
+  attachments: lazy(() =>
+    import("./routers/attachments").then((m) => ({
+      default: m.attachmentsRouter,
+    }))
+  ),
+  automation: lazy(() =>
+    import("./routers/automation").then((m) => ({
+      default: m.automationRouter,
+    }))
+  ),
+  brand: lazy(() =>
+    import("./routers/brand").then((m) => ({ default: m.brandRouter }))
+  ),
+  chat: lazy(() =>
+    import("./routers/chat").then((m) => ({ default: m.chatRouter }))
+  ),
+  content: lazy(() =>
+    import("./routers/content").then((m) => ({ default: m.contentRouter }))
+  ),
+  contentCalendar: lazy(() =>
+    import("./routers/content-calendar").then((m) => ({
+      default: m.contentCalendarRouter,
+    }))
+  ),
+  feedback: lazy(() =>
+    import("./routers/feedback").then((m) => ({ default: m.feedbackRouter }))
+  ),
+  geo: lazy(() =>
+    import("./routers/geo").then((m) => ({ default: m.geoRouter }))
+  ),
+  trafficEmbeds: lazy(() =>
+    import("./routers/traffic-embeds").then((m) => ({
+      default: m.trafficEmbedsRouter,
+    }))
+  ),
+  github: lazy(() =>
+    import("./routers/github").then((m) => ({ default: m.githubRouter }))
+  ),
+  autopilot: lazy(() =>
+    import("./routers/autopilot").then((m) => ({ default: m.autopilotRouter }))
+  ),
+  sites: lazy(() =>
+    import("./routers/sites").then((m) => ({ default: m.sitesRouter }))
+  ),
+  integrations: lazy(() =>
+    import("./routers/integrations").then((m) => ({
+      default: m.integrationsRouter,
+    }))
+  ),
+  logs: lazy(() =>
+    import("./routers/logs").then((m) => ({ default: m.logsRouter }))
+  ),
+  notifications: lazy(() =>
+    import("./routers/notifications").then((m) => ({
+      default: m.notificationsRouter,
+    }))
+  ),
+  onboarding: lazy(() =>
+    import("./routers/onboarding").then((m) => ({
+      default: m.onboardingRouter,
+    }))
+  ),
+  organization: lazy(() =>
+    import("./routers/organization").then((m) => ({
+      default: m.organizationRouter,
+    }))
+  ),
+  search: lazy(() =>
+    import("./routers/search").then((m) => ({ default: m.searchRouter }))
+  ),
+  skills: lazy(() =>
+    import("./routers/skills").then((m) => ({ default: m.skillsRouter }))
+  ),
+  socialAccounts: lazy(() =>
+    import("./routers/social-accounts").then((m) => ({
+      default: m.socialAccountsRouter,
+    }))
+  ),
+  upload: lazy(() =>
+    import("./routers/upload").then((m) => ({ default: m.uploadRouter }))
+  ),
+  usageAlerts: lazy(() =>
+    import("./routers/usage-alerts").then((m) => ({
+      default: m.usageAlertsRouter,
+    }))
+  ),
+  user: lazy(() =>
+    import("./routers/user").then((m) => ({ default: m.userRouter }))
+  ),
 };
 
 export type DashboardRouter = typeof dashboardRouter;

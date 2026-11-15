@@ -73,7 +73,6 @@ export function zonedParts(date: Date, timeZone: string): ZonedParts {
   };
 }
 
-/** Milliseconds the zone is ahead of UTC at `date`. */
 function zoneOffsetMs(date: Date, timeZone: string): number {
   const parts = zonedParts(date, timeZone);
   const asUtc = Date.UTC(
@@ -98,13 +97,10 @@ function zonedWallTimeToUtc(
     parts.hour,
     parts.minute
   );
-  // Two passes settle DST transitions: the offset at the guess can differ
-  // from the offset at the real instant by the DST shift.
   const first = guess - zoneOffsetMs(new Date(guess), timeZone);
   return new Date(guess - zoneOffsetMs(new Date(first), timeZone));
 }
 
-/** Calendar day in the zone `daysAgo` days before the zoned date of `now`. */
 function zonedCalendarDay(now: Date, timeZone: string, daysAgo: number) {
   const today = zonedParts(now, timeZone);
   const shifted = new Date(

@@ -1,4 +1,5 @@
 import { MCP_OAUTH_CALLBACK_PATH } from "@notra/ai/constants/mcp-auth";
+import { useLogger as getRequestLogger, withEvlog } from "@notra/ai/evlog";
 import {
   cancelMcpOAuthAuthorization,
   completeMcpOAuthAuthorization,
@@ -9,11 +10,11 @@ import {
   McpOAuthRefreshTokenRequiredError,
 } from "@notra/ai/integrations/mcp-oauth-errors";
 import { refreshMcpToolIndexForIntegration } from "@notra/ai/integrations/mcp-tool-index";
+import { getAppUrl } from "@notra/ai/utils/url";
 import { mcpOAuthCallbackQuerySchema } from "@notra/schemas/dashboard/integrations";
 import { buildCallbackUrl } from "@notra/utils/callback-url";
 import { createMcpOAuthPopupCompletionResponse } from "@notra/utils/oauth-popup";
 import { Effect } from "effect";
-import type { NextRequest } from "next/server";
 
 import {
   INTEGRATION_AUTH_KINDS,
@@ -25,11 +26,13 @@ import {
   trackIntegrationConnectFailed,
 } from "@/lib/integrations/connect-events";
 
-export async function GET(request: NextRequest) {
-  const baseUrl =
-    process.env.APP_URL ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    new URL(request.url).origin;
+export const GET = withEvlog(async (request: Request) => {
+  const log = getRequestLogger();
+  log.set({
+    feature: "mcp_oauth_callback",
+    routeId: "/api/integrations/mcp/oauth/callback",
+  });
+  const baseUrl = getAppUrl() ?? new URL(request.url).origin;
   const { searchParams } = new URL(request.url);
   const parsed = mcpOAuthCallbackQuerySchema.safeParse({
     code: searchParams.get("code") ?? undefined,
@@ -38,6 +41,7 @@ export async function GET(request: NextRequest) {
   });
 
   if (!parsed.success) {
+    log.set({ outcome: "error", errorCode: "mcp_oauth_invalid_callback" });
     return createMcpOAuthPopupCompletionResponse(
       `${baseUrl}/?error=mcp_oauth_invalid_callback`
     );
@@ -45,10 +49,13 @@ export async function GET(request: NextRequest) {
 
   const { session } = await getServerSession({ headers: request.headers });
   if (!session?.userId) {
+    log.set({ outcome: "error", errorCode: "mcp_oauth_session_required" });
     return createMcpOAuthPopupCompletionResponse(
       `${baseUrl}/?error=mcp_oauth_session_required`
     );
   }
+
+  log.set({ userId: session.userId });
 
   const callbackPath = await getMcpOAuthCallbackPath(
     parsed.data.state,
@@ -57,6 +64,11 @@ export async function GET(request: NextRequest) {
 
   if (parsed.data.error || !parsed.data.code) {
     await cancelMcpOAuthAuthorization(parsed.data.state, session.userId);
+    log.set({
+      outcome: "denied",
+      errorCode: "mcp_oauth_denied",
+      providerError: parsed.data.error,
+    });
     trackIntegrationConnectFailed({
       headers: request.headers,
       userId: session.userId,
@@ -80,10 +92,27 @@ export async function GET(request: NextRequest) {
         userId: session.userId,
       })
     );
+    log.set({
+      organizationId: completed.organizationId,
+      integrationId: completed.integrationId,
+    });
     await refreshMcpToolIndexForIntegration({
       organizationId: completed.organizationId,
       integrationId: completed.integrationId,
-    }).catch(() => undefined);
+    }).catch((error: unknown) => {
+      log.set({
+        toolIndexRefreshFailed: true,
+        toolIndexRefreshError:
+          error instanceof Error ? error.message : String(error),
+      });
+    });
+    log.set({ outcome: "success" });
+    log.audit({
+      action: "integration.mcp.connected",
+      actor: { type: "user", id: session.userId },
+      target: { type: "integration", id: completed.integrationId },
+      outcome: "success",
+    });
     trackIntegrationConnected({
       headers: request.headers,
       userId: session.userId,
@@ -97,16 +126,22 @@ export async function GET(request: NextRequest) {
       })
     );
   } catch (error) {
-    console.error("MCP OAuth callback failed", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-
     let errorCode = "mcp_oauth_failed";
     if (error instanceof McpOAuthRefreshTokenRequiredError) {
       errorCode = "mcp_oauth_refresh_token_required";
     } else if (error instanceof McpOAuthAuthorizationError) {
       errorCode = "mcp_oauth_invalid_callback";
     }
+    log.error(error instanceof Error ? error : String(error), {
+      outcome: "error",
+      errorCode,
+    });
+    log.audit({
+      action: "integration.mcp.connected",
+      actor: { type: "user", id: session.userId },
+      outcome: "failure",
+      reason: errorCode,
+    });
     trackIntegrationConnectFailed({
       headers: request.headers,
       userId: session.userId,
@@ -118,4 +153,4 @@ export async function GET(request: NextRequest) {
       buildCallbackUrl(baseUrl, callbackPath, { error: errorCode })
     );
   }
-}
+});

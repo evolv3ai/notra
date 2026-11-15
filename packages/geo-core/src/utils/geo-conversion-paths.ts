@@ -3,7 +3,7 @@ import type { GeoConversionPageVisit, GeoConversionTotals } from "../types/geo";
 const ROOT_PATH = "/";
 const TRAILING_SLASHES_REGEX = /\/+$/;
 
-export function normalizeConversionPath(value: string): string {
+function normalizeConversionPath(value: string): string {
   const trimmed = value.trim();
   if (trimmed.length === 0) {
     return "";
@@ -32,7 +32,7 @@ export function normalizeConversionPaths(values: readonly string[]): string[] {
   return result;
 }
 
-export function matchesConversionPath(
+function matchesConversionPath(
   path: string,
   conversionPaths: readonly string[]
 ): boolean {

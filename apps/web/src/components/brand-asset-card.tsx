@@ -11,7 +11,8 @@ export function BrandAssetCard({
   asset,
   downloadName,
   copyLabel,
-  children,
+  previewAlt,
+  previewClassName,
 }: BrandAssetCardProps) {
   return (
     <div
@@ -20,7 +21,13 @@ export function BrandAssetCard({
         variant === "light" ? "bg-white" : "bg-[#131316]"
       )}
     >
-      {children}
+      <img
+        alt={previewAlt}
+        className={previewClassName}
+        decoding="async"
+        loading="lazy"
+        src={asset.svg}
+      />
       <div className="duration-fast absolute top-3 right-3 flex items-center gap-1.5 opacity-0 transition-opacity ease-out group-focus-within:opacity-100 group-hover:opacity-100">
         <Button
           aria-label={copyLabel}

@@ -8,6 +8,7 @@ import {
   MAX_SCHEDULE_NAME_LENGTH,
   SUPPORTED_AUTOMATION_OUTPUT_TYPES,
 } from "@notra/schemas/dashboard/integrations";
+import { automationNotifySchema } from "@notra/schemas/shared/automation";
 // biome-ignore lint/performance/noNamespaceImport: Zod recommended way to import
 import * as z from "zod";
 
@@ -53,6 +54,7 @@ export const scheduleFormSchema = z.object({
   lookbackWindow: z.enum(LOOKBACK_WINDOWS),
   brandVoiceId: z.string(),
   autoPublish: z.boolean(),
+  notify: automationNotifySchema,
 });
 
 export type ScheduleFormValues = z.infer<typeof scheduleFormSchema>;

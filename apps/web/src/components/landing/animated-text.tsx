@@ -8,11 +8,6 @@ const BLUR_NONE = "blur(0px)";
 const WORD_STAGGER_S = 0.022;
 const DIGIT_PATTERN = /\d/;
 
-/**
- * Text that crossfades with a short blur whenever it changes. The live value
- * is read from a visually hidden copy so screen readers never hear the
- * outgoing text.
- */
 export function FadeText({
   text,
   className,
@@ -20,7 +15,6 @@ export function FadeText({
 }: {
   text: string;
   className?: string;
-  /** Let the text wrap onto several lines instead of staying on one. */
   wrap?: boolean;
 }) {
   const shouldReduceMotion = useReducedMotion();
@@ -52,24 +46,16 @@ export function FadeText({
   );
 }
 
-/**
- * A number whose changed digits roll in, like a counter: up when the value
- * grows, down when it shrinks. Unchanged digits stay put.
- */
 export function RollingNumber({
   value,
   numeric,
   className,
 }: {
-  /** The formatted string to show, e.g. "4,500" or "$250". */
   value: string;
-  /** The raw number, used only to pick the roll direction. */
   numeric: number;
   className?: string;
 }) {
   const shouldReduceMotion = useReducedMotion();
-  // Derived during render from the last value (React's "adjust state on
-  // prop change" pattern), so the roll knows which way to go.
   const [previous, setPrevious] = useState(numeric);
   const [direction, setDirection] = useState(1);
   if (numeric !== previous) {
@@ -81,7 +67,6 @@ export function RollingNumber({
     return <span className={className}>{value}</span>;
   }
 
-  // Keyed from the right so digits keep their slot when the length changes.
   const chars = [...value];
 
   return (
@@ -131,10 +116,6 @@ export function RollingNumber({
   );
 }
 
-/**
- * A caption that swaps word by word: the old line fades up and out while the
- * new words rise in with a small stagger.
- */
 export function StaggeredCaption({
   id,
   lead,
@@ -142,7 +123,6 @@ export function StaggeredCaption({
   className,
   leadClassName,
 }: {
-  /** Changes whenever the caption should re-enter. */
   id: string | number;
   lead: string;
   rest: string;
@@ -178,7 +158,6 @@ export function StaggeredCaption({
           transition={{ duration: 0.18, ease: EASE_OUT }}
         >
           {words.map(({ word, isLead }, index) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: words can repeat
             <Fragment key={`${word}-${index}`}>
               <m.span
                 animate={{ opacity: 1, y: 0, filter: BLUR_NONE }}

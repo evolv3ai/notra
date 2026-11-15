@@ -3,13 +3,19 @@ import { db } from "@notra/db/drizzle";
 import { brandSettings, geoSettings, projects } from "@notra/db/schema";
 import { GEO_INGEST_IDENTITY_ACTIVE_TTL_SECONDS } from "@notra/geo-core/constants/geo";
 import { GEO_PROJECTS_OLDEST_ORDER } from "@notra/geo-core/constants/geo-projects";
-import { geoIngestHostsCacheKey } from "@notra/geo-core/geo/ingest";
+import { geoIngestHostsCacheKey } from "@notra/geo-core/geo/ingest-hosts-cache";
 import type { GeoIngestIdentity } from "@notra/geo-core/types/geo";
 import { ingestAllowedHosts } from "@notra/geo-core/utils/geo-project-domains";
 import { and, eq } from "drizzle-orm";
 
+function isHostList(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) && value.every((host) => typeof host === "string")
+  );
+}
+
 function parseCachedHosts(value: unknown): string[] | undefined {
-  if (Array.isArray(value) && value.every((host) => typeof host === "string")) {
+  if (isHostList(value)) {
     return value;
   }
   if (typeof value !== "string") {
@@ -17,23 +23,15 @@ function parseCachedHosts(value: unknown): string[] | undefined {
   }
   try {
     const parsed: unknown = JSON.parse(value);
-    if (
-      Array.isArray(parsed) &&
-      parsed.every((host) => typeof host === "string")
-    ) {
-      return parsed;
-    }
+    return isHostList(parsed) ? parsed : undefined;
   } catch {
     return undefined;
   }
-  return undefined;
 }
 
 async function lookupAllowedHosts(
   identity: GeoIngestIdentity
 ): Promise<string[]> {
-  // Legacy organization tokens belong to the oldest project only. Never
-  // accept another project's host and attribute its traffic to the oldest.
   const projectId =
     identity.projectId ??
     (
@@ -84,6 +82,9 @@ async function lookupAllowedHosts(
 export async function loadIngestAllowedHosts(
   identity: GeoIngestIdentity
 ): Promise<string[] | null> {
+  if (identity.site) {
+    return identity.site.hosts;
+  }
   const key = geoIngestHostsCacheKey(
     identity.organizationId,
     identity.projectId

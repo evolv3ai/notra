@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { toast } from "sonner";
 
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@/registry/notra/sonner/components/sonner";
 
 import {
   getServerTheme,

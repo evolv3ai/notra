@@ -123,6 +123,8 @@ function inspectHtml(
       const name = node.tagName?.toLowerCase() ?? "";
       if (name === "script") {
         constructs.push({ reason: REASONS.script, source: elementSource });
+      } else if (name === "base" || name === "meta") {
+        constructs.push({ reason: REASONS.base, source: elementSource });
       } else if (GITHUB_MENTION_UNSAFE_HTML_ELEMENTS.has(name)) {
         constructs.push({ reason: REASONS.embed, source: elementSource });
       }
@@ -183,6 +185,11 @@ export function parseGitHubMentionContent(
         if (name === "script") {
           constructs.push({ reason: REASONS.script, source: nodeSource });
         } else if (
+          name.toLowerCase() === "base" ||
+          name.toLowerCase() === "meta"
+        ) {
+          constructs.push({ reason: REASONS.base, source: nodeSource });
+        } else if (
           GITHUB_MENTION_UNSAFE_HTML_ELEMENTS.has(name.toLowerCase())
         ) {
           constructs.push({ reason: REASONS.embed, source: nodeSource });
@@ -214,8 +221,6 @@ export function parseGitHubMentionContent(
       node.children?.forEach((child) => {
         if (coversInlineHtml && child.type === "html") {
           if (!inspectedInlineHtml) {
-            // Markdown splits inline HTML into tag nodes and ordinary text.
-            // Parse the enclosing block so active element bodies are included.
             inspectHtml(nodeSource, constructs);
             inspectedInlineHtml = true;
           }

@@ -11,11 +11,15 @@ import { recordPublishedSocialPost } from "@/lib/analytics/record-post";
 import {
   getSocialConnectClient,
   isSocialConnectConfigured,
+  isSocialConnectPlatformConfigured,
 } from "@/lib/social-connect/client";
 import {
+  isSocialDeliveryUnknown,
   SocialConnectConfigError,
+  SocialConnectDeliveryUnknownError,
   SocialConnectRequestError,
 } from "@/lib/social-connect/errors";
+import { assertAllowedSocialMediaUrls } from "@/lib/social-connect/media-urls";
 import type { PublishSocialPostParams } from "@/types/services/social-connect";
 
 const RESULT_POLL_ATTEMPTS = 5;
@@ -38,12 +42,7 @@ function getResultErrorMessage(result: SocialPostResult): string {
   return "The platform rejected the post";
 }
 
-/**
- * The demo's accounts are fictional: publishing succeeds without reaching a
- * platform and the post shows up in analytics with generated stats, so the
- * flow can be tried end to end.
- */
-const publishDemoPost = Effect.fn("publishDemoPost")(function* (
+const loadConnectedAccount = Effect.fnUntraced(function* (
   params: PublishSocialPostParams
 ) {
   const account = yield* Effect.tryPromise({
@@ -69,6 +68,13 @@ const publishDemoPost = Effect.fn("publishDemoPost")(function* (
       })
     );
   }
+  return account;
+});
+
+const publishDemoPost = Effect.fn("publishDemoPost")(function* (
+  params: PublishSocialPostParams
+) {
+  const account = yield* loadConnectedAccount(params);
   const platformPostId = `demo-${crypto.randomUUID()}`;
   yield* Effect.tryPromise({
     try: () =>
@@ -91,12 +97,24 @@ const publishDemoPost = Effect.fn("publishDemoPost")(function* (
     postUrl: null,
     username: account.username,
     platform: account.provider,
+    confirmed: true,
   };
 });
 
 export const publishSocialPost = Effect.fn("publishSocialPost")(function* (
   params: PublishSocialPostParams
 ) {
+  yield* Effect.try({
+    try: () =>
+      assertAllowedSocialMediaUrls(params.mediaUrls, params.organizationId),
+    catch: (cause) =>
+      cause instanceof SocialConnectRequestError
+        ? cause
+        : new SocialConnectRequestError({
+            message: "Invalid media URL",
+            cause: null,
+          }),
+  });
   if (isDemoMode()) {
     return yield* publishDemoPost(params);
   }
@@ -108,30 +126,7 @@ export const publishSocialPost = Effect.fn("publishSocialPost")(function* (
     );
   }
 
-  const account = yield* Effect.tryPromise({
-    try: () =>
-      db.query.connectedSocialAccounts.findFirst({
-        columns: { provider: true, providerAccountId: true, username: true },
-        where: and(
-          eq(connectedSocialAccounts.id, params.accountId),
-          eq(connectedSocialAccounts.organizationId, params.organizationId)
-        ),
-      }),
-    catch: (cause) =>
-      new SocialConnectRequestError({
-        message: "Failed to load connected account",
-        cause,
-      }),
-  });
-
-  if (!account) {
-    return yield* Effect.fail(
-      new SocialConnectRequestError({
-        message: "Connected account not found",
-        cause: null,
-      })
-    );
-  }
+  const account = yield* loadConnectedAccount(params);
 
   const parsedPlatform = socialConnectPlatformSchema.safeParse(
     account.provider
@@ -144,38 +139,61 @@ export const publishSocialPost = Effect.fn("publishSocialPost")(function* (
       })
     );
   }
+  if (!isSocialConnectPlatformConfigured(parsedPlatform.data)) {
+    return yield* Effect.fail(
+      new SocialConnectConfigError({
+        message: "Social account linking is not configured",
+      })
+    );
+  }
   const client = getSocialConnectClient(parsedPlatform.data);
 
+  // Creating a post is not idempotent, so the SDK must not resend it on a
+  // timeout or a server error: the first request may have posted already.
   const post = yield* Effect.tryPromise({
     try: () =>
-      client.socialPosts.create({
-        caption: params.content,
-        social_accounts: [account.providerAccountId],
-      }),
+      client.socialPosts.create(
+        {
+          caption: params.content,
+          social_accounts: [account.providerAccountId],
+          ...(params.mediaUrls?.length
+            ? { media: params.mediaUrls.map((url) => ({ url })) }
+            : {}),
+        },
+        { maxRetries: 0 }
+      ),
     catch: (cause) =>
-      new SocialConnectRequestError({
-        message: "Failed to publish post",
-        cause,
-      }),
+      isSocialDeliveryUnknown(cause)
+        ? new SocialConnectDeliveryUnknownError({
+            message: "The platform did not confirm the post",
+            cause,
+          })
+        : new SocialConnectRequestError({
+            message: "Failed to publish post",
+            cause,
+          }),
   });
 
-  let postResult: SocialPostResult | null = null;
-  for (let attempt = 0; attempt < RESULT_POLL_ATTEMPTS; attempt += 1) {
-    yield* Effect.sleep(RESULT_POLL_DELAY);
-    const results = yield* Effect.tryPromise({
-      try: () => client.socialPostResults.list({ post_id: [post.id] }),
-      catch: (cause) =>
-        new SocialConnectRequestError({
-          message: "Failed to load published post",
-          cause,
-        }),
-    }).pipe(Effect.catch(() => Effect.succeed(null)));
-
-    postResult = results?.data.at(0) ?? null;
-    if (postResult) {
-      break;
-    }
-  }
+  const postResult = yield* Effect.sleep(RESULT_POLL_DELAY).pipe(
+    Effect.andThen(
+      Effect.tryPromise({
+        try: () => client.socialPostResults.list({ post_id: [post.id] }),
+        catch: (cause) =>
+          new SocialConnectRequestError({
+            message: "Failed to load published post",
+            cause,
+          }),
+      })
+    ),
+    Effect.map(
+      (results): SocialPostResult | null => results.data.at(0) ?? null
+    ),
+    Effect.catch(() => Effect.succeed(null)),
+    Effect.repeat({
+      until: (result) => result !== null,
+      times: (params.resultPollAttempts ?? RESULT_POLL_ATTEMPTS) - 1,
+    })
+  );
 
   if (postResult && !postResult.success) {
     return yield* Effect.fail(
@@ -214,5 +232,6 @@ export const publishSocialPost = Effect.fn("publishSocialPost")(function* (
     postUrl,
     username: account.username,
     platform: account.provider,
+    confirmed: postResult !== null,
   };
 });

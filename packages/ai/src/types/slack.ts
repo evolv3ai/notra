@@ -34,3 +34,7 @@ export interface CreateSlackConnectChannelInviteInput {
 
 export interface CreateSlackConnectChannelInviteResult
   extends SlackConnectChannel, SlackConnectInviteResult {}
+
+export interface ReusableSlackConnectChannel extends SlackConnectChannel {
+  created: boolean;
+}

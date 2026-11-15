@@ -29,6 +29,7 @@ interface MetadataOpenGraph {
   title?: string;
   description?: string;
   images?: readonly (string | MetadataImage)[];
+  videos?: readonly MetadataImage[];
   publishedTime?: string;
   modifiedTime?: string;
   authors?: readonly string[];

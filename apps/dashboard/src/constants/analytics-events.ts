@@ -1,9 +1,13 @@
+import { POSTHOG_EVENTS } from "@notra/posthog/events";
+
 export const PAYWALL_KINDS = {
   GEO_LOCKED: "geo_locked",
   STUDIO_LOCKED: "studio_locked",
   TRIAL_EXPIRED: "trial_expired",
   UPGRADE_CARD: "upgrade_card",
   NAV_LOCK: "nav_lock",
+  ONBOARDING_PRICING: "onboarding_pricing",
+  SITES_LIMIT: "sites_limit",
 } as const;
 
 export const PLAN_SURFACES = {
@@ -13,6 +17,7 @@ export const PLAN_SURFACES = {
   SIDEBAR_TRIAL_EXPIRED: "sidebar_trial_expired",
   GEO_PAYWALL: "geo_paywall",
   STUDIO_PAYWALL: "studio_paywall",
+  SITES_PAYWALL: "sites_paywall",
 } as const;
 
 export const UPGRADE_DIALOG_EVENTS = {
@@ -28,6 +33,10 @@ export const UPGRADE_DIALOG_EVENTS = {
     kind: PAYWALL_KINDS.STUDIO_LOCKED,
     surface: PLAN_SURFACES.STUDIO_PAYWALL,
   },
+  sites: {
+    kind: PAYWALL_KINDS.SITES_LIMIT,
+    surface: PLAN_SURFACES.SITES_PAYWALL,
+  },
 } as const;
 
 export const BILLING_INTERVALS = {
@@ -39,6 +48,7 @@ export const ONBOARDING_STEPS = {
   WORKSPACE: "workspace",
   VISIBILITY: "visibility",
   COMPETITORS: "competitors",
+  CONNECT: "connect",
   PRICING: "pricing",
 } as const;
 
@@ -115,3 +125,27 @@ export const ONBOARDING_BRAND_ANALYSIS_FAILURE_REASONS = {
 export const CHECKOUT_SURFACES = {
   SUCCESS_PAGE: "success_page",
 } as const;
+
+export const DATABUDDY_FUNNEL_EVENTS: ReadonlySet<string> = new Set([
+  POSTHOG_EVENTS.ONBOARDING_STEP_VIEWED,
+  POSTHOG_EVENTS.ONBOARDING_STEP_SKIPPED,
+  POSTHOG_EVENTS.ONBOARDING_BRAND_SAVED,
+  POSTHOG_EVENTS.ONBOARDING_COMPETITORS_SUBMITTED,
+  POSTHOG_EVENTS.ONBOARDING_MCP_CONNECT_CLICKED,
+  POSTHOG_EVENTS.PAYWALL_SHOWN,
+  POSTHOG_EVENTS.PLAN_SELECTED,
+  POSTHOG_EVENTS.CHECKOUT_REDIRECTED,
+  POSTHOG_EVENTS.CHECKOUT_COMPLETED,
+]);
+
+export const ONBOARDING_FLOW_FLAG_KEY = "onboarding-flow";
+
+export const ONBOARDING_FLOW_VARIANTS = {
+  CONTROL: "control",
+  NO_PREVIEW: "no-preview",
+  NO_EXTRA_STEPS: "no-extra-steps",
+} as const;
+
+export const PAYWALL_EXPERIMENT_FLAG_KEY = "paywall-experiment";
+
+export const PAYWALL_EXPERIMENT_CONTROL_VARIANT = "control";

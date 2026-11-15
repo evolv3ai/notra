@@ -12,7 +12,8 @@ const UNMETERED_CHAT: ChatBillingCheck = {
 };
 
 export async function hasActivePaidPlan(
-  organizationId: string
+  organizationId: string,
+  planIds: ReadonlySet<string> = ACTIVE_PAID_PLAN_IDS
 ): Promise<boolean> {
   if (!autumn) {
     return false;
@@ -24,7 +25,7 @@ export async function hasActivePaidPlan(
     (subscription) =>
       !subscription.addOn &&
       subscription.status === "active" &&
-      ACTIVE_PAID_PLAN_IDS.has(subscription.planId)
+      planIds.has(subscription.planId)
   );
 }
 

@@ -8,18 +8,21 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/gateway": "4.0.85",
+    "@ai-sdk/gateway": "catalog:",
     "@notra/ai": "workspace:*",
-    "@opentui/core": "0.5.12",
-    "@opentui/react": "0.5.12",
-    "ai": "7.0.105",
-    "react": "^19.3.0",
-    "zod": "^4.6.5"
+    "@notra/memory": "workspace:*",
+    "@notra/utils": "workspace:*",
+    "@opentui/core": "0.5.14",
+    "@opentui/react": "0.5.14",
+    "@upstash/box": "~0.5.5",
+    "ai": "catalog:",
+    "react": "^19.3.1",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@notra/typescript-config": "workspace:*",
     "@types/react": "^19.3.0",
-    "bun-types": "1.4.0",
-    "typescript": "7.0.2"
+    "bun-types": "catalog:",
+    "typescript": "catalog:"
   }
 }

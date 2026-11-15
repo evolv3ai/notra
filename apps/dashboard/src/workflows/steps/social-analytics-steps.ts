@@ -1,3 +1,4 @@
+import "@/workflows/runtime";
 import {
   ingestSocialAccountStats,
   ingestSocialAccounts,
@@ -30,22 +31,31 @@ async function filterFlaggedOrganizations(
       enabled: await isAnalyticsEnabledForOrganization(organizationId),
     }))
   );
-  const enabledOrganizations = new Set<string>();
-  for (const flag of flags) {
-    if (flag.enabled) {
-      enabledOrganizations.add(flag.organizationId);
-    }
-  }
+  const enabledOrganizations = new Set(
+    flags.filter((flag) => flag.enabled).map((flag) => flag.organizationId)
+  );
   return accounts.filter((account) =>
     enabledOrganizations.has(account.organizationId)
   );
+}
+
+function accountKeys(account: {
+  organizationId: string;
+  provider: string;
+  providerAccountId: string;
+  username: string;
+}): string[] {
+  const prefix = `${account.organizationId}:${account.provider}`;
+  return [
+    `${prefix}:${account.providerAccountId}`,
+    `${prefix}:@${account.username.toLowerCase()}`,
+  ];
 }
 
 export async function listSyncableAccounts(
   organizationId?: string
 ): Promise<SyncableSocialAccount[]> {
   "use step";
-  // Demo accounts are fictional and their stats are generated at read time.
   if (!isTinybirdConfigured() || isDemoMode()) {
     return [];
   }
@@ -82,45 +92,17 @@ export async function listSyncableAccounts(
   ]);
 
   const connected: SyncableSocialAccount[] = accounts.map((account) => ({
-    id: account.id,
-    organizationId: account.organizationId,
-    provider: account.provider,
-    providerAccountId: account.providerAccountId,
-    username: account.username,
-    displayName: account.displayName,
-    profileImageUrl: account.profileImageUrl,
+    ...account,
     verified: account.verified ?? false,
   }));
 
-  const connectedKeys = new Set(
-    connected.flatMap((account) => [
-      `${account.organizationId}:${account.provider}:${account.providerAccountId}`,
-      `${account.organizationId}:${account.provider}:@${account.username.toLowerCase()}`,
-    ])
-  );
+  const connectedKeys = new Set(connected.flatMap(accountKeys));
 
   const trackedOnly: SyncableSocialAccount[] = tracked
     .filter(
-      (account) =>
-        !(
-          connectedKeys.has(
-            `${account.organizationId}:${account.provider}:${account.providerAccountId}`
-          ) ||
-          connectedKeys.has(
-            `${account.organizationId}:${account.provider}:@${account.username.toLowerCase()}`
-          )
-        )
+      (account) => !accountKeys(account).some((key) => connectedKeys.has(key))
     )
-    .map((account) => ({
-      id: account.id,
-      organizationId: account.organizationId,
-      provider: account.provider,
-      providerAccountId: account.providerAccountId,
-      username: account.username,
-      displayName: account.displayName,
-      profileImageUrl: account.profileImageUrl,
-      verified: false,
-    }));
+    .map((account) => ({ ...account, verified: false }));
 
   return await filterFlaggedOrganizations([...connected, ...trackedOnly]);
 }

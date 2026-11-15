@@ -8,8 +8,8 @@ import type {
 import { engineFamilyLabel } from "@notra/geo-core/utils/geo-engine-family";
 import { tween } from "@notra/ui/lib/motion";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { useTranslations } from "use-intl";
 
 import { GeoPromptAnswerSkeleton } from "@/components/geo/geo-prompt-answer-skeleton";
 import { PromptAnswerContent } from "@/components/geo/prompt-answer-content";
@@ -27,7 +27,6 @@ import { geoChatSkin } from "@/utils/geo-chat-skin";
 import { geoPromptDetailState } from "@/utils/geo-prompt-detail";
 import { latestPromptResults } from "@/utils/geo-prompt-history";
 
-/** Engines that already mention you lead, so the strip reads as a scoreboard. */
 function byVisibility(
   left: GeoPromptResultSummary,
   right: GeoPromptResultSummary
@@ -40,11 +39,6 @@ function byVisibility(
   );
 }
 
-/**
- * The gap sheet's body: which engines mention you, and what the engine you
- * picked actually answered. The numbers already live in the table row, so the
- * sheet carries the answer instead of repeating them.
- */
 export function GapAnswerPanel({
   organizationId,
   promptId,

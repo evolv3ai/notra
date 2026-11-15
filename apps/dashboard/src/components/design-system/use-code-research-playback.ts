@@ -24,7 +24,6 @@ export function useCodeResearchPlayback() {
     [steps, cursor]
   );
   const isAtEnd = cursor >= steps.length;
-  // Derived, so reaching the end stops playback without an effect update.
   const isPlaying = wantsToPlay && !isAtEnd;
 
   useEffect(() => {
@@ -67,7 +66,6 @@ export function useCodeResearchPlayback() {
   const stepForward = useCallback(() => {
     setIsPlaying(false);
     setCursor((value) => {
-      // Skip over zero-delay bookkeeping steps so one click shows a visible change.
       let next = Math.min(value + 1, steps.length);
       while (next < steps.length && steps[next]?.delayMs === 0) {
         next += 1;
@@ -79,7 +77,6 @@ export function useCodeResearchPlayback() {
   const stepBack = useCallback(() => {
     setIsPlaying(false);
     setCursor((value) => {
-      // Mirror stepForward: undo trailing zero-delay steps with the visible one.
       let previous = Math.max(startAt, value - 1);
       while (previous > startAt && steps[previous]?.delayMs === 0) {
         previous -= 1;

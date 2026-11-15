@@ -78,7 +78,6 @@ async function completeSentimentAnalysis(
 ): Promise<SentimentAnalysisState> {
   let state: SentimentAnalysisState;
   try {
-    // Another request can finish between our first read and acquiring the lease.
     const settled = await run.store.get(key);
     if (settled?.status === "ready") {
       state = settled;

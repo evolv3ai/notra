@@ -3,7 +3,10 @@ import { z } from "@hono/zod-openapi";
 import { SUPPORTED_CONTENT_GENERATION_TYPES } from "@notra/content-generation/schemas";
 
 import { splitCommaSeparatedValues } from "../../utils/query-params";
-import { eventTriggerSourceConfigSchema as sharedEventTriggerSourceConfigSchema } from "../shared/automation";
+import {
+  automationNotifySchema,
+  eventTriggerSourceConfigSchema as sharedEventTriggerSourceConfigSchema,
+} from "../shared/automation";
 import { organizationResponseSchema } from "./content";
 import { resourceIdSchema } from "./ids";
 
@@ -39,6 +42,7 @@ export const eventTriggerOutputConfigSchema = z
   .object({
     publishDestination: z.enum(["webflow", "framer", "custom"]).optional(),
     brandVoiceId: z.string().trim().min(1).optional(),
+    notify: automationNotifySchema.optional(),
   })
   .optional();
 

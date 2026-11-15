@@ -1,6 +1,8 @@
+import "@/workflows/runtime";
 import { getGitHubToolRepositoryContextByIntegrationId } from "@notra/ai/integrations/github";
 import { getLinearToolContextByIntegrationId } from "@notra/ai/integrations/linear";
 import { getValidToneProfile } from "@notra/ai/schemas/tone";
+import { loadBrandGuidelineSourceInstructions } from "@notra/ai/utils/load-brand-guideline-source";
 import type { PostSourceMetadata } from "@notra/db/schema";
 import { flushPostHogServer } from "@notra/posthog/server";
 import { createRequestLogger } from "evlog";
@@ -62,8 +64,12 @@ export async function runOnDemandGeneration(
     buildDataPointRestrictionInstructions(dataPoints);
   const selectedItemsInstructions =
     buildSelectedItemsInstructions(selectedItems);
+  const guidelineInstructions = await loadBrandGuidelineSourceInstructions(
+    brand?.id
+  );
   const customInstructions = [
     brand?.customInstructions?.trim() || "",
+    guidelineInstructions,
     restrictionInstructions || "",
     selectedItemsInstructions || "",
   ]
@@ -118,6 +124,7 @@ export async function runOnDemandGeneration(
     sourceTargetParts.push(`Linear (integrationId: ${ref.integrationId})`);
   }
 
+  const tone = getValidToneProfile(brand?.toneProfile, "Conversational");
   const log = createRequestLogger({
     method: "POST",
     path: "/api/workflows/on-demand-content",
@@ -143,7 +150,7 @@ export async function runOnDemandGeneration(
         defaultBranch: repository.defaultBranch,
       })),
       linearIntegrations: linearIntegrationRefs,
-      tone: getValidToneProfile(brand?.toneProfile, "Conversational"),
+      tone,
       promptInput: {
         sourceTargets: sourceTargetParts.join(", "),
         todayUtc,
@@ -155,7 +162,7 @@ export async function runOnDemandGeneration(
         audience: brand?.audience ?? undefined,
         customInstructions: customInstructions || null,
         language: brand?.language ?? undefined,
-        toneProfile: getValidToneProfile(brand?.toneProfile, "Conversational"),
+        toneProfile: tone,
         customTone: brand?.customTone ?? null,
       },
       sourceMetadata,

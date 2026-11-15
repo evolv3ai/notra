@@ -1,4 +1,3 @@
-import { acquireClaim, releaseClaim } from "@notra/ai/autonomy/claims";
 import { chatWorkflowPayloadSchema } from "@notra/ai/schemas/chat";
 import { publicationSyncRepairSchema } from "@notra/ai/schemas/content-publication";
 import type { BrandGuidelinesWorkflowPayload } from "@notra/ai/types/brand-guidelines";
@@ -10,7 +9,7 @@ import { agentReadinessWorkflowPayloadSchema } from "@notra/geo-core/schemas/age
 import {
   geoScanWorkflowPayloadSchema,
   geoWriterWorkflowPayloadSchema,
-} from "@notra/geo-core/schemas/geo";
+} from "@notra/geo-core/schemas/geo-workflows";
 import { gscSyncPayloadSchema } from "@notra/geo-core/schemas/google-search-console";
 import type { AgentReadinessWorkflowPayload } from "@notra/geo-core/types/agent-readiness";
 import type { GeoWriterPayload } from "@notra/geo-core/types/geo";
@@ -21,24 +20,27 @@ import {
   eventWorkflowPayloadSchema,
   scheduleWorkflowPayloadSchema,
 } from "@notra/schemas/dashboard/workflows";
-import {
-  type IrisWorkflowPayload,
-  irisWorkflowPayloadSchema,
-} from "@notra/schemas/dashboard/workflows/iris";
 import { onboardingAgentWorkflowPayloadSchema } from "@notra/schemas/dashboard/workflows/onboarding-agent-payload";
 import { start } from "workflow/api";
 
-import {
-  IRIS_START_CLAIM_SCOPE,
-  IRIS_START_CLAIM_TTL_SECONDS,
-} from "@/constants/iris";
 import {
   WORKFLOW_ANALYTICS_NAMES,
   WORKFLOW_TRIGGERS,
 } from "@/constants/workflow-analytics";
 import { trackWorkflowStarted } from "@/lib/analytics/workflow-lifecycle";
+import { autopilotPullRequestEventSchema } from "@/schemas/autopilot-github";
+import type {
+  AutopilotSuggestionWorkflowPayload,
+  AutopilotPullRequestWorkflowPayload,
+} from "@/types/autopilot";
 import type { BrandAnalysisPayload } from "@/types/brand-analysis";
+import type { ScheduledPublicationWorkflowInput } from "@/types/content/scheduled-publications";
+import type { SiteJobRunHandle } from "@/types/sites-server";
+import type { WorkflowGraphRunPayload } from "@/types/workflow-engine";
+import { autopilotPullRequestMoment } from "@/utils/autopilot-github";
 import { agentReadinessWorkflow } from "@/workflows/agent-readiness";
+import { autopilotPullRequestWorkflow } from "@/workflows/autopilot-pull-request";
+import { autopilotSuggestionWorkflow } from "@/workflows/autopilot-suggestion";
 import {
   brandAnalysisPayloadSchema,
   brandAnalysisWorkflow,
@@ -52,11 +54,20 @@ import { geoScanWorkflow } from "@/workflows/geo-scan";
 import { geoWriterWorkflow } from "@/workflows/geo-writer";
 import { githubMentionWorkflow } from "@/workflows/github-mention";
 import { gscSyncWorkflow } from "@/workflows/gsc-sync";
-import { irisControllerRun } from "@/workflows/iris-controller";
 import { onDemandContentWorkflow } from "@/workflows/on-demand-content";
 import { onboardingAgentWorkflow } from "@/workflows/onboarding-agent";
 import { scheduleContentWorkflow } from "@/workflows/schedule-content";
+import { scheduledPublicationWorkflow } from "@/workflows/scheduled-publication";
+import { siteJobWorkflow } from "@/workflows/site-job";
 import { socialAnalyticsSyncWorkflow } from "@/workflows/social-analytics-sync";
+import { workflowGraphWorkflow } from "@/workflows/workflow-graph";
+
+export async function startSiteJobRun(
+  jobId: string
+): Promise<SiteJobRunHandle> {
+  const run = await start(siteJobWorkflow, [jobId]);
+  return { runId: run.runId };
+}
 
 export async function startGitHubMentionRun(context: GitHubMentionContext) {
   const run = await start(githubMentionWorkflow, [context]);
@@ -123,6 +134,13 @@ export async function startContentPublicationSyncRepair(
   ]);
 }
 
+export async function startScheduledPublicationRun(
+  input: ScheduledPublicationWorkflowInput
+): Promise<{ runId: string }> {
+  const run = await start(scheduledPublicationWorkflow, [input]);
+  return { runId: run.runId };
+}
+
 export async function startOnboardingAgentRun(
   payload: OnboardingAgentWorkflowPayload
 ): Promise<{ runId: string }> {
@@ -134,41 +152,6 @@ export async function startOnboardingAgentRun(
     organizationId: parsed.organizationId,
   });
   return { runId: run.runId };
-}
-
-export async function startIrisRun(
-  payload: IrisWorkflowPayload
-): Promise<{ runId: string | null }> {
-  const parsed = irisWorkflowPayloadSchema.parse(payload);
-  const dispatchToken = crypto.randomUUID();
-  const dispatch = await acquireClaim({
-    scope: IRIS_START_CLAIM_SCOPE,
-    claimKey: parsed.executionId,
-    ownerToken: dispatchToken,
-    ttlSeconds: IRIS_START_CLAIM_TTL_SECONDS,
-    organizationId: parsed.organizationId,
-  });
-  if (!dispatch.claimed) {
-    return { runId: null };
-  }
-  try {
-    const run = await start(irisControllerRun, [parsed]);
-    trackWorkflowStarted({
-      workflow: WORKFLOW_ANALYTICS_NAMES.IRIS_CONTROLLER,
-      runId: run.runId,
-      organizationId: parsed.organizationId,
-      trigger: parsed.trigger,
-      properties: { execution_id: parsed.executionId },
-    });
-    return { runId: run.runId };
-  } catch (error) {
-    await releaseClaim({
-      scope: IRIS_START_CLAIM_SCOPE,
-      claimKey: parsed.executionId,
-      ownerToken: dispatchToken,
-    });
-    throw error;
-  }
 }
 
 export async function startScheduleRun(payload: {
@@ -239,6 +222,8 @@ export async function startGeoScanRun(payload: {
   scanId?: string;
   promptIds?: string[];
   engines?: string[];
+  manual?: boolean;
+  freeScan?: boolean;
 }): Promise<{ runId: string }> {
   const parsed = geoScanWorkflowPayloadSchema.parse(payload);
   const run = await start(geoScanWorkflow, [parsed]);
@@ -279,6 +264,45 @@ export async function startAgentReadinessRun(
     projectId: parsed.projectId,
     properties: { report_id: parsed.reportId },
   });
+  return { runId: run.runId };
+}
+
+export async function startWorkflowGraphRun(
+  payload: WorkflowGraphRunPayload,
+  trigger: string
+): Promise<{ runId: string }> {
+  const run = await start(workflowGraphWorkflow, [payload]);
+  trackWorkflowStarted({
+    workflow: WORKFLOW_ANALYTICS_NAMES.WORKFLOW_GRAPH,
+    runId: run.runId,
+    organizationId: payload.organizationId,
+    properties: { workflow_run_id: payload.runId, trigger },
+  });
+  return { runId: run.runId };
+}
+
+export async function startAutopilotSuggestionWorkflowRun(
+  payload: AutopilotSuggestionWorkflowPayload
+): Promise<{ runId: string }> {
+  const run = await start(autopilotSuggestionWorkflow, [payload]);
+  return { runId: run.runId };
+}
+
+export async function startAutopilotPullRequestWorkflowRun(
+  payload: AutopilotPullRequestWorkflowPayload
+): Promise<{ runId: string } | null> {
+  if (!payload.deliveryId) {
+    throw new Error("GitHub delivery ID is required");
+  }
+  const parsed = autopilotPullRequestEventSchema.safeParse(
+    JSON.parse(payload.rawBody)
+  );
+  if (!parsed.success || !autopilotPullRequestMoment(parsed.data)) {
+    return null;
+  }
+  const run = await start(autopilotPullRequestWorkflow, [
+    { deliveryId: payload.deliveryId, rawBody: JSON.stringify(parsed.data) },
+  ]);
   return { runId: run.runId };
 }
 

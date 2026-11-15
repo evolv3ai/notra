@@ -12,12 +12,12 @@ import {
   SheetScrollArea,
   SheetTitle,
 } from "@notra/ui/components/ui/sheet";
-import { useLocale, useTranslations } from "next-intl";
+import { useRetainedValue } from "@notra/ui/hooks/use-retained-value";
 import { useMemo } from "react";
+import { DataTable } from "ui/table";
+import { useLocale, useTranslations } from "use-intl";
 
-import { Table } from "@/components/motion/table";
 import { GEO_SEARCH_GAP_ACTION_LABEL_KEYS } from "@/constants/geo-gaps";
-import { useRetainedValue } from "@/lib/hooks/use-retained-value";
 import type {
   GeoAiSearchEvidenceProps,
   GeoConsoleSearchGapDetailsProps,
@@ -176,8 +176,7 @@ function ConsoleSearchGapDetails({ gap, ai }: GeoConsoleSearchGapDetailsProps) {
               {gap.queries.length}
             </span>
           </h3>
-          <Table
-            className="rounded-2xl"
+          <DataTable
             columns={[
               {
                 key: "query",
@@ -222,6 +221,7 @@ function ConsoleSearchGapDetails({ gap, ai }: GeoConsoleSearchGapDetailsProps) {
             getRowId={(query) => query.query}
             height={360}
             rowSizing="content"
+            autoHeight
           />
         </section>
 

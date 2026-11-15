@@ -9,8 +9,8 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
 import { useCallback } from "react";
+import { useTranslations } from "use-intl";
 
 import { useGeoLive } from "@/components/providers/geo-live-provider";
 import { useGeoProjectScope } from "@/components/providers/geo-project-provider";
@@ -26,7 +26,8 @@ export function useGeoScanRun(
   scanId: string | undefined,
   offset: number,
   engine?: string,
-  pendingOffset = 0
+  pendingOffset = 0,
+  mentioned = false
 ) {
   const tToast = useTranslations("geo.toasts");
   const { projectId } = useGeoProjectScope();
@@ -44,6 +45,7 @@ export function useGeoScanRun(
         offset,
         engine,
         pendingOffset,
+        ...(mentioned ? { mentioned } : {}),
       },
     }),
     enabled: !!organizationId,

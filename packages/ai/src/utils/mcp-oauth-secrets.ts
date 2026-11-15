@@ -1,6 +1,8 @@
+import {
+  decryptToken,
+  encryptToken,
+} from "@notra/db/utils/integration-encryption";
 import type { z } from "zod";
-
-import { decryptToken, encryptToken } from "../crypto/token-encryption";
 
 export function encryptMcpOAuthSecret(value: unknown) {
   return encryptToken(JSON.stringify(value));

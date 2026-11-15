@@ -21,19 +21,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@notra/ui/components/ui/dropdown-menu";
-import { useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
+import { InstrumentEmpty, InstrumentSection } from "ui/card";
+import { useTranslations } from "use-intl";
 
 import { CitationsTable } from "@/components/geo/citations-table";
-import {
-  InstrumentEmpty,
-  InstrumentSection,
-} from "@/components/instrument/instrument-module";
 import { AI_TRAFFIC_PURPOSE_LABEL_KEYS } from "@/constants/ai-traffic-purposes";
 import { TRAFFIC_LOG_FILTER_KINDS } from "@/constants/geo-analytics";
 import { trackEvent } from "@/lib/analytics/posthog-client";
 import { useGeoTrafficLog } from "@/lib/hooks/use-geo";
 import { useGeoTrafficHostQuery } from "@/lib/hooks/use-geo-traffic-host";
+import { useTrafficPathQuery } from "@/lib/hooks/use-traffic-path";
+import { useTrafficSitesMode } from "@/lib/hooks/use-traffic-sites";
 import type { AiTrafficLogCardProps } from "@/types/geo";
 import { tableHeightFor } from "@/utils/table";
 
@@ -48,11 +47,15 @@ export function AiTrafficLogCard({ organizationId }: AiTrafficLogCardProps) {
     categories: [],
   });
   const [hostQuery] = useGeoTrafficHostQuery();
+  const [pathQuery] = useTrafficPathQuery();
+  const sites = useTrafficSitesMode();
   const { data, isPending, isPlaceholderData } = useGeoTrafficLog(
     organizationId,
     filters,
     {
       host: hostQuery,
+      path: pathQuery,
+      sites,
     }
   );
   const log = data?.log ?? [];
@@ -69,10 +72,10 @@ export function AiTrafficLogCard({ organizationId }: AiTrafficLogCardProps) {
           GEO_CITATIONS_ROW_HEIGHT
         )}
         liveKey={
-          isPlaceholderData ? undefined : JSON.stringify([filters, hostQuery])
+          isPlaceholderData
+            ? undefined
+            : JSON.stringify([filters, hostQuery, pathQuery, sites])
         }
-        // Live refetches swap rows in place; only a new filter or host,
-        // which shows the previous result as placeholder, dims the table.
         loading={isPending || isPlaceholderData}
       />
     );

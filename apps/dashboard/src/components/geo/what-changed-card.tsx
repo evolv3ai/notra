@@ -1,17 +1,12 @@
 "use client";
 
-import {
-  ArrowDown01Icon,
-  ArrowRight01Icon,
-  ArrowUp01Icon,
-} from "@hugeicons/core-free-icons";
+import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   GEO_CHANGE_KIND_ORDER,
   GEO_CHANGES_COMPETITOR_STACK_LIMIT,
   GEO_CHANGES_EMPTY_DETAIL,
   GEO_CHANGES_LABEL,
-  GEO_CHANGES_SKELETON_ROWS,
   GEO_CHANGES_SUMMARY_GROUPS,
   GEO_EMPTY_COMPETITORS,
   GEO_EMPTY_PROMPT_RESULTS,
@@ -26,24 +21,21 @@ import type {
 import { formatAiTrafficTimestamp } from "@notra/geo-core/utils/ai-traffic";
 import { LogoStack } from "@notra/ui/components/geo/logo-stack";
 import { TruncateWithTooltip } from "@notra/ui/components/shared/truncate-with-tooltip";
+import { TrendBadge } from "@notra/ui/components/trend-badge";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@notra/ui/components/ui/tooltip";
-import { useLocale, useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { InstrumentEmpty, InstrumentSection } from "ui/card";
+import { DataTable, type TableColumn } from "ui/table";
+import { useLocale, useTranslations } from "use-intl";
 
 import { EmptyStateTablePreview } from "@/components/empty-state-preview";
 import { CompetitorLogo } from "@/components/geo/competitor-logo";
 import { EngineIcon } from "@/components/geo/engine-icon";
 import { PromptDetailDialog } from "@/components/geo/prompt-detail-dialog";
-import {
-  InstrumentEmpty,
-  InstrumentSection,
-} from "@/components/instrument/instrument-module";
-import { Table, type TableColumn } from "@/components/motion/table";
 import { useGeoProjectScope } from "@/components/providers/geo-project-provider";
 import { EMPTY_STATE_TABLE_COLUMNS } from "@/constants/empty-state";
 import {
@@ -54,6 +46,7 @@ import {
 import { TABLE_ROW_HEIGHT } from "@/constants/table";
 import { useGeoChanges } from "@/lib/hooks/use-geo";
 import { useLogoStackLabels } from "@/lib/i18n/use-logo-stack-labels";
+import { useRouter } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 import type {
   GeoChangeCellProps,
@@ -72,21 +65,9 @@ import {
 } from "@/utils/geo-changes";
 import { withGeoProject } from "@/utils/geo-paths";
 import { promptTableRowForId } from "@/utils/geo-prompts";
-import { tableHeightFor } from "@/utils/table";
+import { GEO_CHANGES_TABLE_HEIGHT } from "@/utils/table";
 
-const STAT_ICON_SIZE = 10;
-const STAT_ICON_STROKE = 2.5;
 const POSITION_ARROW_SIZE = 12;
-
-const STAT_TONE_CLASS = {
-  up: "bg-geo-up/10 text-geo-up",
-  down: "bg-geo-down/10 text-geo-down",
-} as const;
-
-const STAT_ICON = {
-  up: ArrowUp01Icon,
-  down: ArrowDown01Icon,
-} as const;
 
 const CHANGES_DEFAULT_SORT = { key: "change", direction: "asc" } as const;
 
@@ -97,27 +78,11 @@ function SummaryStat({
   value,
 }: GeoChangeSummaryStatProps) {
   const locale = useLocale();
-  const isZero = value === 0;
   return (
     <Tooltip>
       <TooltipTrigger
-        render={
-          <span
-            className={cn(
-              "inline-flex cursor-default items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[0.6875rem] leading-none font-medium tabular-nums",
-              isZero
-                ? "bg-muted text-muted-foreground"
-                : STAT_TONE_CLASS[direction]
-            )}
-          />
-        }
+        render={<TrendBadge tone={value === 0 ? "flat" : direction} />}
       >
-        <HugeiconsIcon
-          aria-hidden="true"
-          icon={STAT_ICON[direction]}
-          size={STAT_ICON_SIZE}
-          strokeWidth={STAT_ICON_STROKE}
-        />
         <span className="sr-only">{label} </span>
         {value.toLocaleString(locale)}
       </TooltipTrigger>
@@ -289,10 +254,6 @@ function CompetitorLogosCell({
       ),
     };
   });
-  /*
-   * One named brand beats four anonymous logos: the column is narrow, and the
-   * row already says what happened, so the only open question is "to whom".
-   */
   return (
     <LogoStack
       labels={logoStackLabels}
@@ -370,6 +331,33 @@ function changeRowId(event: GeoChangeEvent): string {
   return `${event.kind}-${event.promptId}-${event.engine}`;
 }
 
+function ChangesEmpty({
+  isScanning,
+  reason,
+}: {
+  isScanning: boolean;
+  reason: "needsScans" | "noChanges";
+}) {
+  const t = useTranslations("geo.whatChangedCard");
+  const tGeoShared = useTranslations("geo.shared");
+  return (
+    <InstrumentEmpty
+      busy={isScanning}
+      className="h-full"
+      message={isScanning ? tGeoShared("scanningEngines") : t(reason)}
+      preview={
+        <div className="px-6 pt-2">
+          <EmptyStateTablePreview
+            columns={EMPTY_STATE_TABLE_COLUMNS.changes}
+            rows={3}
+          />
+        </div>
+      }
+      seed={GEO_CHANGES_LABEL}
+    />
+  );
+}
+
 export function WhatChangedCard({
   organizationId,
   organizationSlug,
@@ -423,60 +411,32 @@ export function WhatChangedCard({
     );
   }
 
-  let body = (
-    <Table
-      className="rounded-2xl"
+  const body = (
+    <DataTable
       columns={columns}
       data={events}
       defaultSort={CHANGES_DEFAULT_SORT}
+      emptyState={
+        <ChangesEmpty
+          isScanning={isScanning}
+          reason={data?.previousScan ? "noChanges" : "needsScans"}
+        />
+      }
       getRowId={changeRowId}
-      height={tableHeightFor(
-        events.length === 0 ? GEO_CHANGES_SKELETON_ROWS : events.length
-      )}
-      loading={isPending || isFetching}
+      height={GEO_CHANGES_TABLE_HEIGHT}
+      minHeight={GEO_CHANGES_TABLE_HEIGHT}
+      // A background refetch keeps the empty state instead of flashing skeleton rows.
+      loading={isPending || (isFetching && events.length > 0)}
       onRowClick={openEvent}
       resizable
       rowHeight={TABLE_ROW_HEIGHT}
-      toolbar={data ? <SummaryToolbar summary={data.summary} /> : undefined}
+      toolbar={
+        <div className="flex h-17 items-center @min-[32rem]/instrument:h-11">
+          {data ? <SummaryToolbar summary={data.summary} /> : null}
+        </div>
+      }
     />
   );
-  if (!isPending && data) {
-    if (!data.previousScan) {
-      body = (
-        <InstrumentEmpty
-          busy={isScanning}
-          className="h-40"
-          message={isScanning ? tGeoShared("scanningEngines") : t("needsScans")}
-          preview={
-            <div className="px-6 pt-2">
-              <EmptyStateTablePreview
-                columns={EMPTY_STATE_TABLE_COLUMNS.changes}
-                rows={3}
-              />
-            </div>
-          }
-          seed={GEO_CHANGES_LABEL}
-        />
-      );
-    } else if (events.length === 0) {
-      body = (
-        <InstrumentEmpty
-          busy={isScanning}
-          className="h-40"
-          message={isScanning ? tGeoShared("scanningEngines") : t("noChanges")}
-          preview={
-            <div className="px-6 pt-2">
-              <EmptyStateTablePreview
-                columns={EMPTY_STATE_TABLE_COLUMNS.changes}
-                rows={3}
-              />
-            </div>
-          }
-          seed={GEO_CHANGES_LABEL}
-        />
-      );
-    }
-  }
 
   return (
     <>

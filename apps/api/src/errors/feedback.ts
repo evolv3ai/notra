@@ -15,6 +15,16 @@ export class FeedbackNotFoundError extends Schema.TaggedError<FeedbackNotFoundEr
   {}
 ) {}
 
+export class FeedbackIdempotencyConflictError extends Schema.TaggedError<FeedbackIdempotencyConflictError>()(
+  "FeedbackIdempotencyConflictError",
+  {}
+) {}
+
+export class FeedbackQuotaExceededError extends Schema.TaggedError<FeedbackQuotaExceededError>()(
+  "FeedbackQuotaExceededError",
+  {}
+) {}
+
 export class FeedbackDatabaseError extends Schema.TaggedError<FeedbackDatabaseError>()(
   "FeedbackDatabaseError",
   { cause: Schema.Defect() }

@@ -49,10 +49,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@notra/ui/components/ui/tooltip";
-import { TABLE_CHROME_CLASS } from "@notra/ui/constants/table";
+import {
+  TABLE_CARD_CELLS_CLASS,
+  TABLE_FRAME_CLASS,
+  TABLE_INNER_RADIUS_CLASS,
+} from "@notra/ui/constants/table";
 
 import type { FileUIPart, UIMessage } from "ai";
-import Image from "next/image";
+import { Image } from "@notra/ui/components/framework-provider";
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react";
 import {
   createContext,
@@ -62,7 +66,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Streamdown } from "streamdown";
+import { defaultRehypePlugins, Streamdown } from "streamdown";
 import { MESSAGE_CODE_PLUGINS } from "@notra/ui/constants/message-code";
 import { MESSAGE_TEXT_ANIMATION } from "@notra/ui/constants/message-animation";
 import {
@@ -248,7 +252,6 @@ export const MessageBranchContent = ({
   const { currentBranch, setBranches, branches } = useMessageBranch();
   const childrenArray = Array.isArray(children) ? children : [children];
 
-  // Use useEffect to update branches when they change
   useEffect(() => {
     if (branches.length !== childrenArray.length) {
       setBranches(childrenArray);
@@ -278,7 +281,6 @@ export const MessageBranchSelector = ({
 }: MessageBranchSelectorProps) => {
   const { totalBranches } = useMessageBranch();
 
-  // Don't render if there's only one branch
   if (totalBranches <= 1) {
     return null;
   }
@@ -477,10 +479,11 @@ function MessageMarkdownTable({
   };
 
   const renderTable = () => (
-    <div className="max-w-full overflow-x-auto">
+    <div className={cn("max-w-full overflow-x-auto", TABLE_INNER_RADIUS_CLASS)}>
       <table
         className={cn(
           "w-full min-w-max caption-bottom border-separate border-spacing-0 text-sm [&_thead_th:last-child]:pr-24",
+          TABLE_CARD_CELLS_CLASS,
           className,
         )}
         ref={tableRef}
@@ -495,7 +498,7 @@ function MessageMarkdownTable({
     <div
       className={cn(
         "group/table relative max-w-full",
-        TABLE_CHROME_CLASS,
+        TABLE_FRAME_CLASS,
         toolbarOpen && "is-menu-open",
       )}
     >
@@ -619,7 +622,7 @@ function MessageMarkdownTable({
                 </ResponsiveDialogClose>
               </ResponsiveDialogHeader>
               <div className="min-h-0 flex-1 overflow-auto p-4">
-                <div className={TABLE_CHROME_CLASS}>{renderTable()}</div>
+                <div className={TABLE_FRAME_CLASS}>{renderTable()}</div>
               </div>
             </ResponsiveDialogContent>
           </ResponsiveDialog>
@@ -736,8 +739,10 @@ const messageResponseComponents = {
   td: MessageTableCell,
 };
 
+const DEFAULT_REHYPE_PLUGINS = Object.values(defaultRehypePlugins);
+
 export const MessageResponse = memo(
-  ({ className, components, ...props }: MessageResponseProps) => (
+  ({ className, components, rehypePlugins, ...props }: MessageResponseProps) => (
     <Streamdown
       className={cn(
         "message-response wrap-anywhere size-full min-w-0 max-w-full overflow-hidden break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_pre]:max-w-full [&_pre]:overflow-x-auto",
@@ -747,6 +752,11 @@ export const MessageResponse = memo(
       plugins={MESSAGE_CODE_PLUGINS}
       lineNumbers={false}
       {...props}
+      rehypePlugins={
+        rehypePlugins
+          ? [...DEFAULT_REHYPE_PLUGINS, ...rehypePlugins]
+          : DEFAULT_REHYPE_PLUGINS
+      }
       animated={props.isAnimating ? MESSAGE_TEXT_ANIMATION : false}
     />
   ),

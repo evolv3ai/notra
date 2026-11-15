@@ -1,11 +1,5 @@
 import type { DemoChatScenario } from "@notra/ai/types/demo-model";
 
-/**
- * Canned model output for the public demo (NOTRA_DEMO_MODE). The demo has no
- * provider keys; every model call is answered from here. All copy is about
- * Fieldnote, the fictional company the demo workspace belongs to.
- */
-
 export const DEMO_MODEL_PROVIDER = "notra-demo";
 export const DEMO_STREAM_CHUNK_DELAY_MS = 18;
 export const DEMO_FAKE_MAX_DEPTH = 6;
@@ -143,8 +137,6 @@ export const DEMO_FAKE_PARAGRAPHS = {
   ],
 } as const;
 
-// Plain text on purpose: the same draft is used for blog and social posts,
-// and social previews show Markdown literally.
 const DEMO_POST_MARKDOWN = {
   en: `Most teams don't have a meeting problem. They have a memory problem.
 

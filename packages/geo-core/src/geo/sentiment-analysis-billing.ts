@@ -46,7 +46,6 @@ export async function billSentimentAnalysis({
     }
     throw error;
   } finally {
-    // An attempted call confirms usage even if output validation fails.
     await Effect.runPromise(
       billing.finalizeContentBilling({
         reservation,

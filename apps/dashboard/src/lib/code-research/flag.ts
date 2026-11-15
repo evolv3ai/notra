@@ -21,10 +21,8 @@ function getFlagsManager(): ServerFlagsManager | null {
   if (!cachedManager) {
     cachedManager = createServerFlagsManager({
       clientId,
-      autoFetch: false,
       cacheTtl: CODE_RESEARCH_FLAG_CACHE_TTL_MS,
       staleTime: CODE_RESEARCH_FLAG_STALE_TIME_MS,
-      skipStorage: true,
     });
   }
   return cachedManager;
@@ -37,7 +35,6 @@ function getFlagsManager(): ServerFlagsManager | null {
 export async function isCodeResearchEnabledForOrganization(
   organizationId: string
 ): Promise<boolean> {
-  // The kill switch wins over the development default.
   if (!isCodeResearchConfigured()) {
     return false;
   }

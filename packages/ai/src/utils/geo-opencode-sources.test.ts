@@ -2,51 +2,94 @@ import { describe, expect, test } from "bun:test";
 
 import { extractHttpUrls } from "./geo-opencode-sources";
 
-describe("extractHttpUrls", () => {
-  test("strips markdown-link closers and bold markers from cited URLs", () => {
-    expect(
-      extractHttpUrls(
-        "**[Anthropic](https://www.anthropic.com/claude)** and **[Jasper](https://www.jasper.ai/)**"
-      )
-    ).toEqual(["https://www.anthropic.com/claude", "https://www.jasper.ai/"]);
-  });
-
-  test("strips leftover )** from a bare URL scrape", () => {
-    expect(extractHttpUrls("https://chatgpt.com/)**")).toEqual([
-      "https://chatgpt.com/",
-    ]);
-  });
-
-  test("keeps ordinary URLs unchanged", () => {
-    expect(
-      extractHttpUrls("See https://writesonic.com/docs for details")
-    ).toEqual(["https://writesonic.com/docs"]);
-  });
-
-  test("walks nested tool payloads", () => {
+describe("GEO coding-provider source extraction", () => {
+  test("extracts and deduplicates HTTP URLs from nested tool payloads", () => {
     expect(
       extractHttpUrls({
-        output: {
-          links: ["**[Copy.ai](https://www.copy.ai/)**"],
-        },
+        input: [
+          "https://EXAMPLE.com",
+          { nested: "https://example.com/ https://other.example/path?q=1&x=2" },
+        ],
+        output: null,
       })
-    ).toEqual(["https://www.copy.ai/"]);
+    ).toEqual(["https://example.com/", "https://other.example/path?q=1&x=2"]);
   });
 
-  test("keeps a trailing asterisk that is part of the URL", () => {
-    expect(extractHttpUrls("https://example.com/search?q=*")).toEqual([
-      "https://example.com/search?q=*",
+  test("tolerates cycles and non-string scalar values", () => {
+    const payload: unknown[] = [
+      null,
+      undefined,
+      false,
+      3,
+      "https://source.example",
+    ];
+    payload.push(payload);
+    expect(extractHttpUrls(payload)).toEqual(["https://source.example/"]);
+  });
+
+  test("does not return non-HTTP schemes or malformed URLs", () => {
+    expect(
+      extractHttpUrls(
+        "file:///etc/passwd javascript:alert(1) data:text/plain,abc ftp://source.example https://[broken"
+      )
+    ).toEqual([]);
+  });
+
+  test("removes sentence and markdown link punctuation", () => {
+    expect(
+      extractHttpUrls(
+        "See [source](https://source.example/docs), then https://other.example/path."
+      )
+    ).toEqual(["https://source.example/docs", "https://other.example/path"]);
+  });
+
+  test("removes combined wrapper punctuation and emphasis without leaving punctuation in the path", () => {
+    expect(
+      extractHttpUrls(
+        "(**https://source.example/docs.**) **https://other.example/docs.**"
+      )
+    ).toEqual(["https://source.example/docs", "https://other.example/docs"]);
+  });
+
+  test.each([
+    ["https://example.com/files/part**", "https://example.com/files/part**"],
+    [
+      "[search](https://example.com/search?q=foo*)",
+      "https://example.com/search?q=foo*",
+    ],
+    [
+      "**[search](https://example.com/search?q=foo*)**.",
+      "https://example.com/search?q=foo*",
+    ],
+    [
+      "[article](https://example.com/Function_(mathematics)*)",
+      "https://example.com/Function_(mathematics)*",
+    ],
+    [
+      "**https://example.com/search?q=foo***",
+      "https://example.com/search?q=foo*",
+    ],
+    [
+      "**https://example.com/files/part****",
+      "https://example.com/files/part**",
+    ],
+    [
+      "(**https://example.com/search?q=foo*.**)",
+      "https://example.com/search?q=foo*",
+    ],
+  ])("preserves literal destination stars in %s", (text, url) => {
+    expect(extractHttpUrls(text)).toEqual([url]);
+  });
+
+  test("keeps adjacent balanced Markdown destinations without parsing embedded redirect URLs twice", () => {
+    expect(
+      extractHttpUrls(
+        "[one](https://one.example/Function_(math)*)[two](https://two.example/path_(part)*) https://example.com/redirect?to=https://target.example/"
+      )
+    ).toEqual([
+      "https://one.example/Function_(math)*",
+      "https://two.example/path_(part)*",
+      "https://example.com/redirect?to=https://target.example/",
     ]);
-  });
-
-  test("preserves first-seen URL order when markdown citations follow a bare URL", () => {
-    const later = Array.from(
-      { length: 20 },
-      (_, index) => `**[source ${index}](https://later.example/${index})**`
-    ).join(" ");
-
-    expect(extractHttpUrls(`https://first.example/ ${later}`)[0]).toBe(
-      "https://first.example/"
-    );
   });
 });

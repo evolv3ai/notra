@@ -1,0 +1,22 @@
+---
+import { marketingButtonVariants } from "../../registry/notra/marketing-button/components/marketing-button";
+import { CTA_BANNER } from "../constants/cta-banner";
+import HeroDither from "./hero-dither.astro";
+---
+
+<section class="relative isolate flex w-full items-center justify-center overflow-clip rounded-3xl bg-[#C8B2EE40] px-6 py-16 antialiased dark:bg-[#231d3a]">
+  <HeroDither />
+  <div class="relative flex w-full max-w-3xl flex-col items-center gap-10">
+    <div class="flex flex-col items-center gap-4">
+      <h2 class="font-display max-w-2xl text-center text-4xl leading-[1.14] font-medium tracking-tight text-balance text-foreground sm:text-5xl">
+        {CTA_BANNER.heading}
+      </h2>
+      <p class="max-w-lg text-center text-lg font-medium text-balance text-foreground/85">
+        {CTA_BANNER.subcopy}
+      </p>
+    </div>
+    <a class:list={[marketingButtonVariants({ variant: "primary" }), "no-underline"]} href={CTA_BANNER.signupHref}>
+      {CTA_BANNER.primaryLabel}
+    </a>
+  </div>
+</section>

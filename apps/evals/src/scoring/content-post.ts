@@ -14,8 +14,6 @@ import {
 } from "./text-checks";
 
 const TWEET_MAX_CHARS = 280;
-// The SDK turns rejected calls into tool-error parts carrying only the error
-// message (not the class name), e.g. "Invalid input for tool skip: ...".
 const REJECTED_CALL_REGEX =
   /Invalid input for tool |tried to call unavailable tool |InvalidToolInputError|NoSuchToolError/;
 const LINKEDIN_MAX_CHARS = 1600;
@@ -49,7 +47,6 @@ const POST_QUESTIONS = {
   },
 } as const;
 
-/** Everything the writer saw, so attributions and brand facts count as grounded. */
 export function sourceDataFor(scenario: ContentScenario) {
   return {
     company: `${scenario.brand.companyName}: ${scenario.brand.companyDescription}`,
@@ -81,20 +78,13 @@ function field(
   return { field: name, score: Math.max(0, Math.min(1, score)), ...extra };
 }
 
-export interface PostScore extends CaseScore {
-  readonly judgeCostUsd: number;
-}
-
-/** Shared scoring for every stage that ends in createPost / skip / fail. */
 export async function scoreContentOutput(
   output: HarnessOutput,
   scenario: ContentScenario,
   contentType: ContentAgentProfile,
   ctx: ScoreContext
-): Promise<PostScore> {
+): Promise<CaseScore> {
   const expected = scenario.expected.decision;
-  // Execution errors (404 for a missing release) mirror real API answers;
-  // only calls the SDK rejected count against the model.
   const toolErrors = (output.toolErrors ?? []).filter((error) =>
     REJECTED_CALL_REGEX.test(error)
   );
@@ -113,7 +103,7 @@ export async function scoreContentOutput(
     const decided = fields[0]?.score ?? 0;
     const score =
       fields.reduce((sum, item) => sum + item.score, 0) / fields.length;
-    return { score, pass: decided === 1, fields, judgeCostUsd: 0 };
+    return { score, pass: decided === 1, fields };
   }
 
   const post = output.post;
@@ -133,11 +123,10 @@ export async function scoreContentOutput(
     ]) {
       fields.push(field(name, 0, { note: "no post created" }));
     }
-    return { score: 0, pass: false, fields, judgeCostUsd: 0 };
+    return { score: 0, pass: false, fields };
   }
 
   const fullText = `${post.title}\n${post.markdown}\n${post.recommendations ?? ""}`;
-  // Recommendations are publishing advice, not claims about the product.
   const judgedText = `${post.title}\n${post.markdown}`;
   const dashes = countDashes(fullText);
   fields.push(
@@ -233,5 +222,11 @@ export async function scoreContentOutput(
     missing.length === 0 &&
     (verdict.values.grounded ?? 0) >= 0.5 &&
     (verdict.values.coverage ?? 0) >= 0.66;
-  return { score, pass, fields, judgeCostUsd: verdict.costUsd };
+  return {
+    score,
+    pass,
+    fields,
+    judgeCostUsd: verdict.costUsd,
+    judgeCostSource: verdict.costSource,
+  };
 }

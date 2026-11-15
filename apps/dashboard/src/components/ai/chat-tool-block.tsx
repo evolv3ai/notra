@@ -36,9 +36,8 @@ import {
   CollapsibleTrigger,
 } from "@notra/ui/components/ui/collapsible";
 import { cn } from "@notra/ui/lib/utils";
-import { useTranslations } from "next-intl";
-import dynamic from "next/dynamic";
 import { useState } from "react";
+import { useTranslations } from "use-intl";
 
 import { McpIcon } from "@/components/integrations/mcp-icon";
 import { CHAT_TOOL_LABEL_ALIASES } from "@/constants/chat-tool-labels";
@@ -48,6 +47,7 @@ import { getChatToolIcon } from "@/utils/chat-tool-icon";
 import { isFailedToolOutput } from "@/utils/chat-tool-output";
 import { formatElapsedSeconds } from "@/utils/format-elapsed-seconds";
 import { hasOwnKey } from "@/utils/has-own-key";
+import dynamic from "@/utils/lazy-component";
 
 import {
   getMcpToolActionPhrase,
@@ -544,6 +544,15 @@ const TOOL_COPY = {
     suffix: (input) => quotedSuffix(input, ["name"]),
   },
   listSchedules: {},
+  schedulePost: {
+    suffix: (input) => idSuffix(input, ["postId"]),
+  },
+  cancelPostSchedule: {
+    suffix: (input) => idSuffix(input, ["postId"]),
+  },
+  getPostSchedule: {
+    suffix: (input) => idSuffix(input, ["postId"]),
+  },
   reviseImage: {
     subtitle: ({ isStreaming, t }) =>
       isStreaming ? t("imageRevising") : undefined,
@@ -593,6 +602,8 @@ const TOOL_COPY = {
   },
   getMarkdown: {},
   editMarkdown: {},
+  getPostDetails: {},
+  updatePostDetails: {},
   listAvailableSkills: {},
   getSkillByName: {
     suffix: (input) => quotedSuffix(input, ["name"]),

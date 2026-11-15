@@ -7,7 +7,6 @@ import {
 
 import type { ChatSubagentConfig } from "@/types/components/chat-subagent-block";
 
-// Keyed by the eve subagent tool name the root agent calls.
 export const CHAT_SUBAGENTS: Record<string, ChatSubagentConfig> = {
   "code-researcher": {
     labelKey: "codeResearcher",

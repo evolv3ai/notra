@@ -1,0 +1,109 @@
+---
+title: "Databuddy"
+description: "Send visits, web vitals, errors, custom events and session replays on your Notra site to Databuddy, with every tracker option available in blog.json."
+authors:
+  - handle: jan
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/sites/integrations/analytics/databuddy
+  type: how-to
+  applies_to:
+    - notra
+  language: en
+  status: stable
+---
+
+Notra loads the Databuddy script on every live page and allows Databuddy's script and ingestion hosts in the CSP. Every option you set in `blog.json` is passed to the tracker, so you can turn on web vitals, error tracking and custom events, skip or mask paths and tune batching without writing a custom script.
+
+With the [c15t cookie banner](/sites/integrations/consent/c15t) on, Databuddy loads through c15t instead, only after a visitor allows the measurement category, and keeps every option below.
+
+<Steps>
+  <Step title="Copy your Client ID">
+    In [Databuddy](https://www.databuddy.cc), open your website and copy the `data-client-id` value from its tracking code. It's a public ID, so no API key is needed.
+  </Step>
+  <Step title="Add it to Notra">
+    Open **Studio → Sites**, select your site, open **Integrations** and click **Add Databuddy**. Paste the ID into **Client ID** and switch on the tracking you want. To configure it in your repository instead, add it to `blog.json`:
+
+    ```json blog.json
+    {
+      "$schema": "https://usenotra.com/schemas/blog.json",
+      "name": "Acme",
+      "integrations": {
+        "databuddy": {
+          "clientId": "3ed1fce1-5a56-4cbc-a917-66864f6d18e3",
+          "trackWebVitals": true,
+          "trackErrors": true,
+          "trackOutgoingLinks": true,
+          "skipPatterns": ["/drafts/**"]
+        }
+      }
+    }
+    ```
+  </Step>
+  <Step title="Publish and verify">
+    After you [publish the change](/sites/integrations/analytics/overview#set-up-in-the-dashboard) and the production deployment finishes, visit your live site and check the realtime view in Databuddy.
+  </Step>
+</Steps>
+
+## Options
+
+The dashboard covers the Client ID and the four most common tracking switches. Every other option is set in `blog.json`, and editing the integration in the dashboard keeps those options as they are.
+
+| Setting | Dashboard field | Description |
+| --- | --- | --- |
+| `clientId` | **Client ID** | Public Client ID from your website's tracking code |
+| `trackWebVitals` | **Web vitals** | Sends Core Web Vitals for every page. Defaults to `false` |
+| `trackErrors` | **Errors** | Sends uncaught JavaScript errors. Defaults to `false` |
+| `trackOutgoingLinks` | **Outgoing links** | Sends an event when visitors click links to other domains. Defaults to `false` |
+| `trackInteractions` | **Interactions** | Sends clicks, rage clicks and dead clicks. Defaults to `false` |
+| `trackAttributes` | | Sends a custom event when visitors click an element with a `data-track` attribute, using its other `data-*` attributes as properties. Defaults to `false` |
+| `trackHashChanges` | | Counts URL hash changes as page views. Defaults to `false` |
+| `samplingRate` | | Share of events to send, from `0` to `1`. Defaults to `1` |
+| `skipPatterns` | | Up to 50 path globs that are never tracked, like `["/drafts/**"]` |
+| `maskPatterns` | | Up to 50 path globs whose matching segments are masked before sending, like `["/authors/*"]` |
+| `anonymizeVisitorIds` | | Anonymizes visitor IDs before storage. Set it to `"auto"` to let Databuddy decide. Defaults to `true` |
+| `ignoreBotDetection` | | Also tracks visits that look like bots. Defaults to `false` |
+| `usePixel` | | Sends events with a 1x1 image request instead of `fetch`. Defaults to `false` |
+| `enableBatching` | | Sends events in batches. Defaults to `true` |
+| `batchSize` | | Events per batch, from `1` to `50`. Defaults to `10` |
+| `batchTimeout` | | Milliseconds before a partial batch is sent. Defaults to `5000` |
+| `enableRetries` | | Retries failed requests. Defaults to `true` |
+| `maxRetries` | | Retries per failed request, up to `10`. Defaults to `3` |
+| `initialRetryDelay` | | Milliseconds before the first retry. Defaults to `500` |
+| `replay` | | Records [session replays](#session-replay). Set it to `true` or to an object with `maskText`, `recordIframes` and `scriptUrl`. Defaults to `false` |
+| `scriptUrl` | | Full HTTPS tracker script URL for a self-hosted or proxied script. Defaults to `https://cdn.databuddy.cc/databuddy.js` |
+| `apiUrl` | | HTTPS ingestion URL for a self-hosted or proxied endpoint. Defaults to `https://basket.databuddy.cc` |
+
+Notra adds the origins of `scriptUrl` and `apiUrl` to the [Content-Security-Policy](/sites/custom-scripts#content-security-policy) automatically.
+
+## Session replay
+
+With `replay` on, Notra loads Databuddy's recorder next to the tracker on every live page. Turn session replay on for your website in Databuddy as well, or no recordings are stored. Page text is masked by default and typed input is always masked, so a recording shows the layout and visitor actions without what was on screen.
+
+```json blog.json
+{
+  "integrations": {
+    "databuddy": {
+      "clientId": "3ed1fce1-5a56-4cbc-a917-66864f6d18e3",
+      "replay": { "maskText": true }
+    }
+  }
+}
+```
+
+| Setting | Description |
+| --- | --- |
+| `replay.maskText` | Masks page text in recordings. Set it to `false` only when your pages show no personal data. Typed input stays masked either way. Defaults to `true` |
+| `replay.recordIframes` | Records your own embedded pages into the parent page's recording. Set it on the framed page too. Defaults to `false` |
+| `replay.scriptUrl` | Full HTTPS recorder script URL for a self-hosted or proxied script. Defaults to `https://cdn.databuddy.cc/replay.js` |
+
+The recorder sends to the same `apiUrl` as the tracker and uses your `maskPatterns`. Notra adds the recorder's origin to the Content-Security-Policy and allows the `blob:` worker it compresses recordings in. With the [c15t cookie banner](/sites/integrations/consent/c15t) on, the recorder starts only after a visitor allows measurement and stops as soon as they withdraw it.
+
+## Custom events
+
+With `trackAttributes` on, you can track clicks in your own components or MDX without any JavaScript. Databuddy sends the `data-track` value as the event name and the element's other `data-*` attributes as properties:
+
+```html
+<a href="/pricing" data-track="pricing_clicked" data-placement="changelog-footer">See pricing</a>
+```

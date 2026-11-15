@@ -2,68 +2,126 @@ import type { QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { dashboardOrpc } from "@/lib/orpc/query";
-
-interface SaveContentDetailParams {
-  organizationId: string;
-  contentId: string;
-  queryClient: QueryClient;
-  hasTitleChanges: boolean;
-  hasSlugChanges: boolean;
-  title: string;
-  editingSlug: string | null;
-  editedMarkdown: string | null;
-}
+import type {
+  CheckpointContentDetailParams,
+  SaveContentDetailParams,
+} from "@/types/content/document-save";
+import type { ContentApiResponse } from "@/types/hooks/content";
+import { mergeSavedContentDetail } from "@/utils/content-document-save";
 
 export async function saveContentDetail({
   organizationId,
   contentId,
   queryClient,
+  expectedRevision,
   hasTitleChanges,
   hasSlugChanges,
   title,
   editingSlug,
   editedMarkdown,
+  autosave = false,
+  onPersisted,
 }: SaveContentDetailParams) {
-  const body: Record<string, string | null> = {};
-  if (hasTitleChanges) {
-    body.title = title.trim();
-  }
-  if (hasSlugChanges) {
-    body.slug = editingSlug?.trim() || null;
-  }
-  if (editedMarkdown !== null) {
-    body.markdown = editedMarkdown;
-  }
-
-  const responseData = (await dashboardOrpc.content.update.call({
+  const queryKey = dashboardOrpc.content.get.queryKey({
+    input: { organizationId, contentId },
+  });
+  const cached = queryClient.getQueryData<ContentApiResponse>(queryKey);
+  const responseData = await dashboardOrpc.content.saveDocument.call({
     organizationId,
     contentId,
-    ...body,
-  })) as {
-    content?: { title?: string; slug?: string | null };
-  };
+    expectedRevision,
+    autosave,
+    ...(hasTitleChanges ? { title: title.trim() } : {}),
+    ...(hasSlugChanges ? { slug: editingSlug?.trim() || null } : {}),
+    ...(editedMarkdown !== null ? { markdown: editedMarkdown } : {}),
+  });
+  onPersisted?.(responseData.document);
+  await queryClient.cancelQueries({ queryKey, exact: true }, { revert: false });
+  queryClient.setQueryData<ContentApiResponse>(queryKey, (current) =>
+    mergeSavedContentDetail(current, responseData.document)
+  );
+  const metadataChanged =
+    cached?.content.title !== responseData.document.title ||
+    cached?.content.slug !== responseData.document.slug;
 
   await Promise.all([
     queryClient.invalidateQueries({
-      queryKey: dashboardOrpc.content.get.queryKey({
-        input: { organizationId, contentId },
+      queryKey: dashboardOrpc.content.list.key({ input: { organizationId } }),
+      refetchType: metadataChanged ? "active" : "none",
+    }),
+    queryClient.invalidateQueries({
+      queryKey: dashboardOrpc.content.recents.key({
+        input: { organizationId },
       }),
+      refetchType: metadataChanged ? "active" : "none",
     }),
-    queryClient.invalidateQueries({
-      queryKey: dashboardOrpc.content.list.key(),
-    }),
-    queryClient.invalidateQueries({
-      queryKey: dashboardOrpc.content.recents.key(),
-    }),
-    queryClient.invalidateQueries({
-      queryKey: dashboardOrpc.content.collections.list.key(),
-    }),
+    ...(cached?.content.contentType === "blog_post" ||
+    cached?.content.contentType === "changelog"
+      ? [
+          queryClient.invalidateQueries({
+            queryKey: dashboardOrpc.content.history.list.key({
+              input: { organizationId, contentId },
+            }),
+            refetchType: "none",
+          }),
+        ]
+      : []),
+    ...(metadataChanged
+      ? [
+          queryClient.invalidateQueries({
+            queryKey: dashboardOrpc.content.collections.list.key({
+              input: { organizationId },
+            }),
+          }),
+          queryClient.invalidateQueries({
+            queryKey: dashboardOrpc.contentCalendar.list.key({
+              input: { organizationId },
+            }),
+          }),
+        ]
+      : []),
   ]);
 
   return {
-    persistedTitle: responseData.content?.title ?? title.trim(),
-    persistedSlug: responseData.content?.slug ?? null,
+    persistedTitle: responseData.document.title,
+    persistedSlug: responseData.document.slug,
+    revision: responseData.document.revision,
+    cacheApplied:
+      (queryClient.getQueryData<ContentApiResponse>(queryKey)?.content
+        .revision ?? 0) === responseData.document.revision,
   };
+}
+
+export async function checkpointContentDetail({
+  organizationId,
+  contentId,
+  queryClient,
+  manual = false,
+}: CheckpointContentDetailParams) {
+  const cached = queryClient.getQueryData<ContentApiResponse>(
+    dashboardOrpc.content.get.queryKey({
+      input: { organizationId, contentId },
+    })
+  );
+  if (
+    cached?.content.contentType !== "blog_post" &&
+    cached?.content.contentType !== "changelog"
+  ) {
+    return null;
+  }
+  const checkpoint = await dashboardOrpc.content.history.checkpoint.call({
+    organizationId,
+    contentId,
+    expectedRevision: cached.content.revision,
+    manual,
+  });
+  await queryClient.invalidateQueries({
+    queryKey: dashboardOrpc.content.history.list.key({
+      input: { organizationId, contentId },
+    }),
+    refetchType: "none",
+  });
+  return checkpoint;
 }
 
 export function getSaveContentDetailErrorMessage(
@@ -116,6 +174,9 @@ export async function toggleContentDetailStatus({
       queryKey: dashboardOrpc.content.metrics.get.queryKey({
         input: { organizationId },
       }),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: dashboardOrpc.contentCalendar.list.key(),
     }),
   ]);
 

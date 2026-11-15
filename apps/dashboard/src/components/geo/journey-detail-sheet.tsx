@@ -17,18 +17,18 @@ import {
   SheetTitle,
 } from "@notra/ui/components/ui/sheet";
 import { Skeleton } from "@notra/ui/components/ui/skeleton";
-import { useLocale, useTranslations } from "next-intl";
+import { useRetainedValue } from "@notra/ui/hooks/use-retained-value";
 import { useMemo } from "react";
+import { DataTable, type TableColumn } from "ui/table";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { EngineIcon } from "@/components/geo/engine-icon";
 import { JourneyPathTree } from "@/components/geo/journey-path-tree";
 import { SheetStatGrid } from "@/components/geo/sheet-stat-grid";
 import { CountryFlag } from "@/components/geo/twemoji";
-import { Table, type TableColumn } from "@/components/motion/table";
 import { TABLE_ROW_HEIGHT } from "@/constants/table";
 import { useGeoJourneyDetail } from "@/lib/hooks/use-geo";
-import { useRetainedValue } from "@/lib/hooks/use-retained-value";
 import { cn } from "@/lib/utils";
 import type { JourneyDetailSheetProps } from "@/types/geo";
 import { copyToClipboard } from "@/utils/copy-to-clipboard";
@@ -165,7 +165,7 @@ function JourneyDetailContent({
           <span className="min-w-0 truncate">
             {formatGeoSource(journey.source)}
           </span>
-          <Badge variant="secondary">
+          <Badge shape="rounded" size="md" variant="secondary">
             {journey.visitorType === "crawler"
               ? tGeoShared("crawler")
               : tGeoShared("aiReferral")}
@@ -217,8 +217,7 @@ function JourneyDetailContent({
 
         <section className="space-y-3">
           <SectionHeader meta={fetchLimitMeta} title={tGeoShared("fetches")} />
-          <Table
-            className="rounded-2xl"
+          <DataTable
             columns={columns}
             data={events}
             emptyState={t("noFetches")}

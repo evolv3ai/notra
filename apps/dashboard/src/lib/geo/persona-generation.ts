@@ -1,5 +1,3 @@
-import { getRun, start } from "workflow/api";
-
 import {
   PERSONA_GENERATION_FAILED_MESSAGE,
   PERSONA_GENERATION_START_TIMEOUT_MS,
@@ -20,7 +18,12 @@ export async function getPersonaGeneration(
   if (!job || job.status === "completed" || job.status === "failed") {
     return job;
   }
-  const status = job.runId ? await getRun(job.runId).status : null;
+  // The workflow runtime is ~2 MB; GEO pages load this module just to read
+  // job state, so it is only imported once there is a run to inspect.
+  const { runId } = job;
+  const status = runId
+    ? await import("workflow/api").then(({ getRun }) => getRun(runId).status)
+    : null;
   const timedOut =
     (!job.runId || status === "pending") &&
     Date.now() - Date.parse(job.startedAt) >
@@ -64,8 +67,7 @@ export async function startPersonaGeneration(
   if (job.id !== requested.id) {
     return job;
   }
-  // Keep the claim on an ambiguous dispatch failure. The workflow registers its
-  // run ID on entry, and status polling expires an unstarted claim after a grace period.
+  const { start } = await import("workflow/api");
   const run = await start(personaGenerationWorkflow, [job]);
   await updatePersonaGenerationJob(job, { runId: run.runId });
   return { ...job, runId: run.runId };

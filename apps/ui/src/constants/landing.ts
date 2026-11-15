@@ -42,7 +42,7 @@ export const LANDING_SECTIONS: LandingSection[] = [
         title: "Tooltip",
       },
       {
-        description: "A muted header band tucked behind the content card.",
+        description: "A shell header with a 2px rim around the content card.",
         href: "/components/duotone-tooltip",
         preview: "duotone-tooltip",
         title: "Duotone Tooltip",
@@ -56,10 +56,45 @@ export const LANDING_SECTIONS: LandingSection[] = [
       },
       {
         description:
+          "Toasts with the Depth surface of the buttons and tinted status icons.",
+        href: "/components/sonner",
+        preview: "sonner",
+        title: "Sonner",
+      },
+      {
+        description:
+          "A slider that snaps to a fixed set of values, from the Notra pricing page.",
+        href: "/components/step-slider",
+        preview: "step-slider",
+        title: "Step Slider",
+      },
+      {
+        description:
+          "A segmented tab selector where only the active tab shows its icon.",
+        href: "/components/icon-tabs",
+        preview: "icon-tabs",
+        title: "Icon Tabs",
+      },
+      {
+        description:
           "A rail of lines that maps a conversation, with a preview card per turn.",
         href: "/components/chat-minimap",
         preview: "chat-minimap",
         title: "Chat Minimap",
+      },
+      {
+        description:
+          "The chat composer from the dashboard, with queued messages on the tray.",
+        href: "/components/composer",
+        preview: "composer",
+        title: "Composer",
+      },
+      {
+        description:
+          "A sortable, paged table in the grey shell, with an infinite-scroll variant.",
+        href: "/components/table",
+        preview: "data-table",
+        title: "Data Table",
       },
     ],
     description: "Primitives and small pieces used across the dashboard.",
@@ -140,5 +175,32 @@ export const LANDING_SECTIONS: LandingSection[] = [
     description:
       "Coding agents in the terminal, from the welcome banner to the prompt.",
     title: "Terminal Apps",
+  },
+  {
+    items: [
+      {
+        description:
+          "A playable workflow builder with a block palette, branching, a run log and a node sheet.",
+        href: "/blocks/workflow-builder",
+        preview: "workflow-builder",
+        title: "Workflow Builder",
+      },
+      {
+        description:
+          "Steps with brand logos, multi-port handles, live status and a timer per step.",
+        href: "/components/workflow/node",
+        preview: "workflow-node",
+        title: "Workflow Node",
+      },
+      {
+        description:
+          "Track the listicles AI answers cite and pitch their owners from an email modal.",
+        href: "/blocks/listicle-outreach",
+        preview: "listicle-outreach",
+        title: "Listicle Outreach",
+      },
+    ],
+    description: "Workflow and outreach building blocks for automation.",
+    title: "Workflows",
   },
 ];

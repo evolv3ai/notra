@@ -1,10 +1,15 @@
 "use client";
 
 import { POSTHOG_GROUP_TYPES } from "@notra/posthog/constants/posthog";
+import { useConsent } from "c15t/tanstack-start";
 import { useEffect } from "react";
 
 import { POSTHOG_PROJECT_TOKEN } from "@/constants/posthog";
-import { subscribeWhenPostHogReady } from "@/lib/analytics/posthog-lazy";
+import {
+  reapplyPostHogMeasurementConsent,
+  setPostHogMeasurementConsent,
+  subscribeWhenPostHogReady,
+} from "@/lib/analytics/posthog-lazy";
 import { authClient } from "@/lib/auth/client";
 import { useGeoProjectQueryState } from "@/lib/hooks/use-geo-project-query";
 import { clearPostHogIdentity } from "@/utils/posthog";
@@ -18,6 +23,13 @@ export function PostHogIdentity() {
   const hidePersonalData = session?.user.hidePersonalData ?? true;
   const email = session?.user.email;
   const name = session?.user.name;
+  const measurementGranted = useConsent("measurement");
+
+  // Runs before the identity effects below, so they re-identify after an
+  // opt-in has reset PostHog's anonymous cookieless identity.
+  useEffect(() => {
+    setPostHogMeasurementConsent(measurementGranted);
+  }, [measurementGranted]);
 
   useEffect(() => {
     if (!POSTHOG_PROJECT_TOKEN || isPending) {
@@ -27,15 +39,17 @@ export function PostHogIdentity() {
     return subscribeWhenPostHogReady((posthog) => {
       const identifiedUserId = posthog.get_property("$user_id");
 
-      if (!userId) {
+      if (!(userId && measurementGranted)) {
         if (identifiedUserId) {
           clearPostHogIdentity(posthog);
+          reapplyPostHogMeasurementConsent(posthog);
         }
         return;
       }
 
       if (identifiedUserId && identifiedUserId !== userId) {
         clearPostHogIdentity(posthog);
+        reapplyPostHogMeasurementConsent(posthog);
       }
 
       posthog.identify(
@@ -43,10 +57,10 @@ export function PostHogIdentity() {
         hidePersonalData ? undefined : { email, name: name ?? undefined }
       );
     });
-  }, [email, hidePersonalData, isPending, name, userId]);
+  }, [email, hidePersonalData, isPending, measurementGranted, name, userId]);
 
   useEffect(() => {
-    if (!POSTHOG_PROJECT_TOKEN || isPending || !userId) {
+    if (!POSTHOG_PROJECT_TOKEN || isPending || !userId || !measurementGranted) {
       return;
     }
 
@@ -67,7 +81,7 @@ export function PostHogIdentity() {
         posthog.unregister("project_id");
       }
     });
-  }, [isPending, organizationId, projectId, userId]);
+  }, [isPending, measurementGranted, organizationId, projectId, userId]);
 
   return null;
 }

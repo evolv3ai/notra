@@ -1,4 +1,3 @@
-// Diagnostic probe worker for the e2e environment.
 export default {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);

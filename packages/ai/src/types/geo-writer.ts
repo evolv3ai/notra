@@ -78,6 +78,7 @@ export interface GenerateGeoContentBriefOptions {
   organizationId: string;
   input: GeoPlannerPromptInput;
   log?: AILogTarget;
+  telemetryMetadata?: TccMetadata;
 }
 
 export interface GenerateGeoContentBriefResult {
@@ -94,6 +95,7 @@ export interface GeoWriterPromptInput {
   today: string;
   monthYear: string;
   language: string;
+  guidelineDocument?: string | null;
 }
 
 export interface RunGeoWriterOptions {

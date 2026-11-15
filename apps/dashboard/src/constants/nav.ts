@@ -3,7 +3,7 @@ import {
   AiBrowserIcon,
   AiChat01Icon,
   Analytics01Icon,
-  Calendar03Icon,
+  Building03Icon,
   ChartAnalysisIcon,
   Comment01Icon,
   Home01Icon,
@@ -12,30 +12,32 @@ import {
   MagicWand01Icon,
   Message01Icon,
   NoteIcon,
-  Notification03Icon,
   PaintBoardIcon,
   PencilEdit01Icon,
   PlugIcon,
   PlusSignIcon,
-  RainbowIcon,
+  Rocket01Icon,
   Robot01Icon,
   SearchList01Icon,
   Settings01Icon,
   UserGroupIcon,
+  WebDesign01Icon,
+  WorkflowSquare03Icon,
 } from "@hugeicons/core-free-icons";
 import {
   GEO_AGENT_READINESS_NAV_LINK,
   GEO_GAPS_NAV_LINK,
   GEO_PROMPTS_NAV_LINK,
-  GEO_WRITER_NAV_LINK,
 } from "@notra/geo-core/constants/geo";
 import { GEO_PERSONAS_NAV_LINK } from "@notra/geo-core/constants/geo-personas";
 import type { PostStatus } from "@notra/schemas/dashboard/content";
 import { DURATION } from "@notra/ui/lib/motion";
 
 import { AGENT_FEEDBACK_NAV_LINK } from "@/constants/agent-feedback";
-import { IRIS_NAV_LINK } from "@/constants/iris";
+import { AUTOPILOT_NAV_LINK } from "@/constants/autopilot";
+import { SITES_NAV_LINK } from "@/constants/sites";
 import type {
+  NavGroup,
   NavMainItem,
   NavPrimaryActionConfig,
   NavVisibility,
@@ -44,56 +46,34 @@ import type {
 } from "@/types/components/nav";
 
 export const HOME_NAV_LINK = "";
-export const CHAT_NAV_LINK = "/chat";
-export const CONTENT_NAV_LINK = "/content";
+const CHAT_NAV_LINK = "/chat";
+const CONTENT_NAV_LINK = "/content";
 export const ANALYTICS_NAV_LINK = "/analytics";
-export const BRAND_IDENTITY_NAV_LINK = "/brand/identity";
-export const SCHEDULES_NAV_LINK = "/automation/schedules";
-export const EVENTS_NAV_LINK = "/automation/events";
-export const INTEGRATIONS_NAV_LINK = "/integrations";
-export const SKILLS_NAV_LINK = "/skills";
-export const API_KEYS_NAV_LINK = "/api-keys";
+const BRAND_IDENTITY_NAV_LINK = "/brand/identity";
+const AUTOMATIONS_NAV_LINK = "/automation";
+const INTEGRATIONS_NAV_LINK = "/integrations";
+const SKILLS_NAV_LINK = "/skills";
+const API_KEYS_NAV_LINK = "/api-keys";
 export const GEO_OVERVIEW_NAV_LINK = "/geo";
-export const GEO_TRAFFIC_NAV_LINK = "/geo/traffic";
+const GEO_TRAFFIC_NAV_LINK = "/geo/traffic";
 export const GEO_COMPETITORS_NAV_LINK = "/geo/competitors";
-export const GEO_SHELF_SPACE_NAV_LINK = "/geo/shelf-space";
+const GEO_SHELF_SPACE_NAV_LINK = "/geo/shelf-space";
 export const GEO_SETTINGS_NAV_LINK = "/geo/settings";
 
 export const SIDEBAR_DEFAULT_MODE: SidebarMode = "geo";
 export const SIDEBAR_DEFAULT_WIDTH = 256;
+/** Matches `--transition-duration-slow`, the sidebar width transition. */
+export const SIDEBAR_TRANSITION_MS = 300;
 export const SIDEBAR_MIN_WIDTH = 240;
 export const SIDEBAR_MAX_WIDTH = 400;
 export const SIDEBAR_RESIZE_STEP = 8;
 export const SIDEBAR_WIDTH_COOKIE_NAME = "sidebar_width";
 
-export const SIDEBAR_MODES: SidebarModeOption[] = [
-  {
-    id: "geo",
-    label: "GEO",
-    descriptionKey: "measureVisibility",
-    icon: AiBrowserIcon,
-  },
-  {
-    id: "studio",
-    label: "Studio",
-    descriptionKey: "createContent",
-    icon: NoteIcon,
-  },
-];
-
-export const SIDEBAR_MODE_HOME_LINKS: Record<SidebarMode, string> = {
-  geo: GEO_OVERVIEW_NAV_LINK,
-  studio: HOME_NAV_LINK,
-};
-
-export const GEO_ROUTE_SECTIONS: ReadonlySet<string> = new Set([
-  "geo",
-  "feedback",
-]);
+export const GEO_ROUTE_SECTIONS: ReadonlySet<string> = new Set(["geo"]);
 
 export const SHARED_ROUTE_PREFIXES: readonly string[] = [
   "content",
-  "automation/schedules",
+  "automation",
 ];
 
 export const STUDIO_ROUTE_SECTIONS: ReadonlySet<string> = new Set([
@@ -102,28 +82,33 @@ export const STUDIO_ROUTE_SECTIONS: ReadonlySet<string> = new Set([
   "analytics",
   "brand",
   "automation",
-  "iris",
+  "feedback",
+  "sites",
+  "autopilot",
 ]);
 
 export const NAV_MAIN_ITEMS: NavMainItem[] = [
   { link: HOME_NAV_LINK, icon: Home01Icon, labelKey: "home" },
-  { link: CHAT_NAV_LINK, icon: Message01Icon, labelKey: "chat", badge: "beta" },
+  { link: CHAT_NAV_LINK, icon: Message01Icon, labelKey: "chat" },
   { link: CONTENT_NAV_LINK, icon: NoteIcon, labelKey: "content" },
+  { link: SITES_NAV_LINK, icon: WebDesign01Icon, labelKey: "sites" },
   { link: ANALYTICS_NAV_LINK, icon: Analytics01Icon, labelKey: "analytics" },
   {
     link: AGENT_FEEDBACK_NAV_LINK,
     icon: Comment01Icon,
     labelKey: "feedback",
-    badge: "beta",
   },
   {
     link: BRAND_IDENTITY_NAV_LINK,
     icon: PaintBoardIcon,
     labelKey: "brandIdentityTitle",
   },
-  { link: IRIS_NAV_LINK, icon: RainbowIcon, labelKey: "iris" },
-  { link: SCHEDULES_NAV_LINK, icon: Calendar03Icon, labelKey: "schedules" },
-  { link: EVENTS_NAV_LINK, icon: Notification03Icon, labelKey: "events" },
+  { link: AUTOPILOT_NAV_LINK, icon: Rocket01Icon, labelKey: "autopilot" },
+  {
+    link: AUTOMATIONS_NAV_LINK,
+    icon: WorkflowSquare03Icon,
+    labelKey: "automations",
+  },
   { link: INTEGRATIONS_NAV_LINK, icon: PlugIcon, labelKey: "integrations" },
   { link: GEO_OVERVIEW_NAV_LINK, icon: AiBrowserIcon, labelKey: "overview" },
   { link: GEO_TRAFFIC_NAV_LINK, icon: Activity01Icon, labelKey: "traffic" },
@@ -150,7 +135,6 @@ export const NAV_MAIN_ITEMS: NavMainItem[] = [
     labelKey: "personas",
     badge: "beta",
   },
-  { link: GEO_WRITER_NAV_LINK, icon: PencilEdit01Icon, labelKey: "write" },
   {
     link: GEO_SETTINGS_NAV_LINK,
     icon: Settings01Icon,
@@ -160,119 +144,122 @@ export const NAV_MAIN_ITEMS: NavMainItem[] = [
   { link: API_KEYS_NAV_LINK, icon: Key01Icon, labelKey: "apiKeys" },
 ];
 
-export const NAV_GEO_VISIBILITY_LINKS: readonly string[] = [
-  GEO_OVERVIEW_NAV_LINK,
-  GEO_TRAFFIC_NAV_LINK,
-  GEO_PROMPTS_NAV_LINK,
-  GEO_COMPETITORS_NAV_LINK,
-  GEO_PERSONAS_NAV_LINK,
-  AGENT_FEEDBACK_NAV_LINK,
-];
-
 export const NAV_GEO_IMPROVE_LINKS: readonly string[] = [
   GEO_GAPS_NAV_LINK,
   GEO_SHELF_SPACE_NAV_LINK,
   GEO_AGENT_READINESS_NAV_LINK,
-  GEO_WRITER_NAV_LINK,
   CONTENT_NAV_LINK,
-  SCHEDULES_NAV_LINK,
+  AUTOMATIONS_NAV_LINK,
 ];
 
-export const NAV_GEO_LINKS: readonly string[] = [
-  ...NAV_GEO_VISIBILITY_LINKS,
-  ...NAV_GEO_IMPROVE_LINKS,
+/**
+ * Main navigation. One row per job: the row opens its first page and reveals
+ * the related pages underneath while one of them is active.
+ */
+export const NAV_GROUPS: readonly NavGroup[] = [
+  {
+    id: "overview",
+    icon: Home01Icon,
+    labelKey: "overview",
+    links: [
+      GEO_OVERVIEW_NAV_LINK,
+      HOME_NAV_LINK,
+      GEO_TRAFFIC_NAV_LINK,
+      ANALYTICS_NAV_LINK,
+    ],
+  },
+  {
+    id: "prompts",
+    icon: AiChat01Icon,
+    labelKey: "prompts",
+    links: [GEO_PROMPTS_NAV_LINK, GEO_PERSONAS_NAV_LINK],
+  },
+  {
+    id: "competitors",
+    icon: ChartAnalysisIcon,
+    labelKey: "competitors",
+    links: [GEO_COMPETITORS_NAV_LINK, GEO_SHELF_SPACE_NAV_LINK],
+  },
+  {
+    id: "improve",
+    icon: SearchList01Icon,
+    labelKey: "improve",
+    links: [GEO_GAPS_NAV_LINK, GEO_AGENT_READINESS_NAV_LINK],
+  },
+  {
+    id: "automations",
+    icon: WorkflowSquare03Icon,
+    labelKey: "automations",
+    links: [AUTOMATIONS_NAV_LINK],
+  },
+  {
+    id: "content",
+    icon: NoteIcon,
+    labelKey: "content",
+    links: [CONTENT_NAV_LINK, CHAT_NAV_LINK],
+  },
+  {
+    id: "sites",
+    icon: WebDesign01Icon,
+    labelKey: "sites",
+    links: [SITES_NAV_LINK],
+  },
+  {
+    id: "feedback",
+    icon: Comment01Icon,
+    labelKey: "feedback",
+    links: [AGENT_FEEDBACK_NAV_LINK],
+  },
+  // Behind the autopilot flag; resolveNavItems drops it when the flag is off.
+  {
+    id: "autopilot",
+    icon: Rocket01Icon,
+    labelKey: "autopilot",
+    links: [AUTOPILOT_NAV_LINK],
+  },
 ];
 
-export const NAV_STUDIO_LINKS: readonly string[] = [
-  HOME_NAV_LINK,
-  CHAT_NAV_LINK,
-  CONTENT_NAV_LINK,
-  ANALYTICS_NAV_LINK,
-  BRAND_IDENTITY_NAV_LINK,
-];
-
-export const NAV_AUTOMATION_LINKS: readonly string[] = [
-  IRIS_NAV_LINK,
-  SCHEDULES_NAV_LINK,
-  EVENTS_NAV_LINK,
-];
-
-export const NAV_STUDIO_ALL_LINKS: readonly string[] = [
-  ...NAV_STUDIO_LINKS,
-  ...NAV_AUTOMATION_LINKS,
-];
-
-export const NAV_UTILITY_LINKS: readonly string[] = [
-  INTEGRATIONS_NAV_LINK,
-  SKILLS_NAV_LINK,
-  API_KEYS_NAV_LINK,
-];
-
-export const DEFAULT_NAV_VISIBILITY: NavVisibility = {
-  iris: true,
-  analytics: true,
+export const NAV_WORKSPACE_GROUP: NavGroup = {
+  id: "workspace",
+  icon: Building03Icon,
+  labelKey: "workspace",
+  listsOwnPage: true,
+  links: [
+    BRAND_IDENTITY_NAV_LINK,
+    INTEGRATIONS_NAV_LINK,
+    SKILLS_NAV_LINK,
+    API_KEYS_NAV_LINK,
+  ],
 };
 
-export const NAV_PRIMARY_ACTIONS: Record<SidebarMode, NavPrimaryActionConfig> =
-  {
-    geo: { icon: PencilEdit01Icon },
-    studio: { icon: PlusSignIcon },
-  };
+export const DEFAULT_NAV_VISIBILITY: NavVisibility = {
+  autopilot: false,
+  analytics: true,
+  sites: false,
+};
 
-// Shared sidebar panel swap (GEO <-> Studio, main <-> chat/brand).
-// Both layers travel their own side while the outgoing one blurs out and the
-// incoming one resolves — the blur is what lets them overlap for the full
-// window without the two lists colliding into an unreadable double image, so
-// neither layer has to wait for the other.
-//
-// Two things these classes have to get right:
-//   1. Tailwind v4 compiles `translate-x-*` to the standalone `translate`
-//      property, not to `transform`. Transitioning `transform` animates nothing
-//      and the panels snap sideways — `translate` has to be named explicitly.
-//   2. Every nav label is split into one <span> per character for the collapse
-//      animation. Without an up-front compositor layer the browser re-rasterises
-//      all of them on every frame of the fade, which is what makes it stutter.
-//
-// The outgoing layer eases *out*, not in. Accelerating away is the tempting
-// reading of a swoosh, but a single timing function drives opacity and blur too,
-// and an ease-in barely moves them for the first half of the window — the old
-// panel then sits there sharp and opaque long enough to read as a ghost behind
-// the new one. Easing out dumps opacity and smears the blur in the first frames,
-// so the leftovers are gone before the eye lands on them.
 const SIDEBAR_MODE_SWOOSH_IN = "ease-[cubic-bezier(0.16,1,0.3,1)]";
 const SIDEBAR_MODE_SWOOSH_OUT = "ease-emphasized";
 const SIDEBAR_MODE_ENTER_TIMING = `duration-slow ${SIDEBAR_MODE_SWOOSH_IN}`;
 const SIDEBAR_MODE_EXIT_TIMING = `duration-fast ${SIDEBAR_MODE_SWOOSH_OUT}`;
 
-/** Derived from the `duration-fast` token used on the exit classes above. */
 export const SIDEBAR_MODE_EXIT_MS = DURATION.fast * 1000;
 
-/** Base class for a layer that participates in the mode swoosh. */
-export const SIDEBAR_MODE_FADE_CLASS =
-  "transition-[opacity,translate,filter] will-change-[opacity,translate,filter] motion-reduce:translate-x-0 motion-reduce:blur-none motion-reduce:transition-opacity";
-
-/** Applied to the layer belonging to the mode that is now active. */
 export const SIDEBAR_MODE_ENTER_CLASS = `z-10 translate-x-0 opacity-100 blur-[0px] ${SIDEBAR_MODE_ENTER_TIMING}`;
 
-/** Applied to the hidden layer of the left-hand (GEO) mode. */
 export const SIDEBAR_MODE_EXIT_LEFT_CLASS = `pointer-events-none z-0 -translate-x-5 opacity-0 blur-[8px] ${SIDEBAR_MODE_EXIT_TIMING}`;
 
-/** Applied to the hidden layer of the right-hand (Studio) mode. */
 export const SIDEBAR_MODE_EXIT_RIGHT_CLASS = `pointer-events-none z-0 translate-x-5 opacity-0 blur-[8px] ${SIDEBAR_MODE_EXIT_TIMING}`;
 
-/** Indicator that slides between the two tabs of the mode switch. */
-export const SIDEBAR_MODE_PILL_CLASS = `pointer-events-none absolute inset-y-0 left-0 w-1/2 rounded-md bg-background ring-1 ring-border transition-[translate] will-change-[translate] duration-slow ${SIDEBAR_MODE_SWOOSH_IN} motion-reduce:transition-none`;
+const SIDEBAR_MODE_FADE_CLASS =
+  "transition-[opacity,translate,filter] will-change-[opacity,translate,filter] motion-reduce:translate-x-0 motion-reduce:blur-none motion-reduce:transition-opacity";
 
 export const SIDEBAR_MODE_PANEL_CLASS = `flex min-h-0 w-full flex-col ${SIDEBAR_MODE_FADE_CLASS}`;
 
-/** Collapses the primary-action row when the active mode has no action to offer. */
-export const SIDEBAR_MODE_SLOT_CLASS = `grid transition-[grid-template-rows,opacity] duration-slow ${SIDEBAR_MODE_SWOOSH_IN} motion-reduce:transition-none`;
-
 export const NAV_RECENT_LIMIT = 3;
-export const NAV_RECENT_SKELETON_IDS = ["first", "second", "third"] as const;
-export const NAV_RECENT_TITLE_CLASS = "min-w-0 max-w-[8.5rem] flex-1 truncate";
 
-export const POST_STATUS_DOT_CLASS: Record<PostStatus, string> = {
-  draft: "bg-muted-foreground/50",
-  published: "bg-success",
-};
+export const ORG_SWITCH_STATIC_PAGE_SECTIONS: ReadonlySet<string> = new Set([
+  "geo",
+  "automation",
+  "brand",
+]);

@@ -6,7 +6,7 @@ import {
 import type { EngineIconKey } from "../types/geo";
 import { resolveEngineIconKey } from "./geo-engine-icon";
 
-export const GROUNDED_SUFFIX_PATTERN = /(-direct)?-grounded$/;
+const GROUNDED_SUFFIX_PATTERN = /(-direct)?-grounded$/;
 
 export function engineModelOf(engine: string): string {
   return (

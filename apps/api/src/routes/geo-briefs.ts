@@ -1,13 +1,20 @@
 import { createRoute } from "@hono/zod-openapi";
+import { GeoWriterPlanError } from "@notra/geo-core/geo/errors";
 import {
   loadGeoContentGaps,
   refreshGeoContentGapsBestEffort,
+  setGeoPromptGapIgnored,
 } from "@notra/geo-core/geo/gaps";
 import {
   approveAndStartGeoWriter,
   getGeoContentBrief,
   listGeoContentBriefs,
+  updateGeoContentBrief,
 } from "@notra/geo-core/geo/writer";
+import {
+  geoBriefToMarkdown,
+  markdownToGeoBrief,
+} from "@notra/geo-core/utils/geo-writer-brief-markdown";
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
 import {
   approveBriefResponseSchema,
@@ -17,8 +24,14 @@ import {
   listBriefsResponseSchema,
   planBriefRequestSchema,
   planBriefResponseSchema,
+  updateBriefRequestSchema,
+  updateGapRequestSchema,
+  updateGapResponseSchema,
 } from "@notra/schemas/api/geo-content";
-import { projectParamsSchema } from "@notra/schemas/api/geo-params";
+import {
+  projectParamsSchema,
+  promptParamsSchema,
+} from "@notra/schemas/api/geo-params";
 import { Effect } from "effect";
 
 import { API_TRIGGER_SOURCE } from "../constants/analytics";
@@ -26,41 +39,27 @@ import {
   GEO_COMMON_ERROR_RESPONSES,
   GEO_OPENAPI_TAG,
 } from "../constants/geo-openapi";
-import { runGeoEffect } from "../runtime/geo";
-import {
-  GEO_REMOTE_WRITER_PLAN,
-  resolveRemoteGeoUrl,
-  runConfiguredRemoteGeoEffect,
-} from "../runtime/geo-remote";
+import { runGeoEffect, runRemoteGeoEffect } from "../runtime/geo";
+import { GEO_REMOTE_WRITER_PLAN } from "../runtime/geo-remote";
 import { trackApiEvent } from "../utils/analytics";
 import {
   attachGeoOrganization,
   geoErrorResponse,
-  geoRemoteUnavailableResponse,
+  geoOutcomeResponse,
+  geoRemoteErrorResponse,
+  refreshGeoGapsAfter,
 } from "../utils/geo";
+import { getInternalWorkflowUrl } from "../utils/internal-workflow";
 import { createOpenApiApp } from "../utils/openapi-app";
 import { errorResponse, rateLimitResponse } from "../utils/openapi-responses";
 import { enforceRatelimit, RATE_LIMITS, ratelimit } from "../utils/ratelimit";
 
-/**
- * Content gaps and the writer's content briefs.
- *
- * Planning is the one operation here that cannot run in this process: it books
- * AI credits through the Vercel Workflow `"use step"` billing gates and calls
- * the planner model. It is therefore handed to an internal dashboard route,
- * which returns the tagged domain failure so the status mapping still happens
- * here. Everything else — listing, reading, approving — only needs the database
- * and the writer workflow starter, both of which the API can reach.
- */
 export const geoBriefsRoutes = createOpenApiApp();
-
-const GEO_TAG = GEO_OPENAPI_TAG;
-const commonErrors = GEO_COMMON_ERROR_RESPONSES;
 
 const listGapsRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/gaps",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "listGeoContentGaps",
   summary: "List content gaps",
   description:
@@ -71,14 +70,38 @@ const listGapsRoute = createRoute({
       description: "Gaps fetched successfully",
       content: { "application/json": { schema: contentGapsResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
+  },
+});
+
+const updateGapRoute = createRoute({
+  method: "patch",
+  path: "/projects/{projectId}/geo/gaps/{promptId}",
+  tags: [GEO_OPENAPI_TAG],
+  operationId: "updateGeoContentGap",
+  summary: "Ignore or restore a content gap",
+  description:
+    "Hides a prompt gap from `GET /v1/projects/{projectId}/geo/gaps` and from brief planning, or brings it back. `promptId` is the `id` of a row in `promptGaps`. Ignored gaps are not listed, so keep the id to restore one later. The id is not checked against the gap list.",
+  request: {
+    params: promptParamsSchema,
+    body: {
+      required: true,
+      content: { "application/json": { schema: updateGapRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Content gap updated successfully",
+      content: { "application/json": { schema: updateGapResponseSchema } },
+    },
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const listBriefsRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/briefs",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "listGeoContentBriefs",
   summary: "List content briefs",
   request: { params: projectParamsSchema },
@@ -87,14 +110,14 @@ const listBriefsRoute = createRoute({
       description: "Briefs fetched successfully",
       content: { "application/json": { schema: listBriefsResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const getBriefRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/briefs/{briefId}",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "getGeoContentBrief",
   summary: "Get a single content brief",
   request: { params: briefParamsSchema },
@@ -103,14 +126,38 @@ const getBriefRoute = createRoute({
       description: "Brief fetched successfully",
       content: { "application/json": { schema: briefResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
+  },
+});
+
+const updateBriefRoute = createRoute({
+  method: "patch",
+  path: "/projects/{projectId}/geo/briefs/{briefId}",
+  tags: [GEO_OPENAPI_TAG],
+  operationId: "updateGeoContentBrief",
+  summary: "Update a content brief",
+  description:
+    "Edits the brief's outline and planning fields. Omitted fields keep their current value; list fields replace the whole list. Only briefs in `draft` or `failed` can be edited, and the draft post's plan is updated with them. Anything else returns 409. Editing drops research notes such as the baseline and recommended angle, as the dashboard editor does.",
+  request: {
+    params: briefParamsSchema,
+    body: {
+      required: true,
+      content: { "application/json": { schema: updateBriefRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Brief updated successfully",
+      content: { "application/json": { schema: briefResponseSchema } },
+    },
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const planBriefRoute = createRoute({
   method: "post",
   path: "/projects/{projectId}/geo/briefs",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "planGeoContentBrief",
   summary: "Plan a content brief",
   description:
@@ -127,7 +174,7 @@ const planBriefRoute = createRoute({
       description: "Brief planned successfully",
       content: { "application/json": { schema: planBriefResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
     409: errorResponse(
       "Brief planning is still running after the internal timeout; do not retry the plan"
     ),
@@ -141,7 +188,7 @@ const planBriefRoute = createRoute({
 const approveBriefRoute = createRoute({
   method: "post",
   path: "/projects/{projectId}/geo/briefs/{briefId}/approve",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "approveGeoContentBrief",
   summary: "Approve a brief and start the writer",
   description:
@@ -152,7 +199,7 @@ const approveBriefRoute = createRoute({
       description: "Writer accepted",
       content: { "application/json": { schema: approveBriefResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
     429: rateLimitResponse(
       RATE_LIMITS.writerApprove.requests,
       RATE_LIMITS.writerApprove.window
@@ -168,11 +215,30 @@ geoBriefsRoutes.openapi(listGapsRoute, async (c) => {
     "contentGaps",
     loadGeoContentGaps({ organizationId: base.organizationId, projectId })
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
+  return geoOutcomeResponse(c, outcome, 200);
+});
 
-  return c.json({ ...outcome.value, organization: base.organization }, 200);
+geoBriefsRoutes.openapi(updateGapRoute, async (c) => {
+  const base = c.get("geo");
+  const { projectId, promptId } = c.req.valid("param");
+  const { ignored } = c.req.valid("json");
+  const scope = { organizationId: base.organizationId, projectId };
+
+  const outcome = await runGeoEffect(
+    "gapIgnore",
+    setGeoPromptGapIgnored({ ...scope, promptId, ignored }).pipe(
+      refreshGeoGapsAfter(scope)
+    )
+  );
+  if (outcome.ok) {
+    trackApiEvent(c, {
+      event: POSTHOG_EVENTS.GEO_GAP_IGNORED,
+      organizationId: base.organizationId,
+      projectId,
+      properties: { ignored, trigger: API_TRIGGER_SOURCE },
+    });
+  }
+  return geoOutcomeResponse(c, outcome, 200);
 });
 
 geoBriefsRoutes.openapi(listBriefsRoute, async (c) => {
@@ -183,11 +249,7 @@ geoBriefsRoutes.openapi(listBriefsRoute, async (c) => {
     "briefsList",
     listGeoContentBriefs({ organizationId: base.organizationId, projectId })
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json({ ...outcome.value, organization: base.organization }, 200);
+  return geoOutcomeResponse(c, outcome, 200);
 });
 
 geoBriefsRoutes.openapi(getBriefRoute, async (c) => {
@@ -199,28 +261,68 @@ geoBriefsRoutes.openapi(getBriefRoute, async (c) => {
     getGeoContentBrief(
       { organizationId: base.organizationId, projectId },
       briefId
+    ).pipe(Effect.map((brief) => ({ brief })))
+  );
+  return geoOutcomeResponse(c, outcome, 200);
+});
+
+geoBriefsRoutes.openapi(updateBriefRoute, async (c) => {
+  const base = c.get("geo");
+  const { projectId, briefId } = c.req.valid("param");
+  const { expectedUpdatedAt, ...changes } = c.req.valid("json");
+  const scope = { organizationId: base.organizationId, projectId };
+
+  const outcome = await runGeoEffect(
+    "briefUpdate",
+    getGeoContentBrief(scope, briefId).pipe(
+      Effect.flatMap((current) => {
+        const next = {
+          targetPrompt: changes.targetPrompt ?? current.brief.targetPrompt,
+          intent: changes.intent ?? current.brief.intent,
+          contentSubtype: current.brief.contentSubtype,
+          workingTitle: changes.workingTitle ?? current.brief.workingTitle,
+          audience: changes.audience ?? current.brief.audience,
+          jobToBeDone: changes.jobToBeDone ?? current.brief.jobToBeDone,
+          sections: changes.sections ?? current.brief.sections,
+          questionsToAnswer:
+            changes.questionsToAnswer ?? current.brief.questionsToAnswer,
+          internalLinks: changes.internalLinks ?? current.brief.internalLinks,
+          acceptanceChecklist:
+            changes.acceptanceChecklist ?? current.brief.acceptanceChecklist,
+        };
+        const markdown = geoBriefToMarkdown(next);
+        const roundTripped = markdownToGeoBrief(markdown, next);
+        if (JSON.stringify(roundTripped) !== JSON.stringify(next)) {
+          return Effect.fail(
+            new GeoWriterPlanError({
+              message:
+                'Some values cannot be saved as written. Avoid text that starts with "- " or "##", headings named FAQ, Internal links or Acceptance checklist, and placeholders such as "(none listed)".',
+            })
+          );
+        }
+        return updateGeoContentBrief({
+          ...scope,
+          briefId,
+          expectedUpdatedAt: expectedUpdatedAt ?? current.updatedAt,
+          markdown,
+          workingTitle: next.workingTitle,
+        });
+      }),
+      refreshGeoGapsAfter(scope),
+      Effect.map((brief) => ({ brief }))
     )
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json({ brief: outcome.value, organization: base.organization }, 200);
+  return geoOutcomeResponse(c, outcome, 200);
 });
 
 geoBriefsRoutes.openapi(planBriefRoute, async (c) => {
   const base = c.get("geo");
   const { projectId } = c.req.valid("param");
-  const url = resolveRemoteGeoUrl(c.env, GEO_REMOTE_WRITER_PLAN);
+  const url = getInternalWorkflowUrl(c.env, GEO_REMOTE_WRITER_PLAN.path);
   if (!url) {
-    return geoRemoteUnavailableResponse(
-      c,
-      GEO_REMOTE_WRITER_PLAN.unavailableMessage
-    );
+    return c.json({ error: GEO_REMOTE_WRITER_PLAN.unavailableMessage }, 503);
   }
 
-  // Charged immediately before the paid planning run: the 404 and 503 above
-  // must not spend the caller's budget.
   const rateLimited = await enforceRatelimit(
     c,
     ratelimit.writerPlan,
@@ -230,17 +332,13 @@ geoBriefsRoutes.openapi(planBriefRoute, async (c) => {
     return rateLimited;
   }
 
-  const outcome = await runConfiguredRemoteGeoEffect(
-    GEO_REMOTE_WRITER_PLAN,
-    url,
-    {
-      ...c.req.valid("json"),
-      organizationId: base.organizationId,
-      projectId,
-    }
-  );
+  const outcome = await runRemoteGeoEffect(GEO_REMOTE_WRITER_PLAN, url, {
+    ...c.req.valid("json"),
+    organizationId: base.organizationId,
+    projectId,
+  });
   if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
+    return geoRemoteErrorResponse(c, outcome.failure);
   }
   trackApiEvent(c, {
     event: POSTHOG_EVENTS.GEO_BRIEF_PLANNED,
@@ -261,7 +359,6 @@ geoBriefsRoutes.openapi(approveBriefRoute, async (c) => {
   const base = c.get("geo");
   const { projectId, briefId } = c.req.valid("param");
 
-  // Charged immediately before the paid generation starts.
   const rateLimited = await enforceRatelimit(
     c,
     ratelimit.writerApprove,
@@ -271,24 +368,13 @@ geoBriefsRoutes.openapi(approveBriefRoute, async (c) => {
     return rateLimited;
   }
 
+  const scope = { organizationId: base.organizationId, projectId };
+  const refreshGaps = refreshGeoContentGapsBestEffort(scope);
   const outcome = await runGeoEffect(
     "writerStart",
-    approveAndStartGeoWriter(
-      { organizationId: base.organizationId, projectId },
-      briefId
-    ).pipe(
-      Effect.tap(() =>
-        refreshGeoContentGapsBestEffort({
-          organizationId: base.organizationId,
-          projectId,
-        })
-      ),
-      Effect.tapError(() =>
-        refreshGeoContentGapsBestEffort({
-          organizationId: base.organizationId,
-          projectId,
-        })
-      )
+    approveAndStartGeoWriter(scope, briefId).pipe(
+      Effect.tap(() => refreshGaps),
+      Effect.tapError(() => refreshGaps)
     )
   );
   if (!outcome.ok) {

@@ -1,3 +1,4 @@
+import type { GatewayModelOptions } from "@notra/ai/types/gateway";
 import { Effect } from "effect";
 
 import { GeoModelService } from "../deps";
@@ -13,22 +14,33 @@ import { GeoEmptyAnswerError } from "./errors";
 export const judgeAnswer = Effect.fn("geo.judgeAnswer")(function* (
   context: GeoCheckContext,
   promptText: string,
-  answer: string
+  answer: string,
+  logContext?: GatewayModelOptions["logContext"]
 ) {
   const models = yield* GeoModelService;
   const mentioned =
     findBrandMention(answer, context.companyName, context.aliases) !== null;
-  // The judge LLM still supplies competitors and excerpt; the typed
-  // evaluation only runs when there is a mention to rate.
+  const judgeLogContext = {
+    projectId: context.projectId,
+    scanId: context.scanId,
+    runId: context.runId,
+    ...logContext,
+  };
   const [judged, evaluation] = yield* Effect.all(
     [
-      models.judge({
-        organizationId: context.organizationId,
-        prompt: buildJudgePrompt(context, promptText, answer),
-      }),
+      models
+        .judge({
+          organizationId: context.organizationId,
+          prompt: buildJudgePrompt(context, promptText, answer),
+          logContext: judgeLogContext,
+        })
+        .pipe(
+          Effect.retry({ times: 1, while: (error) => error.timedOut === true })
+        ),
       mentioned && models.evaluateMention
         ? models.evaluateMention({
             organizationId: context.organizationId,
+            logContext: judgeLogContext,
             companyName: context.companyName,
             aliases: context.aliases,
             prompt: promptText,

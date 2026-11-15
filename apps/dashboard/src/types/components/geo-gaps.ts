@@ -63,18 +63,12 @@ export interface GeoGapAnswerPanelProps {
 
 export type GeoGapsMeterTone = "empty" | "low" | "mid" | "high";
 
-export type GeoGapLiftTone = "up" | "down" | "flat";
-
-export interface GeoGapLift {
+interface GeoGapLift {
   before: number;
   baselineTotal: number;
   after: number;
   total: number;
   delta: number;
-}
-
-export interface GeoGapLiftLineProps {
-  lift: GeoGapLift;
 }
 
 export type GeoGapsEmptyKind =
@@ -126,8 +120,6 @@ export interface GeoGapsEmptyProps {
 
 export interface GeoGapsTabsProps {
   tab: GeoGapsTab;
-  onTabChange: (tab: GeoGapsTab) => void;
-  counts: Record<GeoGapsTab, number>;
 }
 
 export interface GeoGapEngineLogosProps {
@@ -169,15 +161,6 @@ export interface GeoGapContentCellProps {
   title: string;
   subtitle: string | null;
   lift?: GeoGapLift | null;
-}
-
-export interface GeoGapWriteCellProps {
-  action: GeoGapWriteAction;
-  postId: string | null | undefined;
-  onOpenPost: (postId: string) => void;
-  onWrite: () => void;
-  onRescan?: () => void;
-  rescanDisabled?: boolean;
 }
 
 export interface GeoGapNumberCellProps {

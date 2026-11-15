@@ -3,5 +3,5 @@
   "git": {
     "deploymentEnabled": false
   },
-  "installCommand": "cd ../.. && bunx bun@1.4.0 install --frozen-lockfile --filter '@notra/onboarding-agent...' --filter turbo"
+  "installCommand": "cd ../.. && bunx bun@1.4.4 install --frozen-lockfile --filter '@notra/onboarding-agent...' --filter turbo"
 }

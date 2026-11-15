@@ -1,7 +1,7 @@
 "use client";
 
 import { FlagsProvider } from "@databuddy/sdk/react";
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo } from "react";
 
 import { useOrganizationsContext } from "@/components/providers/organization-provider";
 import { authClient } from "@/lib/auth/client";
@@ -12,6 +12,22 @@ const databuddyClientId =
 export function DatabuddyFlagsProvider({ children }: { children: ReactNode }) {
   const { activeOrganization } = useOrganizationsContext();
   const { data: session, isPending } = authClient.useSession();
+  const userId = session?.user.id;
+  const email = session?.user.email;
+  const organizationId = activeOrganization?.id;
+
+  const user = useMemo(
+    () =>
+      userId
+        ? {
+            userId,
+            email,
+            organizationId,
+            properties: organizationId ? { organizationId } : undefined,
+          }
+        : undefined,
+    [userId, email, organizationId]
+  );
 
   return (
     <FlagsProvider
@@ -21,18 +37,7 @@ export function DatabuddyFlagsProvider({ children }: { children: ReactNode }) {
       isPending={isPending}
       skipStorage
       staleTime={5 * 60 * 1000}
-      user={
-        session?.user
-          ? {
-              userId: session.user.id,
-              email: session.user.email,
-              organizationId: activeOrganization?.id,
-              properties: activeOrganization?.id
-                ? { organizationId: activeOrganization.id }
-                : undefined,
-            }
-          : undefined
-      }
+      user={user}
     >
       {children}
     </FlagsProvider>

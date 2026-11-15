@@ -1,0 +1,88 @@
+---
+title: "Composio Toolkit"
+description: "Connect Notra through Composio and give ChatGPT, Cursor and agents you build yourself access to its GEO, AEO and content tools."
+authors:
+  - handle: dominik
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/devtools/composio
+  type: how-to
+  applies_to:
+    - notra
+    - composio
+  language: en
+  difficulty: intermediate
+  time_estimate: 10m
+  status: stable
+  aliases:
+    - Composio toolkit
+    - Notra on Composio
+    - Composio integration
+  prev: ./chatgpt.mdx
+  next: ./raycast.mdx
+---
+
+Notra is a toolkit in the Composio catalog. You connect your Notra account to Composio once, and every assistant and agent you run through Composio can then use Notra's tools, including agents built on frameworks that don't support MCP directly.
+
+<img
+  src="/images/devtools/composio-notra-light.png"
+  alt="Notra's toolkit page on Composio with its description, tools and setup options."
+  className="block dark:hidden"
+/>
+<img
+  src="/images/devtools/composio-notra-dark.png"
+  alt="Notra's toolkit page on Composio with its description, tools and setup options."
+  className="hidden dark:block"
+/>
+
+<Card
+  title="View on Composio"
+  icon="plug"
+  href="https://composio.dev/toolkits/notra"
+  horizontal
+>
+  Open the Notra toolkit in the Composio catalog.
+</Card>
+
+If you use Claude or ChatGPT directly, the [Claude connector](/devtools/claude) and the [ChatGPT plugin](/devtools/chatgpt) are quicker to set up because they don't need an API key.
+
+## Setup
+
+<Steps>
+  <Step title="Create an API key">
+    Open **API Keys** in your dashboard and create a key with read and write permissions for the resources your agent should use, then copy it.
+
+    See [Authentication](/api/authentication) for details on creating and managing keys.
+  </Step>
+
+  <Step title="Connect Notra in Composio">
+    Open the Notra connection page in Composio and paste your API key. Composio encrypts and stores the key for you.
+  </Step>
+
+  <Step title="Use the toolkit from your agent">
+    Either create a Composio session scoped to Notra with MCP enabled and pass its MCP URL to your client, or call the Notra tools directly through the Composio SDK from your own agent loop. The [toolkit page](https://composio.dev/toolkits/notra) has TypeScript examples for both.
+  </Step>
+</Steps>
+
+Composio also has setup guides for [ChatGPT](https://composio.dev/toolkits/notra/framework/chatgpt), [Hermes](https://composio.dev/toolkits/notra/framework/hermes-agent) and [Atomic Agent](https://composio.dev/toolkits/notra/framework/atomic-agent).
+
+## What you can do
+
+The toolkit has 110 tools, and most of them cover the GEO and AEO workflow. Your agent can run scans against your tracked prompts, compare your share of voice and sentiment with competitors, find content gaps, plan and approve content briefs and report how much traffic AI crawlers and agents send to your site. When a brief is ready, it can draft the post in your brand voice and schedule it in Notra.
+
+Here are a few prompts to start with:
+
+- "Run a GEO scan for our tracked prompts and tell me where we dropped since last week."
+- "Which competitors show up in AI answers for prompts where we don't?"
+- "Find our biggest AEO content gaps and draft a blog post for the first one in our brand voice."
+- "How much traffic did AI crawlers and agents send to our docs this month?"
+
+<Warning>
+  Some tools use credits or can't be undone, such as running scans, approving briefs and deleting data, so ask your agent to show you what it plans to do and confirm before it runs them.
+</Warning>
+
+## Notes
+
+- The API key carries exactly the permissions you picked when you created it, so grant read-only permissions if your agent only reports on your data.
+- Revoke the key in Notra to cut off Composio's access immediately, and create a new key if it is ever exposed.

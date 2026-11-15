@@ -8,7 +8,7 @@ export interface PerplexityStoryCitation {
   extra?: number;
 }
 
-export interface PerplexityStorySearch {
+interface PerplexityStorySearch {
   title: string;
   queries: string[];
   sources: PerplexitySearchSource[];

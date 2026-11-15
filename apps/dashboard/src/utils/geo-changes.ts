@@ -13,7 +13,7 @@ export function geoChangeEngineLabel(engine: string): string {
   return engineFamilyLabel(engineFamilyOf(engine));
 }
 
-export function describeGeoChangeState(
+function describeGeoChangeState(
   state: GeoChangeCheckState | null
 ): GeoChangeStateLabel {
   if (!state) {
@@ -38,8 +38,6 @@ export function isSameGeoChangeState(
   return left.key === right.key;
 }
 
-// Citation rows track whether your pages were cited, not where the brand
-// ranks, so they describe the cited state instead of the mention state.
 export function describeGeoChangeDetail(
   event: GeoChangeEvent
 ): GeoChangeDetail {

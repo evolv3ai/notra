@@ -12,8 +12,8 @@ import {
 
 export function LogoMarquee() {
   return (
-    <section className="flex flex-col items-center gap-12 px-6 pt-16 pb-12 antialiased sm:px-12 lg:gap-12 lg:px-20 lg:pt-20 lg:pb-13">
-      <p className="font-display text-center text-base/6 font-medium tracking-[-0.01em] text-[#1E1E1E80] dark:text-white/50">
+    <section className="flex flex-col items-center gap-8 px-6 pt-14 pb-8 antialiased sm:gap-12 sm:px-12 sm:pt-16 sm:pb-12 lg:px-20 lg:pt-20 lg:pb-13">
+      <p className="font-display text-center text-sm/5 font-medium tracking-[-0.01em] text-[#1E1E1EB3] sm:text-base/6 dark:text-white/50">
         {MARQUEE_CAPTION}
       </p>
       <Marquee

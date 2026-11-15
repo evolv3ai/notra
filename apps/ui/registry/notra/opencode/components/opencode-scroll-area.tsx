@@ -5,7 +5,6 @@ import { cn } from "cn";
 
 import type { OpencodeScrollAreaProps } from "../types/opencode";
 
-/** A scroll area with OpenCode's square, one-cell terminal scrollbar. */
 export const OpencodeScrollArea = ({
   children,
   className,
@@ -22,7 +21,6 @@ export const OpencodeScrollArea = ({
     >
       {children}
     </ScrollAreaPrimitive.Viewport>
-    {/* The track is a wider hit area, the thumb only paints its right edge. */}
     <ScrollAreaPrimitive.Scrollbar
       className="flex w-[1.5ch] touch-none select-none"
       orientation="vertical"

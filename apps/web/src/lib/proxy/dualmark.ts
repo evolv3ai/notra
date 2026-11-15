@@ -1,10 +1,18 @@
 import { detectAIBot, negotiateFormat, toMarkdownPath } from "@dualmark/core";
 
 import { DUALMARK_SKIP_PATHS, MARKDOWN_NAMESPACE } from "@/constants/proxy";
+import { QR_CODE_PATH } from "@/constants/qr-code";
+import { UTM_BUILDER_PATH } from "@/constants/utm-builder";
 import { serveMarkdownTwin } from "@/lib/markdown/handler";
+import { serveQrCodeMarkdown } from "@/lib/qr-code/markdown";
+import { serveUtmBuilderMarkdown } from "@/lib/utm-builder/markdown";
 
 const MARKDOWN_EXTENSION_REGEX = /\.md$/;
 const TRAILING_SLASHES_REGEX = /\/+$/;
+const TOOL_MARKDOWN = new Map([
+  [UTM_BUILDER_PATH, serveUtmBuilderMarkdown],
+  [QR_CODE_PATH, serveQrCodeMarkdown],
+]);
 
 function shouldSkip(pathname: string) {
   if (pathname === "/llms.txt" || pathname === "/favicon.ico") {
@@ -37,16 +45,17 @@ export function appendHeaderValue(
   headers.set(name, existing ? `${existing}, ${value}` : value);
 }
 
-function appendVaryAccept(headers: Headers) {
-  const existing = headers.get("Vary");
-  if (!existing) {
-    headers.set("Vary", "Accept");
-    return;
+function appendNegotiationVary(headers: Headers) {
+  const tokens = (headers.get("Vary") ?? "")
+    .split(",")
+    .map((token) => token.trim())
+    .filter(Boolean);
+  for (const name of ["Accept", "User-Agent"]) {
+    if (!tokens.some((token) => token.toLowerCase() === name.toLowerCase())) {
+      tokens.push(name);
+    }
   }
-  const tokens = existing.split(",").map((token) => token.trim().toLowerCase());
-  if (!tokens.includes("accept")) {
-    headers.set("Vary", `${existing}, Accept`);
-  }
+  headers.set("Vary", tokens.join(", "));
 }
 
 export async function negotiateMarkdown(
@@ -68,7 +77,14 @@ export async function negotiateMarkdown(
   const format = negotiateFormat(accept);
 
   if (detectAIBot(userAgent).isBot || format === "markdown") {
-    return serveMarkdownTwin(request, toMarkdownTwinPath(pathname));
+    const serveTool = TOOL_MARKDOWN.get(
+      pathname.replace(TRAILING_SLASHES_REGEX, "")
+    );
+    const response = serveTool
+      ? serveTool(request)
+      : await serveMarkdownTwin(request, toMarkdownTwinPath(pathname));
+    appendNegotiationVary(response.headers);
+    return response;
   }
 
   if (format === null && accept) {
@@ -78,7 +94,7 @@ export async function negotiateMarkdown(
         status: 406,
         headers: {
           "Content-Type": "text/plain; charset=utf-8",
-          Vary: "Accept",
+          Vary: "Accept, User-Agent",
         },
       }
     );
@@ -90,6 +106,6 @@ export async function negotiateMarkdown(
     "Link",
     `<${toMarkdownPath(pathname)}>; rel="alternate"; type="text/markdown"`
   );
-  appendVaryAccept(response.headers);
+  appendNegotiationVary(response.headers);
   return response;
 }

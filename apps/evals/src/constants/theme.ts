@@ -14,7 +14,6 @@ export const theme = {
   running: "#7aa2f7",
 } as const;
 
-/** Categorical series colours, one per contender (validated for dark bg). */
 export const seriesColors = [
   "#5b8cff",
   "#3fca8a",
@@ -47,7 +46,6 @@ export function runStatusColor(status: string): string {
   return status === "running" ? theme.running : theme.warn;
 }
 
-/** Confusion-matrix cell colour: hits green, misses red, empty faint. */
 export function matrixCellColor(count: number, isDiagonal: boolean): string {
   if (count === 0) {
     return theme.faint;

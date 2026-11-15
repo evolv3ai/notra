@@ -39,6 +39,7 @@ import {
 import { createChatActivityTimingTracker } from "@notra/ai/utils/chat-activity-timing";
 import { preserveConversationSelection } from "@notra/ai/utils/resolve-conversation-route";
 import { routeUsageProperties } from "@notra/ai/utils/route-usage";
+import { logError, logWarn } from "@notra/ai/utils/server-log";
 import { toAgentTokenUsage } from "@notra/ai/utils/token-usage";
 import { withChatStreamCleanup } from "@notra/ai/utils/with-chat-stream-cleanup";
 import { isProjectInOrganization } from "@notra/db/utils/projects";
@@ -51,8 +52,6 @@ import {
   type UIMessage,
 } from "ai";
 import { nanoid } from "nanoid";
-import type { NextRequest } from "next/server";
-import { after, NextResponse } from "next/server";
 
 import {
   AI_CREDITS_SOURCE_STANDALONE_CHAT,
@@ -65,15 +64,14 @@ import {
 } from "@/lib/analytics/studio-events";
 import { withOrganizationAuth } from "@/lib/auth/organization";
 import { isCodeResearchEnabledForOrganization } from "@/lib/code-research/flag";
+import { afterResponse } from "@/lib/framework/after-response";
 import { buildStandaloneChatTelemetryMetadata } from "@/lib/tcc";
 import { startStandaloneChatRun } from "@/lib/workflows/start";
 import type { RouteContext } from "@/types/api/routes";
 import { enforceChatGenerationRatelimit } from "@/utils/chat-ratelimit";
 
-export const maxDuration = 1800;
-
 export const POST = withEvlog(async function POST(
-  request: NextRequest,
+  request: Request,
   { params }: RouteContext<{ organizationId: string }>
 ) {
   const log = getLogger();
@@ -86,10 +84,7 @@ export const POST = withEvlog(async function POST(
   try {
     const { organizationId } = await params;
 
-    log.set({
-      feature: "standalone_chat",
-      organizationId,
-    });
+    log.set({ feature: "standalone_chat" });
 
     const auth = await withOrganizationAuth(request, organizationId);
 
@@ -97,11 +92,13 @@ export const POST = withEvlog(async function POST(
       return auth.response;
     }
 
+    log.set({ organizationId: auth.context.organizationId });
+
     const body = await request.json().catch(() => null);
     const parseResult = standaloneChatRequestSchema.safeParse(body);
 
     if (!parseResult.success) {
-      return NextResponse.json(
+      return Response.json(
         { error: "Invalid request body", details: parseResult.error.issues },
         { status: 400 }
       );
@@ -117,7 +114,7 @@ export const POST = withEvlog(async function POST(
 
     const latestMessage = messages.at(-1);
     if (!latestMessage?.id) {
-      return NextResponse.json(
+      return Response.json(
         { error: "Latest message must include an id" },
         { status: 400 }
       );
@@ -138,11 +135,11 @@ export const POST = withEvlog(async function POST(
       : null;
     if (existingSession) {
       if (existingSession.deletedAt !== null) {
-        return NextResponse.json({ error: "Chat not found" }, { status: 404 });
+        return Response.json({ error: "Chat not found" }, { status: 404 });
       }
       if (existingSession.externalChannelSource === "slack") {
         trackBlocked("CHAT_READ_ONLY");
-        return NextResponse.json(
+        return Response.json(
           {
             error: "Slack-mirrored chats are read-only in the dashboard",
             code: "CHAT_READ_ONLY",
@@ -150,8 +147,6 @@ export const POST = withEvlog(async function POST(
           { status: 409 }
         );
       }
-      // Existing chats keep the project stored at creation. Continuing with a
-      // different active project must not retarget GEO tools or content.
       bindProjectFromSession = true;
       projectId = existingSession.projectId;
     }
@@ -161,7 +156,7 @@ export const POST = withEvlog(async function POST(
       !bindProjectFromSession &&
       !(await isProjectInOrganization(organizationId, projectId))
     ) {
-      return NextResponse.json({ error: "Project not found" }, { status: 400 });
+      return Response.json({ error: "Project not found" }, { status: 400 });
     }
 
     const rateLimited = await enforceChatGenerationRatelimit(
@@ -172,48 +167,38 @@ export const POST = withEvlog(async function POST(
       return rateLimited;
     }
 
-    let useMarkup = false;
-    let chargeAiCredits = false;
-    let billingMode: string | null = null;
-    if (autumn || allowUnmeteredAiInDevelopment) {
-      let billing: Awaited<ReturnType<typeof checkChatBilling>>;
-      try {
-        billing = await checkChatBilling(organizationId);
-      } catch (checkError) {
-        console.error("[Autumn] Check error:", {
-          requestId,
-          customerId: organizationId,
-          error: checkError,
-        });
-        trackBlocked("BILLING_ERROR");
-        return NextResponse.json(
-          { error: "Failed to check usage limits", code: "BILLING_ERROR" },
-          { status: 500 }
-        );
-      }
-
-      if (!billing.allowed) {
-        trackBlocked("USAGE_LIMIT_REACHED");
-        return NextResponse.json(
-          {
-            error: "Usage limit reached",
-            code: "USAGE_LIMIT_REACHED",
-            balance: billing.balanceRemaining ?? 0,
-          },
-          { status: 403 }
-        );
-      }
-
-      useMarkup = billing.useMarkup;
-      chargeAiCredits = billing.chargeAiCredits;
-      billingMode = billing.mode;
-    } else {
+    if (!(autumn || allowUnmeteredAiInDevelopment)) {
       trackBlocked("BILLING_UNAVAILABLE");
-      return NextResponse.json(
+      return Response.json(
         { error: "Billing service is unavailable", code: "BILLING_ERROR" },
         { status: 503 }
       );
     }
+    let billing: Awaited<ReturnType<typeof checkChatBilling>>;
+    try {
+      billing = await checkChatBilling(organizationId);
+    } catch (checkError) {
+      log.error(checkError instanceof Error ? checkError : String(checkError), {
+        billingCheck: "failed",
+      });
+      trackBlocked("BILLING_ERROR");
+      return Response.json(
+        { error: "Failed to check usage limits", code: "BILLING_ERROR" },
+        { status: 500 }
+      );
+    }
+    if (!billing.allowed) {
+      trackBlocked("USAGE_LIMIT_REACHED");
+      return Response.json(
+        {
+          error: "Usage limit reached",
+          code: "USAGE_LIMIT_REACHED",
+          balance: billing.balanceRemaining ?? 0,
+        },
+        { status: 403 }
+      );
+    }
+    const { useMarkup, chargeAiCredits, mode: billingMode } = billing;
 
     cleanupOrganizationId = organizationId;
     cleanupChatId = chatId;
@@ -227,15 +212,13 @@ export const POST = withEvlog(async function POST(
     );
     if (!streamAcquired) {
       trackBlocked("ALREADY_GENERATING");
-      return NextResponse.json(
+      return Response.json(
         { error: "A response is already being generated for this chat" },
         { status: 409 }
       );
     }
     cleanupStreamId = streamId;
 
-    // Finish all preparation before error cleanup can release the stream lock.
-    // Code research fails closed on its own, so it never rejects here.
     const [hydrationResult, integrationsResult, codeResearchResult] =
       await Promise.allSettled([
         hydrateSavedChatPosts(organizationId, chatId, messages),
@@ -258,13 +241,11 @@ export const POST = withEvlog(async function POST(
     );
 
     await clearLastResponseStopped(organizationId, chatId);
-    // Persist only after preparation succeeds so a failed send leaves no turn.
     const historySaved = await replaceChatHistory(
       organizationId,
       chatId,
       messages,
       undefined,
-      // Reject a snapshot made stale before acquiring the stream lock.
       existingSession
         ? (existingSession.messages.at(-1)?.id ?? null)
         : undefined,
@@ -275,19 +256,20 @@ export const POST = withEvlog(async function POST(
       await clearActiveChatStream(organizationId, chatId, streamId);
       const currentSession = await getChatSessionState(organizationId, chatId);
       if (currentSession && currentSession.deletedAt === null) {
-        return NextResponse.json(
+        return Response.json(
           {
             error: "Chat changed while sending. Reload the chat and try again.",
           },
           { status: 409 }
         );
       }
-      return NextResponse.json({ error: "Chat not found" }, { status: 404 });
+      return Response.json({ error: "Chat not found" }, { status: 404 });
     }
 
     if (messages.length === 1 && latestMessage.role === "user") {
-      // Start immediately alongside the response and keep it alive after the request.
-      after(generateAndSetChatTitle(organizationId, chatId, latestMessage));
+      afterResponse(async () => {
+        await generateAndSetChatTitle(organizationId, chatId, latestMessage);
+      });
     }
 
     const canUseWorkflowStreaming = canUseChatWorkflowStreaming();
@@ -362,7 +344,7 @@ export const POST = withEvlog(async function POST(
 
     await startStandaloneChatRun(workflowPayload);
 
-    return NextResponse.json(
+    return Response.json(
       { ok: true, chatId, streamId },
       {
         status: 202,
@@ -378,12 +360,8 @@ export const POST = withEvlog(async function POST(
       ).catch(() => undefined);
     }
     const errorMessage = e instanceof Error ? e.message : String(e);
-    console.error("[Standalone Chat] Error:", {
-      requestId,
-      error: errorMessage,
-      stack: e instanceof Error ? e.stack : undefined,
-    });
-    return NextResponse.json(
+    log.error(e instanceof Error ? e : errorMessage);
+    return Response.json(
       {
         error:
           process.env.NODE_ENV === "development"
@@ -448,8 +426,6 @@ async function createDirectStandaloneChatResponse({
   projectId?: string;
   surface?: ChatWorkflowPayload["surface"];
 }) {
-  const autumnClient = autumn;
-
   const lifecycle = await createChatStreamLifecycle({
     organizationId,
     chatId,
@@ -507,19 +483,13 @@ async function createDirectStandaloneChatResponse({
           usageSnapshot.cacheWriteTokens =
             usage.inputTokenDetails?.cacheWriteTokens ?? 0;
 
-          if (
-            !autumnClient ||
-            allowUnmeteredAiInDevelopment ||
-            !chargeAiCredits
-          ) {
+          if (!autumn || allowUnmeteredAiInDevelopment || !chargeAiCredits) {
             return;
           }
 
           const cost = calculateAiCreditCostCents(
             {
               ...toAgentTokenUsage(usage),
-              // This usage sums every step, and prices can depend on how big
-              // each single request was, so bill the per-step cost.
               maxPromptTokens: routeUsage?.maxPromptTokens,
               tokenCostUsd: routeUsage?.tokenCostUsd,
             },
@@ -528,7 +498,7 @@ async function createDirectStandaloneChatResponse({
           );
 
           try {
-            await autumnClient.track({
+            await autumn.track({
               customerId: organizationId,
               featureId: FEATURES.AI_CREDITS,
               value: cost.costCents,
@@ -563,10 +533,9 @@ async function createDirectStandaloneChatResponse({
               },
             });
           } catch (trackError) {
-            console.error("[Autumn] Track error after standalone chat:", {
+            logError("[Autumn] Track error after standalone chat", trackError, {
               requestId,
               customerId: organizationId,
-              error: trackError,
             });
           }
         },
@@ -624,7 +593,7 @@ async function createDirectStandaloneChatResponse({
           messages.at(-1)?.id
         );
         if (!saved) {
-          console.warn(
+          logWarn(
             "[Standalone Chat] Skipped saving response: chat was deleted",
             { requestId, organizationId, chatId }
           );
@@ -634,10 +603,7 @@ async function createDirectStandaloneChatResponse({
         const isAbort =
           combinedAbortSignal.aborted ||
           (error instanceof Error && error.name === "AbortError");
-        console.error("[Standalone Chat] Direct stream error:", {
-          requestId,
-          error,
-        });
+        logError("[Standalone Chat] Direct stream error", error, { requestId });
         if (isAbort) {
           return "Generation stopped.";
         }

@@ -1,4 +1,4 @@
-export interface WorkOSAuthenticationFactorRef {
+interface WorkOSAuthenticationFactorRef {
   id: string;
   type: string;
 }

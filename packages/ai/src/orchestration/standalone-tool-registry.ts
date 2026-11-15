@@ -14,22 +14,14 @@ import {
   createGetGeoTimeseriesTool,
   createListGeoProjectsTool,
 } from "@notra/ai/tools/geo";
-import {
-  createGetCommitsByTimeframeTool,
-  createGetPullRequestsTool,
-  createGetReleaseByTagTool,
-} from "@notra/ai/tools/github";
+import { buildGitHubDataTools } from "@notra/ai/tools/github";
 import {
   createGetGranolaFoldersTool,
   createGetGranolaNotesTool,
   createGetGranolaNoteTool,
 } from "@notra/ai/tools/granola";
 import { createImageTool } from "@notra/ai/tools/image";
-import {
-  createGetLinearCyclesTool,
-  createGetLinearIssuesTool,
-  createGetLinearProjectsTool,
-} from "@notra/ai/tools/linear";
+import { createGenerateOgImageTool } from "@notra/ai/tools/og-image";
 import {
   createGetAvailableIntegrationsTool,
   createGetBrandIdentityTool,
@@ -37,12 +29,17 @@ import {
 } from "@notra/ai/tools/organization";
 import {
   createCreatePostTool,
+  createEditPostTool,
   createGetAvailablePostsTool,
   createGetPostTool,
   createUpdatePostTool,
   createViewPostTool,
-  getCreatePostToolName,
 } from "@notra/ai/tools/post";
+import {
+  createCancelPostScheduleTool,
+  createGetPostScheduleTool,
+  createSchedulePostTool,
+} from "@notra/ai/tools/post-schedules";
 import {
   createCreateScheduleTool,
   createListSchedulesTool,
@@ -52,6 +49,10 @@ import {
   getSkillByName,
   listAvailableSkills,
 } from "@notra/ai/tools/skills";
+import {
+  createUpdateTodosTool,
+  UPDATE_TODOS_TOOL_NAME,
+} from "@notra/ai/tools/todos";
 import { registerWebSearchTools } from "@notra/ai/tools/web-search";
 import type {
   BuildStandaloneToolSetDeps,
@@ -62,11 +63,29 @@ import type {
   ValidatedIntegration,
 } from "@notra/ai/types/orchestration";
 import { isCodeResearchConfigured } from "@notra/ai/utils/code-research-box";
+import { getCreatePostToolName } from "@notra/ai/utils/post-tool-name";
 import type { Tool } from "ai";
+
+import {
+  getGitHubRepoList,
+  hasGitHubRepositories,
+  registerLinearTools,
+  uniqueIntegrationIds,
+} from "./tool-registry";
 
 /** Tools that write user-visible records and must pause for user approval. */
 export function getStandaloneApprovalToolNames(): Set<string> {
-  const toolNames = new Set<string>(["createSchedule", "createSkill"]);
+  const toolNames = new Set<string>([
+    "addBrandReference",
+    "createImage",
+    "generateOgImage",
+    "createSchedule",
+    "createSkill",
+    "editPost",
+    "updatePost",
+    "schedulePost",
+    "cancelPostSchedule",
+  ]);
   for (const contentType of contentTypeSchema.options) {
     if (contentType !== "image") {
       toolNames.add(getCreatePostToolName(contentType));
@@ -84,12 +103,21 @@ export function buildStandaloneToolSet(
     organizationId,
     userId,
     useMarkup,
+    chargeAiCredits,
     validatedIntegrations,
     postResult,
   } = params;
 
   const tools: Record<string, Tool> = {};
   const descriptions: string[] = [];
+  tools.generateOgImage = createGenerateOgImageTool({
+    organizationId,
+    useMarkup,
+    chargeAiCredits,
+  });
+  descriptions.push(
+    "**OG Images**: Use generateOgImage for a blog hero or Open Graph image. It researches the selected brand autonomously and reuses its saved template. No repository is required. Return its imageUrl and disclose any fallback warnings."
+  );
 
   for (const contentType of contentTypeSchema.options) {
     if (contentType === "image") {
@@ -120,6 +148,14 @@ export function buildStandaloneToolSet(
     postResult
   );
 
+  tools.editPost = createEditPostTool({
+    organizationId,
+    contentType: "blog_post",
+  });
+  tools[UPDATE_TODOS_TOOL_NAME] = createUpdateTodosTool(
+    params.previousTodoCalls ?? 0
+  );
+
   tools.viewPost = createViewPostTool({
     organizationId,
     contentType: "blog_post",
@@ -148,8 +184,11 @@ export function buildStandaloneToolSet(
 
   descriptions.push(
     userId
-      ? "**Content Creation**: Create posts using createChangelog, createBlogPost, createTwitterPost, createLinkedInPost, createInvestorUpdate, createImage, plus updatePost and viewPost. createImage runs in a sandbox, saves the generated image as a draft, and stores a sandbox snapshot for future revisions."
-      : "**Content Creation**: Create posts using createChangelog, createBlogPost, createTwitterPost, createLinkedInPost, createInvestorUpdate, plus updatePost and viewPost"
+      ? "**Content Creation**: Create posts using createChangelog, createBlogPost, createTwitterPost, createLinkedInPost, createInvestorUpdate, createImage, plus updatePost, editPost, and viewPost. createImage runs in a sandbox, saves the generated image as a draft, and stores a sandbox snapshot for future revisions."
+      : "**Content Creation**: Create posts using createChangelog, createBlogPost, createTwitterPost, createLinkedInPost, createInvestorUpdate, plus updatePost, editPost, and viewPost"
+  );
+  descriptions.push(
+    "**Planning**: Keep a short checklist with updateTodos, only when one request asks for four or more separate pieces of content"
   );
   descriptions.push(
     "**Organization Data**: Inspect brand identities, brand references, available integrations, and existing posts using listBrandIdentities, getBrandIdentity, getAvailableBrandReferences, getAvailableIntegrations, getAvailablePosts, and getPost"
@@ -163,11 +202,17 @@ export function buildStandaloneToolSet(
 
   tools.listSchedules = createListSchedulesTool({ organizationId });
   tools.createSchedule = createCreateScheduleTool({ organizationId });
+  tools.getPostSchedule = createGetPostScheduleTool({ organizationId });
+  tools.schedulePost = createSchedulePostTool({
+    organizationId,
+    userId: userId ?? undefined,
+  });
+  tools.cancelPostSchedule = createCancelPostScheduleTool({ organizationId });
   tools.listAvailableSkills = listAvailableSkills({ organizationId });
   tools.getSkillByName = getSkillByName({ organizationId });
   tools.createSkill = createCreateSkillTool({ organizationId });
   descriptions.push(
-    "**Schedules**: List recurring content automations with listSchedules. Create one with createSchedule when the user wants content drafted on a cadence."
+    "**Schedules**: List recurring content automations with listSchedules. Create one with createSchedule when the user wants content drafted on a cadence. To publish an existing post at a set time, check getPostSchedule and call schedulePost; cancelPostSchedule unschedules it."
   );
   descriptions.push(
     "**Skills**: Access knowledge and writing guidelines using listAvailableSkills and getSkillByName. Create a new reusable writing skill with createSkill when the user explicitly asks for one or a clearly new, recurring writing need appears."
@@ -181,36 +226,23 @@ export function buildStandaloneToolSet(
     );
   }
 
-  const hasGitHub = validatedIntegrations.some(
-    (i) => i.type === "github" && i.repositories.length > 0
-  );
-
-  if (hasGitHub) {
-    const allowedIntegrationIds = Array.from(
-      new Set(
-        validatedIntegrations
-          .filter((integration) => integration.type === "github")
-          .map((integration) => integration.id)
-      )
+  if (hasGitHubRepositories(validatedIntegrations)) {
+    const allowedIntegrationIds = uniqueIntegrationIds(
+      validatedIntegrations,
+      "github"
     );
-
-    tools.getPullRequests = createGetPullRequestsTool(
-      { organizationId, allowedIntegrationIds },
-      deps?.resolveContext
-    );
-    tools.getReleaseByTag = createGetReleaseByTagTool(
-      { organizationId, allowedIntegrationIds },
-      deps?.resolveContext
-    );
-    tools.getCommitsByTimeframe = createGetCommitsByTimeframeTool(
-      { organizationId, allowedIntegrationIds },
-      deps?.resolveContext
+    Object.assign(
+      tools,
+      buildGitHubDataTools({
+        organizationId,
+        allowedIntegrationIds,
+        resolveContext: deps?.resolveContext,
+      })
     );
 
     if (params.codeResearch && chatId && isCodeResearchConfigured()) {
       tools[CODE_RESEARCHER_TOOL_NAME] = createCodeResearcherTool({
         organizationId,
-        // One box per chat and repository, reused across turns.
         sessionKey: `chat:${chatId}`,
         allowedIntegrationIds,
         resolveContext: deps?.resolveContext,
@@ -228,46 +260,21 @@ export function buildStandaloneToolSet(
     );
   }
 
-  const hasLinear = validatedIntegrations.some((i) => i.type === "linear");
-
-  if (hasLinear) {
-    const allowedLinearIntegrationIds = Array.from(
-      new Set(
-        validatedIntegrations
-          .filter((integration) => integration.type === "linear")
-          .map((integration) => integration.id)
-      )
-    );
-
-    tools.getLinearIssues = createGetLinearIssuesTool(
-      { organizationId, allowedIntegrationIds: allowedLinearIntegrationIds },
-      deps?.resolveLinearContext
-    );
-    tools.getLinearProjects = createGetLinearProjectsTool(
-      { organizationId, allowedIntegrationIds: allowedLinearIntegrationIds },
-      deps?.resolveLinearContext
-    );
-    tools.getLinearCycles = createGetLinearCyclesTool(
-      { organizationId, allowedIntegrationIds: allowedLinearIntegrationIds },
-      deps?.resolveLinearContext
-    );
-
-    const teams = getLinearTeamList(validatedIntegrations);
-    descriptions.push(
-      `**Linear Integration**: Fetch issues, projects, and cycles${teams ? ` from: ${teams}` : ""}`
-    );
-  }
+  registerLinearTools(
+    tools,
+    descriptions,
+    organizationId,
+    validatedIntegrations,
+    deps?.resolveLinearContext
+  );
 
   const hasGranola = validatedIntegrations.some((i) => i.type === "granola");
 
   if (hasGranola) {
-    const granolaIntegrationIds = new Set<string>();
-    for (const integration of validatedIntegrations) {
-      if (integration.type === "granola") {
-        granolaIntegrationIds.add(integration.id);
-      }
-    }
-    const allowedGranolaIntegrationIds = Array.from(granolaIntegrationIds);
+    const allowedGranolaIntegrationIds = uniqueIntegrationIds(
+      validatedIntegrations,
+      "granola"
+    );
 
     tools.getGranolaNotes = createGetGranolaNotesTool(
       { organizationId, allowedIntegrationIds: allowedGranolaIntegrationIds },
@@ -289,28 +296,6 @@ export function buildStandaloneToolSet(
   }
 
   return { tools, descriptions };
-}
-
-function getGitHubRepoList(integrations: ValidatedIntegration[]): string {
-  const repos: string[] = [];
-  for (const integration of integrations) {
-    if (integration.type === "github") {
-      for (const repo of integration.repositories) {
-        repos.push(`${repo.owner}/${repo.repo}`);
-      }
-    }
-  }
-  return repos.join(", ");
-}
-
-function getLinearTeamList(integrations: ValidatedIntegration[]): string {
-  const teams: string[] = [];
-  for (const integration of integrations) {
-    if (integration.type === "linear") {
-      teams.push(integration.linearTeamName ?? integration.displayName);
-    }
-  }
-  return teams.join(", ");
 }
 
 function getGranolaWorkspaceList(integrations: ValidatedIntegration[]): string {

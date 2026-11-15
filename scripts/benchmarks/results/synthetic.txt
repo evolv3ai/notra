@@ -1,0 +1,19 @@
+Synthetic JSON body-size benchmark; proposed contracts are NOT implemented.
+Serialization: json.dumps(separators=(',', ':'), ensure_ascii=False), UTF-8 bytes.
+No network, credentials, real customer data, compression, HTTP/RPC envelopes, or latency measurements.
+Generator: random.Random(17); 800 ASCII words, lengths randrange(4,13); text(n) joins n//4+1 sampled words then slices to n characters.
+Chat fixture: message-0000..0098 alternate user/assistant (1000/2000 characters); message-0099 is user (1000 characters): 51 user + 49 assistant messages.
+Chat messages contain only id, role, and one text part: no metadata, tools, approvals, attachments, or saved-post hydration.
+POST envelope includes only chatId, synthetic model, timezone, and messages; other optional/current transport fields are omitted.
+Proposed POST sends only message-0099 plus expectedLastMessageId=message-0098; requires server-side history merge and concurrency handling, not a drop-in truncation.
+GET compares all 100 messages against last 20 plus previousCursor; other response fields are unchanged. Requires a compatible server-authoritative send contract.
+Content fixture: 20 non-image blog_post drafts, 2000 ASCII markdown characters each, empty content, null htmlUrl/contentSubtype, fixed timestamps, page 1/20 of 100.
+Proposed content drops content/markdown and adds preview=markdown[:200]; synthetic text has no Markdown syntax. Real implementation must preserve formatting-removal semantics; images excluded.
+Sessions fixture: 1000 summaries, fixed timestamps, null pinnedAt/externalChannelId; proposed first 50 plus nextCursor. Pinning, filtering, and ordering correctness are not benchmarked.
+Logs fixture: 200 GitHub incoming success summaries, hasPayload=true but no payload, fixed timestamps; proposed first 10 plus pagination. Existing overview already strips payload; pagination trades smaller initial fetch for extra navigation requests.
+
+Chat POST: 100 full messages vs proposed latest-message+revision: 156538 -> 1204 bytes; saved 155334; reduction 99.231%
+Chat GET: 100 messages vs proposed last 20: 156582 -> 30654 bytes; saved 125928; reduction 80.423%
+Content list: 20x2000-char markdown vs 20x200-char plain preview: 45201 -> 8921 bytes; saved 36280; reduction 80.264%
+Session list: 1000 summaries vs proposed page 50: 184014 -> 9241 bytes; saved 174773; reduction 94.978%
+Logs overview: 200 summaries vs proposed page 10: 56410 -> 2901 bytes; saved 53509; reduction 94.857%

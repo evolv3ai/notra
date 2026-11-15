@@ -1,5 +1,6 @@
 import { GITHUB_MENTION_ACTIVE_CONTENT_BLOCKED_MESSAGE } from "@notra/ai/constants/github-mention";
 import { getGitHubPublishToken } from "@notra/ai/integrations/github-publish-auth";
+import { getBaseUrl } from "@notra/ai/qstash/triggers";
 import { findOpenContentPublicationForPost } from "@notra/ai/utils/content-publication";
 import { scheduleContentPublicationSyncRepair } from "@notra/ai/utils/content-publication-repair-scheduler";
 import { findNewActiveContent } from "@notra/ai/utils/github-mention-content-policy";
@@ -82,9 +83,7 @@ export function createUpdatePublishedContentTool() {
             "The published file has changed on GitHub. Update it through a PR mention so the current file, including manual edits, is used as the starting point.",
         };
       }
-      if (
-        !(process.env.WORKFLOW_BASE_URL && process.env.INTERNAL_WORKFLOW_SECRET)
-      ) {
+      if (!(getBaseUrl() && process.env.INTERNAL_WORKFLOW_SECRET?.trim())) {
         return {
           updated: false,
           error: "Publication repair workflow is not configured.",
@@ -116,8 +115,6 @@ export function createUpdatePublishedContentTool() {
           blocked,
         };
       }
-      // Do not retry this whole operation: GitHub may have accepted the commit
-      // before publication synchronization failed.
       const result = await withGitHubRateLimitHandling(() =>
         updatePublishedContentAndCommit({
           octokit,

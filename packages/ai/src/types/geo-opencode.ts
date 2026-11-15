@@ -1,6 +1,6 @@
 import type { LanguageModelUsage } from "ai";
 
-export type GeoBoxHarness = "claude-code" | "codex" | "opencode";
+export type GeoBoxHarness = "claude-code" | "codex" | "opencode" | "fx";
 
 export interface GeoBoxRunTarget {
   harness: GeoBoxHarness;
@@ -21,6 +21,14 @@ export interface GeoOpenCodeStaleBoxCandidate {
 
 export interface GeoBoxTokenUsage extends LanguageModelUsage {
   modelId: string;
-  totalUsd: number;
+  totalUsd?: number;
   computeMs: number;
+}
+
+export interface GeoBoxAnswer {
+  text: string;
+  sources: { url: string; title: null }[];
+  groundingSources: { url: string; title: null }[];
+  toolCalls: unknown[];
+  usage: GeoBoxTokenUsage;
 }

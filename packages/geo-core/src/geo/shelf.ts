@@ -20,7 +20,6 @@ export const loadGeoShelfSources = Effect.fn("geo.shelfSources")(function* (
         and(
           eq(geoShelfSources.organizationId, input.organizationId),
           eq(geoShelfSources.projectId, scope.projectId),
-          // Homepages cited by scans are not shelf space; mirrors the dashboard store.
           sql`not (${geoShelfSources.origin} = 'scan' and ${geoShelfSources.url} ~ ${GEO_SHELF_ROOT_URL_PATTERN_SOURCE})`
         )
       )

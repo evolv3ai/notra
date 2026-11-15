@@ -72,9 +72,6 @@ export const runAutomaticSentiment = Effect.fn("geo.runAutomaticSentiment")(
       return;
     }
     const capturedAt = new Date(latest.latestCapturedAt);
-    // Store the answer watermark, not wall-clock now. Checks keep the scan
-    // start time, so a scan that is still running at claim time would otherwise
-    // look older than this attempt after it commits.
     const claimed = yield* geoDb("sentiment automation claim failed", () =>
       db
         .update(geoSettings)

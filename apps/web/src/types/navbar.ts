@@ -3,12 +3,24 @@ import type { ReactNode } from "react";
 
 import type { MarketingNavGroup } from "@/utils/navigation";
 
-export type NavbarVariant = "island" | "landing" | "page" | "pinned" | "static";
+export type NavbarVariant =
+  | "announcement"
+  | "island"
+  | "landing"
+  | "page"
+  | "pinned"
+  | "static";
 
-export type NavbarMobileOverlayLayout = "compact" | "hero";
+export type NavbarMobileOverlayLayout = "announcement" | "compact" | "hero";
 
 export interface NavbarProps {
   variant?: NavbarVariant;
+}
+
+export interface NavbarPanelSize {
+  width: number;
+  height: number;
+  anchorOffset?: number;
 }
 
 export interface NavbarAuthActionsProps {
@@ -31,6 +43,14 @@ export interface NavbarMobileGroupProps {
   stagger: Variants;
 }
 
+export interface NavbarCompactPanelProps {
+  group: MarketingNavGroup;
+  onSelect: () => void;
+  role?: "menuitem";
+  item?: Variants;
+  stagger?: Variants;
+}
+
 export interface NavbarKbdProps {
   children: string;
   onLight?: boolean;
@@ -47,6 +67,7 @@ export interface NavbarHrefProps {
 
 export interface NavbarChromePresentation {
   chrome: boolean;
+  boxed: boolean;
   innerPaddingClass: string;
   overlayLayout: NavbarMobileOverlayLayout;
   positionClass: string;

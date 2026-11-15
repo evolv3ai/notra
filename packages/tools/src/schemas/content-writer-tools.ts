@@ -1,41 +1,21 @@
 import { contentTypeSchema } from "@notra/ai/schemas/content";
-import { POST_SLUG_MAX_LENGTH, POST_SLUG_REGEX } from "@notra/ai/schemas/post";
+import { generatedPostMetadataShape } from "@notra/ai/schemas/post-metadata";
 import { z } from "zod";
 
-const POST_TITLE_MAX_LENGTH = 120;
+import { createPostBaseShape, postSlugSchema } from "./assistant-tools";
 
 export const writerCreatePostInputSchema = z.object({
-  title: z
-    .string()
-    .max(POST_TITLE_MAX_LENGTH)
-    .describe("The post title, plain text without markdown"),
-  markdown: z
-    .string()
-    .describe(
-      "The full post content body as markdown/MDX, without the title heading"
-    ),
-  slug: z
-    .string()
-    .trim()
-    .min(1)
-    .max(POST_SLUG_MAX_LENGTH)
-    .regex(
-      POST_SLUG_REGEX,
-      "Slug must contain lowercase letters, numbers, and hyphens only"
-    )
+  ...generatedPostMetadataShape,
+  title: createPostBaseShape.title,
+  markdown: createPostBaseShape.markdown,
+  slug: postSlugSchema
     .nullable()
     .optional()
     .default(null)
     .describe(
       "Optional URL slug for blog posts and changelogs. Use lowercase letters, numbers, and hyphens."
     ),
-  recommendations: z
-    .string()
-    .nullable()
-    .optional()
-    .describe(
-      "Optional actionable publishing recommendations as markdown: best time to post, audience targeting, distribution channels, or cross-posting ideas"
-    ),
+  recommendations: createPostBaseShape.recommendations,
   contentType: contentTypeSchema
     .optional()
     .describe(

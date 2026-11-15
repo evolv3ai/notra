@@ -1,13 +1,22 @@
+import { createHash } from "node:crypto";
+
 import type { createDb } from "@notra/db/drizzle";
 import { members, organizations, users } from "@notra/db/schema";
+import { parseAccountApiKeyUserId } from "@notra/utils/account-api-key";
 import {
+  isUnscopedApiPath,
   LEGACY_API_READ_SCOPE,
   LEGACY_API_WRITE_SCOPE,
 } from "@notra/utils/api-scopes";
+import { ACCOUNT_API_KEY_ORGANIZATION_HEADERS } from "@notra/utils/constants/account-api-key";
 import { readOAuthConsentGrant } from "@notra/utils/oauth-consent";
 import { Unkey } from "@unkey/api";
+import type {
+  Identity,
+  V2KeysVerifyKeyResponseData,
+} from "@unkey/api/models/components";
 import { NotFoundException, WorkOS } from "@workos-inc/node";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { Context, Next } from "hono";
 import {
   createRemoteJWKSet,
@@ -18,13 +27,18 @@ import {
 
 import { API_AUTH_KINDS } from "../constants/analytics";
 import type { ApiAuthKind } from "../types/analytics";
-import type { AuthData } from "../types/auth";
+import type { AccountApiKeyAuthData, AuthData } from "../types/auth";
+import { accountStandingFailure } from "../utils/account-standing";
 import {
   API_URL,
   AUTH_GUIDE_URL,
   RESOURCE_METADATA_URL,
 } from "../utils/agent-discovery";
-import { trackApiKeyRejected, trackApiKeyVerified } from "../utils/analytics";
+import {
+  resolveAuthKind,
+  trackApiKeyRejected,
+  trackApiKeyVerified,
+} from "../utils/analytics";
 import { isFeedbackToken, verifyFeedbackToken } from "../utils/feedback-token";
 import { unkeyPermissions } from "../utils/unkey-permissions";
 
@@ -36,7 +50,6 @@ declare module "hono" {
 }
 
 interface AuthOptions {
-  getKey?: (c: Context) => string | null;
   legacyPermissions?: string[];
   permissions?: string;
 }
@@ -48,10 +61,18 @@ const OAUTH_AUDIENCES = [
   "https://mcp.usenotra.com",
   "https://mcp.usenotra.com/mcp",
 ] as const;
+const SCOPED_MCP_AUDIENCE_REGEX =
+  /^https:\/\/mcp\.usenotra\.com\/mcp\/[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const SCOPE_SEPARATOR_REGEX = /\s+/;
 const WORKOS_ID_CACHE_MAX_SIZE = 1000;
 const WORKOS_ID_CACHE_TTL_MS = 5 * 60 * 1000;
 const workosIdCache = new Map<string, { localId: string; expiresAt: number }>();
+const UNKEY_VERIFY_CACHE_MAX_SIZE = 5000;
+const UNKEY_VERIFY_CACHE_TTL_MS = 30 * 1000;
+const unkeyVerifyCache = new Map<
+  string,
+  { data: V2KeysVerifyKeyResponseData; expiresAt: number }
+>();
 const remoteJwksByUrl = new Map<
   string,
   ReturnType<typeof createRemoteJWKSet>
@@ -77,18 +98,9 @@ type AuthResult =
       status: AuthFailureStatus;
       kind?: ApiAuthKind;
       code?: string;
+      recovery?: string;
     };
 
-/**
- * Unkey's verification codes, mapped onto answers a client can act on.
- *
- * The codes are Unkey's internal vocabulary (`Code` in `@unkey/api`): passing
- * one through as the `error` string told the caller of an unknown key that
- * something was `NOT_FOUND` — which reads like a missing resource, not a
- * rejected credential — and leaked how the key store answers. Anything not
- * listed here, including codes Unkey adds later (`Code` is an open enum), gets
- * the generic invalid-key answer rather than its raw name.
- */
 const UNKEY_AUTH_FAILURES: Record<
   string,
   { error: string; status: AuthFailureStatus }
@@ -168,9 +180,6 @@ async function resolveLocalUserId(
   }
 
   if (!user) {
-    // Standalone Connect stores our local ID as the WorkOS external_id without
-    // necessarily populating users.workosUserId. Resolve that server-side link;
-    // never infer identity from an email or an untrusted token claim.
     if (!apiKey) {
       throw new Error("WorkOS API key is required to resolve OAuth subjects");
     }
@@ -221,7 +230,6 @@ async function resolveLocalOrganizationId(
   return organization.id;
 }
 
-/** Callers must handle a missing `aud` claim before calling this. */
 function isAllowedAudience(
   aud: NonNullable<JWTPayload["aud"]>,
   workosClientId: string | undefined
@@ -232,7 +240,10 @@ function isAllowedAudience(
   }
 
   const audiences = Array.isArray(aud) ? aud : [aud];
-  return audiences.some((audience) => allowed.has(audience));
+  return audiences.some(
+    (audience) =>
+      allowed.has(audience) || SCOPED_MCP_AUDIENCE_REGEX.test(audience)
+  );
 }
 
 function getRemoteJwks(jwksUrl: string): ReturnType<typeof createRemoteJWKSet> {
@@ -450,12 +461,140 @@ function getRecovery(status: AuthFailureStatus) {
   return "The authentication service is temporarily unavailable. Retry with exponential backoff.";
 }
 
+async function verifyUnkeyKey(
+  rootKey: string,
+  apiKey: string,
+  permissions: string | undefined
+): Promise<V2KeysVerifyKeyResponseData> {
+  const cacheKey = createHash("sha256")
+    .update(`${permissions ?? ""}\n${apiKey}`)
+    .digest("base64url");
+  const cached = unkeyVerifyCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data;
+  }
+  unkeyVerifyCache.delete(cacheKey);
+
+  const { data } = await new Unkey({ rootKey }).keys.verifyKey({
+    key: apiKey,
+    ...(permissions ? { permissions } : {}),
+  });
+
+  if (data.valid && data.credits === undefined && !data.ratelimits?.length) {
+    if (unkeyVerifyCache.size >= UNKEY_VERIFY_CACHE_MAX_SIZE) {
+      const oldestKey = unkeyVerifyCache.keys().next().value;
+      if (oldestKey !== undefined) {
+        unkeyVerifyCache.delete(oldestKey);
+      }
+    }
+    unkeyVerifyCache.set(cacheKey, {
+      data,
+      expiresAt: Math.min(
+        Date.now() + UNKEY_VERIFY_CACHE_TTL_MS,
+        data.expires ?? Number.POSITIVE_INFINITY
+      ),
+    });
+  }
+
+  return data;
+}
+
+function getRequestedOrganizationId(c: Context): string | null {
+  for (const header of ACCOUNT_API_KEY_ORGANIZATION_HEADERS) {
+    const value = c.req.header(header)?.trim();
+    if (value) {
+      return value;
+    }
+  }
+  return null;
+}
+
+async function resolveAccountKeyAuth(
+  c: Context,
+  verified: V2KeysVerifyKeyResponseData & { identity: Identity },
+  userId: string
+): Promise<AuthResult> {
+  const membershipRows = await c.get("db").query.members.findMany({
+    where: eq(members.userId, userId),
+    columns: { organizationId: true },
+    with: { organizations: { columns: { slug: true } } },
+    orderBy: [asc(members.createdAt), asc(members.organizationId)],
+  });
+  const memberOrgIds = membershipRows.map((row) => row.organizationId);
+  const requestedOrganization = getRequestedOrganizationId(c);
+
+  let organizationId: string | undefined;
+  if (requestedOrganization) {
+    organizationId = membershipRows.find(
+      (row) =>
+        row.organizationId === requestedOrganization ||
+        row.organizations?.slug === requestedOrganization
+    )?.organizationId;
+  } else if (
+    memberOrgIds.length === 1 ||
+    (memberOrgIds.length > 0 && isUnscopedApiPath(c.req.path))
+  ) {
+    organizationId = memberOrgIds[0];
+  } else if (memberOrgIds.length > 1) {
+    return {
+      success: false,
+      error:
+        "Organization selection required: send X-Notra-Organization-Id for the workspace this request should act on",
+      status: 403,
+      kind: API_AUTH_KINDS.UNKEY,
+    };
+  }
+
+  if (!organizationId) {
+    return {
+      success: false,
+      error: "Workspace access revoked",
+      status: 403,
+      kind: API_AUTH_KINDS.UNKEY,
+    };
+  }
+
+  const auth: AccountApiKeyAuthData = {
+    ...verified,
+    userId,
+    isAccountKey: true,
+    identity: { ...verified.identity, externalId: organizationId },
+  };
+  c.set("auth", auth);
+  return { success: true, auth };
+}
+
+async function checkOrganizationKeySelection(
+  c: Context,
+  organizationId: string
+): Promise<AuthResult | null> {
+  const requestedOrganization = getRequestedOrganizationId(c);
+  if (!requestedOrganization || requestedOrganization === organizationId) {
+    return null;
+  }
+
+  const organization = await c.get("db").query.organizations.findFirst({
+    where: eq(organizations.id, organizationId),
+    columns: { slug: true },
+  });
+  if (organization?.slug === requestedOrganization) {
+    return null;
+  }
+
+  return {
+    success: false,
+    error:
+      "This API key belongs to a different workspace than X-Notra-Organization-Id names",
+    status: 403,
+    kind: API_AUTH_KINDS.UNKEY,
+  };
+}
+
 async function verifyRequestAuth(
   c: Context,
   options: AuthOptions = {}
 ): Promise<AuthResult> {
-  const getKey = options.getKey ?? extractBearerToken;
-  const apiKey = getKey(c);
+  const apiKey = extractBearerToken(c);
 
   if (!apiKey) {
     return { success: false, error: "Missing API key", status: 401 };
@@ -492,29 +631,26 @@ async function verifyRequestAuth(
   }
 
   try {
-    const unkey = new Unkey({ rootKey: c.env.UNKEY_ROOT_KEY });
-    const permissions = unkeyPermissions(
-      options.permissions,
-      options.legacyPermissions
+    const data = await verifyUnkeyKey(
+      c.env.UNKEY_ROOT_KEY,
+      apiKey,
+      unkeyPermissions(options.permissions, options.legacyPermissions)
     );
-    const result = await unkey.keys.verifyKey({
-      key: apiKey,
-      ...(permissions ? { permissions } : {}),
-    });
 
-    if (!result.data.valid) {
+    if (!data.valid) {
       const failure =
-        UNKEY_AUTH_FAILURES[result.data.code] ?? DEFAULT_UNKEY_AUTH_FAILURE;
+        UNKEY_AUTH_FAILURES[data.code] ?? DEFAULT_UNKEY_AUTH_FAILURE;
       return {
         success: false,
         error: failure.error,
         status: failure.status,
         kind: API_AUTH_KINDS.UNKEY,
-        code: result.data.code,
+        code: data.code,
       };
     }
 
-    if (!result.data.identity?.externalId) {
+    const verifiedIdentity = data.identity;
+    if (!verifiedIdentity?.externalId) {
       return {
         success: false,
         error: "Missing or invalid API key",
@@ -523,8 +659,25 @@ async function verifyRequestAuth(
       };
     }
 
-    c.set("auth", result.data);
-    return { success: true, auth: result.data };
+    const accountUserId = parseAccountApiKeyUserId(verifiedIdentity.externalId);
+    if (accountUserId) {
+      return await resolveAccountKeyAuth(
+        c,
+        { ...data, identity: verifiedIdentity },
+        accountUserId
+      );
+    }
+
+    const mismatch = await checkOrganizationKeySelection(
+      c,
+      verifiedIdentity.externalId
+    );
+    if (mismatch) {
+      return mismatch;
+    }
+
+    c.set("auth", data);
+    return { success: true, auth: data };
   } catch {
     return {
       success: false,
@@ -535,9 +688,31 @@ async function verifyRequestAuth(
   }
 }
 
+async function verifyAuthAndStanding(
+  c: Context,
+  options: AuthOptions
+): Promise<AuthResult> {
+  const result = await verifyRequestAuth(c, options);
+  if (!result.success) {
+    return result;
+  }
+  const kind = resolveAuthKind(result.auth);
+  try {
+    const failure = await accountStandingFailure(c.get("db"), result.auth);
+    return failure ? { success: false, status: 403, kind, ...failure } : result;
+  } catch {
+    return {
+      success: false,
+      error: "Service unavailable",
+      status: 503,
+      kind,
+    };
+  }
+}
+
 export function authMiddleware(options: AuthOptions = {}) {
   return async (c: Context, next: Next) => {
-    const authResult = await verifyRequestAuth(c, options);
+    const authResult = await verifyAuthAndStanding(c, options);
     if (!authResult.success) {
       trackApiKeyRejected(c, {
         authKind: authResult.kind,
@@ -556,7 +731,7 @@ export function authMiddleware(options: AuthOptions = {}) {
         {
           error: authResult.error,
           code: authResult.error.toUpperCase().replace(/[^A-Z0-9]+/g, "_"),
-          recovery: getRecovery(authResult.status),
+          recovery: authResult.recovery ?? getRecovery(authResult.status),
         },
         authResult.status
       );

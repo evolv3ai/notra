@@ -22,7 +22,15 @@ export interface IngestAuthData {
   };
 }
 
-export type WorkspaceAuthData = ApiKeyAuthData | OAuthAuthData;
+export interface AccountApiKeyAuthData extends V2KeysVerifyKeyResponseData {
+  userId: string;
+  isAccountKey: true;
+}
+
+export type WorkspaceAuthData =
+  | ApiKeyAuthData
+  | AccountApiKeyAuthData
+  | OAuthAuthData;
 export type AuthData = WorkspaceAuthData | IngestAuthData;
 
 export function getOrganizationIdFromAuth(auth: AuthData): string | null {
@@ -31,6 +39,15 @@ export function getOrganizationIdFromAuth(auth: AuthData): string | null {
 
 export function isIngestAuth(auth: AuthData): auth is IngestAuthData {
   return "type" in auth && auth.type === "ingest";
+}
+
+export function isAccountKeyAuth(
+  auth: AuthData
+): auth is AccountApiKeyAuthData {
+  return (
+    "isAccountKey" in auth &&
+    (auth as AccountApiKeyAuthData).isAccountKey === true
+  );
 }
 
 export function isOAuthAuth(auth: AuthData): auth is OAuthAuthData {

@@ -40,7 +40,7 @@ function TestimonialCard({
           !featured && "justify-between lg:min-h-[25rem]"
         )}
       >
-        <p className="dark:text-foreground min-w-0 self-stretch font-sans text-xl/7 font-medium tracking-[-0.015em] text-[#1E1E1E] sm:text-[1.375rem]/7.5 lg:text-[1.5625rem]/8">
+        <p className="dark:text-foreground min-w-0 self-stretch font-sans text-lg/7 font-medium tracking-[-0.015em] text-[#1E1E1E] sm:text-[1.375rem]/7.5 lg:text-[1.5625rem]/8">
           {testimonial.quote}
         </p>
         <div className="flex items-center gap-4">
@@ -71,18 +71,18 @@ function TestimonialCard({
 
 export function TestimonialsSection() {
   return (
-    <section className="flex w-full flex-col items-center gap-10 px-6 pt-24 pb-27.5 sm:px-12 lg:gap-13.5 lg:px-20 lg:pt-70">
-      <div className="flex flex-col items-center gap-4">
+    <section className="flex w-full flex-col items-center gap-10 px-6 pt-20 pb-20 sm:px-12 sm:pt-24 sm:pb-27.5 lg:gap-13.5 lg:px-20 lg:pt-70">
+      <div className="flex flex-col items-center gap-3 sm:gap-4">
         <h2 className="font-display dark:text-foreground text-center text-[2rem]/tight font-medium tracking-[-0.02em] text-black sm:text-4xl/tight lg:text-[3.0625rem]/14">
           Teams already <span className="text-primary">ship</span> with Notra.
         </h2>
-        <p className="font-display dark:text-muted-foreground max-w-[31.875rem] text-center text-lg/7 font-medium tracking-[-0.01em] text-[#1E1E1EBF] sm:text-xl/7.5">
+        <p className="font-display dark:text-muted-foreground max-w-[31.875rem] text-center text-base/6 font-medium tracking-[-0.01em] text-[#1E1E1EBF] sm:text-xl/7.5">
           {TESTIMONIALS_SUBHEADING}
         </p>
       </div>
-      <div className="flex w-full max-w-[80rem] flex-col items-start gap-8">
+      <div className="flex w-full max-w-[80rem] flex-col items-start gap-5 sm:gap-8">
         <TestimonialCard featured testimonial={FEATURED_TESTIMONIAL} />
-        <div className="flex w-full flex-col gap-8 lg:flex-row">
+        <div className="flex w-full flex-col gap-5 sm:gap-8 lg:flex-row">
           {PAIR_TESTIMONIALS.map((testimonial) => (
             <TestimonialCard key={testimonial.name} testimonial={testimonial} />
           ))}

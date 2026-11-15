@@ -14,11 +14,6 @@ const wait = (ms: number) =>
     window.setTimeout(resolve, ms);
   });
 
-/**
- * Runs the demo conversation: `send` appends your prompt, works, runs the
- * reply's commands one by one and streams the answer. `stop` interrupts the
- * running turn like Escape does.
- */
 export const useCodexChat = (replies: readonly CodexReply[]): CodexChat => {
   const [turns, setTurns] = useState<CodexChatTurn[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);

@@ -8,9 +8,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@notra/ui/components/ui/tooltip";
+import type { TableColumn } from "ui/table";
 
 import { Button } from "@/components/button";
-import type { TableColumn } from "@/components/motion/table";
 import {
   isImageMimeType,
   isPdfMimeType,

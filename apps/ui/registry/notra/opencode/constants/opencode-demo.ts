@@ -181,7 +181,6 @@ export const OPENCODE_DEMO_QUERIES: string[] = [
   "how teams write release notes",
 ];
 
-/** Answers the demo plays back, one per prompt you send, in order. */
 export const OPENCODE_REPLIES: OpencodeReply[] = [
   {
     activities: [

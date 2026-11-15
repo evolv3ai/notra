@@ -1,10 +1,11 @@
 import { Button } from "@/components/ui/button";
+
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "../../tooltip/components/tooltip";
 
 const SIDES = ["top", "right", "bottom", "left"] as const;
 

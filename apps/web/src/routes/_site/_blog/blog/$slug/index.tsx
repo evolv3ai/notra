@@ -8,6 +8,7 @@ import browserCollections from "@/../.source/browser";
 import { BlogArticle } from "@/components/blog-article";
 import { BlogCopyArticle } from "@/components/blog-copy-article";
 import { getBlogMDXComponents } from "@/components/blog-mdx-components";
+import { BlogPostMobileToc } from "@/components/blog-post-mobile-toc";
 import { BlogPostPagination } from "@/components/blog-post-pagination";
 import { BlogPostSidebar } from "@/components/blog-post-sidebar";
 import { CtaBanner } from "@/components/landing/cta-banner";
@@ -28,6 +29,10 @@ import {
 } from "@/utils/metadata";
 import { SITE_URL } from "@/utils/urls";
 
+function getPostImageUrl(image: string | null, url: string) {
+  return image ? `${SITE_URL}${image}` : `${url}/opengraph-image`;
+}
+
 const blogContent = browserCollections.blog.createClientLoader({
   component: ({ default: MDX, toc }, data: BlogEntryData) => {
     const {
@@ -38,7 +43,7 @@ const blogContent = browserCollections.blog.createClientLoader({
     const slug = post.slug;
     const url = `${SITE_URL}/blog/${slug}`;
     const markdownUrl = `${SITE_URL}/blog/${slug}.md`;
-    const imageUrl = `${SITE_URL}${DEFAULT_SOCIAL_IMAGE.url}`;
+    const imageUrl = `${SITE_URL}${post.image ?? DEFAULT_SOCIAL_IMAGE.url}`;
     const articleJsonLd = buildBlogArticleJsonLd({ post, url, imageUrl });
     const faqJsonLd = buildBlogFaqJsonLd(post);
     const breadcrumbJsonLd = buildBreadcrumbJsonLd([
@@ -48,14 +53,12 @@ const blogContent = browserCollections.blog.createClientLoader({
     ]);
 
     return (
-      <div className="mx-auto flex w-full max-w-7xl flex-col items-stretch px-4 pt-24 sm:px-6 sm:pt-28 md:px-8 md:pt-32">
+      <div className="mx-auto flex w-full max-w-7xl flex-col items-stretch px-4 pt-8 sm:px-6 sm:pt-28 md:px-8 md:pt-32">
         <script
-          // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD payload is server-built and script-close-escaped
           dangerouslySetInnerHTML={{ __html: serializeJsonLd(articleJsonLd) }}
           type="application/ld+json"
         />
         <script
-          // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD payload is server-built and script-close-escaped
           dangerouslySetInnerHTML={{
             __html: serializeJsonLd(breadcrumbJsonLd),
           }}
@@ -63,7 +66,6 @@ const blogContent = browserCollections.blog.createClientLoader({
         />
         {faqJsonLd ? (
           <script
-            // biome-ignore lint/security/noDangerouslySetInnerHtml: JSON-LD payload is server-built and script-close-escaped
             dangerouslySetInnerHTML={{ __html: serializeJsonLd(faqJsonLd) }}
             type="application/ld+json"
           />
@@ -73,7 +75,7 @@ const blogContent = browserCollections.blog.createClientLoader({
           <header className="col-span-2 min-w-0 lg:col-span-1 lg:col-start-1 lg:row-start-1">
             <ViewTransition name="blog-back-button">
               <Link
-                className="group mb-6 inline-flex items-center gap-2 font-mono text-sm text-neutral-500 transition-colors hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-50"
+                className="group mb-4 inline-flex items-center gap-2 font-mono text-sm text-neutral-500 transition-colors hover:text-neutral-900 sm:mb-6 dark:text-neutral-400 dark:hover:text-neutral-50"
                 to="/blog"
               >
                 <HugeiconsIcon
@@ -85,33 +87,37 @@ const blogContent = browserCollections.blog.createClientLoader({
               </Link>
             </ViewTransition>
 
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-sm text-neutral-700 dark:text-neutral-200">
-              <time dateTime={post.createdAt}>
-                Published {formatBlogDate(post.createdAt)}
-              </time>
-              <span className="whitespace-nowrap">
-                · {readingMinutes} min read
-              </span>
+            <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-sm text-neutral-700 dark:text-neutral-200">
+                <time dateTime={post.createdAt}>
+                  Published {formatBlogDate(post.createdAt)}
+                </time>
+                <span className="whitespace-nowrap">
+                  · {readingMinutes} min read
+                </span>
+              </div>
+              <BlogCopyArticle
+                markdown={`${post.markdown.trim()}\n\n${buildCtaBannerMarkdown()}`}
+                markdownUrl={markdownUrl}
+                title={post.title}
+              />
             </div>
 
             <ViewTransition name={blogPostTitleTransitionName(slug)}>
-              <h1 className="font-display mt-6 max-w-3xl text-4xl leading-[1.05] font-medium tracking-[-0.02em] text-balance text-[#1E1E1E] sm:text-5xl dark:text-white">
+              <h1 className="font-display mt-4 max-w-3xl text-[2.5rem] leading-[1.05] font-medium tracking-[-0.03em] text-balance wrap-break-word text-[#1E1E1E] sm:mt-6 sm:text-5xl sm:tracking-[-0.02em] dark:text-white">
                 {post.title}
               </h1>
             </ViewTransition>
           </header>
 
-          <BlogPostSidebar authors={post.authors} toc={toc} />
+          <BlogPostSidebar
+            authors={post.authors}
+            toc={toc}
+            updatedAt={post.updatedAt}
+          />
 
-          <div className="col-start-2 row-start-2 self-end justify-self-end lg:col-start-1">
-            <BlogCopyArticle
-              markdown={`${post.markdown.trim()}\n\n${buildCtaBannerMarkdown()}`}
-              markdownUrl={markdownUrl}
-              title={post.title}
-            />
-          </div>
-
-          <div className="border-border col-span-2 min-w-0 border-t pt-6 lg:col-span-1 lg:col-start-1 lg:row-start-3">
+          <div className="border-border col-span-2 min-w-0 border-t pt-6 lg:col-span-1 lg:col-start-1 lg:row-start-2">
+            <BlogPostMobileToc toc={toc} />
             <BlogArticle>
               <MDX components={getBlogMDXComponents()} />
             </BlogArticle>
@@ -128,6 +134,7 @@ const blogContent = browserCollections.blog.createClientLoader({
 });
 
 export const Route = createFileRoute("/_site/_blog/blog/$slug/")({
+  codeSplitGroupings: [["loader", "component"]],
   loader: async ({ params }) => {
     const data = await getBlogPost({ data: { slug: params.slug } });
     await blogContent.preload(data.path);
@@ -153,7 +160,7 @@ export const Route = createFileRoute("/_site/_blog/blog/$slug/")({
         siteName: "Notra",
         images: [
           {
-            url: `${url}/opengraph-image`,
+            url: getPostImageUrl(post.image, url),
             width: 1200,
             height: 630,
             alt: "Notra blog post",

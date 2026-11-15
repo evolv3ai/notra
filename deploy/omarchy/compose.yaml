@@ -103,6 +103,8 @@ services:
       NEXT_PUBLIC_UNLIMITED_ORGANIZATIONS: "true"
       NOTRA_SELF_HOSTED: "true"
       UPSTASH_REDIS_REST_URL: http://redis-rest:8080
+      # The image defaults this to /tmp; keep run state on the volume below.
+      WORKFLOW_LOCAL_DATA_DIR: /app/apps/dashboard/.workflow-data
     ports:
       - "127.0.0.1:${NOTRA_PORT:-3090}:3000"
     volumes:

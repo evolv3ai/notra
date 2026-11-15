@@ -1,9 +1,16 @@
 export const DITHER_MOBILE_QUERY = "(width < 640px)";
 export const DITHER_FINE_POINTER_QUERY = "(hover: hover) and (pointer: fine)";
+export const DITHER_INTERACTION_EVENTS = [
+  "pointermove",
+  "pointerdown",
+  "touchstart",
+  "wheel",
+  "scroll",
+  "keydown",
+] as const;
 export const DITHER_MOBILE_MAX_PIXELS = 1_000_000;
 
 export const BLOG_CARD_DITHER_MAX_PIXELS = 200_000;
-export const ACTIVITY_CARD_DITHER_MAX_PIXELS = 300_000;
 
 export const BLOG_CARD_DITHER_RANGES = {
   frame: [0, 12_000],

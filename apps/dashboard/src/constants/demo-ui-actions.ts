@@ -2,11 +2,6 @@ import type { DemoUiAction } from "@/types/demo";
 
 const PROJECT = "/v1/projects/{projectId}";
 
-/**
- * Dashboard actions that show up in the demo request feed, keyed by oRPC
- * procedure path. `path` is the public API call that does the same thing;
- * actions without one are listed by their RPC path.
- */
 export const DEMO_UI_ACTIONS: Readonly<Record<string, DemoUiAction>> = {
   "geo.promptsCreate": { method: "POST", path: `${PROJECT}/geo/prompts` },
   "geo.promptsUpdate": {

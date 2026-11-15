@@ -1,0 +1,14 @@
+diff --git a/dist/adapters/tanstack-router.js b/dist/adapters/tanstack-router.js
+index 2bbb0fce678a729e66cdeeea4689fdc4d1a36fd1..e296aac3532f571c70b9dc85bafb97f41a8ba4a1 100644
+--- a/dist/adapters/tanstack-router.js
++++ b/dist/adapters/tanstack-router.js
+@@ -29,8 +29,7 @@ function useNuqsTanstackRouterAdapter(watchKeys) {
+ 		updateUrl: useCallback((search, options) => {
+ 			startTransition(() => {
+ 				navigate({
+-					from: "/",
+-					to: pathname + renderQueryString(search),
++					href: pathname + renderQueryString(search),
+ 					replace: options.history === "replace",
+ 					resetScroll: options.scroll,
+ 					hash: (prevHash) => prevHash ?? "",

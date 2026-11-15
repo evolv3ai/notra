@@ -14,6 +14,7 @@ import {
   AgentReadinessStartError,
 } from "../schemas/agent-readiness-errors";
 import type {
+  AgentReadinessComparison,
   AgentReadinessHistoryPoint,
   AgentReadinessReportView,
   AgentReadinessReportRow,
@@ -23,7 +24,11 @@ import type {
   AgentReadinessWorkflowPayload,
   AgentReadinessWorkflowResult,
 } from "../types/agent-readiness";
-import { canReuseAgentReadinessScan } from "../utils/agent-readiness";
+import {
+  canReuseAgentReadinessScan,
+  compareAgentReadinessIssues,
+} from "../utils/agent-readiness";
+import { logGeoFailure } from "../utils/geo-log";
 import {
   areWebsiteUrlsEquivalent,
   getWebsiteUrlLookupVariants,
@@ -31,7 +36,6 @@ import {
 } from "../utils/geo-website";
 import { geoDb } from "./effect";
 
-/** Everything `toReportView` reads — the two JSONB-free columns are omitted. */
 type AgentReadinessReportFields = Pick<
   AgentReadinessReportRow,
   | "id"
@@ -89,15 +93,14 @@ const resolveTargetUrl = Effect.fn("geo.agentReadiness.target")(function* (
   return targetUrl;
 });
 
-async function latestRowWhere(
+async function latestRunningRow(
   projectId: string,
-  status?: AgentReadinessReportRow["status"],
   targetUrl?: string
 ): Promise<AgentReadinessReportRow | undefined> {
-  const conditions = [eq(geoAgentReadinessReports.projectId, projectId)];
-  if (status) {
-    conditions.push(eq(geoAgentReadinessReports.status, status));
-  }
+  const conditions = [
+    eq(geoAgentReadinessReports.projectId, projectId),
+    eq(geoAgentReadinessReports.status, "running"),
+  ];
   if (targetUrl) {
     conditions.push(
       inArray(
@@ -178,11 +181,9 @@ async function latestReadinessReports(
   };
 }
 
-async function loadHistory(
-  projectId: string,
-  targetUrl: string
-): Promise<AgentReadinessHistoryPoint[]> {
-  const rows = await db.query.geoAgentReadinessReports.findMany({
+/** Completed scans for this target, newest first. */
+async function loadCompletedScans(projectId: string, targetUrl: string) {
+  return await db.query.geoAgentReadinessReports.findMany({
     columns: {
       id: true,
       score: true,
@@ -201,6 +202,15 @@ async function loadHistory(
     orderBy: desc(geoAgentReadinessReports.createdAt),
     limit: AGENT_READINESS_HISTORY_LIMIT,
   });
+}
+
+type CompletedScanRow = Awaited<ReturnType<typeof loadCompletedScans>>[number];
+
+function scanTimestamp(row: CompletedScanRow): string {
+  return (row.scannedAt ?? row.createdAt).toISOString();
+}
+
+function toHistory(rows: CompletedScanRow[]): AgentReadinessHistoryPoint[] {
   return rows
     .map((row) => ({
       id: row.id,
@@ -209,21 +219,38 @@ async function loadHistory(
         .length,
       partialCount: row.issues.filter((issue) => issue.result === "partial")
         .length,
-      scannedAt: (row.scannedAt ?? row.createdAt).toISOString(),
+      scannedAt: scanTimestamp(row),
     }))
     .reverse();
+}
+
+function toComparison(
+  rows: CompletedScanRow[],
+  reportId: string | undefined
+): AgentReadinessComparison | null {
+  const index = rows.findIndex((row) => row.id === reportId);
+  const current = rows[index];
+  const previous = index === -1 ? undefined : rows[index + 1];
+  if (!(current && previous)) {
+    return null;
+  }
+  return {
+    previousScore: previous.score,
+    previousScannedAt: scanTimestamp(previous),
+    ...compareAgentReadinessIssues(previous.issues, current.issues),
+  };
 }
 
 export const loadAgentReadiness = Effect.fn("geo.agentReadiness.load")(
   function* (scope: AgentReadinessScope) {
     const targetUrl = yield* resolveTargetUrl(scope.brandSettingsId);
-    const [reports, history] = yield* Effect.all(
+    const [reports, completedScans] = yield* Effect.all(
       [
         geoDb("read readiness reports", () =>
           latestReadinessReports(scope.projectId, targetUrl)
         ),
         geoDb("read readiness history", () =>
-          loadHistory(scope.projectId, targetUrl)
+          loadCompletedScans(scope.projectId, targetUrl)
         ),
       ],
       { concurrency: "unbounded" }
@@ -237,7 +264,8 @@ export const loadAgentReadiness = Effect.fn("geo.agentReadiness.load")(
       targetUrl,
       report,
       scan,
-      history,
+      history: toHistory(completedScans),
+      comparison: toComparison(completedScans, completed?.id),
     } satisfies AgentReadinessResponse;
   }
 );
@@ -249,7 +277,7 @@ export const startAgentReadinessScan = Effect.fn("geo.agentReadiness.start")(
       const [targetUrl, running] = yield* Effect.all([
         resolveTargetUrl(scope.brandSettingsId),
         geoDb("read running readiness", () =>
-          latestRowWhere(scope.projectId, "running")
+          latestRunningRow(scope.projectId)
         ),
       ]);
       if (running && canReuseAgentReadinessScan(running, targetUrl)) {
@@ -297,7 +325,7 @@ export const startAgentReadinessScan = Effect.fn("geo.agentReadiness.start")(
       );
       if (inserted.length === 0) {
         const winner = yield* geoDb("read readiness claim winner", () =>
-          latestRowWhere(scope.projectId, "running", targetUrl)
+          latestRunningRow(scope.projectId, targetUrl)
         );
         if (!winner || !canReuseAgentReadinessScan(winner, targetUrl)) {
           return yield* Effect.fail(
@@ -330,7 +358,9 @@ export const startAgentReadinessScan = Effect.fn("geo.agentReadiness.start")(
         targetUrl: claim.targetUrl,
       })
       .pipe(
-        Effect.mapError((cause) => new AgentReadinessStartError({ cause })),
+        Effect.mapError(
+          (error) => new AgentReadinessStartError({ cause: error.cause })
+        ),
         Effect.map(() => response),
         Effect.catch((error) =>
           geoDb("stamp failed readiness handoff", () =>
@@ -425,8 +455,6 @@ export const executeAgentReadinessScan = Effect.fn(
           score: report.score,
           scoreLabel: report.scoreLabel,
           scoreBreakdown: report.scoreBreakdown,
-          // feedback.md is a Notra bonus check, so it does not alter the
-          // externally owned Is Agentic score or breakdown.
           issues,
           eligibleChecks: report.eligibleChecks,
           reportUrl: report.reportUrl,
@@ -458,7 +486,12 @@ export const executeAgentReadinessScan = Effect.fn(
           error instanceof AgentReadinessApiError
             ? error.message
             : "Scan failed. Please try again.";
-        console.error("[AgentReadiness] Scan failed:", error);
+        logGeoFailure(
+          "geo.agent_readiness.scan_failed",
+          "Agent readiness scan failed",
+          error,
+          { reportId: payload.reportId }
+        );
         yield* geoDb("stamp failed readiness scan", () =>
           db
             .update(geoAgentReadinessReports)

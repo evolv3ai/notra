@@ -1,15 +1,15 @@
 "use client";
 
-import type {
-  SocialConnectPlatform,
-  SocialPublishSurface,
-} from "@notra/schemas/dashboard/social-accounts";
+import type { SocialConnectPlatform } from "@notra/schemas/dashboard/social-accounts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { SOCIAL_PLATFORM_LABELS } from "@/constants/social-connect";
-import type { ConnectedAccount } from "@/types/hooks/connected-accounts";
+import type {
+  ConnectedAccount,
+  PublishSocialPostInput,
+} from "@/types/hooks/connected-accounts";
 
 import { dashboardOrpc } from "../orpc/query";
 
@@ -73,16 +73,13 @@ export function usePublishSocialPost(
   const tCommon = useTranslations("common");
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: {
-      accountId: string;
-      content: string;
-      from?: SocialPublishSurface;
-    }) =>
+    mutationFn: async (input: PublishSocialPostInput) =>
       dashboardOrpc.socialAccounts.publish.call({
         organizationId,
         accountId: input.accountId,
         content: input.content,
         from: input.from,
+        mediaUrls: input.mediaUrls,
       }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({

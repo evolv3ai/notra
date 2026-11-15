@@ -35,6 +35,7 @@ export interface GroupAssistantMessagePartsOptions<
   TPart = AssistantMessagePart,
 > {
   isStandaloneTool?: (part: TPart) => boolean;
+  isStandalonePartVisible?: (part: TPart, index: number) => boolean;
 }
 
 export interface ChatSearchSource {

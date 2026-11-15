@@ -12,14 +12,13 @@ import { Skeleton } from "@notra/ui/components/ui/skeleton";
 import { cn } from "@notra/ui/lib/utils";
 import { isDemoModeClient } from "@notra/utils/demo-mode";
 import { useReducedMotion } from "motion/react";
-import { useTranslations } from "next-intl";
-import dynamic from "next/dynamic";
-import { usePathname } from "next/navigation";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { SubscriptionGate } from "@/components/billing/subscription-gate";
 import { DashboardSidebar } from "@/components/dashboard/app-sidebar";
+import { DashboardGlobalActions } from "@/components/dashboard/dashboard-global-actions";
 import { SiteHeader } from "@/components/dashboard/header";
 import { RestoreSidebarHome } from "@/components/dashboard/restore-sidebar-home";
 import { RightPanel } from "@/components/dashboard/right-panel";
@@ -27,6 +26,7 @@ import { useRightPanel } from "@/components/dashboard/right-panel-context";
 import { useOrganizationsContext } from "@/components/providers/organization-provider";
 import { EVE_BANNER_HEIGHT } from "@/constants/onboarding-agent";
 import { RIGHT_PANEL_PORTAL_ID } from "@/constants/right-panel";
+import { useDashboardRootMarker } from "@/lib/hooks/use-dashboard-root-marker";
 import { useDemoBannerVisible } from "@/lib/hooks/use-demo-banner-visible";
 import { useDesktopBreakpoint } from "@/lib/hooks/use-desktop-breakpoint";
 import {
@@ -35,14 +35,16 @@ import {
   useRunOnboardingAgent,
 } from "@/lib/hooks/use-onboarding";
 import { useSidebarWidth } from "@/lib/hooks/use-sidebar-width";
+import { useWelcomeTour } from "@/lib/hooks/use-welcome-tour";
+import { usePathname } from "@/lib/navigation";
 import type {
   DashboardOnboardingBannerProps,
   DashboardShellProps,
   DashboardSidebarStyle,
 } from "@/types/components/dashboard-shell";
 import { dashboardShellStyle } from "@/utils/dashboard-shell-style";
+import dynamic from "@/utils/lazy-component";
 
-// Demo-only UI: loaded on demand so production bundles don't carry it.
 const DashboardDemoChrome = dynamic(() =>
   import("@/components/demo/dashboard-demo-chrome").then(
     (module) => module.DashboardDemoChrome
@@ -57,6 +59,12 @@ const DemoPlaygroundProvider = dynamic(() =>
 const OnboardingAgentBanner = dynamic(() =>
   import("@/components/dashboard/onboarding-agent-banner").then(
     (module) => module.OnboardingAgentBanner
+  )
+);
+
+const WelcomeTour = dynamic(() =>
+  import("@/components/dashboard/welcome-tour").then(
+    (module) => module.WelcomeTour
   )
 );
 
@@ -135,10 +143,6 @@ function DashboardAgentSlot() {
     setSlotReady(true);
   }, []);
 
-  // The slot has to exist before the first open. A panel that mounts already
-  // open has no previous width, so the CSS width transition never runs.
-  // Keep the host under this slot at every width. Moving it between the dock
-  // and the mobile dialog remounts the chat and drops the in-flight thread.
   if (!slotReady) {
     return null;
   }
@@ -203,7 +207,7 @@ function DashboardPageViewport({
   return (
     <div
       className={cn(
-        "@container/main flex min-h-0 min-w-0 flex-1 flex-col gap-2 overscroll-contain pointer-fine:overscroll-none",
+        "@container/main flex min-h-0 min-w-0 flex-1 flex-col gap-2 overscroll-contain has-[[data-site-frame]]:overflow-hidden pointer-fine:overscroll-none",
         pageOwnsScroll
           ? "overflow-hidden"
           : "scrollbar-stable scrollbar-thin overflow-x-hidden overflow-y-auto"
@@ -220,6 +224,7 @@ export function DashboardShell({
   initialOnboardingAgentRun,
   initialSidebarOpen,
   initialSidebarWidth,
+  onboardingBannerDismissed,
 }: DashboardShellProps) {
   const t = useTranslations("dashboard.onboardingBanner");
   const { activeOrganization } = useOrganizationsContext();
@@ -230,8 +235,10 @@ export function DashboardShell({
     initialOnboardingAgentRun
   );
   const runAgent = useRunOnboardingAgent();
-  const { dismiss, dismissed } =
-    useOnboardingAgentBannerDismissal(organizationId);
+  const { dismiss, dismissed } = useOnboardingAgentBannerDismissal(
+    organizationId,
+    onboardingBannerDismissed
+  );
   const running = data?.running ?? false;
   const canStart = !!data && !data.ran && !running && !dismissed;
   const bannerAvailable = running || canStart;
@@ -245,6 +252,7 @@ export function DashboardShell({
     runAgent.isPending && runAgent.variables?.organizationId === organizationId;
   const demo = isDemoModeClient();
   const showDemoBanner = useDemoBannerVisible(demoBannerHidden);
+  const welcomeTour = useWelcomeTour();
   const shellStyle = dashboardShellStyle(showDemoBanner, visible);
   const {
     finishSidebarResize,
@@ -253,6 +261,7 @@ export function DashboardShell({
     sidebarWidth,
     startSidebarResize,
   } = useSidebarWidth(initialSidebarWidth);
+  useDashboardRootMarker();
 
   useEffect(() => {
     setDismissingOrganizationId(null);
@@ -298,7 +307,15 @@ export function DashboardShell({
       data-dashboard-shell
       style={shellStyle}
     >
-      {demo ? <DashboardDemoChrome showBanner={showDemoBanner} /> : null}
+      {demo ? (
+        <div
+          className={
+            showDemoBanner ? "h-(--demo-banner-height) shrink-0" : "contents"
+          }
+        >
+          <DashboardDemoChrome showBanner={showDemoBanner} />
+        </div>
+      ) : null}
       <DashboardOnboardingBanner
         available={bannerAvailable}
         dismissing={dismissing}
@@ -342,6 +359,13 @@ export function DashboardShell({
         <div className="contents" id={RIGHT_PANEL_PORTAL_ID} />
         <DashboardAgentSlot />
       </SidebarProvider>
+      <DashboardGlobalActions />
+      {welcomeTour.open ? (
+        <WelcomeTour
+          brandName={activeOrganization?.name}
+          onClose={welcomeTour.close}
+        />
+      ) : null}
     </div>
   );
 

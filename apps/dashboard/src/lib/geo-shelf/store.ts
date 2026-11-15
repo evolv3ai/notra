@@ -4,7 +4,10 @@ import { geoShelfSources } from "@notra/db/schema";
 import { geoShelfSourceSchema } from "@notra/schemas/dashboard/geo-shelf";
 import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
 
-import { GEO_SHELF_CITATION_INSERT_CHUNK } from "@/constants/geo-shelf";
+import {
+  GEO_SHELF_CITATION_INSERT_CHUNK,
+  GEO_SHELF_RELEVANT_MIN_CITATIONS,
+} from "@/constants/geo-shelf";
 
 import type {
   GeoShelfCitationState,
@@ -72,10 +75,6 @@ function scopeWhere(key: GeoShelfStoreKey) {
   );
 }
 
-/**
- * Scan rows stored before homepages were excluded from the citation sync stay
- * in the table but out of every read, so the shelf never lists a bare domain.
- */
 const HIDE_SCAN_ROOT_URLS = sql`not (${geoShelfSources.origin} = 'scan' and ${geoShelfSources.url} ~ ${GEO_SHELF_ROOT_URL_PATTERN_SOURCE})`;
 
 function visibleScopeWhere(key: GeoShelfStoreKey) {
@@ -90,9 +89,10 @@ const OWN_UNKNOWN = sql`${placements} @> '[{"competitorId":null,"status":"unknow
 const HAS_OWN_PLACEMENT = sql`jsonb_path_exists(${placements}, '$[*] ? (@.competitorId == null)')`;
 const COMPETITOR_PRESENT = sql`jsonb_path_exists(${placements}, '$[*] ? (@.competitorId != null && @.status == "present")')`;
 
-/** SQL twin of `matchesShelfSourceFilter` in `utils/geo-shelf-live-query`. */
 function shelfFilterWhere(shelf: GeoShelfPageQuery["shelf"]): SQL | undefined {
   switch (shelf) {
+    case "relevant":
+      return sql`(${geoShelfSources.origin} = 'manual' or ${opportunityStatus} is not null or coalesce((${geoShelfSources.citations}->>'windowCount')::int, 0) >= ${GEO_SHELF_RELEVANT_MIN_CITATIONS})`;
     case "opportunities":
       return sql`(${geoShelfSources.ownership} = 'third_party' and not ${OWN_PRESENT} and ${COMPETITOR_PRESENT})`;
     case "on_shelf":
@@ -104,7 +104,6 @@ function shelfFilterWhere(shelf: GeoShelfPageQuery["shelf"]): SQL | undefined {
   }
 }
 
-/** SQL twin of `matchesTicketSourceFilter`. */
 function ticketFilterWhere(
   ticket: GeoShelfPageQuery["ticket"],
   currentMemberId: string | null
@@ -118,7 +117,6 @@ function ticketFilterWhere(
       if (!currentMemberId) {
         return sql`false`;
       }
-      // The point of contact falls back to the assignee.
       return sql`(${OPEN_TICKET} and (${geoShelfSources.opportunity}->>'assigneeMemberId' = ${currentMemberId} or coalesce(${geoShelfSources.opportunity}->>'pocMemberId', ${geoShelfSources.opportunity}->>'assigneeMemberId') = ${currentMemberId}))`;
     case "unassigned":
       return sql`(${OPEN_TICKET} and ${geoShelfSources.opportunity}->>'assigneeMemberId' is null)`;
@@ -140,7 +138,6 @@ function sqlList(values: readonly string[]): SQL {
   );
 }
 
-/** SQL twin of `matchesSourceSearch`. */
 function searchWhere(search: GeoShelfSearchQuery | null): SQL | undefined {
   const text = search?.text.trim() ?? "";
   if (!search || text.length === 0) {
@@ -177,7 +174,6 @@ function pageFilterWhere(query: GeoShelfPageQuery): SQL {
   );
 }
 
-/** Mirrors the table's client sort values so paging keeps a stable order. */
 function sortExpression(key: GeoShelfPageQuery["sort"]["key"]): SQL {
   switch (key) {
     case "title":
@@ -291,7 +287,6 @@ export async function listPersistedGeoShelfSources(
     .select()
     .from(geoShelfSources)
     .where(visibleScopeWhere(key))
-    // `id` breaks ties: batched writes share an `updated_at` timestamp.
     .orderBy(desc(geoShelfSources.updatedAt), desc(geoShelfSources.id));
   return rows.map(toSource);
 }
@@ -326,9 +321,6 @@ export async function insertGeoShelfSources(
   sources: GeoShelfSource[],
   executor: GeoShelfDbExecutor = db
 ): Promise<GeoShelfSource[]> {
-  if (sources.length === 0) {
-    return [];
-  }
   const persisted: GeoShelfSource[] = [];
   for (
     let index = 0;

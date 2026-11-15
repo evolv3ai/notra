@@ -48,16 +48,12 @@ const tooltipContentClassName =
 const TOOLTIP_ARROW_CLASS_NAME =
   "bg-(--tooltip-arrow) fill-(--tooltip-arrow) -z-10 size-2.5 translate-y-[calc(-50%-2px)] rotate-45 rounded-[2px] data-[side=bottom]:top-1 data-[side=inline-end]:top-1/2! data-[side=inline-end]:-left-1 data-[side=inline-end]:-translate-y-1/2 data-[side=inline-start]:top-1/2! data-[side=inline-start]:-right-1 data-[side=inline-start]:-translate-y-1/2 data-[side=left]:top-1/2! data-[side=left]:-right-1 data-[side=left]:-translate-y-1/2 data-[side=right]:top-1/2! data-[side=right]:-left-1 data-[side=right]:-translate-y-1/2 data-[side=top]:-bottom-2.5"
 
-// Inside a gliding TooltipProvider every tooltip shares one popup, so moving
-// between neighbours slides it over and resizes it instead of reopening.
 const SHARED_POSITIONER_CLASS_NAME =
   "h-(--positioner-height) w-(--positioner-width) transition-[top,left,right,bottom] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none"
 const SHARED_POPUP_CLASS_NAME =
   "h-(--popup-height) w-(--popup-width) max-w-none p-0 has-[[data-slot=kbd]]:pr-0 transition-[opacity,scale,translate,width,height] motion-reduce:transition-opacity"
 const SHARED_VIEWPORT_CLASS_NAME =
   "relative m-0! overflow-hidden rounded-[inherit] [&>[data-previous]]:hidden"
-// The label keeps its own natural width, so it never reflows while the popup
-// resizes around it.
 const SHARED_CONTENT_CLASS_NAME =
   "w-max max-w-xs px-2.5 py-1 has-[[data-slot=kbd]]:pr-1"
 const SHARED_ARROW_CLASS_NAME =
@@ -66,8 +62,6 @@ const SHARED_ARROW_CLASS_NAME =
 const SharedTooltipContext =
   createContext<TooltipPrimitive.Handle<SharedTooltipPayload> | null>(null)
 const SharedTooltipItemContext = createContext<SharedTooltipItem | null>(null)
-// Set by every TooltipProvider, so a standalone Tooltip only adds its own
-// instant provider when no provider (and its delay) sits above it.
 const HasTooltipProviderContext = createContext(false)
 
 function TooltipFrame({
@@ -136,8 +130,6 @@ function TooltipProvider({
   /** Share one popup between the tooltips inside, so it glides between them. */
   glide?: boolean
 }) {
-  // The shared popup only carries labels, so it closes as soon as the pointer
-  // leaves the trigger (disableHoverablePopup on the shared Root).
   const [handle] = useState(() =>
     TooltipPrimitive.createHandle<SharedTooltipPayload>()
   )
@@ -268,8 +260,6 @@ function SharedTooltipContent({
       setPayload(undefined)
       return
     }
-    // Only store a new payload when something changed, so re-renders of the
-    // item don't loop back into another state update.
     setPayload((current) =>
       isSamePayload(current, payload) ? current : payload
     )

@@ -1,4 +1,4 @@
-import { updatePostRecord } from "@notra/ai/utils/post-service";
+import { updateAiPostRecord as updatePostRecord } from "@notra/ai/utils/post-service";
 import { defineTool } from "eve/tools";
 
 import { updatePostInputSchema } from "../schemas/assistant-tools";

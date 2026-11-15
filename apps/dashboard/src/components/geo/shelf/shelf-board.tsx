@@ -24,10 +24,17 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { useTranslations } from "next-intl";
-import { memo, useRef, useState } from "react";
+import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
+import {
+  memo,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { createPortal } from "react-dom";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { ShelfMemberAvatar } from "@/components/geo/shelf/shelf-member-avatar";
@@ -228,7 +235,6 @@ const ShelfBoardColumn = memo(function ShelfBoardColumn({
   pendingSourceIds: ReadonlySet<string>;
   activeId: string | null;
   onRowClick: (row: GeoShelfRow) => void;
-  /** Set while the server has more cards for this column than are loaded. */
   onLoadMore: (() => void) | undefined;
 }) {
   "use no memo";
@@ -241,14 +247,30 @@ const ShelfBoardColumn = memo(function ShelfBoardColumn({
     data: { type: "column" },
     disabled: dropDisabled,
   });
-  const itemIds =
-    rows.length > 0 ? rows.map((row) => row.id) : EMPTY_COLUMN_IDS;
+  const itemIds = useMemo(
+    () => (rows.length > 0 ? rows.map((row) => row.id) : EMPTY_COLUMN_IDS),
+    [rows]
+  );
+  const activeIndex = useMemo(
+    () => (activeId ? rows.findIndex((row) => row.id === activeId) : -1),
+    [activeId, rows]
+  );
+  const rangeExtractor = useCallback(
+    (range: Parameters<typeof defaultRangeExtractor>[0]) => {
+      const indexes = defaultRangeExtractor(range);
+      return activeIndex < 0 || indexes.includes(activeIndex)
+        ? indexes
+        : [...indexes, activeIndex].sort((a, b) => a - b);
+    },
+    [activeIndex]
+  );
   // react-doctor-disable-next-line react-hooks-js/incompatible-library
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => GEO_SHELF_BOARD_CARD_HEIGHT,
     getItemKey: (index) => rows[index]?.id ?? index,
+    rangeExtractor,
     initialRect: {
       height: GEO_SHELF_BOARD_COLUMN_SCROLL_HEIGHT,
       width: GEO_SHELF_BOARD_COLUMN_WIDTH,
@@ -257,8 +279,6 @@ const ShelfBoardColumn = memo(function ShelfBoardColumn({
   });
   const virtualItems = virtualizer.getVirtualItems();
 
-  // Pages are shared by every column, so only the column being read asks for
-  // more; a sparse column never pages through the shelf on its own.
   const handleScroll = () => {
     const element = scrollRef.current;
     if (!(element && onLoadMore)) {
@@ -274,8 +294,6 @@ const ShelfBoardColumn = memo(function ShelfBoardColumn({
   return (
     <section
       className={cn(
-        // min-h-0 keeps the column inside the board; otherwise it grows with
-        // every card and the virtualizer mounts the full list.
         "bg-secondary flex h-full min-h-0 shrink-0 flex-col overflow-hidden rounded-md border",
         "transition-[border-color,background-color] duration-150 ease-out",
         isOver && !dropDisabled && "border-foreground/15 bg-background/40",
@@ -359,6 +377,7 @@ export function ShelfBoard({
   pendingSourceIds,
   onRowClick,
   onUpdateOpportunity,
+  height = GEO_SHELF_BOARD_HEIGHT,
 }: GeoShelfBoardProps) {
   const tLabels = useTranslations("geo.shelf.labels");
   const statusLabels = useGeoShelfStatusLabels();
@@ -386,7 +405,10 @@ export function ShelfBoard({
 
   if (rows.length === 0) {
     return (
-      <div className="text-muted-foreground flex min-h-48 items-center justify-center rounded-xl border border-dashed px-4 text-sm">
+      <div
+        className="text-muted-foreground flex h-(--shelf-height) items-center justify-center rounded-xl border border-dashed px-4 text-sm"
+        style={{ "--shelf-height": `${height}px` } as CSSProperties}
+      >
         {tLabels("noMatches")}
       </div>
     );
@@ -537,8 +559,8 @@ export function ShelfBoard({
       sensors={sensors}
     >
       <div
-        className="flex gap-3 overflow-x-auto overflow-y-hidden"
-        style={{ height: GEO_SHELF_BOARD_HEIGHT }}
+        className="flex h-(--shelf-height) gap-3 overflow-x-auto overflow-y-hidden"
+        style={{ "--shelf-height": `${height}px` } as CSSProperties}
       >
         {visibleColumns.map((column) => {
           const columnId = column.id as GeoShelfBoardColumnId;

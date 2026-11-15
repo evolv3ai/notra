@@ -50,24 +50,15 @@ export function hasSelectedItemsOutsideTargets(
     return false;
   }
 
-  if (
+  return Boolean(
     selectedItems.pullRequestNumbers?.some(
       (item) => !targetRepositoryIds.has(item.repositoryId)
-    )
-  ) {
-    return true;
-  }
-
-  if (
+    ) ||
     selectedItems.releaseTagNames?.some(
       (item) =>
         typeof item !== "string" && !targetRepositoryIds.has(item.repositoryId)
     )
-  ) {
-    return true;
-  }
-
-  return false;
+  );
 }
 
 export function buildSelectionFilters(

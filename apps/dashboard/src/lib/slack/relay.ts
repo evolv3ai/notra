@@ -31,13 +31,31 @@ export function parseSlackExternalChannelKey(
   return { teamId, channelId, threadTs };
 }
 
-async function resolveRelayBotToken(teamId: string): Promise<string> {
+/**
+ * Chat Slack references can be supplied through the public chats API, so the
+ * installation must belong to the organization relaying, never just any team.
+ * The env binding only covers the workspace and organization it names.
+ */
+async function resolveRelayBotToken(
+  teamId: string,
+  organizationId: string
+): Promise<string> {
   const integration = await getSlackIntegrationByTeamId(teamId);
-  if (integration?.enabled) {
+  if (integration) {
+    if (integration.organizationId !== organizationId) {
+      throw new Error("No Slack installation found for this workspace");
+    }
+    if (!integration.enabled) {
+      throw new Error("Slack integration is disabled for this workspace");
+    }
     return getSlackIntegrationBotToken(integration);
   }
   const envToken = process.env.SLACK_AGENT_BOT_TOKEN?.trim();
-  if (!envToken) {
+  if (
+    !envToken ||
+    process.env.SLACK_AGENT_TEAM_ID?.trim() !== teamId ||
+    process.env.SLACK_AGENT_ORGANIZATION_ID?.trim() !== organizationId
+  ) {
     throw new Error("No Slack installation found for this workspace");
   }
   return envToken;
@@ -50,7 +68,10 @@ export async function postSlackRelayMessage(input: {
   chatId: string;
   organizationId: string;
 }): Promise<{ ts: string }> {
-  const token = await resolveRelayBotToken(input.target.teamId);
+  const token = await resolveRelayBotToken(
+    input.target.teamId,
+    input.organizationId
+  );
 
   const response = await fetch("https://slack.com/api/chat.postMessage", {
     method: "POST",
@@ -96,16 +117,17 @@ function permalinkCacheKey(target: SlackRelayTarget) {
 }
 
 export async function getSlackThreadPermalink(
-  target: SlackRelayTarget
+  target: SlackRelayTarget,
+  organizationId: string
 ): Promise<string | null> {
   try {
+    const token = await resolveRelayBotToken(target.teamId, organizationId);
     if (redis) {
       const cached = await redis.get<string>(permalinkCacheKey(target));
       if (typeof cached === "string" && cached.length > 0) {
         return cached;
       }
     }
-    const token = await resolveRelayBotToken(target.teamId);
     const response = await fetch(
       `https://slack.com/api/chat.getPermalink?channel=${encodeURIComponent(target.channelId)}&message_ts=${encodeURIComponent(target.threadTs)}`,
       { headers: { authorization: `Bearer ${token}` } }
@@ -189,8 +211,12 @@ export async function postSlackApprovalInteraction(input: {
   requestId: string;
   approved: boolean;
   userName: string;
+  organizationId: string;
 }): Promise<boolean> {
-  const token = await resolveRelayBotToken(input.target.teamId);
+  const token = await resolveRelayBotToken(
+    input.target.teamId,
+    input.organizationId
+  );
   const signingSecret = requireRelayEnv("SLACK_AGENT_SIGNING_SECRET");
   const agentUrl = requireRelayEnv("EVE_NOTRA_AGENT_URL");
 

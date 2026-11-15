@@ -1,4 +1,3 @@
-# Ignore root files unless required to install or build.
 /*
 !/apps/
 !/packages/
@@ -10,12 +9,10 @@
 !/turbo.json
 !/patches/
 
-# package.json's prepare hook invokes this even on Vercel.
 !/scripts/
 /scripts/*
 !/scripts/prepare-effect.sh
 
-# Agent configuration and vendored skills are development-only, including in apps.
 **/.agents/
 **/.claude/
 **/.codex/

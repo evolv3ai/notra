@@ -1,0 +1,132 @@
+---
+title: "Embed the AI traffic chart"
+sidebarTitle: "Embed on your site"
+description: "Show your AI traffic chart on your own site with an iframe. Only the domains you allow can display it."
+authors:
+  - handle: jan
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/ai-traffic/embed
+  type: how-to
+  applies_to:
+    - notra
+  language: en
+  status: stable
+  aliases:
+    - embed
+    - iframe
+    - public traffic chart
+---
+
+An embed puts the AI traffic chart from the [Traffic](/ai-traffic/overview) page on your own site, for example a stats page or a blog post. It shows crawler requests, citations in AI answers and AI referrals, and updates by itself.
+
+## Create an embed
+
+<Steps>
+  <Step title="Open the embed dialog">
+    On the **Traffic** page, click **Export**, then **Embed on your site**. The embed shows the current project, and only the domain selected in the domain filter if you picked one.
+  </Step>
+
+  <Step title="Allow your domains">
+    Under **Allowed domains**, type each domain that will show the chart and press Enter, for example `example.com`. The chart only displays on these domains.
+  </Step>
+
+  <Step title="Create and configure">
+    Click **Create embed**, then pick the **Period**, **Theme** and what to **Show**. The preview updates as you change them.
+  </Step>
+
+  <Step title="Add it to your site">
+    Copy the code under **Embed code** and paste it where the chart should appear. Or click **Copy agent prompt** and hand it to your coding agent, which adds the chart for you.
+  </Step>
+</Steps>
+
+The embed code looks like this:
+
+```html
+<iframe
+  src="https://app.usenotra.com/embed/ai-traffic/<embed-id>"
+  title="AI traffic"
+  data-notra-embed
+  width="100%"
+  height="420"
+  sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-downloads"
+  style="border:0;width:100%"
+  loading="lazy"
+></iframe>
+<script src="https://app.usenotra.com/embed.js" async></script>
+```
+
+The script keeps the iframe's height in sync with the chart. Load it once per page, even with several embeds. Without it, the iframe stays 420 px high.
+
+### React and other JSX
+
+Convert the attributes and load the script once, for example in Next.js:
+
+```tsx
+import Script from "next/script";
+
+export function AiTrafficChart() {
+  return (
+    <>
+      <iframe
+        src="https://app.usenotra.com/embed/ai-traffic/<embed-id>"
+        title="AI traffic"
+        data-notra-embed=""
+        width="100%"
+        height={420}
+        sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-downloads"
+        style={{ border: 0, width: "100%" }}
+        loading="lazy"
+      />
+      <Script src="https://app.usenotra.com/embed.js" strategy="lazyOnload" />
+    </>
+  );
+}
+```
+
+## Options
+
+The dialog writes the options into the iframe URL. You can also change them there:
+
+| Parameter | Values | Default |
+| --- | --- | --- |
+| `range` | `7d`, `14d`, `30d`, `90d` | `30d` |
+| `theme` | `light`, `dark`, `auto` (follows the visitor's system) | `auto` |
+| `parts` | `metrics`, `chart`, or `metrics,chart` | both |
+| `locale` | a dashboard language such as `en` or `de` | the visitor's browser language |
+
+For example, `.../embed/ai-traffic/<embed-id>?range=7d&theme=dark&parts=chart` shows only the chart for the last 7 days in dark mode.
+
+The background is transparent, so the chart sits on your page's background. If you set `theme=dark` on a page that does not declare `color-scheme: dark`, some browsers paint a solid backdrop behind the iframe.
+
+## Allowed domains
+
+- `example.com` allows `https://example.com` only. Add `www.example.com` separately if your site uses it.
+- `*.example.com` allows every subdomain, but not `example.com` itself.
+- `http://` only works for `localhost` and `127.0.0.1`, for local development.
+- Enter domains only, without paths. An embed allows up to 10 domains.
+
+Every added or removed domain saves right away and applies within a minute. On any other domain the browser refuses to show the chart, and the frame stays empty.
+
+If your site sends a `Content-Security-Policy` header, allow `https://app.usenotra.com` in `frame-src` and `script-src`.
+
+## Manage embeds
+
+Open **Export > Embed on your site** on the **Traffic** page again to switch between embeds, edit their domains or create another one. An organization can have up to 50 embeds.
+
+Click **Delete embed** to take the chart down. Pages that use it show nothing after at most a minute.
+
+## What visitors see
+
+- The numbers are cached and refresh every 10 minutes.
+- The embed runs no analytics and shows no consent banner.
+- A small **AI traffic by Notra** link sits under the chart.
+
+<Warning>
+  Allowed domains control where the chart can be **embedded**. They don't make it private: anyone with the embed URL can still open it directly in a browser. Only use embeds for numbers you are happy to publish, and delete the embed to revoke access.
+</Warning>
+
+## Build your own chart
+
+To draw the numbers in your own chart instead, call `GET /v1/projects/{projectId}/geo/traffic/overview` from your server with an API key that has the `traffic.read` scope. Never put the API key in client-side code. [Authentication](/api/authentication#scopes) explains keys and scopes.

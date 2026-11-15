@@ -133,3 +133,29 @@ export const patchSettingsRequestSchema = z
       }),
   })
   .openapi("PatchGeoSettingsRequest");
+
+const geoEngineSchema = z
+  .object({
+    id: z.string().openapi({
+      description: "Engine id to pass in the `engines` setting.",
+      example: "google/ai-overview",
+    }),
+    label: z.string(),
+    provider: z.string(),
+    zdr: z.enum(["all", "some", "none"]).openapi({
+      description:
+        "Zero data retention coverage. Engines with `none` need `enforceZdr: false` or an entry in `nonZdrApprovedEngines`.",
+    }),
+    default: z.boolean().openapi({
+      description: "Part of the default engine set for new projects.",
+    }),
+    supportsGroundedChecks: z.boolean(),
+  })
+  .openapi("GeoEngine");
+
+export const engineListResponseSchema = z
+  .object({
+    engines: z.array(geoEngineSchema),
+    organization: organizationResponseSchema,
+  })
+  .openapi("GeoEngineListResponse");

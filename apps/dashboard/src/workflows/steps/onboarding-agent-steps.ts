@@ -1,17 +1,11 @@
+import { logError } from "@notra/ai/utils/server-log";
+
+import "@/workflows/runtime";
 import {
   getOnboardingAgentState,
   releaseOnboardingAgentReservation,
-  sendOnboardingSlackInvite,
   startOnboardingAgentSession,
 } from "@/lib/onboarding-agent";
-
-export async function sendOnboardingSlackInviteStep(input: {
-  email: string;
-  organizationName: string;
-}): Promise<{ invited: boolean }> {
-  "use step";
-  return await sendOnboardingSlackInvite(input);
-}
 
 export async function startOnboardingAgentSessionStep(input: {
   domain: string;
@@ -30,9 +24,9 @@ export async function getOnboardingAgentStateStep(input: {
   "use step";
   const state = await getOnboardingAgentState(input.organizationId);
   if (!state.ran && input.poll === input.softLimitPolls) {
-    console.error(
-      `[Onboarding Agent] Run for organization ${input.organizationId} exceeded the soft time limit`
-    );
+    logError("[Onboarding Agent] Run exceeded the soft time limit", undefined, {
+      organizationId: input.organizationId,
+    });
   }
   return state;
 }

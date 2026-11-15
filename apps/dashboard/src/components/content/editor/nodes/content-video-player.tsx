@@ -1,5 +1,6 @@
 "use client";
 
+import { Slider as SliderPrimitive } from "@base-ui/react/slider";
 import {
   FullScreenIcon,
   MinimizeScreenIcon,
@@ -9,10 +10,12 @@ import {
   VolumeOffIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
+import { cn } from "@/lib/utils";
+import type { ContentVideoPlayerProps } from "@/types/content/video-player";
 
 function formatClock(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) {
@@ -24,7 +27,10 @@ function formatClock(seconds: number) {
   return `${minutes}:${rest.toString().padStart(2, "0")}`;
 }
 
-export function ContentVideoPlayer({ src }: { src: string }) {
+export function ContentVideoPlayer({
+  src,
+  videoClassName,
+}: ContentVideoPlayerProps) {
   const t = useTranslations("content.editor.video");
   const tCommon = useTranslations("common");
   const frameRef = useRef<HTMLDivElement>(null);
@@ -76,9 +82,8 @@ export function ContentVideoPlayer({ src }: { src: string }) {
     frame.requestFullscreen().catch(() => undefined);
   }
 
-  function seek(value: string) {
+  function seek(next: number) {
     const video = videoRef.current;
-    const next = Number(value);
     if (!video || !Number.isFinite(next)) {
       return;
     }
@@ -103,9 +108,11 @@ export function ContentVideoPlayer({ src }: { src: string }) {
         {/* oxlint-disable-next-line jsx-a11y/media-has-caption -- uploads do not include a caption file */}
         <video
           aria-label={tCommon("labels.video")}
-          className={
-            fullscreen ? "h-full w-full object-contain" : "max-h-128 w-full"
-          }
+          className={cn(
+            fullscreen
+              ? "h-full w-full object-contain"
+              : ["max-h-128 w-full", videoClassName]
+          )}
           onDurationChange={(event) =>
             setDuration(event.currentTarget.duration)
           }
@@ -118,14 +125,18 @@ export function ContentVideoPlayer({ src }: { src: string }) {
           ref={videoRef}
           src={src}
         />
-        <div
-          aria-hidden
-          className="absolute inset-0 flex items-center justify-center"
+        <button
+          aria-label={playing ? t("pause") : t("play")}
+          className="focus-visible:outline-ring absolute inset-0 flex cursor-pointer items-center justify-center focus-visible:outline-2 focus-visible:-outline-offset-2"
           onClick={togglePlay}
           onMouseDown={(event) => event.preventDefault()}
+          type="button"
         >
           {playing ? null : (
-            <span className="bg-background/95 text-foreground ring-foreground/10 flex size-12 items-center justify-center rounded-full ring-1">
+            <span
+              aria-hidden
+              className="bg-background/95 text-foreground ring-foreground/10 flex size-12 items-center justify-center rounded-full ring-1"
+            >
               <HugeiconsIcon
                 className="ml-0.5 size-5"
                 icon={PlayIcon}
@@ -133,7 +144,7 @@ export function ContentVideoPlayer({ src }: { src: string }) {
               />
             </span>
           )}
-        </div>
+        </button>
       </div>
       <div className="border-border bg-background flex items-center gap-1.5 border-t px-2 py-1.5">
         <Button
@@ -155,20 +166,29 @@ export function ContentVideoPlayer({ src }: { src: string }) {
           <span className="px-1">/</span>
           {formatClock(duration)}
         </span>
-        <input
-          aria-label={t("seek")}
-          aria-valuemax={Number.isFinite(duration) ? duration : 0}
-          aria-valuemin={0}
-          aria-valuenow={current}
-          className="accent-foreground h-1 min-w-0 flex-1 cursor-pointer"
-          max={Number.isFinite(duration) ? duration : 0}
+        <SliderPrimitive.Root
+          className="min-w-0 flex-1"
+          disabled={!Number.isFinite(duration) || duration <= 0}
+          max={Number.isFinite(duration) && duration > 0 ? duration : 1}
           min={0}
-          onChange={(event) => seek(event.target.value)}
-          onMouseDown={(event) => event.stopPropagation()}
-          step="0.1"
-          type="range"
+          onValueChange={(next) => seek(next)}
+          step={0.1}
+          thumbAlignment="edge"
           value={Number.isFinite(current) ? current : 0}
-        />
+        >
+          <SliderPrimitive.Control className="group/seek flex h-6 w-full cursor-pointer touch-none items-center select-none data-[disabled]:cursor-not-allowed">
+            <SliderPrimitive.Track className="bg-muted relative h-1 w-full rounded-full">
+              <SliderPrimitive.Indicator className="bg-foreground rounded-full" />
+              <SliderPrimitive.Thumb
+                aria-label={t("seek")}
+                className="bg-foreground focus-visible:ring-ring/50 size-3 rounded-full opacity-0 transition-opacity outline-none group-hover/seek:opacity-100 focus-visible:opacity-100 focus-visible:ring-4 data-[dragging]:opacity-100"
+                getAriaValueText={() =>
+                  `${formatClock(current)} / ${formatClock(duration)}`
+                }
+              />
+            </SliderPrimitive.Track>
+          </SliderPrimitive.Control>
+        </SliderPrimitive.Root>
         <Button
           aria-label={muted ? t("unmute") : t("mute")}
           aria-pressed={muted}

@@ -103,9 +103,6 @@ export function createStandaloneChatTransport({
       }
 
       const streamHeaders = new Headers(init?.headers);
-      // Pin the generation the trigger just started. Its id is the server's
-      // stream id, not the user message id: a mismatch subscribes to a
-      // channel that never receives chunks and the request hangs.
       if (streamId) {
         streamHeaders.set(CHAT_STREAM_ID_HEADER, encodeChatStreamId(streamId));
       }

@@ -1,18 +1,22 @@
 import type {
   ChatAttachment,
+  ChatInputHandle,
   ChatModel,
   ContextItem,
   TextSelection,
+  ThinkingLevel,
 } from "@notra/ai/types/chat";
+import type { Ref } from "react";
 
 import type { QueuedMessage } from "@/components/chat/chat-queue";
+import type { ChatPostMention } from "@/types/chat-posts";
 import type { PendingChatUpload } from "@/types/hooks/chat-composer-attachments";
 import type { GitHubRepository } from "@/types/integrations";
 import type { SkillSlashOption } from "@/types/skills/slash";
 
 export type ChatModelProvider = "anthropic" | "openai" | "auto";
 
-export type ChatModelDescriptionKey =
+type ChatModelDescriptionKey =
   | "auto"
   | "latestOpus"
   | "everyday"
@@ -24,7 +28,7 @@ export type ChatModelDescriptionKey =
   | "previousSonnet"
   | "previousOpenai";
 
-export interface ChatModelPricing {
+interface ChatModelPricing {
   input: string;
   output: string;
 }
@@ -38,7 +42,18 @@ export interface ChatModelOption {
   beta?: boolean;
 }
 
+export type ContentChatInputHandle = Pick<ChatInputHandle, "setAttachments"> & {
+  /** The content page mounts a floating and a panel composer; only one shows. */
+  isVisible: () => boolean;
+};
+
+export interface ChatInputEditingTarget {
+  title: string;
+  description: string;
+}
+
 export interface ChatInputProps {
+  ref?: Ref<ContentChatInputHandle>;
   onSend?: (value: string, attachments: ChatAttachment[]) => void;
   onStop?: () => void;
   isLoading?: boolean;
@@ -56,10 +71,21 @@ export interface ChatInputProps {
   onClearError?: () => void;
   connectedTop?: boolean;
   placeholder?: string;
+  editingTarget?: ChatInputEditingTarget;
   queuedMessages?: QueuedMessage[];
   onEditQueued?: (message: QueuedMessage) => void;
   onRemoveQueued?: (id: string) => void;
   onSteerQueued?: (message: QueuedMessage) => void;
+  modelEffort?: Omit<ChatModelEffortMenuProps, "disabled">;
+}
+
+export interface ChatModelEffortMenuProps {
+  availableModels: readonly ChatModelOption[];
+  disabled?: boolean;
+  model: ChatModel;
+  onModelChange: (model: ChatModel) => void;
+  onThinkingLevelChange: (level: ThinkingLevel) => void;
+  thinkingLevel: ThinkingLevel;
 }
 
 export type EnabledRepo = GitHubRepository & { integrationId: string };
@@ -78,7 +104,7 @@ export interface ChatInputContextRowProps {
   onClearSelection?: () => void;
 }
 
-export type ChatContextOptionKind = "github" | "linear" | "mcp";
+type ChatContextOptionKind = "github" | "linear" | "mcp";
 
 export interface ChatContextOption {
   id: string;
@@ -90,6 +116,16 @@ export interface ChatContextOption {
   logoLightUrl?: string | null;
   logoDarkUrl?: string | null;
 }
+
+interface ChatPostMentionOption {
+  id: string;
+  kind: "post";
+  label: string;
+  searchText: string;
+  post: ChatPostMention;
+}
+
+export type ChatMentionOption = ChatContextOption | ChatPostMentionOption;
 
 export interface ChatInputContextPickerProps {
   contextOptions: ChatContextOption[];
@@ -105,6 +141,7 @@ export interface ChatInputContextPickerProps {
 export interface ChatInputComposerNudgeProps {
   attachments: ChatAttachment[];
   context: ContextItem[];
+  editingTarget?: ChatInputEditingTarget;
   hasAttachmentChips: boolean;
   hasContextChips: boolean;
   onClearSelection?: () => void;
@@ -141,4 +178,10 @@ export interface ChatContextSuggestedIntegration {
 export interface ChatContextConnectSuggestionsProps {
   organizationSlug: string;
   onSelect: () => void;
+}
+
+export interface ChatFileAttachmentProps {
+  url: string;
+  filename?: string;
+  mediaType?: string;
 }

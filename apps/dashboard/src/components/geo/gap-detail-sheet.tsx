@@ -8,8 +8,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@notra/ui/components/ui/sheet";
-import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { useTranslations } from "use-intl";
 
 import { GapAnswerPanel } from "@/components/geo/gap-answer-panel";
 import type { GeoGapDetailSheetProps } from "@/types/components/geo-gaps";
@@ -22,8 +22,6 @@ export function GapDetailSheet({
   actions,
   onOpenChange,
 }: GeoGapDetailSheetProps) {
-  // Keep the last gap rendered while the sheet animates out, e.g. after an
-  // ignored gap disappears from the list.
   const t = useTranslations("geo.gapDetailSheet");
   const [retained, setRetained] = useState(prompt);
   if (prompt && prompt !== retained) {

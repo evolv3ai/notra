@@ -38,10 +38,11 @@ import type {
 import { geoConversationRules } from "../utils/conversation-generation-prompt";
 import { geoDiscoveryCacheKey } from "../utils/geo-discovery-cache";
 import { trackedGeoLanguages } from "../utils/geo-language-rows";
+import { logGeoFailure } from "../utils/geo-log";
 import { geoEnginesForAudience } from "../utils/geo-model-catalog";
 import { readGeoCache, writeGeoCache } from "./cache";
 import { competitorKey, normalizeCompetitorDomain } from "./domain";
-import { geoSkip } from "./effect";
+import { geoDb, geoSkip } from "./effect";
 import { GeoDiscoveryError } from "./errors";
 import { invalidateGeoIngestHostsCache } from "./ingest-hosts-cache";
 import { toGeoProject } from "./mappers";
@@ -58,9 +59,7 @@ import {
   normalizeGeneratedConversations,
 } from "./sequence-generation";
 import { buildBrandTerms, promptMentionsBrand } from "./suggestion-keywords";
-
-const MIN_PROMPT_LENGTH = GEO_PROMPT_MIN_LENGTH;
-const MAX_PROMPT_LENGTH = GEO_PROMPT_MAX_LENGTH;
+import { geoTransaction } from "./transaction";
 
 function buildDiscoveryPrompt(
   url: string,
@@ -88,15 +87,11 @@ Write questions someone would actually type into ChatGPT before finding this com
 - Stay at this product's level. A provider-agnostic email library can answer questions about switching or using multiple providers, not which provider to buy, how to fix deliverability or how to schedule sends. A social SDK is not a post scheduler. If this product would not be a direct answer, replace the question.
 - Cover different jobs. No more than two questions about the same problem; changing the provider, role or opener does not make a new question. Mix recommendations with practical questions and tradeoffs.
 - Never name this company, its products, aliases or domain in a prompt. Do not copy its wording. Mention a direct competitor only when a buyer would naturally compare it.
-- Write every prompt in ${language}, even when the website uses another language. Do not invent claims about prices, legal deadlines, features or release dates. Each prompt must be ${MIN_PROMPT_LENGTH} to ${MAX_PROMPT_LENGTH} characters; do not append "${year}".
+- Write every prompt in ${language}, even when the website uses another language. Do not invent claims about prices, legal deadlines, features or release dates. Each prompt must be ${GEO_PROMPT_MIN_LENGTH} to ${GEO_PROMPT_MAX_LENGTH} characters; do not append "${year}".
 
 Give each question a useful article title in ${language}, under ${GEO_GAP_TITLE_MAX_LENGTH} characters. Use natural capitalization for that language. Only ranking or comparison titles may include "${year}".
 
 ${geoConversationRules("the company", language)}`;
-}
-
-function normalizeKey(value: string): string {
-  return value.trim().toLowerCase();
 }
 
 function unionValues(
@@ -108,7 +103,7 @@ function unionValues(
   const merged: string[] = [];
   for (const value of [...existing, ...extracted]) {
     const trimmed = value.trim();
-    const key = normalizeKey(trimmed);
+    const key = competitorKey(trimmed);
     if (!trimmed || seen.has(key) || merged.length >= limit) {
       continue;
     }
@@ -135,7 +130,7 @@ function buildCompetitorSeeds(
   }));
 }
 
-export const prepareGeoWebsiteGeneration = Effect.fn(
+const prepareGeoWebsiteGeneration = Effect.fn(
   "geo.generateFromWebsite.prepare"
 )(function* (
   discovery: GeoWebsiteDiscovery,
@@ -158,8 +153,8 @@ export const prepareGeoWebsiteGeneration = Effect.fn(
     const prompt = entry.prompt.trim();
     const title = entry.title.trim().slice(0, GEO_GAP_TITLE_MAX_LENGTH);
     if (
-      prompt.length < MIN_PROMPT_LENGTH ||
-      prompt.length > MAX_PROMPT_LENGTH ||
+      prompt.length < GEO_PROMPT_MIN_LENGTH ||
+      prompt.length > GEO_PROMPT_MAX_LENGTH ||
       promptMentionsBrand(prompt, brandTerms)
     ) {
       continue;
@@ -293,7 +288,6 @@ const persistGeoWebsiteGeneration = Effect.fn(
           companyName,
           aliases,
           competitors: [],
-          // Only a new row is seeded; an existing selection is left alone.
           engines: seedEngines,
           languages: seedLanguages ? [...seedLanguages] : null,
           promptLanguage: seedLanguages?.at(0) ?? null,
@@ -314,8 +308,6 @@ const persistGeoWebsiteGeneration = Effect.fn(
     tx,
     organizationId,
     projectId,
-    // Discovery only tops a project up to its own limit; competitors that
-    // are already tracked (e.g. a CSV import) are never dropped.
     (current) =>
       buildCompetitorSeeds(
         unionValues(
@@ -376,13 +368,6 @@ const startGeoScanAfterWebsiteGeneration = Effect.fn(
     return;
   }
 
-  // Take the same atomic claim every other trigger takes, rather than
-  // stamping a start blindly. The stamp is what the dashboard reads as
-  // "Scanning…", and writing it without owning the slot both lied about a
-  // scan that a concurrent trigger is already running and overwrote the
-  // token that run needs to release it. Losing the claim means a scan is
-  // already in flight for this project — its results are what onboarding
-  // is waiting for anyway, so start nothing.
   const claim = yield* claimGeoScanRun(projectId).pipe(
     geoSkip("scan claim failed")
   );
@@ -393,9 +378,11 @@ const startGeoScanAfterWebsiteGeneration = Effect.fn(
       claim.claimedAt
     ).pipe(
       Effect.catch((error) => {
-        console.error(
-          "[GEO] Failed to start scan after website generate:",
-          error
+        logGeoFailure(
+          "geo.discover.scan_start_failed",
+          "Failed to start scan after website generate",
+          error,
+          { projectId }
         );
         return Effect.void;
       })
@@ -419,8 +406,6 @@ const loadExistingSettings = (projectId: string) =>
 export const generateGeoFromWebsite = Effect.fn("geo.generateFromWebsite")(
   function* (scopeInput: GeoScopeInput, url: string) {
     const organizationId = scopeInput.organizationId;
-    // The project `ensureGeoProject` settles on (the oldest when none is
-    // given) decides the prompt language, so resolve it before discovery.
     const scope = yield* resolveGeoScope(scopeInput).pipe(
       Effect.mapError(
         (cause) =>
@@ -478,32 +463,29 @@ export const generateGeoFromWebsite = Effect.fn("geo.generateFromWebsite")(
 
     const seedEngines = yield* resolveSeedEngines(organizationId, discovery);
 
-    const summary = yield* Effect.tryPromise({
-      try: () =>
-        db.transaction((tx) =>
-          Effect.runPromise(
-            persistGeoWebsiteGeneration(tx, {
-              organizationId,
-              projectId,
-              companyName,
-              aliases,
-              entries,
-              conversations,
-              discoveredCompetitors: discovery.competitors,
-              seedEngines,
-              seedLanguages: null,
-            })
-          )
-        ),
-      catch: (cause) =>
-        new GeoDiscoveryError({
-          message: "Failed to save GEO tracking",
-          cause,
-        }),
-    });
+    const summary = yield* geoTransaction("save GEO tracking failed", (tx) =>
+      persistGeoWebsiteGeneration(tx, {
+        organizationId,
+        projectId,
+        companyName,
+        aliases,
+        entries,
+        conversations,
+        discoveredCompetitors: discovery.competitors,
+        seedEngines,
+        seedLanguages: null,
+      })
+    ).pipe(
+      Effect.catchTag("GeoDatabaseError", (cause) =>
+        Effect.fail(
+          new GeoDiscoveryError({
+            message: "Failed to save GEO tracking",
+            cause,
+          })
+        )
+      )
+    );
 
-    // Newly created settings default to enabled; an existing disabled row is
-    // left alone so we never stamp a scan start that the scan will skip.
     yield* startGeoScanAfterWebsiteGeneration(
       organizationId,
       projectId,
@@ -521,6 +503,7 @@ export const createGeoProjectFromWebsite = Effect.fn(
   name: string,
   brandSettingsId: string,
   url: string,
+  scanEnabled: boolean,
   languages?: readonly string[]
 ) {
   const seedLanguages = languages?.length
@@ -536,10 +519,10 @@ export const createGeoProjectFromWebsite = Effect.fn(
     yield* prepareGeoWebsiteGeneration(discovery);
   const seedEngines = yield* resolveSeedEngines(organizationId, discovery);
 
-  const project = yield* Effect.tryPromise({
-    try: () =>
-      db.transaction(async (tx) => {
-        const rows = await tx
+  const project = yield* geoTransaction("project create failed", (tx) =>
+    Effect.gen(function* () {
+      const rows = yield* geoDb("project insert failed", () =>
+        tx
           .insert(projects)
           .values({
             id: crypto.randomUUID(),
@@ -547,37 +530,49 @@ export const createGeoProjectFromWebsite = Effect.fn(
             name: name.trim(),
             brandSettingsId,
           })
-          .returning();
-        const row = rows.at(0);
-        if (!row) {
-          throw new Error("Project insert returned no row");
-        }
-
-        await Effect.runPromise(
-          persistGeoWebsiteGeneration(tx, {
-            organizationId,
-            projectId: row.id,
-            companyName,
-            aliases,
-            entries,
-            conversations,
-            discoveredCompetitors: discovery.competitors,
-            seedEngines,
-            seedLanguages,
+          .returning()
+      );
+      const row = rows.at(0);
+      if (!row) {
+        return yield* Effect.fail(
+          new GeoDiscoveryError({
+            message: "Failed to create and configure the project",
+            cause: new Error("Project insert returned no row"),
           })
         );
-        return toGeoProject(row);
-      }),
-    catch: (cause) =>
-      new GeoDiscoveryError({
-        message: "Failed to create and configure the project",
-        cause,
-      }),
-  });
+      }
+
+      yield* persistGeoWebsiteGeneration(tx, {
+        organizationId,
+        projectId: row.id,
+        companyName,
+        aliases,
+        entries,
+        conversations,
+        discoveredCompetitors: discovery.competitors,
+        seedEngines,
+        seedLanguages,
+      });
+      return toGeoProject(row);
+    })
+  ).pipe(
+    Effect.catchTag("GeoDatabaseError", (cause) =>
+      Effect.fail(
+        new GeoDiscoveryError({
+          message: "Failed to create and configure the project",
+          cause,
+        })
+      )
+    )
+  );
 
   yield* Effect.promise(() =>
     invalidateGeoIngestHostsCache(organizationId, project.id)
   );
-  yield* startGeoScanAfterWebsiteGeneration(organizationId, project.id, true);
+  yield* startGeoScanAfterWebsiteGeneration(
+    organizationId,
+    project.id,
+    scanEnabled
+  );
   return project;
 });

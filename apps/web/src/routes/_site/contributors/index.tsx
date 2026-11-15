@@ -1,5 +1,4 @@
 import { CtaButton } from "@notra/ui/components/shared/cta-button";
-import { Github } from "@notra/ui/components/ui/svgs/github";
 import { Await, createFileRoute } from "@tanstack/react-router";
 import { Suspense } from "react";
 
@@ -13,14 +12,12 @@ import {
 } from "@/constants/contributors";
 import { getContributorsData } from "@/lib/contributors/functions";
 import type { Metadata } from "@/types/metadata";
-import { GITHUB_REPO_URL } from "@/utils/github";
 import { buildHead } from "@/utils/head";
 import { TWITTER_HANDLE, pageAlternates } from "@/utils/metadata";
 import { SITE_URL } from "@/utils/urls";
 
-const title = "Contributors & Community";
-const description =
-  "Meet the developers who build Notra. Explore open issues, pull requests, and join our community.";
+const title = "Contributors";
+const description = CONTRIBUTORS_HERO_SUBTITLE;
 const url = `${SITE_URL}/contributors`;
 
 const metadata: Metadata = {
@@ -38,7 +35,7 @@ const metadata: Metadata = {
         url: `${url}/opengraph-image`,
         width: 1200,
         height: 630,
-        alt: "Notra contributors and community",
+        alt: "Notra contributors",
         type: "image/png",
       },
     ],
@@ -91,16 +88,6 @@ function ContributorsPage() {
         >
           Try Notra for free
         </CtaButton>
-        <CtaButton
-          nativeButton={false}
-          render={
-            <a href={GITHUB_REPO_URL} rel="noopener noreferrer" target="_blank">
-              <Github className="size-4" />
-              View on GitHub
-            </a>
-          }
-          variant="light"
-        />
       </MarketingHeroWash>
 
       <Suspense fallback={<ContributorsPageSkeleton />}>

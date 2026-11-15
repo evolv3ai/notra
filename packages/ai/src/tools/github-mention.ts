@@ -8,19 +8,22 @@ import {
   githubMentionDirectorySchema,
   githubMentionFileReadSchema,
   githubMentionMoveSchema,
+  githubMentionOgImageSchema,
 } from "@notra/ai/schemas/github-mention";
 import { getSkillByName, listAvailableSkills } from "@notra/ai/tools/skills";
 import type { PublicationRepairScheduler } from "@notra/ai/types/content-publication";
 import type {
   GitHubMentionContext,
-  GitHubMentionFileChange,
   GitHubMentionOctokit,
   GitHubMentionToolState,
 } from "@notra/ai/types/github-mention";
 import { findOpenContentPublicationForPost } from "@notra/ai/utils/content-publication";
 import { reviewGitHubMentionChange } from "@notra/ai/utils/github-mention-change-review";
 import { moveGitHubMentionContent } from "@notra/ai/utils/github-mention-move";
-import { partitionGitHubMentionPaths } from "@notra/ai/utils/github-mention-path-policy";
+import {
+  getGitHubMentionImagePathBlockReason,
+  partitionGitHubMentionPaths,
+} from "@notra/ai/utils/github-mention-path-policy";
 import { isGitHubPermissionError } from "@notra/ai/utils/github-mention-permissions";
 import { carryOverImageTargets } from "@notra/ai/utils/github-mention-published-file";
 import { runGitHubMentionSandbox } from "@notra/ai/utils/github-mention-sandbox";
@@ -38,8 +41,10 @@ import {
   getGitHubPullRequestFilePatch,
   getPullRequestHead,
   getRepositoryFileContents,
+  githubStatus,
 } from "@notra/ai/utils/github-pr-commit";
-import { updatePostRecord } from "@notra/ai/utils/post-service";
+import { generateBrandOgImage } from "@notra/ai/utils/og-image";
+import { updateAiPostRecord as updatePostRecord } from "@notra/ai/utils/post-service";
 import {
   syncPublishedPostAfterCommit,
   updatePublishedContentAndCommit,
@@ -51,29 +56,14 @@ import { and, eq } from "drizzle-orm";
 // biome-ignore lint/performance/noNamespaceImport: Zod recommended way to import
 import * as z from "zod";
 
-async function recordWrite(
-  params: {
-    octokit: GitHubMentionOctokit;
-    context: GitHubMentionContext;
-    state: GitHubMentionToolState;
-  },
+function markCommitted(
+  state: GitHubMentionToolState,
   commitSha: string,
-  target: { branch: string; pullRequestUrl: string }
+  target: { pullRequestUrl: string }
 ) {
-  // The commit already landed, so mark it before anything else can throw: a
-  // run that wrote must never look retryable.
-  params.state.committed = true;
-  params.state.commitSha = commitSha;
-  if (params.context.destination.mode === "new_pull_request") {
-    params.state.pullRequestUrl = null;
-  }
-  const followUp = await ensureFollowUpPullRequest({
-    octokit: params.octokit,
-    context: params.context,
-    state: params.state,
-    branch: target.branch,
-  });
-  params.state.pullRequestUrl = followUp?.htmlUrl ?? target.pullRequestUrl;
+  state.committed = true;
+  state.commitSha = commitSha;
+  state.pullRequestUrl = target.pullRequestUrl;
 }
 
 /**
@@ -90,10 +80,6 @@ function createWriteQueue() {
   };
 }
 
-/**
- * A missing App permission fails the same way on every attempt. Instead of
- * letting the model retry, the run is flagged and ends with a fixed reply.
- */
 function stopOnPermissionError(
   tools: Record<string, Tool>,
   state: GitHubMentionToolState
@@ -129,6 +115,8 @@ export function buildGitHubMentionTools(params: {
   octokit: GitHubMentionOctokit;
   context: GitHubMentionContext;
   state: GitHubMentionToolState;
+  /** Brand identity of the post's voice; its OG template renders images. */
+  brandIdentityId?: string;
   scheduleRepair?: PublicationRepairScheduler;
 }): Record<string, Tool> {
   const { octokit, context, state } = params;
@@ -187,8 +175,23 @@ export function buildGitHubMentionTools(params: {
   }
 
   const inWriteOrder = createWriteQueue();
-  // Cache only within this agent run. Including the commit keeps reads fresh
-  // after a write, while the entry cap bounds memory when browsing many files.
+  const recordWrite = async (
+    commitSha: string,
+    target: { branch: string; pullRequestUrl: string }
+  ) => {
+    state.committed = true;
+    state.commitSha = commitSha;
+    if (context.destination.mode === "new_pull_request") {
+      state.pullRequestUrl = null;
+    }
+    const followUp = await ensureFollowUpPullRequest({
+      octokit,
+      context,
+      state,
+      branch: target.branch,
+    });
+    state.pullRequestUrl = followUp?.htmlUrl ?? target.pullRequestUrl;
+  };
   const fileReads = new Map<string, Promise<string>>();
 
   const tools: Record<string, Tool> = {
@@ -269,21 +272,13 @@ export function buildGitHubMentionTools(params: {
             context,
             target,
             scheduleRepair: params.scheduleRepair,
-            onCommitted: (sha) => {
-              state.committed = true;
-              state.commitSha = sha;
-              state.pullRequestUrl = target.pullRequestUrl;
-            },
+            onCommitted: (sha) => markCommitted(state, sha, target),
           });
           if (result.commitSha) {
             state.proposals = state.proposals.filter(
               (proposal) => proposal.path !== input.fromPath
             );
-            await recordWrite(
-              { octokit, context, state },
-              result.commitSha,
-              target
-            );
+            await recordWrite(result.commitSha, target);
           }
           return { ...result, pullRequestUrl: state.pullRequestUrl };
         }),
@@ -557,11 +552,7 @@ export function buildGitHubMentionTools(params: {
             path: publication.path,
             publicationId: publication.id,
             scheduleRepair: params.scheduleRepair,
-            onCommitted: (sha) => {
-              state.committed = true;
-              state.commitSha = sha;
-              state.pullRequestUrl = target.pullRequestUrl;
-            },
+            onCommitted: (sha) => markCommitted(state, sha, target),
             recordPublicationHead:
               context.destination.mode === "same_pull_request",
             commitMessage:
@@ -575,11 +566,7 @@ export function buildGitHubMentionTools(params: {
               publication.title = title;
             }
           }
-          await recordWrite(
-            { octokit, context, state },
-            result.commitSha,
-            target
-          );
+          await recordWrite(result.commitSha, target);
           return {
             postId: publication.postId,
             path: publication.path,
@@ -639,11 +626,9 @@ export function buildGitHubMentionTools(params: {
             branch: target.branch,
             expectedHeadOid: target.expectedHeadOid,
             headline,
-            files: files as GitHubMentionFileChange[],
+            files,
           });
-          state.committed = true;
-          state.commitSha = commitSha;
-          state.pullRequestUrl = target.pullRequestUrl;
+          markCommitted(state, commitSha, target);
           const publicationSync = await syncPublishedPostAfterCommit({
             octokit,
             organizationId: context.organizationId,
@@ -664,13 +649,100 @@ export function buildGitHubMentionTools(params: {
             context.publication.headSha = commitSha;
             context.publication.markdown = publicationSync.markdown;
           }
-          await recordWrite({ octokit, context, state }, commitSha, target);
+          await recordWrite(commitSha, target);
           return {
             commitSha,
             pullRequestUrl: state.pullRequestUrl,
             publicationSync,
           };
         }),
+    }),
+    createOgImage: tool({
+      description:
+        "Renders a 1200x630 on-brand Open Graph image (PNG) for a title with the organization's brand template and commits it onto the mention pull request at imagePath. Only adds new files: an existing path is never replaced. Takes seconds when the brand template exists and up to a few minutes the first time. It only adds the image file: reference it from the post's frontmatter separately with the content edit tools.",
+      inputSchema: githubMentionOgImageSchema,
+      execute: async ({ title, imagePath, headline }, { abortSignal }) => {
+        const blockReason = getGitHubMentionImagePathBlockReason(imagePath);
+        if (blockReason) {
+          return { error: `Nothing was committed: ${blockReason}.` };
+        }
+        let image: Awaited<ReturnType<typeof generateBrandOgImage>>;
+        try {
+          image = await generateBrandOgImage({
+            organizationId: context.organizationId,
+            brandIdentityId: params.brandIdentityId,
+            title,
+            onUsage: state.onUsage,
+            signal: abortSignal,
+          });
+        } catch (error) {
+          if (
+            error instanceof Error &&
+            error.message === "Brand identity not found in this organization"
+          ) {
+            return {
+              error:
+                "No brand identity is set up in Notra, so there is no brand template to render the image with. Tell the commenter to add one in Notra first.",
+            };
+          }
+          throw error;
+        }
+        return await inWriteOrder(async () => {
+          const target = await resolveGitHubMentionWriteTarget({
+            octokit,
+            context,
+            state,
+          });
+          const existing = await octokit
+            .request("GET /repos/{owner}/{repo}/contents/{path}", {
+              owner: context.owner,
+              repo: context.repo,
+              path: imagePath,
+              ref: target.expectedHeadOid,
+            })
+            .catch((error: unknown) => {
+              if (githubStatus(error) === 404) {
+                return null;
+              }
+              throw error;
+            });
+          if (existing !== null) {
+            return {
+              error:
+                "A file already exists at imagePath. Nothing was committed. Pick a new path, or ask the commenter whether to replace it; never overwrite it with another write tool.",
+              conflictingPath: imagePath,
+            };
+          }
+          const commitSha = await commitFilesToPullRequest({
+            octokit,
+            owner: context.owner,
+            repo: context.repo,
+            branch: target.branch,
+            expectedHeadOid: target.expectedHeadOid,
+            headline,
+            files: [
+              {
+                path: imagePath,
+                contents: image.pngBase64,
+                encoding: "base64",
+              },
+            ],
+          });
+          markCommitted(state, commitSha, target);
+          await recordWrite(commitSha, target);
+          const encodedPath = imagePath
+            .split("/")
+            .map(encodeURIComponent)
+            .join("/");
+          return {
+            path: imagePath,
+            commitSha,
+            previewUrl: `https://github.com/${context.owner}/${context.repo}/blob/${commitSha}/${encodedPath}?raw=true`,
+            warnings: image.warnings,
+            pullRequestUrl: state.pullRequestUrl,
+          };
+        });
+      },
     }),
     runRepoSandbox: tool({
       description:
@@ -695,21 +767,13 @@ export function buildGitHubMentionTools(params: {
             expectedHeadOid: target.expectedHeadOid,
             onUsage: state.onUsage,
             scheduleRepair: params.scheduleRepair,
-            onCommitted: (sha) => {
-              state.committed = true;
-              state.commitSha = sha;
-              state.pullRequestUrl = target.pullRequestUrl;
-            },
+            onCommitted: (sha) => markCommitted(state, sha, target),
           });
           if (!result.available) {
             return { error: result.error };
           }
           if (result.commitSha) {
-            await recordWrite(
-              { octokit, context, state },
-              result.commitSha,
-              target
-            );
+            await recordWrite(result.commitSha, target);
           }
           return result;
         }),

@@ -1,39 +1,46 @@
 "use client";
 
-import { Tooltip as BaseTooltip } from "@base-ui/react/tooltip";
 import {
-  ArrowRight01Icon,
+  Calendar03Icon,
   Cancel01Icon,
-  SparklesIcon,
+  Rocket01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
-import { BrailleLoader } from "@notra/ui/components/shared/braille-loader";
-import { TitleCard } from "@notra/ui/components/ui/title-card";
 import {
+  Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@notra/ui/components/ui/tooltip";
-import { useTranslations } from "next-intl";
-import { useRef, useState } from "react";
 import { toast } from "sonner";
+import { InstrumentSection } from "ui/card";
+import { useTranslations } from "use-intl";
 
-import { SuggestionDetailsSheet } from "@/components/automation/suggestion-details-sheet";
+import { AutomationCard } from "@/components/automation/automation-template-gallery";
 import { Button } from "@/components/button";
-import { EVE_ACCENT_COLOR } from "@/constants/onboarding-agent";
+import { AgentLoader } from "@/components/icons/agent-loader";
 import { trackEvent } from "@/lib/analytics/posthog-client";
 import {
   useDismissOnboardingSuggestion,
   useOnboardingAgentRun,
   useOnboardingSuggestions,
 } from "@/lib/hooks/use-onboarding";
-import type { OnboardingSuggestionsProps } from "@/types/components/onboarding-suggestions";
-import { getOnboardingSuggestionEvidence } from "@/utils/onboarding-suggestions";
+import type {
+  OnboardingSuggestionsProps,
+  SuggestionType,
+} from "@/types/components/onboarding-suggestions";
+
+const SUGGESTION_TYPES: readonly SuggestionType[] = [
+  "schedule_automation",
+  "event_automation",
+];
+
+const isAutomationSuggestion = (type: string): type is SuggestionType =>
+  (SUGGESTION_TYPES as readonly string[]).includes(type);
 
 export function OnboardingSuggestions({
   organizationId,
-  type,
   onCreate,
 }: OnboardingSuggestionsProps) {
   const t = useTranslations("automation.suggestions");
@@ -44,15 +51,12 @@ export function OnboardingSuggestions({
     agentRunning,
   });
   const dismissMutation = useDismissOnboardingSuggestion();
-  const [detailsOpen, setDetailsOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selectedIdRef = useRef<string | null>(null);
 
   const dismissPendingId = dismissMutation.isPending
     ? (dismissMutation.variables?.suggestionId ?? null)
     : null;
 
-  const dismissSuggestion = (suggestionId: string, onSuccess?: () => void) => {
+  const dismissSuggestion = (suggestionId: string, type: SuggestionType) => {
     dismissMutation.mutate(
       { organizationId, suggestionId },
       {
@@ -62,157 +66,85 @@ export function OnboardingSuggestions({
             suggestion_id: suggestionId,
             suggestion_kind: type,
           });
-          onSuccess?.();
         },
       }
     );
   };
 
-  const createFromSuggestion = (suggestionId: string) => {
+  const createFromSuggestion = (suggestionId: string, type: SuggestionType) => {
     trackEvent(POSTHOG_EVENTS.ONBOARDING_SUGGESTION_USED, {
       suggestion_id: suggestionId,
       suggestion_kind: type,
     });
-    onCreate(suggestionId);
+    onCreate(suggestionId, type);
   };
 
-  const matching = (suggestions ?? []).filter(
-    (suggestion) => suggestion.type === type
-  );
+  const matching = (suggestions ?? []).flatMap((suggestion) => {
+    const { type } = suggestion;
+    return isAutomationSuggestion(type) ? [{ ...suggestion, type }] : [];
+  });
 
   if (matching.length === 0) {
     return null;
   }
 
-  const selectedSuggestion = matching.find(
-    (suggestion) => suggestion.id === selectedId
-  );
-
   return (
     <TooltipProvider delay={400}>
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <HugeiconsIcon
-            className="text-muted-foreground size-4"
-            icon={SparklesIcon}
-          />
-          <h2 className="text-sm font-medium">
-            {tCommon("labels.suggestions")}
-          </h2>
-          {agentRunning && (
-            <BrailleLoader
-              ariaLabel={tCommon("states.loading")}
-              className="text-xs"
-            />
-          )}
-        </div>
+      <InstrumentSection
+        eyebrow={tCommon("labels.suggestions")}
+        readout={
+          <>
+            <span className="sr-only" role="status">
+              {agentRunning ? tCommon("states.loading") : ""}
+            </span>
+            {agentRunning ? (
+              <AgentLoader className="text-muted-foreground size-3.5" />
+            ) : null}
+          </>
+        }
+      >
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {matching.map((suggestion) => {
-            const evidence = getOnboardingSuggestionEvidence(suggestion.data);
-            const openDetails = () => {
-              selectedIdRef.current = suggestion.id;
-              setSelectedId(suggestion.id);
-              setDetailsOpen(true);
-            };
+            const isEvent = suggestion.type === "event_automation";
             return (
-              <TitleCard
-                accentColor={EVE_ACCENT_COLOR}
-                action={
-                  <div className="flex items-center gap-1.5">
-                    <Button
-                      onClick={() => createFromSuggestion(suggestion.id)}
-                      size="sm"
-                    >
-                      {tCommon("actions.create")}
-                    </Button>
-                    <BaseTooltip.Root>
-                      <TooltipTrigger
-                        render={
-                          <Button
-                            aria-label={t("dismissLabel", {
-                              title: suggestion.title,
-                            })}
-                            disabled={dismissPendingId === suggestion.id}
-                            onClick={() => dismissSuggestion(suggestion.id)}
-                            size="icon-sm"
-                            variant="ghost"
-                          />
-                        }
-                      >
-                        <HugeiconsIcon className="size-4" icon={Cancel01Icon} />
-                      </TooltipTrigger>
-                      <TooltipContent>{t("dismissTooltip")}</TooltipContent>
-                    </BaseTooltip.Root>
-                  </div>
-                }
-                className="h-full"
-                contentClassName="relative"
-                heading={
-                  <BaseTooltip.Root>
+              <AutomationCard
+                action="content"
+                corner={
+                  <Tooltip>
                     <TooltipTrigger
-                      render={<span className="block truncate" />}
+                      render={
+                        <Button
+                          aria-label={t("dismissLabel", {
+                            title: suggestion.title,
+                          })}
+                          disabled={dismissPendingId === suggestion.id}
+                          onClick={() =>
+                            dismissSuggestion(suggestion.id, suggestion.type)
+                          }
+                          size="icon-sm"
+                          variant="ghost"
+                        />
+                      }
                     >
-                      {suggestion.title}
+                      <HugeiconsIcon className="size-4" icon={Cancel01Icon} />
                     </TooltipTrigger>
-                    <TooltipContent>{suggestion.title}</TooltipContent>
-                  </BaseTooltip.Root>
+                    <TooltipContent>{t("dismissTooltip")}</TooltipContent>
+                  </Tooltip>
                 }
-                icon={<HugeiconsIcon icon={SparklesIcon} />}
+                description={suggestion.description}
+                icon={isEvent ? Rocket01Icon : Calendar03Icon}
                 key={suggestion.id}
-              >
-                <div className="space-y-1.5">
-                  {suggestion.description ? (
-                    <p className="text-muted-foreground line-clamp-3 text-sm">
-                      {suggestion.description}
-                    </p>
-                  ) : null}
-                  {evidence ? (
-                    <p className="text-muted-foreground/70 line-clamp-2 text-xs">
-                      {evidence}
-                    </p>
-                  ) : null}
-                  <button
-                    aria-label={t("viewDetails", { title: suggestion.title })}
-                    className="peer focus-visible:ring-ring absolute inset-0 cursor-pointer rounded-t-lg focus-visible:ring-2"
-                    onClick={openDetails}
-                    type="button"
-                  />
-                  <span className="from-background via-background/90 text-foreground duration-normal pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center gap-1.5 bg-gradient-to-t to-transparent pt-6 pb-2 text-sm font-medium opacity-0 transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100">
-                    {t("clickToExpand")}
-                    <HugeiconsIcon className="size-4" icon={ArrowRight01Icon} />
-                  </span>
-                </div>
-              </TitleCard>
+                onSelect={() =>
+                  createFromSuggestion(suggestion.id, suggestion.type)
+                }
+                title={suggestion.title}
+                tone={isEvent ? "success" : "info"}
+                trigger={isEvent ? "github" : "schedule"}
+              />
             );
           })}
         </div>
-      </div>
-
-      {selectedSuggestion ? (
-        <SuggestionDetailsSheet
-          dismissing={dismissPendingId === selectedSuggestion.id}
-          onCreate={() => {
-            setDetailsOpen(false);
-            createFromSuggestion(selectedSuggestion.id);
-          }}
-          onDismiss={() =>
-            dismissSuggestion(selectedSuggestion.id, () => {
-              if (selectedIdRef.current === selectedSuggestion.id) {
-                setDetailsOpen(false);
-              }
-            })
-          }
-          onOpenChange={setDetailsOpen}
-          open={detailsOpen}
-          suggestion={{
-            description: selectedSuggestion.description,
-            evidence: getOnboardingSuggestionEvidence(selectedSuggestion.data),
-            id: selectedSuggestion.id,
-            title: selectedSuggestion.title,
-            type: selectedSuggestion.type,
-          }}
-        />
-      ) : null}
+      </InstrumentSection>
     </TooltipProvider>
   );
 }

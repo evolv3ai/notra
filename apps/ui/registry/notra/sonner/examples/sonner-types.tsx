@@ -3,7 +3,8 @@
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Toaster } from "@/components/ui/sonner";
+
+import { Toaster } from "../../sonner/components/sonner";
 
 export default function SonnerTypesExample() {
   return (

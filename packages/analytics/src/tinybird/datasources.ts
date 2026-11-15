@@ -209,6 +209,7 @@ export const geoTrafficEvents = defineDatasource("geo_traffic_events", {
   schema: {
     organization_id: t.string(),
     project_id: t.string().lowCardinality(),
+    site_id: t.string().lowCardinality().default(""),
     captured_at: t.dateTime(),
     visitor_type: t.string().lowCardinality(),
     source: t.string().lowCardinality(),
@@ -232,6 +233,8 @@ export const geoTrafficEvents = defineDatasource("geo_traffic_events", {
     ttl: "captured_at + toIntervalDay(396)",
     settings: { ttl_only_drop_parts: 1 },
   }),
+  forwardQuery:
+    "SELECT organization_id, project_id, defaultValueOfTypeName('LowCardinality(String)') AS site_id, captured_at, visitor_type, source, agent, category, confidence, path, host, method, referer, ua, country, language, request_id, journey_id, wants_markdown",
 });
 
 export const geoTrafficDaily = defineDatasource("geo_traffic_daily", {
@@ -241,6 +244,7 @@ export const geoTrafficDaily = defineDatasource("geo_traffic_daily", {
     day: t.date(),
     organization_id: t.string(),
     project_id: t.string().lowCardinality(),
+    site_id: t.string().lowCardinality().default(""),
     visitor_type: t.string().lowCardinality(),
     source: t.string().lowCardinality(),
     visits_state: t.aggregateFunction("count"),
@@ -255,12 +259,15 @@ export const geoTrafficDaily = defineDatasource("geo_traffic_daily", {
     sortingKey: [
       "organization_id",
       "project_id",
+      "site_id",
       "visitor_type",
       "source",
       "day",
     ],
     partitionKey: "toYYYYMM(day)",
   }),
+  forwardQuery:
+    "SELECT day, organization_id, project_id, defaultValueOfTypeName('LowCardinality(String)') AS site_id, visitor_type, source, visits_state, markdown_visits_state, paths_state, last_seen_state, agent_state, category_state, confidence_state",
   jsonPaths: false,
 });
 
@@ -273,6 +280,7 @@ export const geoTrafficPagesByHostDaily = defineDatasource(
       day: t.date(),
       organization_id: t.string(),
       project_id: t.string().lowCardinality(),
+      site_id: t.string().lowCardinality().default(""),
       visitor_type: t.string().lowCardinality(),
       source: t.string().lowCardinality(),
       host: t.string(),
@@ -284,6 +292,7 @@ export const geoTrafficPagesByHostDaily = defineDatasource(
       sortingKey: [
         "organization_id",
         "project_id",
+        "site_id",
         "visitor_type",
         "source",
         "host",
@@ -292,9 +301,249 @@ export const geoTrafficPagesByHostDaily = defineDatasource(
       ],
       partitionKey: "toYYYYMM(day)",
     }),
+    forwardQuery:
+      "SELECT day, organization_id, project_id, defaultValueOfTypeName('LowCardinality(String)') AS site_id, visitor_type, source, host, path, visits_state, last_seen_state",
     jsonPaths: false,
   }
 );
+
+export const webPageViews = defineDatasource("web_page_views", {
+  description:
+    "Append-only log of human page views (Notra Sites and opted-in SDK projects); AI referrals are also recorded in geo_traffic_events",
+  schema: {
+    organization_id: t.string(),
+    project_id: t.string().lowCardinality(),
+    site_id: t.string().lowCardinality(),
+    captured_at: t.dateTime(),
+    host: t.string().lowCardinality(),
+    path: t.string(),
+    status: t.uint16(),
+    visitor_id: t.string(),
+    session_id: t.string(),
+    session_page_index: t.uint16(),
+    referrer_host: t.string(),
+    referrer_group: t.string().lowCardinality(),
+    referrer_source: t.string().lowCardinality(),
+    ai_product: t.string().lowCardinality(),
+    utm_source: t.string().lowCardinality(),
+    utm_medium: t.string().lowCardinality(),
+    utm_campaign: t.string(),
+    country: t.string().lowCardinality(),
+    device: t.string().lowCardinality(),
+    browser: t.string().lowCardinality(),
+    os: t.string().lowCardinality(),
+    request_id: t.string(),
+  },
+  engine: engine.mergeTree({
+    sortingKey: ["organization_id", "project_id", "host", "captured_at"],
+    partitionKey: "toYYYYMM(captured_at)",
+    ttl: "captured_at + toIntervalDay(90)",
+    settings: { ttl_only_drop_parts: 1 },
+  }),
+});
+
+export const webPageEngagement = defineDatasource("web_page_engagement", {
+  description:
+    "Time a Notra Sites page stayed visible, reported by the site script whenever the tab hides; one view can report several times, read the max per view_id",
+  schema: {
+    organization_id: t.string(),
+    project_id: t.string().lowCardinality(),
+    site_id: t.string().lowCardinality(),
+    captured_at: t.dateTime(),
+    host: t.string().lowCardinality(),
+    path: t.string(),
+    view_id: t.string(),
+    visible_ms: t.uint32(),
+    scroll_depth: t.uint8(),
+  },
+  engine: engine.mergeTree({
+    sortingKey: ["organization_id", "site_id", "captured_at"],
+    partitionKey: "toYYYYMM(captured_at)",
+    ttl: "captured_at + toIntervalDay(90)",
+    settings: { ttl_only_drop_parts: 1 },
+  }),
+});
+
+export const webPagesDaily = defineDatasource("web_pages_daily", {
+  description:
+    "Daily rollup of web_page_views per site, host, path and status; read with countMerge/uniqMerge/countIfMerge/uniqIfMerge",
+  schema: {
+    day: t.date(),
+    organization_id: t.string(),
+    project_id: t.string().lowCardinality(),
+    site_id: t.string().lowCardinality(),
+    host: t.string().lowCardinality(),
+    path: t.string(),
+    status: t.uint16(),
+    views_state: t.aggregateFunction("count"),
+    visitors_state: t.aggregateFunction("uniq", t.string()),
+    sessions_state: t.aggregateFunction("countIf", t.uint8()),
+    engaged_sessions_state: t.aggregateFunction("countIf", t.uint8()),
+    ai_visitors_state: t.aggregateFunction("uniqIf", t.string(), t.uint8()),
+  },
+  engine: engine.aggregatingMergeTree({
+    sortingKey: [
+      "organization_id",
+      "project_id",
+      "site_id",
+      "host",
+      "day",
+      "path",
+      "status",
+    ],
+    partitionKey: "toYYYYMM(day)",
+  }),
+  jsonPaths: false,
+});
+
+export const webSourcesDaily = defineDatasource("web_sources_daily", {
+  description:
+    "Daily rollup of session landings in web_page_views per referrer and campaign; read with countMerge/uniqMerge",
+  schema: {
+    day: t.date(),
+    organization_id: t.string(),
+    project_id: t.string().lowCardinality(),
+    site_id: t.string().lowCardinality(),
+    host: t.string().lowCardinality(),
+    referrer_group: t.string().lowCardinality(),
+    referrer_source: t.string().lowCardinality(),
+    ai_product: t.string().lowCardinality(),
+    utm_source: t.string().lowCardinality(),
+    utm_medium: t.string().lowCardinality(),
+    utm_campaign: t.string(),
+    sessions_state: t.aggregateFunction("count"),
+    visitors_state: t.aggregateFunction("uniq", t.string()),
+  },
+  engine: engine.aggregatingMergeTree({
+    sortingKey: [
+      "organization_id",
+      "project_id",
+      "site_id",
+      "host",
+      "day",
+      "referrer_group",
+      "referrer_source",
+      "ai_product",
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+    ],
+    partitionKey: "toYYYYMM(day)",
+  }),
+  jsonPaths: false,
+});
+
+export const webAudienceDaily = defineDatasource("web_audience_daily", {
+  description:
+    "Daily rollup of web_page_views visitors per country, device, browser and OS; read with countMerge/uniqMerge",
+  schema: {
+    day: t.date(),
+    organization_id: t.string(),
+    project_id: t.string().lowCardinality(),
+    site_id: t.string().lowCardinality(),
+    host: t.string().lowCardinality(),
+    country: t.string().lowCardinality(),
+    device: t.string().lowCardinality(),
+    browser: t.string().lowCardinality(),
+    os: t.string().lowCardinality(),
+    views_state: t.aggregateFunction("count"),
+    visitors_state: t.aggregateFunction("uniq", t.string()),
+  },
+  engine: engine.aggregatingMergeTree({
+    sortingKey: [
+      "organization_id",
+      "project_id",
+      "site_id",
+      "host",
+      "day",
+      "country",
+      "device",
+      "browser",
+      "os",
+    ],
+    partitionKey: "toYYYYMM(day)",
+  }),
+  jsonPaths: false,
+});
+
+export const mcpEvents = defineDatasource("mcp_events", {
+  description:
+    "Append-only log of JSON-RPC requests answered by customer MCP servers and of requests those servers send to clients (elicitation, sampling), captured by the geo SDK; arguments and responses only when the customer opts in, redacted by the SDK",
+  schema: {
+    organization_id: t.string(),
+    project_id: t.string().lowCardinality(),
+    captured_at: t.dateTime64(3),
+    sequence: t.uint32().default(0),
+    session_id: t.string(),
+    server_name: t.string().lowCardinality(),
+    server_version: t.string().lowCardinality(),
+    protocol_version: t.string().lowCardinality(),
+    client_name: t.string().lowCardinality(),
+    client_version: t.string().lowCardinality(),
+    method: t.string().lowCardinality(),
+    target: t.string(),
+    status: t.string().lowCardinality(),
+    error_code: t.int32(),
+    error_message: t.string(),
+    duration_ms: t.uint32(),
+    response_bytes: t.uint32(),
+    user_id: t.string(),
+    intent: t.string(),
+    model: t.string().lowCardinality(),
+    arguments: t.string(),
+    response: t.string(),
+    outcome: t.string().lowCardinality().default(""),
+    listed_tools: t.array(t.string()).jsonPath("$.listed_tools[:]"),
+    listed_descriptions: t
+      .array(t.string())
+      .jsonPath("$.listed_descriptions[:]"),
+    listed_ui_resources: t
+      .array(t.string())
+      .jsonPath("$.listed_ui_resources[:]"),
+  },
+  engine: engine.mergeTree({
+    sortingKey: ["organization_id", "project_id", "captured_at"],
+    partitionKey: "toYYYYMM(captured_at)",
+    ttl: "toDateTime(captured_at) + toIntervalDay(90)",
+    settings: { ttl_only_drop_parts: 1 },
+  }),
+});
+
+export const mcpDaily = defineDatasource("mcp_daily", {
+  description:
+    "Daily rollup of mcp_events per project, method, target, client and status; read with countMerge/uniqMerge/uniqIfMerge/sumMerge/quantilesTDigestMerge(0.5, 0.95)",
+  schema: {
+    day: t.date(),
+    organization_id: t.string(),
+    project_id: t.string().lowCardinality(),
+    method: t.string().lowCardinality(),
+    status: t.string().lowCardinality(),
+    client_name: t.string().lowCardinality(),
+    target: t.string(),
+    requests_state: t.aggregateFunction("count"),
+    sessions_state: t.aggregateFunction("uniq", t.string()),
+    users_state: t.aggregateFunction("uniqIf", t.string(), t.uint8()),
+    response_bytes_state: t.aggregateFunction("sum", t.uint32()),
+    duration_state: t.aggregateFunction(
+      "quantilesTDigest(0.5, 0.95)",
+      t.uint32()
+    ),
+    last_seen_state: t.aggregateFunction("max", t.dateTime()),
+  },
+  engine: engine.aggregatingMergeTree({
+    sortingKey: [
+      "organization_id",
+      "project_id",
+      "method",
+      "status",
+      "client_name",
+      "day",
+      "target",
+    ],
+    partitionKey: "toYYYYMM(day)",
+  }),
+  jsonPaths: false,
+});
 
 export type SocialAccountRow = InferRow<typeof socialAccounts>;
 export type SocialAccountStatsRow = InferRow<typeof socialAccountStats>;
@@ -302,3 +551,4 @@ export type SocialPostRow = InferRow<typeof socialPosts>;
 export type SocialPostStatsRow = InferRow<typeof socialPostStats>;
 export type SocialPostSourceRow = InferRow<typeof socialPostSources>;
 export type GeoTrafficEventRow = InferRow<typeof geoTrafficEvents>;
+export type McpEventRow = InferRow<typeof mcpEvents>;

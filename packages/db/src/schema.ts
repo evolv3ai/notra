@@ -1,7 +1,30 @@
+import {
+  SITE_DEPLOYMENT_KINDS,
+  SITE_DEPLOYMENT_STATUSES,
+  SITE_DEPLOYMENT_TRIGGERS,
+  SITE_DOMAIN_KINDS,
+  SITE_DOMAIN_STATUSES,
+  SITE_PREVIEW_VISIBILITIES,
+  SITE_STATUSES,
+  SITE_SUSPENDERS,
+  SITE_SUSPENSION_CATEGORIES,
+} from "@notra/sites-core/constants/sites";
+import type { SiteDiagnostic } from "@notra/sites-core/types/build";
+import type { SiteBuildMetrics } from "@notra/sites-core/types/build-metrics";
+import type {
+  SiteBuildTarget,
+  SiteMounts,
+  SitePreviewPassword,
+} from "@notra/sites-core/types/deployment";
+import type { SmartDeploymentEvaluation } from "@notra/sites-core/types/smart-deployments";
+import type { StoredWorkflowGraph } from "@notra/workflows/types/graph";
 import { relations, sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
+  type PgTableExtraConfigValue,
   boolean,
   check,
+  doublePrecision,
   foreignKey,
   index,
   integer,
@@ -15,34 +38,68 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+import { ABUSE_ACTIONS, ABUSE_SUBJECT_TYPES } from "./constants/abuse";
 import {
   AGENT_FEEDBACK_KINDS,
   AGENT_FEEDBACK_SENTIMENTS,
   AGENT_FEEDBACK_SOURCES,
   AGENT_FEEDBACK_STATUSES,
 } from "./constants/agent-feedback";
+import { AUTOMATION_RUN_STATUSES } from "./constants/automation-runs";
+import {
+  AUTOPILOT_EVENT_LEVELS,
+  AUTOPILOT_FINDING_STATUSES,
+  AUTOPILOT_JOB_KINDS,
+  AUTOPILOT_RUN_STATUSES,
+  AUTOPILOT_RUN_TRIGGERS,
+} from "./constants/autopilot";
 import {
   BLOG_POST_SUBTYPES,
   CONTENT_PUBLICATION_STATUSES,
 } from "./constants/content";
 import { DEMO_REQUEST_SOURCES } from "./constants/demo";
 import { GEO_PERSONA_MEMORY_KINDS } from "./constants/geo-personas";
+import {
+  GEO_PROMPT_SUGGESTION_ACTIONS,
+  GEO_PROMPT_SUGGESTION_SOURCES,
+} from "./constants/geo-prompt-suggestions";
 import { GEO_PROSPECT_REPORT_STATUSES } from "./constants/geo-prospect-reports";
 import {
   GEO_CONTENT_BRIEF_STATUSES,
   GEO_WRITER_SOURCE_KINDS,
 } from "./constants/geo-writer";
+import { POST_HISTORY_SOURCES } from "./constants/post-history";
+import {
+  SCHEDULED_PUBLICATION_DESTINATIONS,
+  SCHEDULED_PUBLICATION_STATUSES,
+} from "./constants/scheduled-publications";
+import { SITE_JOB_KINDS, SITE_JOB_STATUSES } from "./constants/sites";
+import {
+  WORKFLOW_RUN_NODE_STATUSES,
+  WORKFLOW_RUN_STATUSES,
+} from "./constants/workflows";
 import type { AgentFeedbackMetadata } from "./types/agent-feedback";
 import type {
   AgentReadinessIssue,
   AgentReadinessScoreBreakdown,
 } from "./types/agent-readiness";
+import type {
+  AutopilotCommitFilters,
+  AutopilotFindingEvidence,
+  AutopilotJobs,
+  AutopilotRunEventData,
+  AutopilotRunSummary,
+  AutopilotTraceDetail,
+} from "./types/autopilot";
+import type { SharedChatMessage } from "./types/chat-shares";
 import type { DemoAffectedEntity, DemoPersonalization } from "./types/demo";
-import type { GeoCheckGrounding } from "./types/geo-checks";
+import type { DiscussionCommentAnchor } from "./types/discussion-comments";
+import type { GeoCheckGrounding, GeoCheckSurfaces } from "./types/geo-checks";
 import type {
   GeoPersonaProfile,
   GeoPersonaSnapshot,
 } from "./types/geo-personas";
+import type { GeoPromptSuggestionReasonData } from "./types/geo-prompt-suggestions";
 import type { GeoProspectReportJson } from "./types/geo-prospect-report";
 import {
   GEO_SCAN_EVENT_STATUSES,
@@ -53,7 +110,19 @@ import {
 } from "./types/geo-scan";
 import type { GeoContentBriefJson } from "./types/geo-writer";
 import type { GoogleSearchConsoleQuery } from "./types/google-search-console";
+import type { OgDesignRunStatus, OgDesignCallStatus } from "./types/og-image";
 import type { PostGitHubPublish } from "./types/post-github-publish";
+import type { PostHistoryMetadata } from "./types/post-history";
+import type { PostCoverImage } from "./types/post-metadata";
+import type {
+  ScheduledPublicationDestinationConfig,
+  ScheduledPublicationResult,
+} from "./types/scheduled-publications";
+import type {
+  SiteDomainVerificationRecord,
+  SiteJobPayload,
+} from "./types/sites";
+import type { WorkflowRunNodeStep } from "./types/workflows";
 
 export const lookbackWindowEnum = pgEnum("lookback_window", [
   "current_day",
@@ -98,6 +167,18 @@ export const users = pgTable("users", {
   showAgentStats: boolean("show_agent_stats").default(false).notNull(),
   locale: text("locale"),
   workosUserId: text("workos_user_id").unique(),
+  /**
+   * When the user opted into marketing email; null means no consent. Opt-outs
+   * from an email footer live in Brew, not here.
+   */
+  marketingOptInAt: timestamp("marketing_opt_in_at"),
+  /**
+   * Proof of the opt-in: where it was given and the exact wording shown, in
+   * the user's language. Sent to Brew as consent evidence.
+   */
+  marketingOptInEvidence: text("marketing_opt_in_evidence"),
+  /** Privacy policy version in force when the user opted in. */
+  marketingOptInPolicyVersion: text("marketing_opt_in_policy_version"),
 });
 
 export const userBackupCodes = pgTable(
@@ -112,7 +193,6 @@ export const userBackupCodes = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    index("user_backup_codes_userId_idx").on(table.userId),
     uniqueIndex("user_backup_codes_userId_codeHash_uidx").on(
       table.userId,
       table.codeHash
@@ -148,7 +228,6 @@ export const chatSessions = pgTable(
       .notNull(),
   },
   (table) => [
-    index("chatSessions_organizationId_idx").on(table.organizationId),
     index("chatSessions_organizationId_deletedAt_idx").on(
       table.organizationId,
       table.deletedAt
@@ -172,6 +251,47 @@ export const chatSessions = pgTable(
       .where(
         sql`${table.externalChannelSource} IN ('discord', 'slack') AND ${table.externalChannelId} IS NOT NULL AND ${table.deletedAt} IS NULL`
       ),
+  ]
+);
+
+/**
+ * Public, unlisted read-only copies of a chat. `messages` is a sanitized
+ * snapshot taken when the link was created or refreshed, so later turns in
+ * the chat never leak through the link. One active link per chat.
+ */
+export const chatShares = pgTable(
+  "chat_shares",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    chatId: text("chat_id")
+      .notNull()
+      .references(() => chatSessions.id, { onDelete: "cascade" }),
+    createdByUserId: text("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    title: text("title").notNull(),
+    messages: jsonb("messages")
+      .$type<SharedChatMessage[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    revokedAt: timestamp("revoked_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("chatShares_organizationId_chatId_idx").on(
+      table.organizationId,
+      table.chatId
+    ),
+    uniqueIndex("chatShares_active_chatId_uidx")
+      .on(table.chatId)
+      .where(sql`${table.revokedAt} IS NULL`),
   ]
 );
 
@@ -240,8 +360,7 @@ export const socialConnections = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     provider: text("provider").notNull(),
     providerAccountId: text("provider_account_id").notNull(),
-    accessToken: text("access_token"),
-    refreshToken: text("refresh_token"),
+    encryptedAccessToken: text("encrypted_access_token"),
     scope: text("scope"),
     accessTokenExpiresAt: timestamp("access_token_expires_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -255,7 +374,6 @@ export const socialConnections = pgTable(
       table.userId,
       table.provider
     ),
-    index("socialConnections_userId_idx").on(table.userId),
     index("socialConnections_provider_providerAccountId_idx").on(
       table.provider,
       table.providerAccountId
@@ -263,27 +381,103 @@ export const socialConnections = pgTable(
   ]
 );
 
-export const organizations = pgTable("organizations", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  slug: text("slug").notNull().unique(),
-  logo: text("logo"),
-  createdAt: timestamp("created_at").notNull(),
-  metadata: text("metadata"),
-  heardAboutNotraSource: text("heard_about_notra_source"),
-  heardAboutNotraOther: text("heard_about_notra_other"),
-  geoIngestTokenGeneration: integer("geo_ingest_token_generation")
-    .notNull()
-    .default(1),
-  feedbackIngestTokenGeneration: integer("feedback_ingest_token_generation")
-    .notNull()
-    .default(1),
-  onboardingCompleted: boolean("onboarding_completed").default(false).notNull(),
-  onboardingDismissed: boolean("onboarding_dismissed").default(false).notNull(),
-  onboardingAgentRan: boolean("onboarding_agent_ran").default(false).notNull(),
-  onboardingAgentStartedAt: timestamp("onboarding_agent_started_at"),
-  workosOrgId: text("workos_org_id").unique(),
-});
+export const organizations = pgTable(
+  "organizations",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull().unique(),
+    logo: text("logo"),
+    createdAt: timestamp("created_at").notNull(),
+    metadata: text("metadata"),
+    heardAboutNotraSource: text("heard_about_notra_source"),
+    heardAboutNotraOther: text("heard_about_notra_other"),
+    geoIngestTokenGeneration: integer("geo_ingest_token_generation")
+      .notNull()
+      .default(1),
+    feedbackIngestTokenGeneration: integer("feedback_ingest_token_generation")
+      .notNull()
+      .default(1),
+    onboardingCompleted: boolean("onboarding_completed")
+      .default(false)
+      .notNull(),
+    onboardingDismissed: boolean("onboarding_dismissed")
+      .default(false)
+      .notNull(),
+    onboardingAgentRan: boolean("onboarding_agent_ran")
+      .default(false)
+      .notNull(),
+    onboardingAgentStartedAt: timestamp("onboarding_agent_started_at"),
+    workosOrgId: text("workos_org_id").unique(),
+    /** Set while Notra has suspended the workspace for abuse. */
+    suspendedAt: timestamp("suspended_at"),
+    suspendedReason: text("suspended_reason"),
+    suspendedCategory: text("suspended_category", {
+      enum: SITE_SUSPENSION_CATEGORIES,
+    }),
+  },
+  (table) => [
+    check(
+      "organizations_suspendedCategory_check",
+      sql`${table.suspendedCategory} IN ('phishing', 'malware', 'deceptive_redirects', 'spam', 'terms')`
+    ),
+  ]
+);
+
+export const freeScanClaims = pgTable(
+  "free_scan_claims",
+  {
+    domain: text("domain").primaryKey(),
+    promptLimit: integer("prompt_limit").notNull().default(15),
+    organizationId: text("organization_id").references(() => organizations.id, {
+      onDelete: "set null",
+    }),
+    claimedAt: timestamp("claimed_at"),
+    revokedAt: timestamp("revoked_at"),
+  },
+  (table) => [
+    index("freeScanClaims_organizationId_idx").on(table.organizationId),
+  ]
+);
+
+/** Append-only record of every suspension and ban, by whom and why. */
+export const abuseActions = pgTable(
+  "abuse_actions",
+  {
+    id: text("id").primaryKey(),
+    subjectType: text("subject_type", { enum: ABUSE_SUBJECT_TYPES }).notNull(),
+    subjectId: text("subject_id").notNull(),
+    action: text("action", { enum: ABUSE_ACTIONS }).notNull(),
+    category: text("category", { enum: SITE_SUSPENSION_CATEGORIES }),
+    reason: text("reason"),
+    /** A repeat that finished an earlier action instead of starting one. */
+    retry: boolean("retry").default(false).notNull(),
+    actorUserId: text("actor_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("abuse_actions_subject_idx").on(
+      table.subjectType,
+      table.subjectId,
+      table.createdAt
+    ),
+    index("abuse_actions_createdAt_idx").on(table.createdAt),
+    check(
+      "abuse_actions_subjectType_check",
+      sql`${table.subjectType} IN ('site', 'organization', 'user')`
+    ),
+    check(
+      "abuse_actions_action_check",
+      sql`${table.action} IN ('suspend', 'unsuspend', 'ban', 'unban')`
+    ),
+    check(
+      "abuse_actions_category_check",
+      sql`${table.category} IN ('phishing', 'malware', 'deceptive_redirects', 'spam', 'terms')`
+    ),
+  ]
+);
 
 export const members = pgTable(
   "members",
@@ -299,7 +493,6 @@ export const members = pgTable(
     createdAt: timestamp("created_at").notNull(),
   },
   (table) => [
-    index("members_organizationId_idx").on(table.organizationId),
     index("members_userId_idx").on(table.userId),
     uniqueIndex("members_organizationId_userId_uidx").on(
       table.organizationId,
@@ -333,13 +526,16 @@ export const githubAppInstallations = pgTable(
       .notNull(),
   },
   (table) => [
-    index("githubAppInstallations_organizationId_idx").on(table.organizationId),
     index("githubAppInstallations_createdByUserId_idx").on(
       table.createdByUserId
     ),
     uniqueIndex("githubAppInstallations_organization_installation_uidx").on(
       table.organizationId,
       table.installationId
+    ),
+    uniqueIndex("githubAppInstallations_org_id_uidx").on(
+      table.organizationId,
+      table.id
     ),
   ]
 );
@@ -375,13 +571,24 @@ export const githubIntegrations = pgTable(
       .notNull(),
   },
   (table) => [
-    index("githubIntegrations_organizationId_idx").on(table.organizationId),
     index("githubIntegrations_createdByUserId_idx").on(table.createdByUserId),
     uniqueIndex("githubIntegrations_organization_owner_repo_uidx").on(
       table.organizationId,
       table.owner,
       table.repo
     ),
+    uniqueIndex("githubIntegrations_org_id_uidx").on(
+      table.organizationId,
+      table.id
+    ),
+    foreignKey({
+      columns: [table.organizationId, table.githubAppInstallationId],
+      foreignColumns: [
+        githubAppInstallations.organizationId,
+        githubAppInstallations.id,
+      ],
+      name: "githubIntegrations_org_installation_fk",
+    }).onDelete("cascade"),
   ]
 );
 
@@ -410,7 +617,6 @@ export const linearIntegrations = pgTable(
       .notNull(),
   },
   (table) => [
-    index("linearIntegrations_organizationId_idx").on(table.organizationId),
     index("linearIntegrations_createdByUserId_idx").on(table.createdByUserId),
     uniqueIndex("linearIntegrations_org_linearOrg_team_uidx").on(
       table.organizationId,
@@ -554,7 +760,6 @@ export const mcpServerIntegrations = pgTable(
     ),
     index("mcpServerIntegrations_resourceType_idx").on(table.resourceType),
     index("mcpServerIntegrations_storeStatus_idx").on(table.storeStatus),
-    index("mcpServerIntegrations_organizationId_idx").on(table.organizationId),
     index("mcpServerIntegrations_createdByUserId_idx").on(
       table.createdByUserId
     ),
@@ -786,11 +991,6 @@ export const mcpSessionToolActivations = pgTable(
       table.surface,
       table.mcpToolIndexId
     ),
-    index("mcpSessionToolActivations_session_idx").on(
-      table.organizationId,
-      table.sessionId,
-      table.surface
-    ),
     index("mcpSessionToolActivations_expiresAt_idx").on(table.expiresAt),
     foreignKey({
       columns: [table.organizationId, table.mcpToolIndexId],
@@ -824,10 +1024,49 @@ export const contentTriggers = pgTable(
       .notNull(),
   },
   (table) => [
-    index("contentTriggers_organizationId_idx").on(table.organizationId),
     uniqueIndex("contentTriggers_organization_dedupe_uidx").on(
       table.organizationId,
       table.dedupeHash
+    ),
+  ]
+);
+
+export const automationRuns = pgTable(
+  "automation_runs",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    automationId: text("automation_id")
+      .notNull()
+      .references(() => contentTriggers.id, { onDelete: "cascade" }),
+    status: text("status", { enum: AUTOMATION_RUN_STATUSES })
+      .notNull()
+      .default("running"),
+    manual: boolean("manual").notNull().default(false),
+    title: text("title"),
+    errorMessage: text("error_message"),
+    postId: text("post_id").references(() => posts.id, {
+      onDelete: "set null",
+    }),
+    startedAt: timestamp("started_at").defaultNow().notNull(),
+    finishedAt: timestamp("finished_at"),
+  },
+  (table) => [
+    index("automationRuns_org_startedAt_idx").on(
+      table.organizationId,
+      table.startedAt,
+      table.id
+    ),
+    index("automationRuns_org_automation_startedAt_idx").on(
+      table.organizationId,
+      table.automationId,
+      table.startedAt
+    ),
+    check(
+      "automation_runs_status_check",
+      sql`${table.status} IN ('running', 'success', 'failed', 'skipped')`
     ),
   ]
 );
@@ -853,10 +1092,16 @@ export const repositoryOutputs = pgTable(
     outputType: text("output_type").notNull(),
     enabled: boolean("enabled").default(true).notNull(),
     config: jsonb("config"),
+    reviewProcess: text("review_process", { enum: ["pull_request", "direct"] })
+      .default("pull_request")
+      .notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    index("repositoryOutputs_repositoryId_idx").on(table.repositoryId),
+    check(
+      "repositoryOutputs_reviewProcess_check",
+      sql`${table.reviewProcess} IN ('pull_request', 'direct')`
+    ),
     uniqueIndex("repositoryOutputs_repository_outputType_uidx").on(
       table.repositoryId,
       table.outputType
@@ -899,7 +1144,6 @@ export const brandSettings = pgTable(
     uniqueIndex("brandSettings_org_default_uidx")
       .on(table.organizationId)
       .where(sql`${table.isDefault} = true`),
-    index("brandSettings_organizationId_idx").on(table.organizationId),
   ]
 );
 
@@ -976,6 +1220,8 @@ export const brandGuidelineScreenshotKindEnum = pgEnum(
   ["desktop_hero", "desktop_full_page", "mobile_hero"]
 );
 
+// The physical supermemory_* columns are intentionally undeclared; a later
+// migration drops them.
 export const brandReferences = pgTable(
   "brand_references",
   {
@@ -991,10 +1237,6 @@ export const brandReferences = pgTable(
     sourceCapturedAt: timestamp("source_captured_at"),
     metadata: jsonb("metadata"),
     note: text("note"),
-    supermemoryDocumentId: text("supermemory_document_id"),
-    supermemoryMemoryId: text("supermemory_memory_id"),
-    supermemorySyncedAt: timestamp("supermemory_synced_at"),
-    supermemoryLastSyncError: text("supermemory_last_sync_error"),
     applicableTo: applicablePlatformEnum("applicable_to")
       .array()
       .default(sql`ARRAY['all']::applicable_platform[]`)
@@ -1006,7 +1248,6 @@ export const brandReferences = pgTable(
       .notNull(),
   },
   (table) => [
-    index("brandReferences_brandSettingsId_idx").on(table.brandSettingsId),
     index("brandReferences_brandSettingsId_sourceUrl_idx").on(
       table.brandSettingsId,
       table.sourceUrl
@@ -1025,6 +1266,11 @@ export const brandGuidelines = pgTable(
     contextDevMeta: jsonb("context_dev_meta"),
     lastGeneratedAt: timestamp("last_generated_at"),
     lastGenerationError: text("last_generation_error"),
+    sourcePdfFilename: text("source_pdf_filename"),
+    sourcePdfStorageKey: text("source_pdf_storage_key"),
+    sourcePdfUrl: text("source_pdf_url"),
+    sourcePdfText: text("source_pdf_text"),
+    sourcePdfUploadedAt: timestamp("source_pdf_uploaded_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -1037,6 +1283,73 @@ export const brandGuidelines = pgTable(
     ),
     index("brandGuidelines_status_idx").on(table.status),
   ]
+);
+
+export const brandOgTemplates = pgTable("brand_og_templates", {
+  brandSettingsId: text("brand_settings_id")
+    .primaryKey()
+    .references(() => brandSettings.id, { onDelete: "cascade" }),
+  sourceHash: text("source_hash").notNull(),
+  document: jsonb("document").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const brandOgDesignRuns = pgTable(
+  "brand_og_design_runs",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    brandSettingsId: text("brand_settings_id")
+      .notNull()
+      .references(() => brandSettings.id, { onDelete: "cascade" }),
+    sourceHash: text("source_hash").notNull(),
+    status: text("status")
+      .$type<OgDesignRunStatus>()
+      .notNull()
+      .default("running"),
+    leaseExpiresAt: timestamp("lease_expires_at").notNull(),
+    retryAfter: timestamp("retry_after"),
+    error: text("error"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    finishedAt: timestamp("finished_at"),
+  },
+  (table) => [
+    uniqueIndex("brandOgDesignRuns_active_uidx")
+      .on(table.brandSettingsId)
+      .where(sql`${table.status} = 'running'`),
+    index("brandOgDesignRuns_brand_hash_idx").on(
+      table.brandSettingsId,
+      table.sourceHash
+    ),
+  ]
+);
+
+export const brandOgDesignCalls = pgTable(
+  "brand_og_design_calls",
+  {
+    id: text("id").primaryKey(),
+    runId: text("run_id")
+      .notNull()
+      .references(() => brandOgDesignRuns.id, { onDelete: "cascade" }),
+    stage: text("stage").notNull(),
+    requestedModel: text("requested_model").notNull(),
+    status: text("status")
+      .$type<OgDesignCallStatus>()
+      .notNull()
+      .default("running"),
+    usage: jsonb("usage"),
+    route: jsonb("route"),
+    estimatedCostUsd: doublePrecision("estimated_cost_usd"),
+    reportedCostUsd: doublePrecision("reported_cost_usd"),
+    costCheckedAt: timestamp("cost_checked_at"),
+    error: text("error"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    finishedAt: timestamp("finished_at"),
+  },
+  (table) => [index("brandOgDesignCalls_run_idx").on(table.runId)]
 );
 
 export const brandGuidelineColors = pgTable(
@@ -1059,7 +1372,6 @@ export const brandGuidelineColors = pgTable(
       .notNull(),
   },
   (table) => [
-    index("brandGuidelineColors_guidelineId_idx").on(table.guidelineId),
     index("brandGuidelineColors_guideline_role_idx").on(
       table.guidelineId,
       table.role
@@ -1088,7 +1400,6 @@ export const brandGuidelineFonts = pgTable(
       .notNull(),
   },
   (table) => [
-    index("brandGuidelineFonts_guidelineId_idx").on(table.guidelineId),
     index("brandGuidelineFonts_guideline_role_idx").on(
       table.guidelineId,
       table.role
@@ -1116,7 +1427,6 @@ export const brandGuidelineTokens = pgTable(
       .notNull(),
   },
   (table) => [
-    index("brandGuidelineTokens_guidelineId_idx").on(table.guidelineId),
     index("brandGuidelineTokens_guideline_type_idx").on(
       table.guidelineId,
       table.type
@@ -1150,11 +1460,6 @@ export const brandGuidelineAssets = pgTable(
       .notNull(),
   },
   (table) => [
-    index("brandGuidelineAssets_guidelineId_idx").on(table.guidelineId),
-    index("brandGuidelineAssets_guideline_kind_idx").on(
-      table.guidelineId,
-      table.kind
-    ),
     uniqueIndex("brandGuidelineAssets_guideline_kind_variant_uidx").on(
       table.guidelineId,
       table.kind,
@@ -1187,7 +1492,6 @@ export const brandGuidelineScreenshots = pgTable(
       .notNull(),
   },
   (table) => [
-    index("brandGuidelineScreenshots_guidelineId_idx").on(table.guidelineId),
     uniqueIndex("brandGuidelineScreenshots_guideline_kind_uidx").on(
       table.guidelineId,
       table.kind
@@ -1220,7 +1524,6 @@ export const brandSitemaps = pgTable(
       .notNull(),
   },
   (table) => [
-    index("brandSitemaps_brandSettingsId_idx").on(table.brandSettingsId),
     uniqueIndex("brandSitemaps_brandSettings_url_uidx").on(
       table.brandSettingsId,
       table.url
@@ -1253,11 +1556,6 @@ export const brandSitemapPages = pgTable(
       .notNull(),
   },
   (table) => [
-    index("brandSitemapPages_sitemapId_idx").on(table.sitemapId),
-    index("brandSitemapPages_sitemap_category_idx").on(
-      table.sitemapId,
-      table.category
-    ),
     index("brandSitemapPages_sitemap_category_wordCount_idx").on(
       table.sitemapId,
       table.category,
@@ -1291,9 +1589,6 @@ export const connectedSocialAccounts = pgTable(
       .notNull(),
   },
   (table) => [
-    index("connectedSocialAccounts_organizationId_idx").on(
-      table.organizationId
-    ),
     uniqueIndex("connectedSocialAccounts_org_provider_account_uidx").on(
       table.organizationId,
       table.provider,
@@ -1323,7 +1618,6 @@ export const trackedSocialAccounts = pgTable(
       .notNull(),
   },
   (table) => [
-    index("trackedSocialAccounts_organizationId_idx").on(table.organizationId),
     uniqueIndex("trackedSocialAccounts_org_provider_account_uidx").on(
       table.organizationId,
       table.provider,
@@ -1348,7 +1642,12 @@ export const organizationNotificationSettings = pgTable(
     scheduledContentSkipped: boolean("scheduled_content_skipped")
       .default(false)
       .notNull(),
-    marketingEmails: boolean("marketing_emails").default(true).notNull(),
+    /**
+     * @deprecated Unused since marketing consent moved to
+     * `users.marketing_opt_in_at`. Dropped in a follow-up migration once no
+     * deployment reads it.
+     */
+    marketingEmails: boolean("marketing_emails").default(false).notNull(),
     dailySummary: boolean("daily_summary").default(true).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
@@ -1392,7 +1691,7 @@ export const projects = pgTable(
       .notNull(),
   },
   (table) => [
-    index("projects_organizationId_idx").on(table.organizationId),
+    uniqueIndex("projects_org_id_uidx").on(table.organizationId, table.id),
     uniqueIndex("projects_organizationId_sample_uidx")
       .on(table.organizationId)
       .where(sql`${table.isSample} = true`),
@@ -1504,6 +1803,11 @@ export const geoSettings = pgTable(
       .array()
       .notNull()
       .default(sql`ARRAY[]::text[]`),
+    /** Discovered brands dismissed from the competitor suggestions. */
+    ignoredCompetitors: text("ignored_competitors")
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
     enabled: boolean("enabled").notNull().default(true),
     scanIntervalHours: integer("scan_interval_hours").notNull().default(24),
     sentimentAttemptedAt: timestamp("sentiment_attempted_at"),
@@ -1521,6 +1825,39 @@ export const geoSettings = pgTable(
   (table) => [
     index("geoSettings_organizationId_idx").on(table.organizationId),
     uniqueIndex("geoSettings_projectId_uidx").on(table.projectId),
+  ]
+);
+
+/**
+ * Public, read-only AI traffic charts that customers embed in an iframe. The
+ * id is the publishable key in the embed URL; `allowedOrigins` become the
+ * page's `frame-ancestors`, so only those sites can frame it.
+ */
+export const geoTrafficEmbeds = pgTable(
+  "geo_traffic_embeds",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    projectId: text("project_id").references(() => projects.id, {
+      onDelete: "cascade",
+    }),
+    createdByUserId: text("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    name: text("name").notNull(),
+    host: text("host"),
+    allowedOrigins: text("allowed_origins").array().notNull(),
+    revokedAt: timestamp("revoked_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("geoTrafficEmbeds_organizationId_idx").on(table.organizationId),
   ]
 );
 
@@ -1560,7 +1897,6 @@ export const geoPrompts = pgTable(
   },
   (table) => [
     index("geoPrompts_organizationId_idx").on(table.organizationId),
-    index("geoPrompts_projectId_idx").on(table.projectId),
     index("geoPrompts_projectId_createdAt_idx").on(
       table.projectId,
       table.createdAt.desc()
@@ -1720,7 +2056,6 @@ export const geoCompetitors = pgTable(
   },
   (table) => [
     index("geoCompetitors_organizationId_idx").on(table.organizationId),
-    index("geoCompetitors_projectId_idx").on(table.projectId),
     uniqueIndex("geoCompetitors_projectId_name_uidx").on(
       table.projectId,
       table.name
@@ -1872,6 +2207,8 @@ export const geoMentionChecks = pgTable(
       .$type<{ url: string; title: string | null }[]>()
       .notNull()
       .default(sql`'[]'::jsonb`),
+    /** Ads, shopping and model info from consumer-app scrapes; null for APIs. */
+    surfaces: jsonb("surfaces").$type<GeoCheckSurfaces>(),
     finishReason: text("finish_reason"),
     promptTokens: integer("prompt_tokens"),
     outputTokens: integer("output_tokens"),
@@ -1925,7 +2262,6 @@ export const geoMentionChecks = pgTable(
     index("geoMentionChecks_sequence_turn_engine_captured_idx")
       .on(table.sequenceId, table.turn, table.engine, table.capturedAt.desc())
       .where(sql`${table.sequenceId} IS NOT NULL`),
-    index("geoMentionChecks_scanId_idx").on(table.scanId),
     index("geoMentionChecks_personaId_capturedAt_idx").on(
       table.personaId,
       table.capturedAt
@@ -2013,6 +2349,36 @@ export const geoAgentReadinessReports = pgTable(
   ]
 );
 
+export const inthIntegrations = pgTable(
+  "inth_integrations",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    createdByUserId: text("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    encryptedAccessToken: text("encrypted_access_token").notNull(),
+    encryptedRefreshToken: text("encrypted_refresh_token").notNull(),
+    accessTokenExpiresAt: timestamp("access_token_expires_at").notNull(),
+    status: text("status", { enum: ["active", "reauth_required"] })
+      .notNull()
+      .default("active"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("inthIntegrations_organizationId_uidx").on(
+      table.organizationId
+    ),
+    index("inthIntegrations_createdByUserId_idx").on(table.createdByUserId),
+  ]
+);
+
 export const googleSearchConsoleIntegrations = pgTable(
   "google_search_console_integrations",
   {
@@ -2067,9 +2433,21 @@ export const geoPromptSuggestions = pgTable(
     }),
     prompt: text("prompt").notNull(),
     title: text("title"),
-    source: text("source", { enum: ["search_console"] })
+    source: text("source", { enum: GEO_PROMPT_SUGGESTION_SOURCES })
       .notNull()
       .default("search_console"),
+    /** track adds the prompt; pause stops scanning targetPromptId. */
+    action: text("action", { enum: GEO_PROMPT_SUGGESTION_ACTIONS })
+      .notNull()
+      .default("track"),
+    /** Custom prompt id or auto prompt slug the suggestion acts on. */
+    targetPromptId: text("target_prompt_id"),
+    /** Why the suggestion was made, in English, for logs and the API. */
+    reason: text("reason"),
+    /** Numbers behind the reason, so the dashboard can render it translated. */
+    reasonData: jsonb(
+      "reason_data"
+    ).$type<GeoPromptSuggestionReasonData | null>(),
     sourceKeywords: jsonb("source_keywords")
       .$type<
         {
@@ -2103,8 +2481,12 @@ export const geoPromptSuggestions = pgTable(
       table.projectId,
       table.status
     ),
-    uniqueIndex("geoPromptSuggestions_projectId_prompt_uidx").on(
+    // Per source and action: an accepted GSC suggestion must not block
+    // Autopilot from later suggesting to pause the same prompt.
+    uniqueIndex("geoPromptSuggestions_projectId_source_action_prompt_uidx").on(
       table.projectId,
+      table.source,
+      table.action,
       table.prompt
     ),
   ]
@@ -2269,6 +2651,8 @@ export const posts = pgTable(
       .references(() => postCollections.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     slug: text("slug"),
+    // Maintained by the posts_revision trigger (migration 0120); writes are ignored.
+    revision: integer("revision").default(0).notNull(),
     content: text("content").notNull(),
     htmlUrl: text("html_url"),
     markdown: text("markdown"),
@@ -2278,7 +2662,22 @@ export const posts = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
     sourceMetadata: jsonb("source_metadata"),
     githubPublish: jsonb("github_publish").$type<PostGitHubPublish | null>(),
+    coverImage: jsonb("cover_image").$type<PostCoverImage | null>(),
+    tags: text("tags")
+      .array()
+      .default(sql`'{}'::text[]`)
+      .notNull(),
+    excerpt: text("excerpt"),
+    authorIds: text("author_ids")
+      .array()
+      .default(sql`'{}'::text[]`)
+      .notNull(),
+    featured: boolean("featured").default(false).notNull(),
+    noindex: boolean("noindex").default(false).notNull(),
+    hidden: boolean("hidden").default(false).notNull(),
+    displayDate: timestamp("display_date"),
     status: postStatusEnum("status").default("draft").notNull(),
+    publishedAt: timestamp("published_at"),
     updatedAt: timestamp("updated_at")
       .defaultNow()
       .$onUpdate(() => new Date())
@@ -2294,6 +2693,7 @@ export const posts = pgTable(
       table.id
     ),
     index("posts_collection_id_idx").on(table.collectionId),
+    uniqueIndex("posts_org_id_uidx").on(table.organizationId, table.id),
     index("posts_org_createdAt_status_idx").on(
       table.organizationId,
       table.createdAt,
@@ -2307,6 +2707,168 @@ export const posts = pgTable(
       table.contentType,
       table.updatedAt.desc()
     ),
+    index("posts_org_published_at_idx")
+      .on(table.organizationId, table.publishedAt)
+      .where(sql`${table.publishedAt} IS NOT NULL`),
+  ]
+);
+
+export const postVersions = pgTable(
+  "post_versions",
+  {
+    id: text("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()::text`),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    postId: text("post_id").notNull(),
+    revision: integer("revision").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    actorUserId: text("actor_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    source: text("source", { enum: POST_HISTORY_SOURCES }).notNull(),
+    retained: boolean("retained").default(false).notNull(),
+    title: text("title").notNull(),
+    slug: text("slug"),
+    markdown: text("markdown"),
+    metadata: jsonb("metadata").$type<PostHistoryMetadata>().notNull(),
+  },
+  (table) => [
+    uniqueIndex("post_versions_org_post_revision_uidx").on(
+      table.organizationId,
+      table.postId,
+      table.revision
+    ),
+    index("post_versions_org_post_unretained_created_at_idx")
+      .on(table.organizationId, table.postId, table.createdAt)
+      .where(sql`${table.retained} = false`),
+    foreignKey({
+      columns: [table.organizationId, table.postId],
+      foreignColumns: [posts.organizationId, posts.id],
+      name: "post_versions_org_post_fk",
+    }).onDelete("cascade"),
+    check(
+      "post_versions_source_check",
+      sql`${table.source} IN ('baseline', 'editor_autosave', 'editor_save', 'checkpoint', 'restore', 'ai', 'api', 'system')`
+    ),
+    check("post_versions_revision_check", sql`${table.revision} >= 0`),
+  ]
+);
+
+export const contentAuthors = pgTable(
+  "content_authors",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    title: text("title"),
+    bio: text("bio"),
+    avatarUrl: text("avatar_url"),
+    url: text("url"),
+    x: text("x"),
+    linkedin: text("linkedin"),
+    github: text("github"),
+    userId: text("user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("content_authors_org_slug_uidx").on(
+      table.organizationId,
+      table.slug
+    ),
+    uniqueIndex("content_authors_org_user_uidx")
+      .on(table.organizationId, table.userId)
+      .where(sql`${table.userId} IS NOT NULL`),
+  ]
+);
+
+export const scheduledPublicationStatusEnum = pgEnum(
+  "scheduled_publication_status",
+  SCHEDULED_PUBLICATION_STATUSES
+);
+
+export const scheduledPublicationDestinationEnum = pgEnum(
+  "scheduled_publication_destination",
+  SCHEDULED_PUBLICATION_DESTINATIONS
+);
+
+/**
+ * One row per post and destination that should go out at `scheduled_at`.
+ *
+ * The row is the schedule: a cron sweep polls `next_attempt_at` and claims due
+ * rows with a compare-and-set on `status` + `lease_until`, so rescheduling or
+ * canceling is a plain update and there is no external job that can drift from
+ * the database or die with a deployment. `claim_token` fences a slow or
+ * duplicated workflow run out once a later sweep took the row over, and
+ * `external_attempt_at` marks a non-idempotent call (a social post) as started
+ * so a retry never posts twice.
+ */
+export const scheduledPublications = pgTable(
+  "scheduled_publications",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    postId: text("post_id")
+      .notNull()
+      .references(() => posts.id, { onDelete: "cascade" }),
+    scheduledAt: timestamp("scheduled_at").notNull(),
+    timeZone: text("time_zone").notNull(),
+    destination: scheduledPublicationDestinationEnum("destination").notNull(),
+    destinationConfig: jsonb("destination_config")
+      .$type<ScheduledPublicationDestinationConfig>()
+      .notNull(),
+    status: scheduledPublicationStatusEnum("status")
+      .default("scheduled")
+      .notNull(),
+    nextAttemptAt: timestamp("next_attempt_at").notNull(),
+    claimToken: text("claim_token"),
+    leaseUntil: timestamp("lease_until"),
+    attempts: integer("attempts").default(0).notNull(),
+    externalAttemptAt: timestamp("external_attempt_at"),
+    cancelRequestedAt: timestamp("cancel_requested_at"),
+    errorCode: text("error_code"),
+    lastError: text("last_error"),
+    result: jsonb("result").$type<ScheduledPublicationResult>(),
+    /**
+     * The current claim's publish outcome, kept until it is written, so a
+     * retried call returns it instead of publishing again.
+     */
+    attemptOutcome: jsonb("attempt_outcome"),
+    publishedAt: timestamp("published_at"),
+    createdByUserId: text("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("scheduled_publications_due_idx")
+      .on(table.nextAttemptAt)
+      .where(sql`${table.status} IN ('scheduled', 'publishing')`),
+    index("scheduled_publications_org_scheduled_at_idx").on(
+      table.organizationId,
+      table.scheduledAt
+    ),
+    index("scheduled_publications_post_idx").on(table.postId),
+    uniqueIndex("scheduled_publications_active_post_destination_uidx")
+      .on(table.postId, table.destination)
+      .where(sql`${table.status} IN ('scheduled', 'publishing')`),
   ]
 );
 
@@ -2327,8 +2889,8 @@ export const contentPublications = pgTable(
     repo: text("repo").notNull(),
     path: text("path").notNull(),
     branch: text("branch").notNull(),
-    pullRequestNumber: integer("pull_request_number").notNull(),
-    pullRequestUrl: text("pull_request_url").notNull(),
+    pullRequestNumber: integer("pull_request_number"),
+    pullRequestUrl: text("pull_request_url"),
     headSha: text("head_sha"),
     status: text("status", { enum: CONTENT_PUBLICATION_STATUSES })
       .notNull()
@@ -2340,7 +2902,6 @@ export const contentPublications = pgTable(
       .notNull(),
   },
   (table) => [
-    index("contentPublications_organizationId_idx").on(table.organizationId),
     index("contentPublications_postId_idx").on(table.postId),
     uniqueIndex("contentPublications_repository_pullRequest_uidx").on(
       table.repositoryId,
@@ -2354,6 +2915,56 @@ export const contentPublications = pgTable(
       table.owner,
       table.repo,
       table.pullRequestNumber
+    ),
+    foreignKey({
+      columns: [table.organizationId, table.postId],
+      foreignColumns: [posts.organizationId, posts.id],
+      name: "contentPublications_org_post_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.organizationId, table.repositoryId],
+      foreignColumns: [
+        githubIntegrations.organizationId,
+        githubIntegrations.id,
+      ],
+      name: "contentPublications_org_repository_fk",
+    }).onDelete("cascade"),
+  ]
+);
+
+export const systemSkills = pgTable("system_skills", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  description: text("description").notNull(),
+  content: text("content").notNull(),
+  version: integer("version").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+});
+
+export const systemSkillVersions = pgTable(
+  "system_skill_versions",
+  {
+    id: text("id").primaryKey(),
+    systemSkillId: text("system_skill_id")
+      .notNull()
+      .references(() => systemSkills.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    description: text("description").notNull(),
+    content: text("content").notNull(),
+    note: text("note"),
+    publishedByUserId: text("published_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("system_skill_versions_skill_version_uidx").on(
+      table.systemSkillId,
+      table.version
     ),
   ]
 );
@@ -2369,6 +2980,10 @@ export const skills = pgTable(
     description: text("description").notNull(),
     content: text("content").notNull(),
     isSystem: boolean("is_system").default(false).notNull(),
+    systemSkillId: text("system_skill_id").references(() => systemSkills.id, {
+      onDelete: "set null",
+    }),
+    systemSkillVersion: integer("system_skill_version"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -2376,8 +2991,8 @@ export const skills = pgTable(
       .notNull(),
   },
   (table) => [
-    index("skills_organizationId_idx").on(table.organizationId),
     uniqueIndex("skills_org_name_uidx").on(table.organizationId, table.name),
+    index("skills_system_skill_idx").on(table.systemSkillId),
   ]
 );
 
@@ -2441,410 +3056,6 @@ export const onboardingSuggestions = pgTable(
     index("onboardingSuggestions_org_type_idx").on(
       table.organizationId,
       table.type
-    ),
-  ]
-);
-
-export const autonomyMandateStatusEnum = pgEnum("autonomy_mandate_status", [
-  "active",
-  "paused",
-  "revoked",
-]);
-
-export const autonomyMandates = pgTable(
-  "autonomy_mandates",
-  {
-    id: text("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
-    objective: text("objective").notNull(),
-    policy: jsonb("policy").notNull(),
-    status: autonomyMandateStatusEnum("status").default("active").notNull(),
-    version: integer("version").default(1).notNull(),
-    qstashScheduleId: text("qstash_schedule_id"),
-    createdByUserId: text("created_by_user_id").references(() => users.id, {
-      onDelete: "set null",
-    }),
-    pausedAt: timestamp("paused_at"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
-      .defaultNow()
-      .$onUpdate(() => new Date())
-      .notNull(),
-  },
-  (table) => [
-    index("autonomyMandates_organizationId_idx").on(table.organizationId),
-    uniqueIndex("autonomyMandates_organizationId_name_uidx").on(
-      table.organizationId,
-      table.name
-    ),
-  ]
-);
-
-export const autonomySignalStatusEnum = pgEnum("autonomy_signal_status", [
-  "pending",
-  "coalesced",
-  "processed",
-  "discarded",
-]);
-
-export const autonomySignals = pgTable(
-  "autonomy_signals",
-  {
-    id: text("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
-    source: text("source").notNull(),
-    sourceEventId: text("source_event_id"),
-    kind: text("kind").notNull(),
-    payload: jsonb("payload").notNull(),
-    dedupeHash: text("dedupe_hash").notNull(),
-    status: autonomySignalStatusEnum("status").default("pending").notNull(),
-    coalescedIntoSignalId: text("coalesced_into_signal_id"),
-    occurredAt: timestamp("occurred_at").notNull(),
-    processedAt: timestamp("processed_at"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
-      .defaultNow()
-      .$onUpdate(() => new Date())
-      .notNull(),
-  },
-  (table) => [
-    index("autonomySignals_organizationId_idx").on(table.organizationId),
-    uniqueIndex("autonomySignals_organizationId_dedupeHash_uidx").on(
-      table.organizationId,
-      table.dedupeHash
-    ),
-    index("autonomySignals_organizationId_status_occurredAt_idx").on(
-      table.organizationId,
-      table.status,
-      table.occurredAt
-    ),
-    foreignKey({
-      columns: [table.coalescedIntoSignalId],
-      foreignColumns: [table.id],
-      name: "autonomySignals_coalescedIntoSignalId_fk",
-    }).onDelete("set null"),
-  ]
-);
-
-export const autonomyGoalStatusEnum = pgEnum("autonomy_goal_status", [
-  "open",
-  "in_progress",
-  "blocked",
-  "completed",
-  "abandoned",
-]);
-
-export const autonomyGoals = pgTable(
-  "autonomy_goals",
-  {
-    id: text("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
-    mandateId: text("mandate_id")
-      .notNull()
-      .references(() => autonomyMandates.id, { onDelete: "cascade" }),
-    title: text("title").notNull(),
-    summary: text("summary"),
-    status: autonomyGoalStatusEnum("status").default("open").notNull(),
-    priority: integer("priority").default(0).notNull(),
-    originSignalIds: jsonb("origin_signal_ids")
-      .default(sql`'[]'::jsonb`)
-      .notNull(),
-    completedAt: timestamp("completed_at"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
-      .defaultNow()
-      .$onUpdate(() => new Date())
-      .notNull(),
-  },
-  (table) => [
-    index("autonomyGoals_organizationId_idx").on(table.organizationId),
-    index("autonomyGoals_mandateId_idx").on(table.mandateId),
-    index("autonomyGoals_organizationId_status_idx").on(
-      table.organizationId,
-      table.status
-    ),
-  ]
-);
-
-export const autonomyRunTriggerEnum = pgEnum("autonomy_run_trigger", [
-  "signal",
-  "wake",
-  "manual",
-  "repair",
-]);
-
-export const autonomyRunStatusEnum = pgEnum("autonomy_run_status", [
-  "planning",
-  "executing",
-  "completed",
-  "failed",
-  "canceled",
-]);
-
-export const autonomyRuns = pgTable(
-  "autonomy_runs",
-  {
-    id: text("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
-    mandateId: text("mandate_id")
-      .notNull()
-      .references(() => autonomyMandates.id, { onDelete: "cascade" }),
-    mandateVersion: integer("mandate_version").notNull(),
-    goalId: text("goal_id").references(() => autonomyGoals.id, {
-      onDelete: "set null",
-    }),
-    trigger: autonomyRunTriggerEnum("trigger").notNull(),
-    plannerInputHash: text("planner_input_hash"),
-    plannerOutput: jsonb("planner_output"),
-    status: autonomyRunStatusEnum("status").default("planning").notNull(),
-    costCents: integer("cost_cents").default(0).notNull(),
-    startedAt: timestamp("started_at").defaultNow().notNull(),
-    completedAt: timestamp("completed_at"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
-      .defaultNow()
-      .$onUpdate(() => new Date())
-      .notNull(),
-  },
-  (table) => [
-    index("autonomyRuns_organizationId_idx").on(table.organizationId),
-    index("autonomyRuns_mandateId_idx").on(table.mandateId),
-    index("autonomyRuns_goalId_idx").on(table.goalId),
-    index("autonomyRuns_organizationId_status_idx").on(
-      table.organizationId,
-      table.status
-    ),
-  ]
-);
-
-export const autonomyTaskStatusEnum = pgEnum("autonomy_task_status", [
-  "pending",
-  "ready",
-  "running",
-  "waiting",
-  "completed",
-  "failed",
-  "canceled",
-]);
-
-export const autonomyTasks = pgTable(
-  "autonomy_tasks",
-  {
-    id: text("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
-    goalId: text("goal_id")
-      .notNull()
-      .references(() => autonomyGoals.id, { onDelete: "cascade" }),
-    runId: text("run_id").references(() => autonomyRuns.id, {
-      onDelete: "set null",
-    }),
-    capabilityName: text("capability_name").notNull(),
-    capabilityVersion: integer("capability_version").default(1).notNull(),
-    params: jsonb("params").notNull(),
-    dependsOnTaskIds: jsonb("depends_on_task_ids")
-      .default(sql`'[]'::jsonb`)
-      .notNull(),
-    status: autonomyTaskStatusEnum("status").default("pending").notNull(),
-    attempt: integer("attempt").default(0).notNull(),
-    waitUntil: timestamp("wait_until"),
-    result: jsonb("result"),
-    errorMessage: text("error_message"),
-    completedAt: timestamp("completed_at"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
-      .defaultNow()
-      .$onUpdate(() => new Date())
-      .notNull(),
-  },
-  (table) => [
-    index("autonomyTasks_organizationId_idx").on(table.organizationId),
-    index("autonomyTasks_goalId_idx").on(table.goalId),
-    index("autonomyTasks_runId_idx").on(table.runId),
-    index("autonomyTasks_organizationId_status_waitUntil_idx").on(
-      table.organizationId,
-      table.status,
-      table.waitUntil
-    ),
-  ]
-);
-
-export const autonomyActionStatusEnum = pgEnum("autonomy_action_status", [
-  "pending",
-  "executing",
-  "succeeded",
-  "failed",
-  "unknown",
-  "compensated",
-  "canceled",
-]);
-
-export const autonomyActions = pgTable(
-  "autonomy_actions",
-  {
-    id: text("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
-    runId: text("run_id")
-      .notNull()
-      .references(() => autonomyRuns.id, { onDelete: "cascade" }),
-    taskId: text("task_id").references(() => autonomyTasks.id, {
-      onDelete: "set null",
-    }),
-    capabilityName: text("capability_name").notNull(),
-    capabilityVersion: integer("capability_version").notNull(),
-    idempotencyKey: text("idempotency_key").notNull(),
-    status: autonomyActionStatusEnum("status").default("pending").notNull(),
-    externalRef: jsonb("external_ref"),
-    error: jsonb("error"),
-    startedAt: timestamp("started_at"),
-    finishedAt: timestamp("finished_at"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
-      .defaultNow()
-      .$onUpdate(() => new Date())
-      .notNull(),
-  },
-  (table) => [
-    index("autonomyActions_organizationId_idx").on(table.organizationId),
-    index("autonomyActions_runId_idx").on(table.runId),
-    uniqueIndex("autonomyActions_org_capability_idempotency_uidx").on(
-      table.organizationId,
-      table.capabilityName,
-      table.idempotencyKey
-    ),
-    index("autonomyActions_organizationId_status_idx").on(
-      table.organizationId,
-      table.status
-    ),
-  ]
-);
-
-export const autonomyCheckpoints = pgTable(
-  "autonomy_checkpoints",
-  {
-    id: text("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
-    runId: text("run_id")
-      .notNull()
-      .references(() => autonomyRuns.id, { onDelete: "cascade" }),
-    taskId: text("task_id").references(() => autonomyTasks.id, {
-      onDelete: "set null",
-    }),
-    kind: text("kind").notNull(),
-    state: jsonb("state").notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-  },
-  (table) => [
-    index("autonomyCheckpoints_organizationId_idx").on(table.organizationId),
-    index("autonomyCheckpoints_runId_idx").on(table.runId),
-  ]
-);
-
-export const autonomyOutboxStatusEnum = pgEnum("autonomy_outbox_status", [
-  "pending",
-  "attempting",
-  "delivered",
-  "failed",
-  "canceled",
-]);
-
-export const autonomyOutbox = pgTable(
-  "autonomy_outbox",
-  {
-    id: text("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
-    runId: text("run_id").references(() => autonomyRuns.id, {
-      onDelete: "set null",
-    }),
-    destination: text("destination").notNull(),
-    dedupeKey: text("dedupe_key").notNull(),
-    payload: jsonb("payload").notNull(),
-    status: autonomyOutboxStatusEnum("status").default("pending").notNull(),
-    attempts: integer("attempts").default(0).notNull(),
-    nextAttemptAt: timestamp("next_attempt_at"),
-    lastError: text("last_error"),
-    deliveredAt: timestamp("delivered_at"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
-      .defaultNow()
-      .$onUpdate(() => new Date())
-      .notNull(),
-  },
-  (table) => [
-    index("autonomyOutbox_organizationId_idx").on(table.organizationId),
-    uniqueIndex("autonomyOutbox_org_destination_dedupeKey_uidx").on(
-      table.organizationId,
-      table.destination,
-      table.dedupeKey
-    ),
-    index("autonomyOutbox_status_nextAttemptAt_idx").on(
-      table.status,
-      table.nextAttemptAt
-    ),
-  ]
-);
-
-export const autonomyClaims = pgTable(
-  "autonomy_claims",
-  {
-    id: text("id").primaryKey(),
-    organizationId: text("organization_id").references(() => organizations.id, {
-      onDelete: "cascade",
-    }),
-    scope: text("scope").notNull(),
-    claimKey: text("claim_key").notNull(),
-    ownerToken: text("owner_token").notNull(),
-    expiresAt: timestamp("expires_at").notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
-      .defaultNow()
-      .$onUpdate(() => new Date())
-      .notNull(),
-  },
-  (table) => [
-    uniqueIndex("autonomyClaims_scope_claimKey_uidx").on(
-      table.scope,
-      table.claimKey
-    ),
-    index("autonomyClaims_expiresAt_idx").on(table.expiresAt),
-  ]
-);
-
-export const autonomyControllerLeases = pgTable(
-  "autonomy_controller_leases",
-  {
-    id: text("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organizations.id, { onDelete: "cascade" }),
-    ownerToken: text("owner_token").notNull(),
-    fencingToken: integer("fencing_token").default(0).notNull(),
-    expiresAt: timestamp("expires_at").notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at")
-      .defaultNow()
-      .$onUpdate(() => new Date())
-      .notNull(),
-  },
-  (table) => [
-    index("autonomyControllerLeases_organizationId_idx").on(
-      table.organizationId
     ),
   ]
 );
@@ -2976,16 +3187,6 @@ export const organizationsRelations = relations(
     chatSessions: many(chatSessions),
     chatAttachments: many(chatAttachments),
     onboardingSuggestions: many(onboardingSuggestions),
-    autonomyMandates: many(autonomyMandates),
-    autonomySignals: many(autonomySignals),
-    autonomyGoals: many(autonomyGoals),
-    autonomyRuns: many(autonomyRuns),
-    autonomyTasks: many(autonomyTasks),
-    autonomyActions: many(autonomyActions),
-    autonomyCheckpoints: many(autonomyCheckpoints),
-    autonomyOutbox: many(autonomyOutbox),
-    autonomyClaims: many(autonomyClaims),
-    autonomyControllerLeases: many(autonomyControllerLeases),
   })
 );
 
@@ -3573,6 +3774,13 @@ export const postCollectionsRelations = relations(
   })
 );
 
+export const contentAuthorsRelations = relations(contentAuthors, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [contentAuthors.organizationId],
+    references: [organizations.id],
+  }),
+}));
+
 export const postsRelations = relations(posts, ({ many, one }) => ({
   organization: one(organizations, {
     fields: [posts.organizationId],
@@ -3584,7 +3792,22 @@ export const postsRelations = relations(posts, ({ many, one }) => ({
   }),
   chatSessions: many(chatSessions),
   contentPublications: many(contentPublications),
+  scheduledPublications: many(scheduledPublications),
 }));
+
+export const scheduledPublicationsRelations = relations(
+  scheduledPublications,
+  ({ one }) => ({
+    organization: one(organizations, {
+      fields: [scheduledPublications.organizationId],
+      references: [organizations.id],
+    }),
+    post: one(posts, {
+      fields: [scheduledPublications.postId],
+      references: [posts.id],
+    }),
+  })
+);
 
 export const contentPublicationsRelations = relations(
   contentPublications,
@@ -3609,160 +3832,27 @@ export const skillsRelations = relations(skills, ({ one }) => ({
     fields: [skills.organizationId],
     references: [organizations.id],
   }),
+  systemSkill: one(systemSkills, {
+    fields: [skills.systemSkillId],
+    references: [systemSkills.id],
+  }),
 }));
 
-export const autonomyMandatesRelations = relations(
-  autonomyMandates,
-  ({ one, many }) => ({
-    organization: one(organizations, {
-      fields: [autonomyMandates.organizationId],
-      references: [organizations.id],
+export const systemSkillsRelations = relations(systemSkills, ({ many }) => ({
+  versions: many(systemSkillVersions),
+  copies: many(skills),
+}));
+
+export const systemSkillVersionsRelations = relations(
+  systemSkillVersions,
+  ({ one }) => ({
+    systemSkill: one(systemSkills, {
+      fields: [systemSkillVersions.systemSkillId],
+      references: [systemSkills.id],
     }),
-    createdByUser: one(users, {
-      fields: [autonomyMandates.createdByUserId],
+    publishedBy: one(users, {
+      fields: [systemSkillVersions.publishedByUserId],
       references: [users.id],
-    }),
-    goals: many(autonomyGoals),
-    runs: many(autonomyRuns),
-  })
-);
-
-export const autonomySignalsRelations = relations(
-  autonomySignals,
-  ({ one, many }) => ({
-    organization: one(organizations, {
-      fields: [autonomySignals.organizationId],
-      references: [organizations.id],
-    }),
-    coalescedIntoSignal: one(autonomySignals, {
-      fields: [autonomySignals.coalescedIntoSignalId],
-      references: [autonomySignals.id],
-      relationName: "autonomySignalCoalescing",
-    }),
-    coalescedSignals: many(autonomySignals, {
-      relationName: "autonomySignalCoalescing",
-    }),
-  })
-);
-
-export const autonomyGoalsRelations = relations(
-  autonomyGoals,
-  ({ one, many }) => ({
-    organization: one(organizations, {
-      fields: [autonomyGoals.organizationId],
-      references: [organizations.id],
-    }),
-    mandate: one(autonomyMandates, {
-      fields: [autonomyGoals.mandateId],
-      references: [autonomyMandates.id],
-    }),
-    runs: many(autonomyRuns),
-    tasks: many(autonomyTasks),
-  })
-);
-
-export const autonomyRunsRelations = relations(
-  autonomyRuns,
-  ({ one, many }) => ({
-    organization: one(organizations, {
-      fields: [autonomyRuns.organizationId],
-      references: [organizations.id],
-    }),
-    mandate: one(autonomyMandates, {
-      fields: [autonomyRuns.mandateId],
-      references: [autonomyMandates.id],
-    }),
-    goal: one(autonomyGoals, {
-      fields: [autonomyRuns.goalId],
-      references: [autonomyGoals.id],
-    }),
-    tasks: many(autonomyTasks),
-    actions: many(autonomyActions),
-    checkpoints: many(autonomyCheckpoints),
-    outboxMessages: many(autonomyOutbox),
-  })
-);
-
-export const autonomyTasksRelations = relations(
-  autonomyTasks,
-  ({ one, many }) => ({
-    organization: one(organizations, {
-      fields: [autonomyTasks.organizationId],
-      references: [organizations.id],
-    }),
-    goal: one(autonomyGoals, {
-      fields: [autonomyTasks.goalId],
-      references: [autonomyGoals.id],
-    }),
-    run: one(autonomyRuns, {
-      fields: [autonomyTasks.runId],
-      references: [autonomyRuns.id],
-    }),
-    actions: many(autonomyActions),
-    checkpoints: many(autonomyCheckpoints),
-  })
-);
-
-export const autonomyActionsRelations = relations(
-  autonomyActions,
-  ({ one }) => ({
-    organization: one(organizations, {
-      fields: [autonomyActions.organizationId],
-      references: [organizations.id],
-    }),
-    run: one(autonomyRuns, {
-      fields: [autonomyActions.runId],
-      references: [autonomyRuns.id],
-    }),
-    task: one(autonomyTasks, {
-      fields: [autonomyActions.taskId],
-      references: [autonomyTasks.id],
-    }),
-  })
-);
-
-export const autonomyCheckpointsRelations = relations(
-  autonomyCheckpoints,
-  ({ one }) => ({
-    organization: one(organizations, {
-      fields: [autonomyCheckpoints.organizationId],
-      references: [organizations.id],
-    }),
-    run: one(autonomyRuns, {
-      fields: [autonomyCheckpoints.runId],
-      references: [autonomyRuns.id],
-    }),
-    task: one(autonomyTasks, {
-      fields: [autonomyCheckpoints.taskId],
-      references: [autonomyTasks.id],
-    }),
-  })
-);
-
-export const autonomyOutboxRelations = relations(autonomyOutbox, ({ one }) => ({
-  organization: one(organizations, {
-    fields: [autonomyOutbox.organizationId],
-    references: [organizations.id],
-  }),
-  run: one(autonomyRuns, {
-    fields: [autonomyOutbox.runId],
-    references: [autonomyRuns.id],
-  }),
-}));
-
-export const autonomyClaimsRelations = relations(autonomyClaims, ({ one }) => ({
-  organization: one(organizations, {
-    fields: [autonomyClaims.organizationId],
-    references: [organizations.id],
-  }),
-}));
-
-export const autonomyControllerLeasesRelations = relations(
-  autonomyControllerLeases,
-  ({ one }) => ({
-    organization: one(organizations, {
-      fields: [autonomyControllerLeases.organizationId],
-      references: [organizations.id],
     }),
   })
 );
@@ -3796,11 +3886,19 @@ export const discussionComments = pgTable(
       { onDelete: "cascade" }
     ),
     parentId: text("parent_id"),
+    contentId: text("content_id").references(() => posts.id, {
+      onDelete: "cascade",
+    }),
+    resolvedAt: timestamp("resolved_at"),
+    resolvedByUserId: text("resolved_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
     depth: integer("depth").notNull().default(0),
     userId: text("user_id").references(() => users.id, {
       onDelete: "set null",
     }),
     body: text("body").notNull(),
+    anchor: jsonb("anchor").$type<DiscussionCommentAnchor>(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     editedAt: timestamp("edited_at"),
     deletedAt: timestamp("deleted_at"),
@@ -3820,11 +3918,23 @@ export const discussionComments = pgTable(
     }).onDelete("cascade"),
     check(
       "discussionComments_target_check",
-      sql`num_nonnulls(${table.feedbackId}, ${table.shelfSourceId}) = 1`
+      sql`num_nonnulls(${table.feedbackId}, ${table.shelfSourceId}, ${table.contentId}) = 1`
+    ),
+    index("discussionComments_content_idx").on(
+      table.contentId,
+      table.createdAt
+    ),
+    check(
+      "discussionComments_resolution_check",
+      sql`(${table.resolvedAt} IS NULL AND ${table.resolvedByUserId} IS NULL) OR (${table.resolvedAt} IS NOT NULL AND ${table.contentId} IS NOT NULL AND ${table.parentId} IS NULL)`
     ),
     check(
       "discussionComments_depth_check",
       sql`${table.depth} between 0 and 5`
+    ),
+    check(
+      "discussionComments_anchor_check",
+      sql`${table.anchor} IS NULL OR (${table.contentId} IS NOT NULL AND ${table.parentId} IS NULL AND ${table.depth} = 0 AND jsonb_typeof(${table.anchor}) = 'object')`
     ),
   ]
 );
@@ -3865,15 +3975,11 @@ export const demoSandboxes = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    // Demo keys only work against demo-api and expire with the sandbox, so
-    // keeping the plaintext lets the in-app API console send real requests.
     apiKey: text("api_key"),
     apiKeyId: text("api_key_id"),
     timeZone: text("time_zone").default("UTC").notNull(),
     anchorAt: timestamp("anchor_at").notNull(),
     ipHash: text("ip_hash"),
-    // What the visitor entered under "Customize your experience"; reapplied
-    // on every reset. Null means the default Fieldnote workspace.
     personalization: jsonb("personalization").$type<DemoPersonalization>(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
@@ -4030,6 +4136,718 @@ export const webhookAttempts = pgTable(
     uniqueIndex("webhook_attempts_delivery_number").on(
       table.deliveryId,
       table.attemptNumber
+    ),
+  ]
+);
+
+// The physical publish_mode column is dropped in a follow-up migration.
+export const sites = pgTable(
+  "sites",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "restrict" }),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    repositoryId: text("repository_id").references(
+      () => githubIntegrations.id,
+      {
+        onDelete: "set null",
+      }
+    ),
+    githubInstallationId: text("github_installation_id"),
+    githubRepositoryId: text("github_repository_id"),
+    repositoryOwner: text("repository_owner"),
+    repositoryName: text("repository_name"),
+    productionBranch: text("production_branch").notNull().default("main"),
+    rootDirectory: text("root_directory").notNull().default(""),
+    publicOrigin: text("public_origin").notNull(),
+    mounts: jsonb("mounts").$type<SiteMounts>().notNull(),
+    previewsEnabled: boolean("previews_enabled").notNull().default(true),
+    smartDeployments: boolean("smart_deployments").notNull().default(true),
+    previewCommentsEnabled: boolean("preview_comments_enabled")
+      .notNull()
+      .default(true),
+    previewVisibility: text("preview_visibility", {
+      enum: SITE_PREVIEW_VISIBILITIES,
+    })
+      .notNull()
+      .default("protected"),
+    showBranding: boolean("show_branding").notNull().default(true),
+    analyticsEnabled: boolean("analytics_enabled").notNull().default(true),
+    previewPassword: jsonb("preview_password").$type<SitePreviewPassword>(),
+    status: text("status", { enum: SITE_STATUSES }).notNull().default("active"),
+    suspendedReason: text("suspended_reason"),
+    suspendedBy: text("suspended_by", { enum: SITE_SUSPENDERS }),
+    /** Suspended by an organization suspension; lifted with it. */
+    suspendedWithOrganization: boolean("suspended_with_organization")
+      .notNull()
+      .default(false),
+    lastGeneration: integer("last_generation").notNull().default(0),
+    activeProductionDeploymentId: text(
+      "active_production_deployment_id"
+    ).references((): AnyPgColumn => siteDeployments.id, {
+      onDelete: "set null",
+    }),
+    createdByUserId: text("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table): PgTableExtraConfigValue[] => [
+    index("sites_org_project_idx").on(table.organizationId, table.projectId),
+    uniqueIndex("sites_slug_uidx").on(table.slug),
+    index("sites_githubRepositoryId_idx").on(table.githubRepositoryId),
+    uniqueIndex("sites_org_id_uidx").on(table.organizationId, table.id),
+    foreignKey({
+      columns: [table.organizationId, table.projectId],
+      foreignColumns: [projects.organizationId, projects.id],
+      name: "sites_org_project_fk",
+    }),
+    foreignKey({
+      columns: [table.organizationId, table.repositoryId],
+      foreignColumns: [
+        githubIntegrations.organizationId,
+        githubIntegrations.id,
+      ],
+      name: "sites_org_repository_fk",
+    }),
+    foreignKey({
+      columns: [table.id, table.activeProductionDeploymentId],
+      foreignColumns: [siteDeployments.siteId, siteDeployments.id],
+      name: "sites_active_production_same_site_fk",
+    }),
+    check(
+      "sites_status_check",
+      sql`${table.status} IN ('active', 'suspended')`
+    ),
+    check(
+      "sites_previewVisibility_check",
+      sql`${table.previewVisibility} IN ('public', 'protected')`
+    ),
+    check("sites_lastGeneration_check", sql`${table.lastGeneration} >= 0`),
+    check(
+      "sites_suspendedBy_check",
+      sql`${table.suspendedBy} IN ('owner', 'notra')`
+    ),
+  ]
+);
+
+export const siteDomains = pgTable(
+  "site_domains",
+  {
+    id: text("id").primaryKey(),
+    siteId: text("site_id")
+      .notNull()
+      .references((): AnyPgColumn => sites.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    hostname: text("hostname").notNull(),
+    kind: text("kind", { enum: SITE_DOMAIN_KINDS }).notNull(),
+    status: text("status", { enum: SITE_DOMAIN_STATUSES })
+      .notNull()
+      .default("pending"),
+    cloudflareHostnameId: text("cloudflare_hostname_id"),
+    verificationRecords: jsonb("verification_records")
+      .$type<SiteDomainVerificationRecord[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    lastError: text("last_error"),
+    lastCheckedAt: timestamp("last_checked_at"),
+    verifiedAt: timestamp("verified_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("siteDomains_site_hostname_uidx").on(
+      table.siteId,
+      table.hostname
+    ),
+    uniqueIndex("siteDomains_active_hostname_uidx")
+      .on(table.hostname)
+      .where(sql`${table.status} = 'active'`),
+    index("siteDomains_hostname_idx").on(table.hostname),
+    foreignKey({
+      columns: [table.organizationId, table.siteId],
+      foreignColumns: [sites.organizationId, sites.id],
+      name: "siteDomains_org_site_fk",
+    }).onDelete("cascade"),
+    check(
+      "siteDomains_kind_check",
+      sql`${table.kind} IN ('subdomain', 'proxy')`
+    ),
+    check(
+      "siteDomains_status_check",
+      sql`${table.status} IN ('pending', 'verifying', 'active', 'failed')`
+    ),
+  ]
+);
+
+export const siteDeployments = pgTable(
+  "site_deployments",
+  {
+    id: text("id").primaryKey(),
+    siteId: text("site_id")
+      .notNull()
+      .references((): AnyPgColumn => sites.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: SITE_DEPLOYMENT_KINDS }).notNull(),
+    previewKey: text("preview_key"),
+    trigger: text("trigger", { enum: SITE_DEPLOYMENT_TRIGGERS }).notNull(),
+    status: text("status", { enum: SITE_DEPLOYMENT_STATUSES })
+      .notNull()
+      .default("queued"),
+    generation: integer("generation").notNull(),
+    githubRepositoryId: text("github_repository_id"),
+    repositoryOwner: text("repository_owner"),
+    repositoryName: text("repository_name"),
+    branch: text("branch").notNull(),
+    commitSha: text("commit_sha").notNull(),
+    commitMessage: text("commit_message"),
+    commitAuthor: text("commit_author"),
+    pullRequestNumber: integer("pull_request_number"),
+    target: jsonb("target").$type<SiteBuildTarget>().notNull(),
+    configHash: text("config_hash").notNull(),
+    inputFingerprint: text("input_fingerprint"),
+    skipReason: text("skip_reason"),
+    smartDeploymentEvaluation: jsonb(
+      "smart_deployment_evaluation"
+    ).$type<SmartDeploymentEvaluation>(),
+    buildBudgetReserved: boolean("build_budget_reserved")
+      .notNull()
+      .default(true),
+    toolchainVersion: text("toolchain_version"),
+    fileCount: integer("file_count"),
+    totalBytes: integer("total_bytes"),
+    buildDurationMs: integer("build_duration_ms"),
+    diagnostics: jsonb("diagnostics")
+      .$type<SiteDiagnostic[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    errorMessage: text("error_message"),
+    checkRunId: text("check_run_id"),
+    requestedByUserId: text("requested_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    startedAt: timestamp("started_at"),
+    finishedAt: timestamp("finished_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("siteDeployments_site_created_idx").on(table.siteId, table.createdAt),
+    uniqueIndex("siteDeployments_site_generation_uidx").on(
+      table.siteId,
+      table.generation
+    ),
+    index("siteDeployments_site_preview_idx").on(
+      table.siteId,
+      table.previewKey
+    ),
+    uniqueIndex("siteDeployments_site_id_uidx").on(table.siteId, table.id),
+    index("siteDeployments_org_created_idx").on(
+      table.organizationId,
+      table.createdAt
+    ),
+    foreignKey({
+      columns: [table.organizationId, table.siteId],
+      foreignColumns: [sites.organizationId, sites.id],
+      name: "siteDeployments_org_site_fk",
+    }).onDelete("cascade"),
+    check(
+      "siteDeployments_kind_check",
+      sql`${table.kind} IN ('production', 'preview')`
+    ),
+    check(
+      "siteDeployments_status_check",
+      sql`${table.status} IN ('queued', 'building', 'uploading', 'ready', 'superseded', 'skipped', 'failed', 'canceled', 'expired')`
+    ),
+    check(
+      "siteDeployments_trigger_check",
+      sql`${table.trigger} IN ('push', 'pull_request', 'manual', 'redeploy', 'config')`
+    ),
+    check("siteDeployments_generation_check", sql`${table.generation} >= 0`),
+    check(
+      "siteDeployments_previewKey_check",
+      sql`(${table.kind} = 'production' AND ${table.previewKey} IS NULL) OR (${table.kind} = 'preview' AND ${table.previewKey} IS NOT NULL AND length(${table.previewKey}) > 0)`
+    ),
+  ]
+);
+
+export const siteBuildTelemetry = pgTable("site_build_telemetry", {
+  deploymentId: text("deployment_id")
+    .primaryKey()
+    .references(() => siteDeployments.id, { onDelete: "cascade" }),
+  metrics: jsonb("metrics").$type<SiteBuildMetrics>().notNull(),
+  log: text("log").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+});
+
+export const siteJobs = pgTable(
+  "site_jobs",
+  {
+    id: text("id").primaryKey(),
+    siteId: text("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    deploymentId: text("deployment_id"),
+    kind: text("kind", { enum: SITE_JOB_KINDS }).notNull(),
+    payload: jsonb("payload")
+      .$type<SiteJobPayload>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    status: text("status", { enum: SITE_JOB_STATUSES })
+      .notNull()
+      .default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(3),
+    availableAt: timestamp("available_at").defaultNow().notNull(),
+    leaseUntil: timestamp("lease_until"),
+    dispatchedAt: timestamp("dispatched_at"),
+    lastError: text("last_error"),
+    dedupeKey: text("dedupe_key"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("siteJobs_due_idx").on(table.status, table.availableAt),
+    uniqueIndex("siteJobs_dedupeKey_uidx").on(table.dedupeKey),
+    index("siteJobs_site_deployment_idx").on(table.siteId, table.deploymentId),
+    foreignKey({
+      columns: [table.siteId, table.deploymentId],
+      foreignColumns: [siteDeployments.siteId, siteDeployments.id],
+      name: "siteJobs_site_deployment_fk",
+    }).onDelete("cascade"),
+    check(
+      "siteJobs_kind_check",
+      sql`${table.kind} IN ('build', 'remove_preview', 'sync_state')`
+    ),
+    check(
+      "siteJobs_status_check",
+      sql`${table.status} IN ('pending', 'running', 'done', 'failed')`
+    ),
+    check(
+      "siteJobs_attempts_check",
+      sql`${table.attempts} >= 0 AND ${table.maxAttempts} >= 0`
+    ),
+  ]
+);
+
+export const siteSlugGrants = pgTable("site_slug_grants", {
+  slug: text("slug").primaryKey(),
+  // Null keeps the slug blocked for everyone, e.g. after the owning
+  // organization is deleted, so proxies still pointing at it can't be taken.
+  organizationId: text("organization_id").references(() => organizations.id, {
+    onDelete: "set null",
+  }),
+  note: text("note"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const siteWebhookDeliveries = pgTable("site_webhook_deliveries", {
+  deliveryId: text("delivery_id").primaryKey(),
+  event: text("event").notNull(),
+  receivedAt: timestamp("received_at").defaultNow().notNull(),
+  processedAt: timestamp("processed_at"),
+});
+
+export const siteDrafts = pgTable(
+  "site_drafts",
+  {
+    id: text("id").primaryKey(),
+    siteId: text("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    branch: text("branch").notNull().default(""),
+    path: text("path").notNull(),
+    content: text("content").notNull(),
+    baseBlobSha: text("base_blob_sha"),
+    baseCommitSha: text("base_commit_sha"),
+    deleted: boolean("deleted").notNull().default(false),
+    revision: integer("revision").notNull().default(0),
+    committedRevision: integer("committed_revision"),
+    updatedByUserId: text("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("siteDrafts_site_path_uidx").on(table.siteId, table.path),
+    uniqueIndex("siteDrafts_site_branch_path_uidx").on(
+      table.siteId,
+      table.branch,
+      table.path
+    ),
+  ]
+);
+
+export const siteBranchDrafts = pgTable(
+  "site_branch_drafts",
+  {
+    id: text("id").primaryKey(),
+    siteId: text("site_id")
+      .notNull()
+      .references(() => sites.id, { onDelete: "cascade" }),
+    branch: text("branch").notNull(),
+    path: text("path").notNull(),
+    content: text("content").notNull(),
+    baseBlobSha: text("base_blob_sha"),
+    baseCommitSha: text("base_commit_sha"),
+    deleted: boolean("deleted").notNull().default(false),
+    revision: integer("revision").notNull().default(0),
+    committedRevision: integer("committed_revision"),
+    updatedByUserId: text("updated_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("siteBranchDrafts_site_branch_path_uidx").on(
+      table.siteId,
+      table.branch,
+      table.path
+    ),
+  ]
+);
+
+export const sitesRelations = relations(sites, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [sites.organizationId],
+    references: [organizations.id],
+  }),
+  repository: one(githubIntegrations, {
+    fields: [sites.repositoryId],
+    references: [githubIntegrations.id],
+  }),
+  domains: many(siteDomains),
+  deployments: many(siteDeployments),
+}));
+
+export const siteDomainsRelations = relations(siteDomains, ({ one }) => ({
+  site: one(sites, { fields: [siteDomains.siteId], references: [sites.id] }),
+}));
+
+export const siteDeploymentsRelations = relations(
+  siteDeployments,
+  ({ one }) => ({
+    site: one(sites, {
+      fields: [siteDeployments.siteId],
+      references: [sites.id],
+    }),
+    requestedByUser: one(users, {
+      fields: [siteDeployments.requestedByUserId],
+      references: [users.id],
+    }),
+    telemetry: one(siteBuildTelemetry),
+  })
+);
+
+export const siteBuildTelemetryRelations = relations(
+  siteBuildTelemetry,
+  ({ one }) => ({
+    deployment: one(siteDeployments, {
+      fields: [siteBuildTelemetry.deploymentId],
+      references: [siteDeployments.id],
+    }),
+  })
+);
+
+// Deliberately no organization FK: cleanup must survive the organization cascade.
+export const autopilotNamespaceDeletions = pgTable(
+  "autopilot_namespace_deletions",
+  {
+    organizationId: text("organization_id").primaryKey(),
+    nextAttemptAt: timestamp("next_attempt_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("autopilotNamespaceDeletions_nextAttemptAt_idx").on(
+      table.nextAttemptAt
+    ),
+  ]
+);
+
+export const autopilotSettings = pgTable("autopilot_settings", {
+  organizationId: text("organization_id")
+    .primaryKey()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").notNull().default(false),
+  projectId: text("project_id").references(() => projects.id, {
+    onDelete: "set null",
+  }),
+  repositoryOwner: text("repository_owner"),
+  repositoryName: text("repository_name"),
+  repositoryBranch: text("repository_branch"),
+  contentPath: text("content_path"),
+  slackIntegrationId: text("slack_integration_id").references(
+    () => slackIntegrations.id,
+    { onDelete: "set null" }
+  ),
+  slackChannelId: text("slack_channel_id"),
+  slackChannelName: text("slack_channel_name"),
+  briefHour: integer("brief_hour").notNull().default(9),
+  timezone: text("timezone").notNull().default("Europe/Berlin"),
+  jobs: jsonb("jobs")
+    .$type<AutopilotJobs>()
+    .notNull()
+    .default(
+      sql`'{"readiness":true,"keywords":true,"commits":true,"competitors":true}'::jsonb`
+    ),
+  /**
+   * Author and path filters for the pull requests the commits job reads. The
+   * well-known bots are skipped by default, as removable entries.
+   */
+  commitFilters: jsonb("commit_filters")
+    .$type<AutopilotCommitFilters>()
+    .notNull()
+    .default(
+      sql`'{"excludedAuthors":["dependabot[bot]","renovate[bot]","github-actions[bot]"],"paths":{}}'::jsonb`
+    ),
+  maxOpenPullRequests: integer("max_open_pull_requests").notNull().default(3),
+  /** Drafts nobody touched for this many days are closed; null keeps them open. */
+  stalePullRequestDays: integer("stale_pull_request_days").default(14),
+  lastRunAt: timestamp("last_run_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+});
+
+export const autopilotRuns = pgTable(
+  "autopilot_runs",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    trigger: text("trigger", { enum: AUTOPILOT_RUN_TRIGGERS }).notNull(),
+    workflowKey: text("workflow_key"),
+    status: text("status", { enum: AUTOPILOT_RUN_STATUSES })
+      .notNull()
+      .default("running"),
+    summary: jsonb("summary").$type<AutopilotRunSummary | null>().default(null),
+    slackMessageTs: text("slack_message_ts"),
+    errorMessage: text("error_message"),
+    startedAt: timestamp("started_at").defaultNow().notNull(),
+    finishedAt: timestamp("finished_at"),
+    /** Renewed while a worker is alive; startedAt remains the actual start time. */
+    heartbeatAt: timestamp("heartbeat_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("autopilotRuns_organizationId_startedAt_idx").on(
+      table.organizationId,
+      table.startedAt
+    ),
+    uniqueIndex("autopilotRuns_organizationId_running_uidx")
+      .on(table.organizationId)
+      .where(
+        sql`${table.status} = 'running' AND ${table.trigger} IN ('manual', 'cron', 'onboarding')`
+      ),
+  ]
+);
+
+export const autopilotFindings = pgTable(
+  "autopilot_findings",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    runId: text("run_id").references(() => autopilotRuns.id, {
+      onDelete: "set null",
+    }),
+    kind: text("kind", { enum: AUTOPILOT_JOB_KINDS }).notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    title: text("title").notNull(),
+    summary: text("summary").notNull(),
+    evidence: jsonb("evidence")
+      .$type<AutopilotFindingEvidence>()
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    status: text("status", { enum: AUTOPILOT_FINDING_STATUSES })
+      .notNull()
+      .default("open"),
+    repository: text("repository"),
+    pullRequestNumber: integer("pull_request_number"),
+    pullRequestUrl: text("pull_request_url"),
+    branch: text("branch"),
+    headSha: text("head_sha"),
+    postId: text("post_id").references(() => posts.id, {
+      onDelete: "set null",
+    }),
+    errorMessage: text("error_message"),
+    /** Whoever is writing this finding right now; writes and status changes require it. */
+    claimToken: text("claim_token"),
+    claimedAt: timestamp("claimed_at"),
+    mergedAt: timestamp("merged_at"),
+    /** When it was closed without a merge, by a person or as stale. */
+    dismissedAt: timestamp("dismissed_at"),
+    /** When its pull request was opened; an idea can wait days before that. */
+    openedAt: timestamp("opened_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("autopilotFindings_organizationId_fingerprint_uidx").on(
+      table.organizationId,
+      table.fingerprint
+    ),
+    index("autopilotFindings_organizationId_status_idx").on(
+      table.organizationId,
+      table.status
+    ),
+    index("autopilotFindings_organizationId_updatedAt_idx").on(
+      table.organizationId,
+      table.updatedAt
+    ),
+  ]
+);
+
+/** Step-by-step trace of what Autopilot looked at and decided during a run. */
+export const autopilotRunEvents = pgTable(
+  "autopilot_run_events",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    runId: text("run_id")
+      .notNull()
+      .references(() => autopilotRuns.id, { onDelete: "cascade" }),
+    job: text("job", { enum: AUTOPILOT_JOB_KINDS }),
+    level: text("level", { enum: AUTOPILOT_EVENT_LEVELS }).notNull(),
+    message: text("message").notNull(),
+    data: jsonb("data").$type<AutopilotRunEventData | null>().default(null),
+    /** Admin-only events (per-candidate drops, raw model calls); never sent to users. */
+    internal: boolean("internal").notNull().default(false),
+    /** Admin-only payload: prompts, model inputs and outputs, tool calls. */
+    detail: jsonb("detail").$type<AutopilotTraceDetail | null>().default(null),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("autopilotRunEvents_runId_createdAt_idx").on(
+      table.runId,
+      table.createdAt
+    ),
+    index("autopilotRunEvents_organizationId_createdAt_idx").on(
+      table.organizationId,
+      table.createdAt
+    ),
+  ]
+);
+
+export const workflowRuns = pgTable(
+  "workflow_runs",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    workflowKey: text("workflow_key").notNull(),
+    parentRunId: text("parent_run_id").references(
+      (): AnyPgColumn => workflowRuns.id,
+      { onDelete: "cascade" }
+    ),
+    rootRunId: text("root_run_id"),
+    parentNodeId: text("parent_node_id"),
+    graph: jsonb("graph").$type<StoredWorkflowGraph>().notNull(),
+    runtimeRunId: text("runtime_run_id"),
+    trigger: text("trigger").notNull(),
+    status: text("status", { enum: WORKFLOW_RUN_STATUSES })
+      .notNull()
+      .default("queued"),
+    input: jsonb("input").$type<unknown>(),
+    output: jsonb("output").$type<unknown>(),
+    errorMessage: text("error_message"),
+    failedNodeId: text("failed_node_id"),
+    startedAt: timestamp("started_at"),
+    finishedAt: timestamp("finished_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("workflowRuns_organizationId_createdAt_idx").on(
+      table.organizationId,
+      table.createdAt
+    ),
+    index("workflowRuns_organizationId_workflowKey_createdAt_idx").on(
+      table.organizationId,
+      table.workflowKey,
+      table.createdAt
+    ),
+    index("workflowRuns_rootRunId_idx").on(table.rootRunId),
+    uniqueIndex("workflowRuns_parentRunId_parentNodeId_uidx").on(
+      table.parentRunId,
+      table.parentNodeId
+    ),
+  ]
+);
+
+export const workflowRunNodes = pgTable(
+  "workflow_run_nodes",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    runId: text("run_id")
+      .notNull()
+      .references(() => workflowRuns.id, { onDelete: "cascade" }),
+    nodeId: text("node_id").notNull(),
+    status: text("status", { enum: WORKFLOW_RUN_NODE_STATUSES }).notNull(),
+    steps: jsonb("steps")
+      .$type<Record<string, WorkflowRunNodeStep>>()
+      .notNull()
+      .default({}),
+    port: text("port"),
+    output: jsonb("output").$type<unknown>(),
+    errorMessage: text("error_message"),
+    reason: text("reason"),
+    startedAt: timestamp("started_at"),
+    finishedAt: timestamp("finished_at"),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("workflowRunNodes_runId_nodeId_uidx").on(
+      table.runId,
+      table.nodeId
     ),
   ]
 );

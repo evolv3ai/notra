@@ -1,5 +1,4 @@
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
-import type { PostHogProperties } from "@notra/posthog/types/posthog";
 
 import {
   BRAND_ANALYSIS_PHASES_BY_STEP,
@@ -18,19 +17,21 @@ import type {
 } from "@/types/analytics/workflow-events";
 import type { BrandAnalysisProgressInput } from "@/types/workflows/brand-analysis";
 import type { TrackContentOutcomeInput } from "@/types/workflows/content-generation-steps";
+import {
+  buildFailureTelemetryFields,
+  isConfigurationFailure,
+} from "@/utils/workflow-failure";
 import { notifyWorkflowFailure } from "@/utils/workflow-failure-alert";
 import { getCurrentWorkflowRunId } from "@/utils/workflow-run-id";
 import { logWorkflowTelemetry } from "@/utils/workflow-telemetry";
 
 function resolveDurationMs(startedAt: number | undefined): number | undefined {
-  if (startedAt === undefined) {
-    return undefined;
-  }
-  return Math.max(0, Date.now() - startedAt);
+  return startedAt === undefined
+    ? undefined
+    : Math.max(0, Date.now() - startedAt);
 }
 
 export function trackWorkflowStarted(input: WorkflowStartedInput): void {
-  // start() acknowledges queue acceptance, not the beginning of execution.
   logWorkflowTelemetry({
     event: "job.queued",
     runId: input.runId,
@@ -53,55 +54,70 @@ export function trackWorkflowStarted(input: WorkflowStartedInput): void {
   });
 }
 
-function buildWorkflowOutcomeProperties(
-  input: WorkflowOutcomeInput
-): PostHogProperties {
-  return {
-    workflow: input.workflow,
-    run_id: input.runId,
-    duration_ms: resolveDurationMs(input.startedAt),
-    step_failed: input.stepFailed,
-    reason: input.reason,
-    ...input.properties,
-  };
-}
-
 export async function trackWorkflowOutcomeAndFlush(
   input: WorkflowOutcomeInput
 ): Promise<void> {
+  const failed = input.outcome === WORKFLOW_OUTCOMES.FAILED;
+  const configurationFailure = failed && isConfigurationFailure(input);
   const runId = getCurrentWorkflowRunId();
+  let telemetryOutcome: "success" | "warning" | "error" = "success";
+  if (failed) {
+    telemetryOutcome = configurationFailure ? "warning" : "error";
+  }
   logWorkflowTelemetry({
-    event:
-      input.outcome === WORKFLOW_OUTCOMES.FAILED
-        ? "job.failed"
-        : "job.completed",
+    event: failed ? "job.failed" : "job.completed",
     runId,
     executionId: input.runId,
     workflow: input.workflow,
     organizationId: input.organizationId,
     projectId: input.projectId,
     durationMs: resolveDurationMs(input.startedAt),
-    outcome: input.outcome === WORKFLOW_OUTCOMES.FAILED ? "error" : "success",
+    outcome: telemetryOutcome,
     stepFailed: input.stepFailed,
+    ...(failed ? buildFailureTelemetryFields(input) : {}),
   });
   const alertRunId = runId ?? input.runId;
-  if (input.outcome === WORKFLOW_OUTCOMES.FAILED && alertRunId) {
+  // Configuration failures are caused by the request, not by an outage, so
+  // they keep their status, logs, and analytics but do not page.
+  if (failed && alertRunId && !configurationFailure) {
     await notifyWorkflowFailure({
       runId: alertRunId,
       workflow: input.workflow,
       organizationId: input.organizationId,
       projectId: input.projectId,
       reason: input.reason ?? input.stepFailed,
+      errorCode: input.errorCode,
+      phase: input.phase,
+      classification: input.classification,
+      diagnostics: input.diagnostics,
+      websiteUrl: input.websiteUrl,
     });
   }
   await trackServerEventAndFlush({
-    event:
-      input.outcome === WORKFLOW_OUTCOMES.FAILED
-        ? POSTHOG_EVENTS.WORKFLOW_FAILED
-        : POSTHOG_EVENTS.WORKFLOW_COMPLETED,
+    event: failed
+      ? POSTHOG_EVENTS.WORKFLOW_FAILED
+      : POSTHOG_EVENTS.WORKFLOW_COMPLETED,
     organizationId: input.organizationId,
     projectId: input.projectId,
-    properties: buildWorkflowOutcomeProperties(input),
+    properties: {
+      workflow: input.workflow,
+      run_id: input.runId,
+      duration_ms: resolveDurationMs(input.startedAt),
+      step_failed: input.stepFailed,
+      reason: input.reason,
+      ...(input.errorCode ? { error_code: input.errorCode } : {}),
+      ...(input.phase ? { phase: input.phase } : {}),
+      ...(input.classification
+        ? { failure_classification: input.classification }
+        : {}),
+      ...Object.fromEntries(
+        Object.entries(input.diagnostics ?? {}).map(([key, value]) => [
+          `diagnostic_${key}`,
+          value,
+        ])
+      ),
+      ...input.properties,
+    },
   });
 }
 
@@ -116,6 +132,7 @@ export async function trackContentOutcomeAndFlush(
       creation_mode: input.creationMode,
       output_type: input.outputType,
       reason: input.reason,
+      error_code: input.errorCode,
       repository_count: input.repositoryCount,
       lookback_window: input.lookbackWindow,
       post_count: input.postIds?.length,
@@ -136,15 +153,13 @@ export async function trackBrandAnalysisOutcomeAndFlush(
     ? (BRAND_ANALYSIS_PHASES_BY_STEP[currentStep] ??
       BRAND_ANALYSIS_UNEXPECTED_PHASE)
     : undefined;
-  const durationMs = resolveDurationMs(input.startedAt);
-
   await trackServerEventAndFlush({
     event: failed
       ? POSTHOG_EVENTS.BRAND_ANALYSIS_FAILED
       : POSTHOG_EVENTS.BRAND_ANALYSIS_COMPLETED,
     organizationId: input.organizationId,
     properties: {
-      duration_ms: durationMs,
+      duration_ms: resolveDurationMs(input.startedAt),
       phase_failed: phaseFailed,
       job_id: input.jobId,
     },
@@ -157,5 +172,6 @@ export async function trackBrandAnalysisOutcomeAndFlush(
     startedAt: input.startedAt,
     stepFailed: phaseFailed,
     reason: failed ? error : undefined,
+    websiteUrl: input.websiteUrl,
   });
 }

@@ -1,6 +1,6 @@
-import { describeContentBillingDenial } from "@notra/ai/billing/content-billing";
 import { gateway } from "@notra/ai/gateway";
 import type { AgentTokenUsage } from "@notra/ai/types/agents";
+import { describeContentBillingDenial } from "@notra/ai/utils/content-billing-messages";
 import { toAgentTokenUsage } from "@notra/ai/utils/token-usage";
 import { db } from "@notra/db/drizzle";
 import {
@@ -48,6 +48,7 @@ import {
   geoPersonaGenerationSchema,
   geoPersonaRegenerationSchema,
 } from "../schemas/geo-personas";
+import type { DbTransaction } from "../types/db";
 import type { GeoScopeInput, GeoWindowInput } from "../types/geo";
 import type {
   GeoPersona,
@@ -61,6 +62,7 @@ import type {
   GeoPersonaUpdateInput,
   PersonaGenerationContext,
 } from "../types/geo-personas";
+import { logGeoFailure } from "../utils/geo-log";
 import {
   hasGeoPersonaDetailsChanged,
   normalizeGeneratedPersonaSet,
@@ -78,6 +80,7 @@ import { toGeoPersona } from "./mappers";
 import { geoCheckScope, requireGeoProject, resolveGeoScope } from "./projects";
 import { startClaimedGeoScanRun } from "./scan-handoff";
 import { claimGeoScanRun } from "./scan-status";
+import { geoTransaction } from "./transaction";
 
 const loadPersonaRows = Effect.fn("geo.personas.load")(function* (
   projectId: string,
@@ -124,6 +127,24 @@ function toPersonas(
   return rows.map((row) => toGeoPersona(row, byPersona.get(row.id) ?? []));
 }
 
+async function countActivePersonas(
+  executor: typeof db | DbTransaction,
+  organizationId: string,
+  projectId: string
+): Promise<number> {
+  const [row] = await executor
+    .select({ count: count() })
+    .from(geoPersonas)
+    .where(
+      and(
+        eq(geoPersonas.projectId, projectId),
+        eq(geoPersonas.organizationId, organizationId),
+        isNull(geoPersonas.archivedAt)
+      )
+    );
+  return row?.count ?? 0;
+}
+
 export const listGeoPersonas = Effect.fn("geo.personasList")(function* (
   input: GeoScopeInput
 ) {
@@ -145,19 +166,10 @@ export const requireGeoPersonaGenerationCapacity = Effect.fn(
     return scope;
   }
   const current = yield* geoDb("persona count lookup failed", () =>
-    db
-      .select({ count: count() })
-      .from(geoPersonas)
-      .where(
-        and(
-          eq(geoPersonas.projectId, scope.projectId),
-          eq(geoPersonas.organizationId, scope.organizationId),
-          isNull(geoPersonas.archivedAt)
-        )
-      )
+    countActivePersonas(db, scope.organizationId, scope.projectId)
   );
   const requestedCount = brief ? 1 : GEO_PERSONA_MIN_COUNT;
-  if ((current.at(0)?.count ?? 0) + requestedCount > GEO_PERSONA_MAX_COUNT) {
+  if (current + requestedCount > GEO_PERSONA_MAX_COUNT) {
     return yield* Effect.fail(
       new GeoPersonaLimitError({ limit: GEO_PERSONA_MAX_COUNT })
     );
@@ -340,33 +352,25 @@ export const persistGeneratedPersonas = Effect.fn("geo.personas.persist")(
       }
     }
 
-    const persisted = yield* geoDb("personas persist failed", () =>
-      db.transaction(async (tx) => {
-        await Effect.runPromise(lockGeoProject(tx, projectId));
+    const persisted = yield* geoTransaction("personas persist failed", (tx) =>
+      Effect.gen(function* () {
+        yield* lockGeoProject(tx, projectId);
         if (!target) {
-          const current = await tx
-            .select({ count: count() })
-            .from(geoPersonas)
-            .where(
-              and(
-                eq(geoPersonas.projectId, projectId),
-                eq(geoPersonas.organizationId, organizationId),
-                isNull(geoPersonas.archivedAt)
-              )
-            );
-          if (
-            (current.at(0)?.count ?? 0) + personaRows.length >
-            GEO_PERSONA_MAX_COUNT
-          ) {
+          const current = yield* geoDb("personas persist failed", () =>
+            countActivePersonas(tx, organizationId, projectId)
+          );
+          if (current + personaRows.length > GEO_PERSONA_MAX_COUNT) {
             return null;
           }
         }
         if (target) {
           const replacement = personaRows.at(0);
           if (!replacement || personaRows.length !== 1) {
-            throw new GeoPersonaGenerateError({
-              message: "Expected one replacement persona",
-            });
+            return yield* Effect.fail(
+              new GeoPersonaGenerateError({
+                message: "Expected one replacement persona",
+              })
+            );
           }
           const replacementFields = promptsOnly
             ? { conversationPrompts: replacement.conversationPrompts }
@@ -379,43 +383,54 @@ export const persistGeneratedPersonas = Effect.fn("geo.personas.persist")(
                 conversationPrompts: replacement.conversationPrompts,
                 profile: replacement.profile,
               };
-          const updated = await tx
-            .update(geoPersonas)
-            .set({
-              ...replacementFields,
-              updatedAt: now,
-            })
-            .where(
-              and(
-                eq(geoPersonas.projectId, projectId),
-                eq(geoPersonas.organizationId, organizationId),
-                eq(geoPersonas.id, target.id),
-                isNull(geoPersonas.archivedAt),
-                eq(geoPersonas.name, target.name),
-                eq(geoPersonas.role, target.role),
-                eq(geoPersonas.company, target.company),
-                eq(geoPersonas.summary, target.summary),
-                eq(geoPersonas.searchStyle, target.searchStyle),
-                eq(geoPersonas.profile, target.profile),
-                eq(geoPersonas.conversationPrompts, target.conversationPrompts)
+          const updated = yield* geoDb("personas persist failed", () =>
+            tx
+              .update(geoPersonas)
+              .set({
+                ...replacementFields,
+                updatedAt: now,
+              })
+              .where(
+                and(
+                  eq(geoPersonas.projectId, projectId),
+                  eq(geoPersonas.organizationId, organizationId),
+                  eq(geoPersonas.id, target.id),
+                  isNull(geoPersonas.archivedAt),
+                  eq(geoPersonas.name, target.name),
+                  eq(geoPersonas.role, target.role),
+                  eq(geoPersonas.company, target.company),
+                  eq(geoPersonas.summary, target.summary),
+                  eq(geoPersonas.searchStyle, target.searchStyle),
+                  eq(geoPersonas.profile, target.profile),
+                  eq(
+                    geoPersonas.conversationPrompts,
+                    target.conversationPrompts
+                  )
+                )
               )
-            )
-            .returning({ id: geoPersonas.id });
+              .returning({ id: geoPersonas.id })
+          );
           if (updated.length !== 1) {
             return null;
           }
           if (!promptsOnly) {
-            await tx
-              .delete(geoPersonaMemories)
-              .where(eq(geoPersonaMemories.personaId, target.id));
+            yield* geoDb("personas persist failed", () =>
+              tx
+                .delete(geoPersonaMemories)
+                .where(eq(geoPersonaMemories.personaId, target.id))
+            );
           }
         } else {
-          await tx.insert(geoPersonas).values(personaRows);
+          yield* geoDb("personas persist failed", () =>
+            tx.insert(geoPersonas).values(personaRows)
+          );
         }
         if (!promptsOnly) {
-          await tx.insert(geoPersonaMemories).values(memoryRows);
+          yield* geoDb("personas persist failed", () =>
+            tx.insert(geoPersonaMemories).values(memoryRows)
+          );
         }
-        return Effect.runPromise(loadPersonaRows(projectId, tx));
+        return yield* loadPersonaRows(projectId, tx);
       })
     );
     if (!persisted) {
@@ -488,10 +503,10 @@ export const generateGeoPersonas = Effect.fn("geo.personasGenerate")(function* (
     })
     .pipe(
       Effect.mapError(
-        (cause) =>
+        (error) =>
           new GeoPersonaGenerateError({
             message: "Failed to reserve AI credits",
-            cause,
+            cause: error.cause,
           })
       )
     );
@@ -521,7 +536,12 @@ export const generateGeoPersonas = Effect.fn("geo.personasGenerate")(function* (
       .pipe(
         Effect.catch((error) =>
           Effect.sync(() => {
-            console.error(`[GeoPersonas] billing ${action} failed:`, error);
+            logGeoFailure(
+              "geo.personas.billing_failed",
+              `Persona billing ${action} failed`,
+              error,
+              { action, runId, projectId: scope.projectId }
+            );
           })
         )
       );
@@ -543,13 +563,8 @@ export const generateGeoPersonas = Effect.fn("geo.personasGenerate")(function* (
     promptsOnly
   ).pipe(Effect.tapError(() => settle("release")));
 
-  // The set is committed at this point, so the credits are spent no matter
-  // what happens while building the response below.
   yield* settle("confirm", generated.usage);
 
-  // Personas only produce results inside a scan, so a fresh set kicks one off
-  // right away when the project scans at all. An existing scan keeps its frozen
-  // plan; new personas will be picked up by the next project scan.
   if (settings?.enabled) {
     const claim = yield* claimGeoScanRun(scope.projectId).pipe(
       geoSkip("scan claim failed")
@@ -561,7 +576,12 @@ export const generateGeoPersonas = Effect.fn("geo.personasGenerate")(function* (
         claim.claimedAt
       ).pipe(
         Effect.catch((error) => {
-          console.error("[GEO] Failed to start scan after personas:", error);
+          logGeoFailure(
+            "geo.personas.scan_start_failed",
+            "Failed to start scan after personas",
+            error,
+            { projectId: scope.projectId }
+          );
           return Effect.void;
         })
       );
@@ -669,57 +689,54 @@ export const restoreGeoPersona = Effect.fn("geo.personaRestore")(function* (
 ) {
   const scope = yield* requireGeoProject(input);
   const now = new Date();
-  const result = yield* geoDb("persona restore failed", () =>
-    db.transaction(async (tx) => {
-      await Effect.runPromise(lockGeoProject(tx, scope.projectId));
-      const archived = await tx.query.geoPersonas.findFirst({
-        columns: { id: true },
-        where: and(
-          eq(geoPersonas.id, personaId),
-          eq(geoPersonas.organizationId, scope.organizationId),
-          eq(geoPersonas.projectId, scope.projectId),
-          isNotNull(geoPersonas.archivedAt)
-        ),
-      });
-      if (!archived) {
-        return { status: "missing" as const };
-      }
-      const current = await tx
-        .select({ count: count() })
-        .from(geoPersonas)
-        .where(
-          and(
-            eq(geoPersonas.projectId, scope.projectId),
-            eq(geoPersonas.organizationId, scope.organizationId),
-            isNull(geoPersonas.archivedAt)
-          )
-        );
-      if ((current.at(0)?.count ?? 0) >= GEO_PERSONA_MAX_COUNT) {
-        return { status: "limit" as const };
-      }
-      const [row] = await tx
-        .update(geoPersonas)
-        .set({ archivedAt: null, enabled: false, updatedAt: now })
-        .where(
-          and(
+  const result = yield* geoTransaction("persona restore failed", (tx) =>
+    Effect.gen(function* () {
+      yield* lockGeoProject(tx, scope.projectId);
+      return yield* geoDb("persona restore failed", async () => {
+        const archived = await tx.query.geoPersonas.findFirst({
+          columns: { id: true },
+          where: and(
             eq(geoPersonas.id, personaId),
             eq(geoPersonas.organizationId, scope.organizationId),
             eq(geoPersonas.projectId, scope.projectId),
             isNotNull(geoPersonas.archivedAt)
+          ),
+        });
+        if (!archived) {
+          return { status: "missing" as const };
+        }
+        const current = await countActivePersonas(
+          tx,
+          scope.organizationId,
+          scope.projectId
+        );
+        if (current >= GEO_PERSONA_MAX_COUNT) {
+          return { status: "limit" as const };
+        }
+        const [row] = await tx
+          .update(geoPersonas)
+          .set({ archivedAt: null, enabled: false, updatedAt: now })
+          .where(
+            and(
+              eq(geoPersonas.id, personaId),
+              eq(geoPersonas.organizationId, scope.organizationId),
+              eq(geoPersonas.projectId, scope.projectId),
+              isNotNull(geoPersonas.archivedAt)
+            )
           )
-        )
-        .returning();
-      if (!row) {
-        return { status: "missing" as const };
-      }
-      const memories = await tx.query.geoPersonaMemories.findMany({
-        where: eq(geoPersonaMemories.personaId, row.id),
-        orderBy: [asc(geoPersonaMemories.createdAt)],
+          .returning();
+        if (!row) {
+          return { status: "missing" as const };
+        }
+        const memories = await tx.query.geoPersonaMemories.findMany({
+          where: eq(geoPersonaMemories.personaId, row.id),
+          orderBy: [asc(geoPersonaMemories.createdAt)],
+        });
+        return {
+          status: "restored" as const,
+          persona: toGeoPersona(row, memories),
+        };
       });
-      return {
-        status: "restored" as const,
-        persona: toGeoPersona(row, memories),
-      };
     })
   );
   if (result.status === "missing") {

@@ -5,8 +5,7 @@ export interface ChartColorPair {
   dark: string;
 }
 
-// Require at least one theme key — identical constraint to the repo's ChartConfig.
-export type AtLeastOneThemeColor =
+type AtLeastOneThemeColor =
   | { light: string[]; dark?: string[] }
   | { light?: string[]; dark: string[] };
 
@@ -51,10 +50,6 @@ export interface SparklinePathInput {
 export interface ChartMarker {
   value: string;
   label: string;
-}
-
-export interface GridProps {
-  lineType?: "solid" | "dashed";
 }
 
 export type TooltipLayout = "rows" | "bars" | "activity";

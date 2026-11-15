@@ -1,22 +1,17 @@
 import { shouldBypassAutumnInDevelopment } from "@notra/ai/utils/autumn-development";
+import { logError } from "@notra/ai/utils/server-log";
 import { Effect } from "effect";
 import type { Context, Next } from "hono";
 
 import { API_PAYWALL_FEATURES } from "../constants/analytics";
 import { RESTRICTED_BILLING_METHODS } from "../constants/billing";
-import { billingLayer, type BillingMiddlewareOptions } from "../lib/billing";
-import { checkSubscriptionAccess } from "../programs/subscription";
+import { ORGANIZATION_SCOPED_API_KEY_ERROR } from "../constants/skills";
+import { BillingService, getBillingLayer } from "../lib/billing";
 import { isIngestAuth } from "../types/auth";
 import { trackApiPaywalled } from "../utils/analytics";
 import { getOrganizationId } from "../utils/auth";
 
-export type SubscriptionMiddlewareOptions = BillingMiddlewareOptions;
-
-// DELETE and GET are intentionally unrestricted so lapsed/unsubscribed orgs
-// retain read access and data-deletion rights (GDPR / data portability).
-export function subscriptionMiddleware(
-  options: SubscriptionMiddlewareOptions = {}
-) {
+export function subscriptionMiddleware() {
   return async (c: Context, next: Next) => {
     if (!RESTRICTED_BILLING_METHODS.has(c.req.method)) {
       return next();
@@ -32,9 +27,7 @@ export function subscriptionMiddleware(
         return next();
       }
 
-      console.error(
-        "AUTUMN_SECRET_KEY is not configured — rejecting write request"
-      );
+      logError("AUTUMN_SECRET_KEY is not configured, rejecting write request");
       trackApiPaywalled(c, {
         feature: API_PAYWALL_FEATURES.SUBSCRIPTION,
         status: 503,
@@ -44,17 +37,19 @@ export function subscriptionMiddleware(
 
     const orgId = getOrganizationId(c);
     if (!orgId) {
-      return c.json(
-        { error: "Forbidden: API key must be scoped to an organization" },
-        403
-      );
+      return c.json({ error: ORGANIZATION_SCOPED_API_KEY_ERROR }, 403);
     }
 
-    const layer = options.billingLayer ?? billingLayer(secretKey);
     const access = await Effect.runPromise(
       Effect.result(
-        checkSubscriptionAccess({ organizationId: orgId, secretKey }).pipe(
-          Effect.provide(layer)
+        Effect.gen(function* () {
+          const billing = yield* BillingService;
+          return yield* billing.checkSubscriptionAccess({
+            organizationId: orgId,
+          });
+        }).pipe(
+          Effect.withSpan("billing.checkSubscriptionAccess"),
+          Effect.provide(getBillingLayer(secretKey))
         )
       )
     );

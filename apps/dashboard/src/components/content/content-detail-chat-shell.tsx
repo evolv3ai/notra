@@ -7,13 +7,38 @@ import type {
   TextSelection,
 } from "@notra/ai/types/chat";
 import type { ChatStatus, UIMessage } from "ai";
+import {
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+} from "react";
 
 import ChatInput from "@/components/chat-input";
 import type { QueuedMessage } from "@/components/chat/chat-queue";
 import { ContentChatActivityPanel } from "@/components/content/content-chat-activity-panel";
+import {
+  ContentPanelOverview,
+  ContentPanelTabs,
+} from "@/components/content/overview/content-panel-tabs";
 import { RightPanel } from "@/components/dashboard/right-panel";
+import { useRightPanel } from "@/components/dashboard/right-panel-context";
+import {
+  isContentPanelDismissed,
+  setContentPanelDismissed,
+  setContentPanelHasOverview,
+  setContentPanelHasPreview,
+  useContentPanelTab,
+} from "@/lib/content-panel-tab";
+import type {
+  ChatInputEditingTarget,
+  ChatInputProps,
+  ContentChatInputHandle,
+} from "@/types/components/chat-input";
 
 export interface ContentDetailChatComposerProps {
+  ref: RefObject<ContentChatInputHandle | null>;
   context: ContextItem[];
   disabled: boolean;
   error: string | null;
@@ -34,6 +59,8 @@ export interface ContentDetailChatComposerProps {
   organizationId: string;
   organizationSlug: string;
   placeholder?: string;
+  editingTarget?: ChatInputEditingTarget;
+  modelEffort: ChatInputProps["modelEffort"];
   queuedMessages: QueuedMessage[];
   selection: TextSelection | null;
   value: string;
@@ -72,22 +99,77 @@ interface ContentDetailChatPanelProps {
   sessions: ChatSessionSummary[];
   status: ChatStatus;
   composer: ContentDetailChatComposerProps;
+  overview?: ReactNode;
+  preview?: ReactNode;
+}
+
+function ContentDetailChatComposerSlot({
+  composer,
+}: {
+  composer: ContentDetailChatComposerProps;
+}) {
+  return (
+    <div className="shrink-0 p-2 pt-1">
+      <ContentDetailChatComposer {...composer} />
+    </div>
+  );
 }
 
 export function ContentDetailChatPanel({
   composer,
+  overview,
+  preview,
   ...panelProps
 }: ContentDetailChatPanelProps) {
+  const tab = useContentPanelTab();
+  const hasOverview = Boolean(overview);
+  const hasPreview = Boolean(preview);
+  const showOverview = hasOverview && tab === "overview";
+  const showPreview = hasPreview && tab === "preview";
+  const { openPanel } = useRightPanel();
+  const openByDefault = useEffectEvent(() => {
+    if (!isContentPanelDismissed()) {
+      openPanel("content");
+    }
+  });
+
+  // Layout effect: the header button appears in the same frame as the
+  // toolbar this page portals into the header.
+  useLayoutEffect(() => {
+    setContentPanelHasOverview(hasOverview);
+    if (hasOverview) {
+      openByDefault();
+    }
+    return () => setContentPanelHasOverview(null);
+  }, [hasOverview]);
+
+  useEffect(() => {
+    setContentPanelHasPreview(hasPreview);
+    return () => setContentPanelHasPreview(false);
+  }, [hasPreview]);
+
+  const onClose = () => {
+    if (hasOverview) {
+      setContentPanelDismissed(true);
+    }
+    panelProps.onClose();
+  };
   return (
     <RightPanel id="content">
-      <ContentChatActivityPanel
-        {...panelProps}
-        organizationSlug={composer.organizationSlug}
-      >
-        <div className="shrink-0 p-2 pt-1">
-          <ContentDetailChatComposer {...composer} />
-        </div>
-      </ContentChatActivityPanel>
+      {showOverview || showPreview ? (
+        <ContentPanelOverview onClose={onClose}>
+          {showPreview ? preview : overview}
+        </ContentPanelOverview>
+      ) : (
+        <ContentChatActivityPanel
+          {...panelProps}
+          onClose={onClose}
+          organizationSlug={composer.organizationSlug}
+          titleSlot={overview ? <ContentPanelTabs /> : undefined}
+        >
+          <ContentDetailChatComposerSlot composer={composer} />
+        </ContentChatActivityPanel>
+      )}
     </RightPanel>
   );
 }

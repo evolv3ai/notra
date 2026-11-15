@@ -4,6 +4,7 @@ import type { ComponentProps, ReactNode } from "react";
 export interface EmptyStateProps extends ComponentProps<"div"> {
   title: string;
   titleIcon?: ReactNode;
+  illustration?: ReactNode;
   description: ReactNode;
   action?: ReactNode;
   actionLabel?: string;

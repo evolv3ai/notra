@@ -1,4 +1,4 @@
-import { describeContentBillingDenial } from "@notra/ai/billing/content-billing";
+import { describeContentBillingDenial } from "@notra/ai/utils/content-billing-messages";
 import {
   isTinybirdConfigured,
   queryGeoJourneyDetail,
@@ -10,21 +10,25 @@ import {
   queryGeoTrafficPages,
   queryGeoTrafficTimeseries,
 } from "@notra/analytics/tinybird/client";
+import type { GeoTrafficOverviewRow } from "@notra/analytics/types/tinybird-endpoints";
 import { db } from "@notra/db/drizzle";
 import {
   brandSettings,
   geoCompetitors,
   geoPrompts,
+  geoPromptSuggestions,
   geoScans,
   geoSettings,
 } from "@notra/db/schema";
+import { bumpGeoCheckGeneration } from "@notra/db/utils/geo-check-cache";
 import {
   queryGeoCheckCompetitorPrompts,
   queryGeoCheckCompetitorPromptSummary,
   queryGeoCheckCompetitorShare,
-  queryGeoCheckCompetitorShareTimeseries,
-  queryGeoCheckCompetitorShareTrends,
+  queryGeoCheckCompetitorShareAggregate,
   queryGeoCheckCompetitorTimeseries,
+  queryGeoCheckEngineBrandMentions,
+  queryGeoCheckEngineTotals,
   queryGeoCheckLanguageShare,
   queryGeoCheckLanguageShareTrends,
   queryGeoCheckOverview,
@@ -53,18 +57,25 @@ import {
   GEO_MAX_ENGINES,
   GEO_MAX_LANGUAGES,
 } from "../constants/geo";
-import { GEO_MODEL_CATALOG_STATIC } from "../constants/geo-model-catalog";
+import {
+  GEO_MODEL_CATALOG_STATIC,
+  GEO_MODEL_EXCLUDED_IDS,
+} from "../constants/geo-model-catalog";
 import { GeoEntitlementService } from "../deps";
 import type { DbTransaction } from "../types/db";
 import type {
   AiTrafficResponse,
   GeoChangesResponse,
+  GeoScanDiff,
   GeoChangeScan,
+  GeoCompetitorDomainFillInput,
+  GeoCompetitorIgnoreInput,
   GeoCompetitor,
   GeoCompetitorDetailResponse,
   GeoCompetitorMerge,
   GeoCompetitorReconcileOutcome,
   GeoCompetitorSeed,
+  GeoCompetitorEngineMatrixResponse,
   GeoCompetitorShareResponse,
   GeoCompetitorsResponse,
   GeoCompetitorUpsertInput,
@@ -93,6 +104,8 @@ import type {
   GeoTrafficJourneysResponse,
   GeoTrafficLogResponse,
   GeoTrafficPagesResponse,
+  AiTrafficSourcesResponse,
+  GeoTrafficSitesMode,
   GeoTrafficSource,
   GeoWindowInput,
 } from "../types/geo";
@@ -109,11 +122,20 @@ import {
   toGeoScanCheckSnapshot,
 } from "../utils/geo-changes";
 import {
+  competitorBrandFoldKeys,
+  competitorCanonicalMap,
+  isGeoOwnBrandName,
+} from "../utils/geo-competitor-names";
+import { summarizeGeoCompetitorShare } from "../utils/geo-competitor-share";
+import {
   normalizeConversionPaths,
   sumConversionVisits,
 } from "../utils/geo-conversion-paths";
 import { engineFamilyOf } from "../utils/geo-engine-family";
-import { scopeGeoScanEngines } from "../utils/geo-engines";
+import {
+  remapRetiredGeoEngineIds,
+  scopeGeoScanEngines,
+} from "../utils/geo-engines";
 import {
   trackedGeoLanguages,
   withPromptLanguage,
@@ -130,8 +152,9 @@ import {
 import { toGeoPromptResult } from "../utils/geo-prompt-results";
 import { normalizePromptTags } from "../utils/geo-prompt-tags";
 import { groupGeoSparklinePoints } from "../utils/geo-sparkline";
-import { competitorKey } from "./domain";
-import { geoDb, geoQuery, geoSkip } from "./effect";
+import { memoizeGeoRequest } from "../utils/request-memo";
+import { competitorKey, normalizeCompetitorDomain } from "./domain";
+import { geoDb, geoQuery, geoRequiredQuery, geoSkip } from "./effect";
 import {
   GeoCompetitorLimitError,
   GeoPromptDuplicateError,
@@ -180,6 +203,7 @@ import {
 } from "./scan-handoff";
 import { rearmedGeoScanAt } from "./scan-schedule";
 import { claimGeoScanRun, sweepStaleGeoScanRows } from "./scan-status";
+import { geoTransaction } from "./transaction";
 import { geoTrafficWindowParams } from "./window";
 
 function mergeLegacyCompetitors(
@@ -208,17 +232,25 @@ function mergeLegacyCompetitors(
   return merged;
 }
 
+function findGeoSettingsRow(projectId: string) {
+  return memoizeGeoRequest(`settings:${projectId}`, () =>
+    db.query.geoSettings.findFirst({
+      where: eq(geoSettings.projectId, projectId),
+    })
+  );
+}
+
+function loadScopeSettingsRow(projectId: string | null) {
+  return projectId
+    ? geoDb("settings lookup failed", () => findGeoSettingsRow(projectId))
+    : Effect.succeed(null);
+}
+
 export const loadGeoSettings = Effect.fn("geo.settings")(function* (
   input: GeoScopeInput
 ) {
   const scope = yield* resolveGeoScope(input);
-  const row = scope.projectId
-    ? yield* geoDb("settings lookup failed", () =>
-        db.query.geoSettings.findFirst({
-          where: eq(geoSettings.projectId, scope.projectId ?? ""),
-        })
-      )
-    : null;
+  const row = yield* loadScopeSettingsRow(scope.projectId);
 
   const catalog = yield* loadGeoModelCatalog(scope.organizationId);
   const response: GeoSettingsResponse = {
@@ -355,17 +387,13 @@ const reconcileCompetitorsInTransaction = Effect.fn(
 export const reconcileGeoCompetitors = Effect.fn("geo.competitorsReconcile")(
   function* (input: GeoScopeInput, merge: GeoCompetitorMerge, limit?: number) {
     const scope = yield* requireGeoProject(input);
-    const outcome = yield* geoDb("competitors sync failed", () =>
-      db.transaction((tx) =>
-        Effect.runPromise(
-          reconcileCompetitorsInTransaction(
-            tx,
-            scope.organizationId,
-            scope.projectId,
-            merge,
-            limit
-          )
-        )
+    const outcome = yield* geoTransaction("competitors sync failed", (tx) =>
+      reconcileCompetitorsInTransaction(
+        tx,
+        scope.organizationId,
+        scope.projectId,
+        merge,
+        limit
       )
     );
 
@@ -388,12 +416,7 @@ const loadCompetitorsByProject = Effect.fn("geo.competitorsByProject")(
             orderBy: [asc(geoCompetitors.createdAt)],
           })
         ),
-        geoDb("settings lookup failed", () =>
-          db.query.geoSettings.findFirst({
-            columns: { competitors: true },
-            where: eq(geoSettings.projectId, projectId),
-          })
-        ),
+        geoDb("settings lookup failed", () => findGeoSettingsRow(projectId)),
       ],
       { concurrency: "unbounded" }
     );
@@ -461,6 +484,32 @@ export const upsertGeoCompetitor = Effect.fn("geo.competitorUpsert")(function* (
   return response;
 });
 
+/**
+ * Stores looked-up websites for competitors that still have none. Checked
+ * against the stored rows inside the reconcile transaction, so a website
+ * someone entered meanwhile is never replaced.
+ */
+export const fillGeoCompetitorDomains = Effect.fn("geo.competitorDomainsFill")(
+  function* (input: GeoCompetitorDomainFillInput) {
+    const domains = new Map(
+      input.domains.flatMap((entry) => {
+        const domain = normalizeCompetitorDomain(entry.domain);
+        return domain ? [[competitorKey(entry.name), domain] as const] : [];
+      })
+    );
+    const competitors = yield* reconcileGeoCompetitors(input, (current) =>
+      current.map((competitor) => {
+        const domain = domains.get(competitorKey(competitor.name));
+        return competitor.domain || !domain
+          ? competitor
+          : { ...competitor, domain };
+      })
+    );
+    const response: GeoCompetitorsResponse = { competitors };
+    return response;
+  }
+);
+
 export const deleteGeoCompetitor = Effect.fn("geo.competitorDelete")(function* (
   scopeInput: GeoScopeInput,
   name: string
@@ -472,6 +521,35 @@ export const deleteGeoCompetitor = Effect.fn("geo.competitorDelete")(function* (
   const response: GeoCompetitorsResponse = { competitors };
   return response;
 });
+
+/**
+ * Dismisses a discovered brand from the competitor suggestions (or brings it
+ * back). Stored lowercased so name variants that differ in case stay hidden.
+ */
+export const setGeoCompetitorIgnored = Effect.fn("geo.competitorIgnore")(
+  function* (input: GeoCompetitorIgnoreInput) {
+    const scope = yield* requireGeoProject(input);
+    const key = competitorKey(input.name);
+    const column = geoSettings.ignoredCompetitors;
+    const next = input.ignored
+      ? sql`CASE WHEN ${key} = ANY(${column}) THEN ${column} ELSE array_append(${column}, ${key}) END`
+      : sql`array_remove(${column}, ${key})`;
+    const updated = yield* geoDb("ignore competitor suggestion failed", () =>
+      db
+        .update(geoSettings)
+        .set({ ignoredCompetitors: next })
+        .where(eq(geoSettings.projectId, scope.projectId))
+        .returning({ ignoredCompetitors: geoSettings.ignoredCompetitors })
+    );
+    const row = updated[0];
+    if (!row) {
+      return yield* Effect.fail(
+        new GeoSettingsMissingError({ organizationId: scope.organizationId })
+      );
+    }
+    return { ignoredCompetitors: row.ignoredCompetitors };
+  }
+);
 
 export const importGeoCompetitors = Effect.fn("geo.competitorsImport")(
   function* (
@@ -552,7 +630,8 @@ export const addGeoTrackedEngine = Effect.fn("geo.settingsEngineAdd")(
   function* (input: GeoSettingsEngineAddInput) {
     const { projectId } = yield* requireGeoProject(input);
     const catalog = yield* loadGeoModelCatalog(input.organizationId);
-    if (!getGeoModelCatalogEntry(catalog, input.engine)) {
+    const model = getGeoModelCatalogEntry(catalog, input.engine);
+    if (!model) {
       return yield* Effect.fail(
         new GeoSettingsTrackingError({
           message: "This model is no longer available for tracking",
@@ -586,6 +665,7 @@ export const addGeoTrackedEngine = Effect.fn("geo.settingsEngineAdd")(
           and(
             eq(geoSettings.organizationId, input.organizationId),
             eq(geoSettings.projectId, projectId),
+            sql`(NOT ${Boolean(model.hidden)} OR ${input.engine} = ANY(${geoSettings.engines}))`,
             sql`(
               NOT ${geoSettings.enforceZdr}
               OR ${isGeoEngineZdrCapable(catalog, input.engine)}
@@ -655,31 +735,33 @@ export const upsertGeoSettings = Effect.fn("geo.settingsUpsert")(function* (
   input: GeoSettingsUpsertInput
 ) {
   const entitlements = yield* GeoEntitlementService;
-  const projectId = yield* ensureGeoProject(
-    { organizationId: input.organizationId, projectId: input.projectId },
-    input.companyName
-  );
+  const projectId =
+    input.engines.length === 0
+      ? (yield* requireGeoProject(input)).projectId
+      : yield* ensureGeoProject(
+          { organizationId: input.organizationId, projectId: input.projectId },
+          input.companyName
+        );
 
-  // Zero data retention needs the ZDR add-on: without the entitlement the
-  // flag is forced off regardless of what the client sent.
-  // resolveZdrEntitlement never throws; a billing outage answers "unknown",
-  // which counts as not entitled here so the toggle fails closed.
   const entitlement = yield* entitlements.resolveZdrEntitlement(
     input.organizationId
   );
   const enforceZdr = entitlement === "entitled" && input.enforceZdr;
   const catalog = yield* loadGeoModelCatalog(input.organizationId);
-  // Static engines hidden from this organization (missing credential or flag
-  // off) keep their stored selection so a re-save doesn't silently drop them.
   const unavailableStaticEngines = new Set<string>();
   for (const entry of GEO_MODEL_CATALOG_STATIC) {
-    if (!getGeoModelCatalogEntry(catalog, entry.id)) {
+    if (
+      !GEO_MODEL_EXCLUDED_IDS.has(entry.id) &&
+      !getGeoModelCatalogEntry(catalog, entry.id)
+    ) {
       unavailableStaticEngines.add(entry.id);
     }
   }
   const existingSettings = yield* geoDb("settings lookup failed", () =>
     db.query.geoSettings.findFirst({
       columns: {
+        companyName: true,
+        aliases: true,
         engines: true,
         nonZdrApprovedEngines: true,
         trackWithoutSearch: true,
@@ -696,6 +778,23 @@ export const upsertGeoSettings = Effect.fn("geo.settingsUpsert")(function* (
       where: eq(geoSettings.projectId, projectId),
     })
   );
+  const storedEngines = remapRetiredGeoEngineIds(
+    existingSettings?.engines ?? []
+  );
+  const storedEngineSet = new Set(storedEngines);
+  const requestedEngines = remapRetiredGeoEngineIds(input.engines);
+  if (
+    requestedEngines.some((engine) => {
+      const model = getGeoModelCatalogEntry(catalog, engine);
+      return !storedEngineSet.has(engine) && (!model || model.hidden);
+    })
+  ) {
+    return yield* Effect.fail(
+      new GeoSettingsTrackingError({
+        message: "Legacy or unavailable models cannot be newly selected",
+      })
+    );
+  }
   const pausedAutoPromptIds =
     input.pausedAutoPromptIds ?? existingSettings?.pausedAutoPromptIds ?? [];
   const removedAutoPromptIds =
@@ -708,8 +807,6 @@ export const upsertGeoSettings = Effect.fn("geo.settingsUpsert")(function* (
   const domains = normalizeProjectDomains(
     input.domains ?? existingSettings?.domains ?? []
   );
-  // Stored prompts are written in the prompt language, so it is fixed once set
-  // and always stays tracked; otherwise scans would only run translations.
   const promptLanguage =
     existingSettings?.promptLanguage ?? input.promptLanguage ?? null;
   const languages = withPromptLanguage(input.languages, promptLanguage);
@@ -720,28 +817,26 @@ export const upsertGeoSettings = Effect.fn("geo.settingsUpsert")(function* (
       })
     );
   }
-  const preservedEngines = (existingSettings?.engines ?? []).filter(
-    (engine) =>
-      unavailableStaticEngines.size > 0 && unavailableStaticEngines.has(engine)
+  const preservedEngines = storedEngines.filter((engine) =>
+    unavailableStaticEngines.has(engine)
   );
   const preservedEngineSet = new Set(preservedEngines);
-  const engines = [...new Set([...input.engines, ...preservedEngines])];
+  const engines = [...new Set([...requestedEngines, ...preservedEngines])];
+  if (engines.length === 0) {
+    return yield* Effect.fail(
+      new GeoSettingsTrackingError({ message: "Choose at least one model" })
+    );
+  }
   const engineSet = new Set(engines);
   const nonZdrApprovedEngines = [
     ...new Set([
-      ...input.nonZdrApprovedEngines,
-      ...(existingSettings?.nonZdrApprovedEngines ?? []).filter((engine) =>
-        preservedEngineSet.has(engine)
-      ),
+      ...remapRetiredGeoEngineIds(input.nonZdrApprovedEngines),
+      ...remapRetiredGeoEngineIds(
+        existingSettings?.nonZdrApprovedEngines ?? []
+      ).filter((engine) => preservedEngineSet.has(engine)),
     ]),
   ].filter((engine) => engineSet.has(engine));
 
-  // The schedule is a plain due stamp the cron sweep polls. An unchanged
-  // enabled row keeps its pending due time (a still-null stamp stays null and
-  // is picked up by the next sweep), disabling clears it, and a fresh enable
-  // or an interval change re-arms it from the last finished scan — not a full
-  // interval out from now, which used to push the next scan a whole day away
-  // every time settings were saved.
   const keepNextScanAt =
     input.enabled &&
     existingSettings?.enabled === true &&
@@ -755,9 +850,6 @@ export const upsertGeoSettings = Effect.fn("geo.settingsUpsert")(function* (
       existingSettings?.lastScanAt ?? null
     );
   }
-  // A re-armed or cleared schedule must not stay leased by the sweep that was
-  // mid-tick, or the new stamp would be ignored until the lease expires. An
-  // untouched schedule keeps whatever lease that sweep holds.
   const clearedLease = keepNextScanAt
     ? {}
     : { scanLeaseUntil: null, scanFirstFailedAt: null };
@@ -812,6 +904,12 @@ export const upsertGeoSettings = Effect.fn("geo.settingsUpsert")(function* (
   yield* Effect.promise(() =>
     invalidateGeoIngestHostsCache(input.organizationId, projectId)
   );
+  const brandNamesChanged =
+    existingSettings?.companyName !== input.companyName ||
+    (existingSettings?.aliases ?? []).join("\n") !== input.aliases.join("\n");
+  if (brandNamesChanged) {
+    yield* Effect.promise(() => bumpGeoCheckGeneration([input.organizationId]));
+  }
 
   yield* reconcileGeoCompetitors(
     { organizationId: input.organizationId, projectId },
@@ -996,11 +1094,13 @@ export const loadGeoChanges = Effect.fn("geo.changes")(function* (
     ],
     { concurrency: "unbounded" }
   );
-  const events = diffScanChecks(
-    comparison.previous.map(toGeoScanCheckSnapshot),
-    comparison.current.map(toGeoScanCheckSnapshot),
-    competitors
-  );
+  const events = comparison.previousScan
+    ? diffScanChecks(
+        comparison.previous.map(toGeoScanCheckSnapshot),
+        comparison.current.map(toGeoScanCheckSnapshot),
+        competitors
+      )
+    : [];
 
   const response: GeoChangesResponse = {
     previousScan: toGeoChangeScan(comparison.previousScan),
@@ -1009,6 +1109,34 @@ export const loadGeoChanges = Effect.fn("geo.changes")(function* (
     events: events.slice(0, GEO_CHANGES_LIMIT),
   };
   return response;
+});
+
+/** Every change between the two latest completed scans, unsliced. */
+export const loadGeoScanDiff = Effect.fn("geo.scanDiff")(function* (
+  input: GeoScopeInput
+) {
+  const scope = yield* requireGeoProject(input);
+  const [comparison, competitors] = yield* Effect.all(
+    [
+      geoDb("scan comparison query failed", () =>
+        queryGeoScanComparison({ projectId: scope.projectId })
+      ),
+      loadCompetitorsByProject(scope.projectId),
+    ],
+    { concurrency: "unbounded" }
+  );
+  const previous = comparison.previous.map(toGeoScanCheckSnapshot);
+  const current = comparison.current.map(toGeoScanCheckSnapshot);
+  const diff: GeoScanDiff = {
+    previousScanId: comparison.previousScan?.id ?? null,
+    currentScanId: comparison.currentScan?.id ?? null,
+    previous,
+    current,
+    events: comparison.previousScan
+      ? diffScanChecks(previous, current, competitors)
+      : [],
+  };
+  return diff;
 });
 
 export const loadGeoCompetitorShare = Effect.fn("geo.competitorShare")(
@@ -1022,8 +1150,6 @@ export const loadGeoCompetitorShare = Effect.fn("geo.competitorShare")(
     const checkWindow = toGeoCheckWindow(window);
 
     if (summaryOnly) {
-      // Callers that only render aggregate shares skip the two additional
-      // full-range scans used for sparklines, charts and change indicators.
       const rows = yield* geoDb("competitor share query failed", () =>
         queryGeoCheckCompetitorShare(
           checkScope,
@@ -1042,50 +1168,68 @@ export const loadGeoCompetitorShare = Effect.fn("geo.competitorShare")(
       return response;
     }
 
-    const [rows, timeseries, trendRows] = yield* Effect.all(
-      [
-        geoDb("competitor share query failed", () =>
-          queryGeoCheckCompetitorShare(
-            checkScope,
-            checkWindow,
-            GEO_COMPETITOR_SHARE_LIMIT
-          )
-        ),
-        geoDb("competitor share timeseries query failed", () =>
-          queryGeoCheckCompetitorShareTimeseries(checkScope, checkWindow)
-        ),
-        geoDb("competitor share trends query failed", () =>
-          queryGeoCheckCompetitorShareTrends(
-            checkScope,
-            checkWindow,
-            GEO_COMPETITOR_SHARE_LIMIT
-          )
-        ),
-      ],
-      { concurrency: "unbounded" }
-    );
-    const trendsByBrand = groupGeoSparklinePoints(
-      trendRows,
-      (point) => point.brand,
-      (point) => ({ day: point.day, value: point.share })
+    const aggregates = yield* geoDb(
+      "competitor share aggregate query failed",
+      () => queryGeoCheckCompetitorShareAggregate(checkScope, checkWindow)
     );
 
     const response: GeoCompetitorShareResponse = {
       configured: true,
-      points: rows.map((row) => ({
-        brand: row.brand,
-        mentions: row.mentions,
-        trend: trendsByBrand.get(row.brand) ?? [],
-      })),
-      timeseries: timeseries.map((row) => ({
-        brand: row.brand,
-        day: row.day,
-        mentions: row.mentions,
-      })),
+      ...summarizeGeoCompetitorShare(aggregates, GEO_COMPETITOR_SHARE_LIMIT),
     };
     return response;
   }
 );
+
+export const loadGeoCompetitorEngineMatrix = Effect.fn(
+  "geo.competitorEngineMatrix"
+)(function* (input: GeoScopeInput, window: GeoWindowInput) {
+  const scope = yield* resolveGeoScope(input);
+  const checkScope = geoCheckScope(scope);
+  const checkWindow = toGeoCheckWindow(window);
+
+  const [engines, competitors] = yield* Effect.all(
+    [
+      geoDb("engine totals query failed", () =>
+        queryGeoCheckEngineTotals(checkScope, checkWindow)
+      ),
+      scope.projectId
+        ? loadCompetitorsByProject(scope.projectId)
+        : Effect.succeed<GeoCompetitor[]>([]),
+    ],
+    { concurrency: "unbounded" }
+  );
+  const brands = competitorCanonicalMap(competitors);
+  if (brands.size === 0) {
+    const topBrands = yield* geoDb("competitor share query failed", () =>
+      queryGeoCheckCompetitorShare(
+        checkScope,
+        checkWindow,
+        GEO_COMPETITOR_SHARE_LIMIT
+      )
+    );
+    for (const row of topBrands) {
+      const key = competitorKey(row.brand);
+      if (key.length > 0 && !brands.has(key)) {
+        brands.set(key, row.brand);
+      }
+    }
+  }
+  const cells = yield* geoDb("engine brand mentions query failed", () =>
+    queryGeoCheckEngineBrandMentions(
+      checkScope,
+      checkWindow,
+      Array.from(brands, ([key, name]) => ({ key, name }))
+    )
+  );
+
+  const response: GeoCompetitorEngineMatrixResponse = {
+    configured: true,
+    engines,
+    cells,
+  };
+  return response;
+});
 
 export const loadGeoCompetitorDetail = Effect.fn("geo.competitorDetail")(
   function* (
@@ -1100,9 +1244,25 @@ export const loadGeoCompetitorDetail = Effect.fn("geo.competitorDetail")(
       toGeoCheckWindow({ days: GEO_COMPETITOR_DETAIL_DAYS });
 
     const checkScope = geoCheckScope(scope);
+    const settingsRow = yield* loadScopeSettingsRow(scope.projectId);
+    const own = isGeoOwnBrandName(
+      brand,
+      settingsRow?.companyName,
+      settingsRow?.aliases ?? []
+    );
+    const tracked =
+      own || !scope.projectId
+        ? []
+        : yield* loadCompetitorsByProject(scope.projectId);
+    const brandKeys = competitorBrandFoldKeys(brand, tracked);
     if (summaryOnly) {
       const summary = yield* geoDb("competitor summary query failed", () =>
-        queryGeoCheckCompetitorPromptSummary(checkScope, brand, resolvedWindow)
+        queryGeoCheckCompetitorPromptSummary(
+          checkScope,
+          brandKeys,
+          resolvedWindow,
+          own
+        )
       );
       const response: GeoCompetitorDetailResponse = {
         configured: true,
@@ -1121,10 +1281,20 @@ export const loadGeoCompetitorDetail = Effect.fn("geo.competitorDetail")(
     const [timeseries, prompts] = yield* Effect.all(
       [
         geoDb("competitor timeseries query failed", () =>
-          queryGeoCheckCompetitorTimeseries(checkScope, brand, resolvedWindow)
+          queryGeoCheckCompetitorTimeseries(
+            checkScope,
+            brandKeys,
+            resolvedWindow,
+            own
+          )
         ),
         geoDb("competitor prompts query failed", () =>
-          queryGeoCheckCompetitorPrompts(checkScope, brand, resolvedWindow)
+          queryGeoCheckCompetitorPrompts(
+            checkScope,
+            brandKeys,
+            resolvedWindow,
+            own
+          )
         ),
       ],
       { concurrency: "unbounded" }
@@ -1150,45 +1320,97 @@ export const loadGeoCompetitorDetail = Effect.fn("geo.competitorDetail")(
   }
 );
 
-export const loadAiTraffic = Effect.fn("geo.aiTraffic")(function* (
+function toGeoTrafficSources(
+  rows: readonly GeoTrafficOverviewRow[] | undefined
+): GeoTrafficSource[] {
+  return (rows ?? []).map((row) => ({
+    source: row.source,
+    visitorType: toGeoVisitorType(row.visitor_type),
+    agent: row.agent,
+    category: row.category,
+    confidence: row.confidence,
+    visits: Number(row.visits),
+    ...(row.previous_visits == null
+      ? {}
+      : { previousVisits: Number(row.previous_visits) }),
+    markdownVisits: Number(row.markdown_visits),
+    ...(row.previous_markdown_visits == null
+      ? {}
+      : { previousMarkdownVisits: Number(row.previous_markdown_visits) }),
+    paths: Number(row.paths),
+    ...(row.previous_paths == null
+      ? {}
+      : { previousPaths: Number(row.previous_paths) }),
+    lastSeenAt: row.last_seen_at,
+  }));
+}
+
+function isAiVisitorSource(row: GeoTrafficSource): boolean {
+  return row.visitorType === "crawler" || row.visitorType === "ai_referral";
+}
+
+const aiTrafficParams = Effect.fn("geo.aiTrafficParams")(function* (
   input: GeoScopeInput,
-  window: GeoWindowInput
+  window: GeoWindowInput,
+  hosts: readonly string[],
+  siteId: string,
+  path: string,
+  sites: GeoTrafficSitesMode | undefined
 ) {
   const scope = yield* resolveGeoScope(input);
-  const windowParams = geoTrafficWindowParams(window, AI_TRAFFIC_DEFAULT_DAYS);
-  const settingsRow = scope.projectId
-    ? yield* geoDb("settings lookup failed", () =>
-        db.query.geoSettings.findFirst({
-          columns: { conversionPaths: true },
-          where: eq(geoSettings.projectId, scope.projectId ?? ""),
-        })
-      )
-    : null;
+  const params = {
+    ...geoScopeParams(scope),
+    ...geoHiddenSourceParams(),
+    ...geoTrafficWindowParams(window, AI_TRAFFIC_DEFAULT_DAYS),
+    hosts: hosts.join(","),
+    path,
+    sites: sites ?? "",
+    ...(siteId
+      ? { site_id: siteId, project_id: "", include_unassigned: 0 }
+      : {}),
+  };
+  return { scope, params };
+});
+
+/**
+ * Totals, chart points and per-source visits. `withPaths: false` skips the
+ * distinct page counts, which cost far more than the rest of the query; read
+ * them separately with loadAiTrafficSources.
+ */
+export const loadAiTraffic = Effect.fn("geo.aiTraffic")(function* (
+  input: GeoScopeInput,
+  window: GeoWindowInput,
+  hosts: readonly string[] = [],
+  siteId = "",
+  path = "",
+  sites: GeoTrafficSitesMode | undefined = undefined,
+  withPaths = true
+) {
+  const { scope, params } = yield* aiTrafficParams(
+    input,
+    window,
+    hosts,
+    siteId,
+    path,
+    sites
+  );
+  const settingsRow = yield* loadScopeSettingsRow(scope.projectId);
   const conversionPaths = settingsRow?.conversionPaths ?? [];
+  const query = siteId && isTinybirdConfigured() ? geoRequiredQuery : geoQuery;
 
   const [overview, timeseries, conversionPages] = yield* Effect.all(
     [
-      geoQuery("traffic overview query failed", () =>
-        queryGeoTrafficOverview({
-          ...geoScopeParams(scope),
-          ...geoHiddenSourceParams(),
-          ...windowParams,
-        })
+      query("traffic overview query failed", () =>
+        queryGeoTrafficOverview({ ...params, with_paths: withPaths ? 1 : 0 })
       ),
-      geoQuery("traffic timeseries query failed", () =>
-        queryGeoTrafficTimeseries({
-          ...geoScopeParams(scope),
-          ...geoHiddenSourceParams(),
-          ...windowParams,
-        })
+      query("traffic timeseries query failed", () =>
+        queryGeoTrafficTimeseries(params)
       ),
       conversionPaths.length === 0
         ? Effect.succeed(null)
-        : geoQuery("traffic conversion pages query failed", () =>
+        : query("traffic conversion pages query failed", () =>
             queryGeoTrafficPages({
-              ...geoScopeParams(scope),
-              ...geoHiddenSourceParams(),
-              ...windowParams,
+              ...params,
               limit: AI_TRAFFIC_PAGES_FETCH_LIMIT,
               visitor: "ai_referral",
             })
@@ -1210,29 +1432,13 @@ export const loadAiTraffic = Effect.fn("geo.aiTraffic")(function* (
           conversionPaths
         );
 
-  const sources: GeoTrafficSource[] = (overview?.data ?? []).map((row) => ({
-    source: row.source,
-    visitorType: toGeoVisitorType(row.visitor_type),
-    agent: row.agent,
-    category: row.category,
-    confidence: row.confidence,
-    visits: Number(row.visits),
-    ...(row.previous_visits == null
-      ? {}
-      : { previousVisits: Number(row.previous_visits) }),
-    markdownVisits: Number(row.markdown_visits),
-    paths: Number(row.paths),
-    lastSeenAt: row.last_seen_at,
-  }));
+  const sources = toGeoTrafficSources(overview?.data);
 
   const response: AiTrafficResponse = {
     configured: isTinybirdConfigured(),
     totals: toGeoTrafficTotals(sources, conversionTotals?.conversions ?? null),
     previousConversions: conversionTotals?.previousConversions ?? null,
-    sources: sources.filter(
-      (row) =>
-        row.visitorType === "crawler" || row.visitorType === "ai_referral"
-    ),
+    sources: sources.filter(isAiVisitorSource),
     points: (timeseries?.data ?? []).map((row) => ({
       day: row.day,
       visitorType: toGeoVisitorType(row.visitor_type),
@@ -1243,12 +1449,42 @@ export const loadAiTraffic = Effect.fn("geo.aiTraffic")(function* (
   return response;
 });
 
+/** Per-source visits with distinct page counts, for the sources table. */
+export const loadAiTrafficSources = Effect.fn("geo.aiTrafficSources")(
+  function* (
+    input: GeoScopeInput,
+    window: GeoWindowInput,
+    hosts: readonly string[] = [],
+    path = "",
+    sites: GeoTrafficSitesMode | undefined = undefined
+  ) {
+    const { params } = yield* aiTrafficParams(
+      input,
+      window,
+      hosts,
+      "",
+      path,
+      sites
+    );
+    const overview = yield* geoQuery("traffic sources query failed", () =>
+      queryGeoTrafficOverview({ ...params, with_paths: 1 })
+    );
+    const response: AiTrafficSourcesResponse = {
+      configured: isTinybirdConfigured(),
+      sources: toGeoTrafficSources(overview?.data).filter(isAiVisitorSource),
+    };
+    return response;
+  }
+);
+
 export const loadGeoTrafficLog = Effect.fn("geo.trafficLog")(function* (
   input: GeoScopeInput,
   limit: number | undefined,
   visitorTypes: readonly string[] | undefined,
   categories: readonly string[] | undefined,
-  host: string | undefined
+  host: string | undefined,
+  path = "",
+  sites: GeoTrafficSitesMode | undefined = undefined
 ) {
   const scope = yield* resolveGeoScope(input);
   const rows = yield* geoQuery("traffic log query failed", () =>
@@ -1259,10 +1495,11 @@ export const loadGeoTrafficLog = Effect.fn("geo.trafficLog")(function* (
       visitor_type: visitorTypes?.join(",") ?? "",
       category: categories?.join(",") ?? "",
       host: trafficLogHostFilter(host),
+      path,
+      sites: sites ?? "",
     })
   );
-  const data = rows?.data ?? [];
-  const log = data.map(toGeoTrafficLogEntry);
+  const log = (rows?.data ?? []).map(toGeoTrafficLogEntry);
 
   const response: GeoTrafficLogResponse = {
     configured: isTinybirdConfigured(),
@@ -1298,8 +1535,6 @@ export const loadGeoTrafficJourneys = Effect.fn("geo.trafficJourneys")(
         distinctPaths: Number(row.distinct_paths),
         firstSeenAt: row.first_seen_at,
         lastSeenAt: row.last_seen_at,
-        // `sample_paths` is a set with no ordering guarantee, so it is only a
-        // fallback for pipe versions deployed before `entry_path` existed.
         entryPath: row.entry_path ?? row.sample_paths[0] ?? "",
         samplePaths: row.sample_paths,
       })),
@@ -1318,7 +1553,6 @@ function toJourneyDailyPoints(
   }));
 }
 
-/** `maxIf` over no rows yields the epoch; treat it as "not seen". */
 function journeyLastSeen(value: string): string | null {
   return value.startsWith(JOURNEY_EPOCH_PREFIX) ? null : value;
 }
@@ -1361,7 +1595,6 @@ export const loadGeoJourneyStats = Effect.fn("geo.journeyStats")(function* (
       lastSeenAt: journeyLastSeen(row.last_seen_at),
       daily: toJourneyDailyPoints(row.days, row.daily_journeys),
     })),
-    // Rows with no journeys in the window only ride along to carry the totals.
     pages: pageRows
       .filter((row) => Number(row.journeys) > 0)
       .map((row) => ({
@@ -1415,7 +1648,9 @@ export const loadGeoTrafficPages = Effect.fn("geo.trafficPages")(function* (
   window: GeoWindowInput,
   limit: number | undefined,
   visitorType: string | undefined,
-  host: string | undefined
+  host: string | undefined,
+  path = "",
+  sites: GeoTrafficSitesMode | undefined = undefined
 ) {
   const scope = yield* resolveGeoScope(input);
   const pages = yield* geoQuery("traffic pages query failed", () =>
@@ -1426,6 +1661,8 @@ export const loadGeoTrafficPages = Effect.fn("geo.trafficPages")(function* (
       limit: limit ?? AI_TRAFFIC_DEFAULT_PAGES_LIMIT,
       visitor: visitorType ?? "",
       host: trafficLogHostFilter(host),
+      path,
+      sites: sites ?? "",
     })
   );
 
@@ -1467,11 +1704,7 @@ export const listGeoPrompts = Effect.fn("geo.promptsList")(function* (
           orderBy: [desc(geoPrompts.createdAt)],
         })
       ),
-      geoDb("settings lookup failed", () =>
-        db.query.geoSettings.findFirst({
-          where: eq(geoSettings.projectId, projectId),
-        })
-      ),
+      geoDb("settings lookup failed", () => findGeoSettingsRow(projectId)),
       loadGeoProjectBrand({ organizationId: scope.organizationId, projectId }),
     ],
     { concurrency: "unbounded" }
@@ -1553,18 +1786,14 @@ export const createGeoPrompt = Effect.fn("geo.promptsCreate")(function* (
   tags: readonly string[] = []
 ) {
   const scope = yield* requireGeoProject(input);
-  const row = yield* geoDb("prompt create failed", () =>
-    db.transaction((tx) =>
-      Effect.runPromise(
-        createPromptInTransaction(
-          tx,
-          scope.organizationId,
-          scope.projectId,
-          prompt,
-          id,
-          tags
-        )
-      )
+  const row = yield* geoTransaction("prompt create failed", (tx) =>
+    createPromptInTransaction(
+      tx,
+      scope.organizationId,
+      scope.projectId,
+      prompt,
+      id,
+      tags
     )
   );
 
@@ -1632,16 +1861,12 @@ export const insertGeoPrompts = Effect.fn("geo.promptsInsert")(function* (
   entries: readonly GeoPromptInsert[]
 ) {
   const scope = yield* requireGeoProject(input);
-  return yield* geoDb("prompts insert failed", () =>
-    db.transaction((tx) =>
-      Effect.runPromise(
-        insertPromptsInTransaction(
-          tx,
-          scope.organizationId,
-          scope.projectId,
-          entries
-        )
-      )
+  return yield* geoTransaction("prompts insert failed", (tx) =>
+    insertPromptsInTransaction(
+      tx,
+      scope.organizationId,
+      scope.projectId,
+      entries
     )
   );
 });
@@ -1770,18 +1995,14 @@ const patchAutoPromptSettings = Effect.fn("geo.promptsPatchAuto")(function* (
   promptId: string,
   change: "pause" | "resume" | "remove"
 ) {
-  const outcome = yield* geoDb("auto prompt update failed", () =>
-    db.transaction((tx) =>
-      Effect.runPromise(
-        patchAutoPromptInTransaction(
-          tx,
-          organizationId,
-          projectId,
-          brandSettingsId,
-          promptId,
-          change
-        )
-      )
+  const outcome = yield* geoTransaction("auto prompt update failed", (tx) =>
+    patchAutoPromptInTransaction(
+      tx,
+      organizationId,
+      projectId,
+      brandSettingsId,
+      promptId,
+      change
     )
   );
   if (outcome.status === "missing-settings") {
@@ -1798,6 +2019,19 @@ export const deleteGeoPrompt = Effect.fn("geo.promptsDelete")(function* (
   promptId: string
 ) {
   const scope = yield* requireGeoProject(input);
+  // Autopilot suggestions about this prompt have nothing left to act on.
+  yield* geoDb("retire prompt suggestions failed", () =>
+    db
+      .update(geoPromptSuggestions)
+      .set({ status: "dismissed" })
+      .where(
+        and(
+          eq(geoPromptSuggestions.projectId, scope.projectId),
+          eq(geoPromptSuggestions.targetPromptId, promptId),
+          eq(geoPromptSuggestions.status, "pending")
+        )
+      )
+  );
   const rows = yield* geoDb("prompt delete failed", () =>
     db
       .delete(geoPrompts)
@@ -1935,10 +2169,18 @@ export const toggleGeoPrompt = Effect.fn("geo.promptsToggle")(function* (
   return trackedAutoPrompt(promptId, enabled);
 });
 
+/**
+ * `manual` is for a hand-started conversation or persona run: those stay
+ * runnable while automatic scans are paused, so the enabled check is skipped.
+ * Everything else (claim, billing, engine scoping, ZDR at planning) still
+ * applies.
+ */
 export const startGeoScanScoped = Effect.fn("geo.startScanScoped")(function* (
   input: GeoScopeInput,
   promptIds?: readonly string[],
-  engines?: readonly string[]
+  engines?: readonly string[],
+  manual = false,
+  freeScan = false
 ) {
   const scope = yield* requireGeoProject(input);
   const projectId = scope.projectId;
@@ -1955,20 +2197,18 @@ export const startGeoScanScoped = Effect.fn("geo.startScanScoped")(function* (
     );
   }
 
-  if (!row.enabled) {
+  const manualScope = manual && promptIds !== undefined;
+  if (!(row.enabled || manualScope)) {
     return yield* Effect.fail(new GeoSettingsDisabledError({ projectId }));
   }
 
   if (engines) {
     const catalog = yield* loadGeoModelCatalog(scope.organizationId);
-    const tracked = row.engines ?? [];
-    if (scopeGeoScanEngines(catalog, tracked, engines).length === 0) {
+    if (scopeGeoScanEngines(catalog, row.engines ?? [], engines).length === 0) {
       return yield* Effect.fail(new GeoScanEnginesEmptyError({ projectId }));
     }
   }
 
-  // Refuse before claiming, so an organization out of credits gets a 402 now
-  // instead of a scan id whose run fails at its billing gate.
   const denial = yield* findGeoScanBillingDenial(
     scope.organizationId,
     projectId
@@ -1981,25 +2221,19 @@ export const startGeoScanScoped = Effect.fn("geo.startScanScoped")(function* (
     );
   }
 
-  // Claim the scan slot atomically *before* handing off. Reading the settings
-  // row and checking `isGeoScanRunning` cannot serialize anything: concurrent
-  // triggers (public API, dashboard, cron sweep) all read "idle" before
-  // any of them stamps, and all of them start a scan the organization pays
-  // for. Losing the claim means someone else is already scanning.
   const claim = yield* claimGeoScanRun(projectId);
   if (!claim) {
     return yield* Effect.fail(new GeoScanAlreadyRunningError({ projectId }));
   }
 
-  // The hand-off creates the `geo_scans` row the caller polls, carries the
-  // claim token, and owns the rules for a failed start (definite refusal
-  // releases the claim and fails the row, unknown outcome holds both).
   return yield* startClaimedGeoScanRun(
     scope.organizationId,
     projectId,
     claim.claimedAt,
     promptIds,
-    engines
+    engines,
+    manualScope,
+    freeScan
   );
 });
 

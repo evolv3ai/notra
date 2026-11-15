@@ -1,6 +1,7 @@
 import type {
   BillingPeriod,
   BillingToggleOption,
+  PricingFreePlan,
   PricingPlan,
   TrackedEngine,
 } from "@/types/landing/pricing";
@@ -30,7 +31,7 @@ export const TRACKED_ENGINES: TrackedEngine[] = [
 
 export const PRICING_ANNUAL_BADGE = "2 months free";
 
-export const PRICING_DEFAULT_BILLING: BillingPeriod = "yearly";
+export const PRICING_DEFAULT_BILLING: BillingPeriod = "monthly";
 
 export const PRICING_BILLING_OPTIONS: BillingToggleOption[] = [
   { value: "monthly", label: "Monthly" },
@@ -41,10 +42,34 @@ export const PRICING_HEADING =
   "Simple pricing that scales with what you track.";
 
 export const PRICING_SUBHEADING =
-  "Every plan comes with prompt tracking, traffic attribution and the writer. The difference is how many answers you track a month. Cancel whenever.";
+  "Paid plans come with prompt tracking, traffic attribution and the writer, and they differ in how many answers and AI traffic events you track a month. The free plan covers AI traffic analytics and agent feedback for up to 1 million events a month, and you can cancel a paid plan anytime.";
 
 const SIGNUP_URL = "https://app.usenotra.com/signup";
 const ENTERPRISE_MAIL_URL = "mailto:hello@usenotra.com";
+
+export const PRICING_FREE_PLAN: PricingFreePlan = {
+  name: "Free",
+  description:
+    "Track which AI crawlers and assistants visit your site and collect feedback from the agents that use it.",
+  price: "$0",
+  cta: {
+    label: "Start for free",
+    kind: "signup",
+    href: SIGNUP_URL,
+    source: "pricing_free",
+    showArrow: true,
+  },
+  features: [
+    { label: "1M AI traffic events / mo", icon: "traffic" },
+    { label: "Agent feedback", icon: "feedback" },
+  ],
+};
+
+export const PRICING_CAROUSEL_LABEL = "Plans";
+
+export function pricingCarouselDotLabel(planName: string) {
+  return `Show the ${planName} plan`;
+}
 
 export const PRICING_PLANS: PricingPlan[] = [
   {
@@ -65,6 +90,11 @@ export const PRICING_PLANS: PricingPlan[] = [
     },
     features: [
       { label: "2,000 AI answers tracked / mo", icon: "tracking" },
+      {
+        label: "5M AI traffic events / mo",
+        subtitle: "includes agent feedback",
+        icon: "traffic",
+      },
       { label: "8 image generations / mo", icon: "images" },
       { label: "10 long-form posts / mo", icon: "content" },
       { label: "Unlimited social posts", icon: "social" },
@@ -96,6 +126,11 @@ export const PRICING_PLANS: PricingPlan[] = [
     },
     features: [
       { label: "6,000 AI answers tracked / mo", icon: "tracking" },
+      {
+        label: "15M AI traffic events / mo",
+        subtitle: "includes agent feedback",
+        icon: "traffic",
+      },
       { label: "20 image generations / mo", icon: "images" },
       { label: "25 long-form posts / mo", icon: "content" },
       { label: "Unlimited social posts", icon: "social" },
@@ -127,6 +162,11 @@ export const PRICING_PLANS: PricingPlan[] = [
     },
     features: [
       { label: "12,000 AI answers tracked / mo", icon: "tracking" },
+      {
+        label: "30M AI traffic events / mo",
+        subtitle: "includes agent feedback",
+        icon: "traffic",
+      },
       { label: "45 image generations / mo", icon: "images" },
       { label: "50 long-form posts / mo", icon: "content" },
       { label: "Unlimited social posts", icon: "social" },
@@ -156,6 +196,7 @@ export const PRICING_PLANS: PricingPlan[] = [
     },
     features: [
       { label: "Unlimited AI answers tracked", icon: "tracking" },
+      { label: "Unlimited AI traffic events", icon: "traffic" },
       { label: "Unlimited image generations", icon: "images" },
       { label: "Unlimited long-form posts", icon: "content" },
       { label: "Unlimited social posts", icon: "social" },
@@ -165,4 +206,9 @@ export const PRICING_PLANS: PricingPlan[] = [
       { label: "ZDR included", icon: "zdr" },
     ],
   },
+];
+
+export const PRICING_CAROUSEL_PLANS: PricingPlan[] = [
+  ...PRICING_PLANS.filter((plan) => plan.variant === "featured"),
+  ...PRICING_PLANS.filter((plan) => plan.variant !== "featured"),
 ];

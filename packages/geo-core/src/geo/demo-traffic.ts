@@ -17,10 +17,6 @@ const cache = new Map<
   { builtAt: number; events: Promise<DemoTrafficEvent[]> }
 >();
 
-/**
- * The sandbox's own hosts (seeded from the visitor's company name), so
- * traffic shows the same domain as the rest of the project.
- */
 async function trafficHosts(
   organizationId: string,
   projectId: string
@@ -75,7 +71,6 @@ export function registerGeoDemoTraffic() {
         cache.delete(key);
       }
     });
-    // Bounded: sandboxes come and go, so drop stale and oldest entries.
     for (const [entryKey, entry] of cache) {
       if (now - entry.builtAt >= GEO_DEMO_TRAFFIC_CACHE_MS) {
         cache.delete(entryKey);

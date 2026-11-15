@@ -16,6 +16,7 @@ import type {
 
 const PUBLIC_FEEDBACK_INGEST_PATH_REGEX = /^\/v1\/feedback\/[^/]+\/?$/;
 const FEEDBACK_API_PATH_REGEX = /^\/v1\/feedback(?:\/|$)/;
+const FEEDBACK_SUBMISSION_PATH_REGEX = /^\/v1\/feedback\/?$/;
 
 export function serializeFeedback(
   row: AgentFeedbackRow
@@ -33,7 +34,6 @@ export function getIngestProjectId(c: Context): string | undefined {
   if (!auth || !isIngestAuth(auth)) {
     return undefined;
   }
-  // Unbound org-scoped ingest tokens use null; fall back to body.projectId.
   return auth.projectId ?? undefined;
 }
 
@@ -44,15 +44,17 @@ export function isPublicFeedbackIngestRequest(
   return method === "POST" && PUBLIC_FEEDBACK_INGEST_PATH_REGEX.test(pathname);
 }
 
-/**
- * Any request aimed at the feedback resource — public slug ingest included.
- * The subscription gate skips the whole resource because feedback is free.
- */
+export function isFeedbackSubmissionRequest(
+  pathname: string,
+  method: string
+): boolean {
+  return method === "POST" && FEEDBACK_SUBMISSION_PATH_REGEX.test(pathname);
+}
+
 export function isFeedbackApiRequest(pathname: string): boolean {
   return FEEDBACK_API_PATH_REGEX.test(pathname);
 }
 
-/** Leave unexpected database errors to Hono's central error handler. */
 export function runFeedbackProgram<A, E extends FeedbackDomainError>(
   program: Effect.Effect<A, E | FeedbackDatabaseError>
 ) {
@@ -77,7 +79,5 @@ export function respondToFeedbackFailure(
   if (failure._tag === "FeedbackProjectNotFoundError") {
     return c.json({ error: FEEDBACK_PROJECT_NOT_FOUND_ERROR }, 404);
   }
-  if (failure._tag === "FeedbackNotFoundError") {
-    return c.json({ error: FEEDBACK_NOT_FOUND_ERROR }, 404);
-  }
+  return c.json({ error: FEEDBACK_NOT_FOUND_ERROR }, 404);
 }

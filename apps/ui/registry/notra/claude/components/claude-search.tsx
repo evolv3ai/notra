@@ -131,6 +131,12 @@ const ClaudeCodeBlock = ({ code }: { code: string }) => (
   </ScrollArea>
 );
 
+const ClaudeLogoSlot = ({ children }: { children: ReactNode }) => (
+  <span className="flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-[0.25rem] [&_img]:size-full [&_svg]:size-full">
+    {children}
+  </span>
+);
+
 const ClaudeToolRow = ({
   resultsLabel,
   tool,
@@ -140,6 +146,7 @@ const ClaudeToolRow = ({
 }) => {
   const labelNode = (
     <>
+      {tool.logo && <ClaudeLogoSlot>{tool.logo}</ClaudeLogoSlot>}
       <span className="text-claude-muted shrink-0">{tool.label}</span>
       {tool.detail && (
         <span className="text-claude-fg min-w-0 truncate">{tool.detail}</span>
@@ -290,6 +297,7 @@ export const ClaudeSearch = ({
   defaultOpen = false,
   groups = EMPTY_GROUPS,
   items = EMPTY_ITEMS,
+  logo,
   onOpenChange,
   open: openProp,
   queryLabel = "Searched the web",
@@ -368,6 +376,7 @@ export const ClaudeSearch = ({
             />
           }
         >
+          {finished && logo && <ClaudeLogoSlot>{logo}</ClaudeLogoSlot>}
           {finished ? (
             doneLabel
           ) : (

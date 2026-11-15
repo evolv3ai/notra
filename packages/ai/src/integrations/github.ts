@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
 
+import { GITHUB_API_VERSION_HEADERS } from "@notra/ai/constants/github";
+import { logError } from "@notra/ai/utils/server-log";
 import { db } from "@notra/db/drizzle";
 import {
   githubAppInstallations,
@@ -7,6 +9,10 @@ import {
   repositoryOutputs,
   socialConnections,
 } from "@notra/db/schema";
+import {
+  decryptToken,
+  encryptToken,
+} from "@notra/db/utils/integration-encryption";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { Effect, Result } from "effect";
 import { customAlphabet } from "nanoid";
@@ -15,7 +21,6 @@ import {
   GITHUB_APP_REPOSITORIES_CACHE_TTL_SECONDS,
   GITHUB_APP_REPOSITORIES_STALE_CACHE_TTL_SECONDS,
 } from "../constants/github-app";
-import { decryptToken, encryptToken } from "../crypto/token-encryption";
 import {
   decodeCachedGitHubAppRepositories,
   decodeGitHubAppInstallationResponse,
@@ -32,6 +37,7 @@ import {
   GitHubRequestError,
   GitHubRepositoryCacheError,
   GitHubResponseError,
+  GitHubWebhookRepairPreconditionError,
 } from "../schemas/github-operations";
 import type {
   GitHubAppPublishAccess,
@@ -44,7 +50,6 @@ import type {
   AddRepositoryParams,
   ConfigureOutputParams,
   CreateGitHubIntegrationParams,
-  ErrorWithStatus,
   GitHubOrgMembershipCheck,
   RepositoryOutputType,
   SetRepositoryOutputConfigParams,
@@ -53,12 +58,14 @@ import type {
 } from "../types/integrations";
 import type { GitHubToolRepositoryContext } from "../types/tools";
 import { githubAppInstallationCanPublishContent } from "../utils/github-app-publish-access";
+import { resolveGitHubSocialToken } from "../utils/github-social-token";
 import {
   createOctokit,
   GITHUB_INTERACTIVE_READ_TIMEOUT_MS,
 } from "../utils/octokit";
 import { hasOrganizationAccess } from "../utils/organization-access";
 import { redis } from "../utils/redis";
+import { repairGitHubWebhook } from "../utils/repair-github-webhook";
 import { runGitHubEffect } from "../utils/run-github-effect";
 import { saveGitHubRepositorySelection } from "../utils/save-github-repository-selection";
 import { getConfiguredAppUrl } from "../utils/url";
@@ -129,11 +136,7 @@ function generateWebhookSecret(): string {
 }
 
 function base64url(value: string) {
-  return Buffer.from(value)
-    .toString("base64")
-    .replace(/=/g, "")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_");
+  return Buffer.from(value).toString("base64url");
 }
 
 function readGitHubAppConfig() {
@@ -179,12 +182,22 @@ function createGitHubAppJwt() {
   const signature = crypto
     .createSign("RSA-SHA256")
     .update(`${header}.${payload}`)
-    .sign(privateKey, "base64")
-    .replace(/=/g, "")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_");
+    .sign(privateKey, "base64url");
 
   return `${header}.${payload}.${signature}`;
+}
+
+export async function createScopedGitHubAppInstallationToken(
+  installationId: string,
+  scope: GitHubInstallationTokenScope
+) {
+  return runGitHubEffect(
+    createGitHubAppInstallationTokenEffect(
+      installationId,
+      undefined,
+      scope
+    ).pipe(Effect.mapError((error) => error.cause))
+  );
 }
 
 async function createGitHubAppInstallationToken(installationId: string) {
@@ -219,7 +232,7 @@ function createGitHubAppInstallationTokenEffect(
               ? { repositories: scope.repositories }
               : {}),
             ...(scope?.permissions ? { permissions: scope.permissions } : {}),
-            headers: { "X-GitHub-Api-Version": "2022-11-28" },
+            headers: GITHUB_API_VERSION_HEADERS,
           }
         ),
       catch: (cause) =>
@@ -241,9 +254,7 @@ async function getGitHubAppInstallation(installationId: string) {
     "GET /app/installations/{installation_id}",
     {
       installation_id: Number(installationId),
-      headers: {
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
+      headers: GITHUB_API_VERSION_HEADERS,
     }
   );
 
@@ -261,9 +272,7 @@ export async function getGitHubAppInstallationPublishAccess(
       "GET /app/installations/{installation_id}",
       {
         installation_id: Number(installationId),
-        headers: {
-          "X-GitHub-Api-Version": "2022-11-28",
-        },
+        headers: GITHUB_API_VERSION_HEADERS,
       }
     );
 
@@ -361,9 +370,10 @@ async function getInstallationOrgMembership(params: {
       params.installationId
     );
   } catch (error) {
-    console.error(
-      "Failed to create GitHub App installation token for org membership check:",
-      error instanceof Error ? error.message : String(error)
+    logError(
+      "[GitHub] Failed to create installation token for org membership check",
+      undefined,
+      { error: error instanceof Error ? error.message : String(error) }
     );
     return { verified: false };
   }
@@ -375,9 +385,7 @@ async function getInstallationOrgMembership(params: {
       {
         org: params.org,
         username: params.username,
-        headers: {
-          "X-GitHub-Api-Version": "2022-11-28",
-        },
+        headers: GITHUB_API_VERSION_HEADERS,
       }
     );
 
@@ -390,9 +398,13 @@ async function getInstallationOrgMembership(params: {
       return { verified: true, isAdmin: false };
     }
     if (getErrorStatus(error) !== 403) {
-      console.error(
-        "GitHub org membership check via installation token failed:",
-        error instanceof Error ? error.message : String(error)
+      logError(
+        "[GitHub] Org membership check via installation token failed",
+        undefined,
+        {
+          status: getErrorStatus(error),
+          error: error instanceof Error ? error.message : String(error),
+        }
       );
     }
     return { verified: false };
@@ -415,21 +427,30 @@ async function assertGitHubInstallationAdmin(params: {
     ),
     columns: {
       providerAccountId: true,
-      accessToken: true,
+      encryptedAccessToken: true,
       scope: true,
     },
   });
 
-  if (!githubAccount?.accessToken) {
+  if (!githubAccount) {
     throw new GitHubAccountRequiredError();
   }
 
-  const octokit = createOctokit(githubAccount.accessToken);
+  let accessToken: string | null;
+  try {
+    accessToken = resolveGitHubSocialToken(githubAccount);
+  } catch {
+    throw new GitHubReauthorizationRequiredError();
+  }
+
+  if (!accessToken) {
+    throw new GitHubAccountRequiredError();
+  }
+
+  const octokit = createOctokit(accessToken);
   const userResponse = await octokit
     .request("GET /user", {
-      headers: {
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
+      headers: GITHUB_API_VERSION_HEADERS,
     })
     .catch((error: unknown) => {
       if (getErrorStatus(error) === 401) {
@@ -477,9 +498,7 @@ async function assertGitHubInstallationAdmin(params: {
       "GET /user/memberships/orgs/{org}",
       {
         org: params.installationAccount.login,
-        headers: {
-          "X-GitHub-Api-Version": "2022-11-28",
-        },
+        headers: GITHUB_API_VERSION_HEADERS,
       }
     );
 
@@ -505,11 +524,11 @@ export async function isGitHubAccountConnectionRequired(userId: string) {
       eq(socialConnections.provider, "github")
     ),
     columns: {
-      accessToken: true,
+      encryptedAccessToken: true,
     },
   });
 
-  return !githubAccount?.accessToken;
+  return !githubAccount?.encryptedAccessToken;
 }
 
 function toRepositoryRecord(integration: {
@@ -540,22 +559,7 @@ function toRepositoryRecord(integration: {
 }
 
 function toIntegrationWithRepository<
-  T extends {
-    id: string;
-    owner: string | null;
-    repo: string | null;
-    defaultBranch: string | null;
-    repositoryEnabled: boolean;
-    encryptedWebhookSecret: string | null;
-    outputs?: Array<{
-      id: string;
-      repositoryId: string;
-      outputType: string;
-      enabled: boolean;
-      config: unknown;
-      createdAt: Date;
-    }>;
-  },
+  T extends Parameters<typeof toRepositoryRecord>[0],
 >(integration: T) {
   return {
     ...integration,
@@ -616,23 +620,18 @@ export async function validateRepositoryAccess(params: {
   encryptedToken: string | null;
 }) {
   const { owner, repo, token, encryptedToken } = params;
-  const resolvedToken =
-    token?.trim() ||
-    (encryptedToken ? decryptToken(encryptedToken) : undefined);
-  const octokit = createOctokit(resolvedToken);
+  const octokit = createOctokit(
+    token?.trim() || (encryptedToken ? decryptToken(encryptedToken) : undefined)
+  );
 
   try {
     await octokit.request("GET /repos/{owner}/{repo}", {
       owner,
       repo,
-      headers: {
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
+      headers: GITHUB_API_VERSION_HEADERS,
     });
   } catch (error) {
-    const status = (error as ErrorWithStatus).status;
-
-    if (status === 404) {
+    if (getErrorStatus(error) === 404) {
       throw new GitHubRepositoryNotFoundError(owner, repo);
     }
 
@@ -678,7 +677,7 @@ export async function createGitHubIntegration(
 
     try {
       await octokit.request("GET /user");
-    } catch (_error) {
+    } catch {
       throw new Error("Invalid GitHub token");
     }
 
@@ -690,19 +689,16 @@ export async function createGitHubIntegration(
       await octokit.request("GET /repos/{owner}/{repo}", {
         owner,
         repo,
-        headers: {
-          "X-GitHub-Api-Version": "2022-11-28",
-        },
+        headers: GITHUB_API_VERSION_HEADERS,
       });
-    } catch (_error) {
+    } catch {
       throw new Error(
         "Unable to access repository. It may be private and require a Personal Access Token."
       );
     }
   }
 
-  const webhookSecret = generateWebhookSecret();
-  const encryptedWebhookSecret = encryptToken(webhookSecret);
+  const encryptedWebhookSecret = encryptToken(generateWebhookSecret());
 
   const [integration] = await db
     .insert(githubIntegrations)
@@ -831,17 +827,6 @@ export async function upsertGitHubAppInstallation(params: {
   return record;
 }
 
-export async function getGitHubAppInstallationByOrganization(
-  organizationId: string
-) {
-  return db.query.githubAppInstallations.findFirst({
-    where: and(
-      eq(githubAppInstallations.organizationId, organizationId),
-      eq(githubAppInstallations.enabled, true)
-    ),
-  });
-}
-
 export async function listGitHubAppInstallationsByOrganization(
   organizationId: string
 ) {
@@ -906,9 +891,7 @@ function fetchInstallationRepositories(
           octokit.request("GET /installation/repositories", {
             per_page: 100,
             page: currentPage,
-            headers: {
-              "X-GitHub-Api-Version": "2022-11-28",
-            },
+            headers: GITHUB_API_VERSION_HEADERS,
           }),
         catch: (cause) =>
           new GitHubRequestError({
@@ -931,18 +914,15 @@ function fetchInstallationRepositories(
       page += 1;
     }
 
-    const mappedRepositories: GitHubAppRepository[] = repositories.map(
-      (repo) => ({
-        id: String(repo.id),
-        owner: repo.owner.login,
-        name: repo.name,
-        fullName: repo.full_name,
-        private: repo.private,
-        description: repo.description,
-        defaultBranch: repo.default_branch,
-      })
-    );
-    return mappedRepositories;
+    return repositories.map((repo): GitHubAppRepository => ({
+      id: String(repo.id),
+      owner: repo.owner.login,
+      name: repo.name,
+      fullName: repo.full_name,
+      private: repo.private,
+      description: repo.description,
+      defaultBranch: repo.default_branch,
+    }));
   });
 }
 
@@ -1224,9 +1204,7 @@ export async function getGitHubIntegrationsByOrganization(
     },
   });
 
-  return integrations.map((integration) =>
-    toIntegrationWithRepository(integration)
-  );
+  return integrations.map(toIntegrationWithRepository);
 }
 
 export async function getGitHubIntegrationById(integrationId: string) {
@@ -1275,7 +1253,7 @@ async function getAuthorizedGitHubIntegration(
   return integration;
 }
 
-export async function getDecryptedToken(integrationId: string, userId: string) {
+async function getDecryptedToken(integrationId: string, userId: string) {
   const integration = await getAuthorizedGitHubIntegration(
     integrationId,
     userId
@@ -1339,6 +1317,7 @@ export async function getRepositoryById(repositoryId: string) {
       organizationId: integration.organizationId,
       encryptedToken: integration.encryptedToken,
       enabled: integration.enabled,
+      githubAppInstallationId: integration.githubAppInstallationId,
     },
   };
 }
@@ -1396,6 +1375,7 @@ export async function setRepositoryOutputConfig(
   params: SetRepositoryOutputConfigParams
 ) {
   const config = {
+    ...(params.siteId !== undefined ? { siteId: params.siteId } : {}),
     ...(params.directory !== undefined ? { directory: params.directory } : {}),
     ...(params.contentPath !== undefined
       ? { contentPath: params.contentPath }
@@ -1419,27 +1399,20 @@ export async function setRepositoryOutputConfig(
       enabled:
         params.outputType === "changelog" || params.outputType === "blog_post",
       config,
+      ...(params.reviewProcess ? { reviewProcess: params.reviewProcess } : {}),
     })
     .onConflictDoUpdate({
       target: [repositoryOutputs.repositoryId, repositoryOutputs.outputType],
-      set: { config: mergedConfig },
+      set: {
+        config: mergedConfig,
+        ...(params.reviewProcess
+          ? { reviewProcess: params.reviewProcess }
+          : {}),
+      },
     })
     .returning();
 
   return output;
-}
-
-export async function toggleGitHubIntegration(
-  integrationId: string,
-  enabled: boolean
-) {
-  const [updated] = await db
-    .update(githubIntegrations)
-    .set({ enabled })
-    .where(eq(githubIntegrations.id, integrationId))
-    .returning();
-
-  return updated;
 }
 
 export async function updateGitHubIntegration(
@@ -1492,7 +1465,7 @@ export async function updateGitHubIntegrationToken(
 
   try {
     await octokit.request("GET /user");
-  } catch (_error) {
+  } catch {
     throw new Error("Invalid GitHub token");
   }
 
@@ -1500,11 +1473,9 @@ export async function updateGitHubIntegrationToken(
     await octokit.request("GET /repos/{owner}/{repo}", {
       owner,
       repo,
-      headers: {
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
+      headers: GITHUB_API_VERSION_HEADERS,
     });
-  } catch (_error) {
+  } catch {
     throw new Error(`Token does not have access to ${owner}/${repo}`);
   }
 
@@ -1553,25 +1524,19 @@ export async function validateRepositoryBranchExists(
     return;
   }
 
-  const resolvedToken = token?.trim() || undefined;
-  const authToken =
-    resolvedToken ??
-    (encryptedToken ? decryptToken(encryptedToken) : undefined);
-  const octokit = createOctokit(authToken);
+  const octokit = createOctokit(
+    token?.trim() || (encryptedToken ? decryptToken(encryptedToken) : undefined)
+  );
 
   try {
     await octokit.request("GET /repos/{owner}/{repo}/branches/{branch}", {
       owner,
       repo,
       branch: normalizedBranch,
-      headers: {
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
+      headers: GITHUB_API_VERSION_HEADERS,
     });
   } catch (error) {
-    const status = (error as ErrorWithStatus).status;
-
-    if (status === 404) {
+    if (getErrorStatus(error) === 404) {
       throw new GitHubBranchNotFoundError(owner, repo, normalizedBranch);
     }
 
@@ -1616,9 +1581,7 @@ export async function listAvailableRepositories(
   const { data } = await octokit.request("GET /user/repos", {
     per_page: 100,
     sort: "updated",
-    headers: {
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
+    headers: GITHUB_API_VERSION_HEADERS,
   });
 
   return data.map((repo) => ({
@@ -1629,54 +1592,6 @@ export async function listAvailableRepositories(
     description: repo.description,
     url: repo.html_url,
   }));
-}
-
-export async function getTokenForRepository(
-  owner: string,
-  repo: string,
-  options?: { organizationId?: string }
-) {
-  const whereClauses = [
-    sql`lower(${githubIntegrations.owner}) = ${owner.toLowerCase()}`,
-    sql`lower(${githubIntegrations.repo}) = ${repo.toLowerCase()}`,
-  ];
-
-  if (options?.organizationId) {
-    whereClauses.push(
-      eq(githubIntegrations.organizationId, options.organizationId)
-    );
-  }
-
-  const [integration] = await db
-    .select({
-      id: githubIntegrations.id,
-      organizationId: githubIntegrations.organizationId,
-      encryptedToken: githubIntegrations.encryptedToken,
-      githubAppInstallationId: githubIntegrations.githubAppInstallationId,
-      integrationEnabled: githubIntegrations.enabled,
-      repositoryEnabled: githubIntegrations.repositoryEnabled,
-    })
-    .from(githubIntegrations)
-    .where(and(...whereClauses))
-    .limit(1)
-    .$withCache(false);
-
-  if (!(integration?.integrationEnabled && integration.repositoryEnabled)) {
-    return undefined;
-  }
-
-  return runGitHubEffect(
-    resolveGitHubCredentials(
-      integration.id,
-      integration,
-      githubCredentialDependencies
-    ).pipe(
-      Effect.catchTag("GitHubCredentialsMissingError", () =>
-        Effect.succeed(undefined)
-      ),
-      Effect.catchTag("GitHubRequestError", (error) => Effect.fail(error.cause))
-    )
-  );
 }
 
 const githubCredentialDependencies: GitHubCredentialDependencies = {
@@ -1757,15 +1672,15 @@ export function getTokenForIntegrationIdEffect(
               })
               .from(githubIntegrations)
               .where(
-                params.organizationId
-                  ? and(
-                      eq(githubIntegrations.id, params.integrationId),
-                      eq(
+                and(
+                  eq(githubIntegrations.id, params.integrationId),
+                  params.organizationId
+                    ? eq(
                         githubIntegrations.organizationId,
                         params.organizationId
                       )
-                    )
-                  : eq(githubIntegrations.id, params.integrationId)
+                    : undefined
+                )
               )
               .limit(1)
               .$withCache(false)
@@ -1802,13 +1717,6 @@ export async function getGitHubToolRepositoryContextByIntegrationId(
     tokenScope?: GitHubInstallationTokenScope;
   }
 ): Promise<GitHubToolRepositoryContext> {
-  const whereClause = options?.organizationId
-    ? and(
-        eq(githubIntegrations.id, integrationId),
-        eq(githubIntegrations.organizationId, options.organizationId)
-      )
-    : eq(githubIntegrations.id, integrationId);
-
   const [integration] = await db
     .select({
       id: githubIntegrations.id,
@@ -1820,7 +1728,14 @@ export async function getGitHubToolRepositoryContextByIntegrationId(
       repositoryEnabled: githubIntegrations.repositoryEnabled,
     })
     .from(githubIntegrations)
-    .where(whereClause)
+    .where(
+      and(
+        eq(githubIntegrations.id, integrationId),
+        options?.organizationId
+          ? eq(githubIntegrations.organizationId, options.organizationId)
+          : undefined
+      )
+    )
     .limit(1);
 
   if (!integration) {
@@ -1881,11 +1796,10 @@ export async function generateWebhookSecretForRepository(
   }
 
   const secret = generateWebhookSecret();
-  const encryptedSecret = encryptToken(secret);
 
   await db
     .update(githubIntegrations)
-    .set({ encryptedWebhookSecret: encryptedSecret })
+    .set({ encryptedWebhookSecret: encryptToken(secret) })
     .where(eq(githubIntegrations.id, repositoryId));
 
   const webhookUrl = buildWebhookUrl(
@@ -1942,30 +1856,44 @@ export async function getWebhookConfigForRepository(
   };
 }
 
-export async function hasWebhookConfigured(repositoryId: string) {
-  const integration = await db.query.githubIntegrations.findFirst({
-    where: eq(githubIntegrations.id, repositoryId),
-    columns: {
-      encryptedWebhookSecret: true,
-    },
-  });
-
-  return !!integration?.encryptedWebhookSecret;
-}
-
-export async function getWebhookSecretByRepositoryId(repositoryId: string) {
-  const integration = await db.query.githubIntegrations.findFirst({
-    where: eq(githubIntegrations.id, repositoryId),
-    columns: {
-      encryptedWebhookSecret: true,
-    },
-  });
-
-  if (!integration?.encryptedWebhookSecret) {
-    return null;
+export async function repairWebhookForRepository(
+  repositoryId: string,
+  userId: string
+) {
+  const webhook = await getWebhookConfigForRepository(repositoryId, userId);
+  const repository = await getRepositoryById(repositoryId);
+  if (
+    !webhook ||
+    !repository?.enabled ||
+    !repository.integration.enabled ||
+    repository.integration.githubAppInstallationId
+  ) {
+    throw new GitHubWebhookRepairPreconditionError({
+      message: "An enabled repository webhook connection is required",
+    });
   }
-
-  return decryptToken(integration.encryptedWebhookSecret);
+  const token = await getTokenForIntegrationId(repositoryId, {
+    organizationId: repository.integration.organizationId,
+  });
+  if (!token) {
+    throw new GitHubWebhookRepairPreconditionError({
+      message: "A GitHub token with repository webhook permissions is required",
+    });
+  }
+  return repairGitHubWebhook({
+    octokit: createOctokit(token, {
+      requestTimeoutMs: GITHUB_INTERACTIVE_READ_TIMEOUT_MS,
+    }),
+    webhook,
+    organizationId: repository.integration.organizationId,
+    integrationExists: async (integrationId) =>
+      Boolean(
+        await db.query.githubIntegrations.findFirst({
+          where: eq(githubIntegrations.id, integrationId),
+          columns: { id: true },
+        })
+      ),
+  });
 }
 
 function buildWebhookUrl(

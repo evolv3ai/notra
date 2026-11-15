@@ -1,0 +1,32 @@
+export const SAD_CAPYBARA_PIXELS = [
+  "....oo..............oo....",
+  "...obbo............obbo...",
+  "...obdboooooooooooobdbo...",
+  "....obbbbbbbbbbbbbbbbo....",
+  "...obbbbbbbbbbbbbbbbbbo...",
+  "..obbbbbbbbbbbbbbbbbbbbo..",
+  "..obbbbbbbbbbbbbbbbbbbbo..",
+  ".obbbooobbbbbbbbbbooobbbo.",
+  ".obbbbtbbbbbbbbbbbbtbbbbo.",
+  ".obbbbtbbbbbbbbbbbbtbbbbo.",
+  ".obbbbtbbolllllllobtbbbbo.",
+  ".obbbbbbollllllllllobbbbo.",
+  ".obbbbbolllnllnllllobbbbo.",
+  ".obbbbbollllllllllllobbbo.",
+  ".obbbbbolllllollllllobbbo.",
+  ".obbbbbollllolollllobbbbo.",
+  "..obbbbboollllllllobbbbo..",
+  "..odbbbbbbooooooooobbbdo..",
+  "...oddbbbbbbbbbbbbbbddo...",
+  "....ooddddddddddddddoo....",
+  "......oooooooooooooo......",
+] as const;
+
+export const SAD_CAPYBARA_COLORS: Record<string, string> = {
+  o: "#4a2f19",
+  b: "#b57d47",
+  d: "#96632f",
+  l: "#d8a86f",
+  n: "#24140a",
+  t: "#5aa9f0",
+};

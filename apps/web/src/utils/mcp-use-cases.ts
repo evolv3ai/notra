@@ -39,7 +39,6 @@ export function filterMcpUseCases(
   return useCases.filter((entry) => entry.category === category);
 }
 
-/** Same-category use cases first, then the rest in list order. */
 export function getRelatedMcpUseCases(
   currentEntry: McpUseCase,
   limit = MCP_USE_CASES_RELATED_LIMIT

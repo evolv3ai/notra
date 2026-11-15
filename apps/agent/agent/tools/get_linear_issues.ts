@@ -1,3 +1,8 @@
 import { createGetLinearIssuesTool } from "@notra/tools/assistant/get-linear-issues";
 
-export default createGetLinearIssuesTool();
+import { withToolActivityLabel } from "../lib/utils/tool-activity";
+
+export default withToolActivityLabel(
+  createGetLinearIssuesTool(),
+  "Reading Linear issues"
+);

@@ -2,7 +2,7 @@ import { db } from "@notra/db/drizzle";
 import { projects } from "@notra/db/schema";
 import { asc, eq } from "drizzle-orm";
 
-import { DEMO_API_BASE_URL, DEMO_SIGNUP_URL } from "@/constants/demo";
+import { DEMO_SIGNUP_URL } from "@/constants/demo";
 import { loadDemoMissions } from "@/lib/demo/missions";
 import { demoSandboxRoute } from "@/lib/demo/route";
 import type { DemoSandboxInfo } from "@/types/demo";
@@ -23,7 +23,8 @@ export const GET = demoSandboxRoute(async (sandbox) => {
     expiresAt: sandbox.expiresAt.toISOString(),
     timeZone: sandbox.timeZone,
     apiKey: sandbox.apiKey,
-    apiBaseUrl: DEMO_API_BASE_URL,
+    apiBaseUrl:
+      process.env.NOTRA_DEMO_API_URL?.trim() || "https://demo-api.usenotra.com",
     signupUrl: DEMO_SIGNUP_URL,
     projectId: project?.id ?? null,
     personalization: sandbox.personalization,

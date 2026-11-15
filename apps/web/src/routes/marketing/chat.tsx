@@ -1,13 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ImageResponse } from "@vercel/og";
 
 import bgDataUrl from "@/../public/marketing/chat-bg.jpg?inline";
 import notraSvg from "@/../public/notra-mark.svg?raw";
+import { MARKETING_CHAT_LONG_DATE_FORMATTER } from "@/constants/marketing-chat";
 import { marketingChatOgQuerySchema } from "@/schemas/marketing-chat";
 import type {
   ChatOgComposerProps,
   ChatOgHeadlineProps,
 } from "@/types/marketing-chat";
+import { ImageResponse } from "@/utils/image-response";
 import { loadInterFont } from "@/utils/og";
 
 const SIZE = { width: 1200, height: 630 };
@@ -48,11 +49,7 @@ function getGreeting(now: Date): string {
 }
 
 function formatLongDate(now: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  }).format(now);
+  return MARKETING_CHAT_LONG_DATE_FORMATTER.format(now);
 }
 
 function BrainIcon() {
@@ -228,7 +225,6 @@ function ChatOgComposer({ notraDataUrl }: ChatOgComposerProps) {
               fontWeight: 500,
             }}
           >
-            {/* biome-ignore lint/performance/noImgElement: next/og JSX requires native img */}
             <img alt="" height={14} src={notraDataUrl} width={14} />
             <span>Auto</span>
           </div>

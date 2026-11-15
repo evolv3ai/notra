@@ -1,30 +1,45 @@
 "use client";
 
+import { GEO_GAPS_TABLE_HEIGHT } from "@notra/geo-core/constants/geo";
+import { PageHeading } from "@notra/ui/components/shared/page-heading";
 import { Skeleton } from "@notra/ui/components/ui/skeleton";
-import { useTranslations } from "next-intl";
+import { DataTableSkeleton } from "ui/table";
+import { DATA_TABLE_ROW_HEIGHT } from "ui/table/constants";
+import type { DataTableSkeletonColumn } from "ui/table/types";
+import { useTranslations } from "use-intl";
 
-import { GeoTableSkeleton } from "@/components/geo/skeleton-parts";
 import { PageContainer } from "@/components/layout/container";
-import { PageHeader } from "@/components/layout/page-header";
+import { useFillHeight } from "@/lib/hooks/use-fill-height";
 
-const GAP_ROW_COUNT = 6;
+/** Prompt, opportunity, visible on, competitors, write. */
+const GAP_COLUMN_WIDTHS: readonly DataTableSkeletonColumn[] = [
+  { width: "1fr", minWidth: "12rem" },
+  "9rem",
+  { width: "9.5rem", collapsePriority: 1 },
+  { width: "9.5rem", collapsePriority: 2 },
+  { width: "9.5rem", minWidth: "9.5rem", align: "right" },
+];
 
 export function GeoGapsSkeleton({ embedded = false }: { embedded?: boolean }) {
   const t = useTranslations("geo.pages.gaps");
   const tCommon = useTranslations("common");
+  const [tableRef, tableHeight] = useFillHeight(GEO_GAPS_TABLE_HEIGHT);
   const table = (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="flex h-8 shrink-0 flex-wrap items-center justify-between gap-2">
-        <div className="bg-muted/40 flex items-center gap-0.5 rounded-lg border p-0.5">
-          <Skeleton className="h-7 w-28 rounded-md" />
-          <Skeleton className="h-7 w-28 rounded-md" />
-        </div>
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+        <Skeleton className="h-8 w-60 max-w-full rounded-lg" />
         <div className="flex items-center gap-2">
-          <Skeleton className="h-8 w-48 rounded-md" />
-          <Skeleton className="h-8 w-36 rounded-md" />
+          <Skeleton className="h-8 w-[13.375rem] rounded-md" />
+          <Skeleton className="h-7 w-44 rounded-md" />
         </div>
       </div>
-      <GeoTableSkeleton rows={GAP_ROW_COUNT} />
+      <div className="min-h-0 flex-1" ref={tableRef}>
+        <DataTableSkeleton
+          columnWidths={GAP_COLUMN_WIDTHS}
+          height={tableHeight}
+          rowHeight={DATA_TABLE_ROW_HEIGHT}
+        />
+      </div>
       <p aria-live="polite" className="sr-only">
         {t("loadingStatus")}
       </p>
@@ -41,12 +56,10 @@ export function GeoGapsSkeleton({ embedded = false }: { embedded?: boolean }) {
       data-geo-gaps-page=""
     >
       <div className="flex min-h-0 w-full flex-1 flex-col gap-6 px-4 lg:px-6">
-        <PageHeader
+        <PageHeading
           description={t("description")}
           title={tCommon("labels.contentGaps")}
-        >
-          <Skeleton className="h-9 w-36 rounded-md" />
-        </PageHeader>
+        />
         {table}
       </div>
     </PageContainer>

@@ -1,7 +1,6 @@
 import { decode, encode } from "blurhash";
 import sharp from "sharp";
 
-// Build-time only: pass a local filename or image bytes, never import into client code.
 export async function generateImagePlaceholder(input: string | Buffer) {
   const { data, info } = await sharp(input)
     .rotate()

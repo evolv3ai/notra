@@ -28,7 +28,6 @@ import {
   shareOfVoiceSliceColor,
 } from "@/utils/geo-competitors";
 
-/** A brand without mentions ranks behind every brand that has some. */
 function shareOfVoiceRank(
   mentions: number,
   rows: readonly { mentions: number }[]
@@ -57,7 +56,7 @@ function sumWindow(
  * half of the settled days in range, matching `mentionCountDelta`. Works on
  * daily mention counts, not on the daily share fractions in `row.trend`.
  */
-export function shareOfVoiceOwnTrends(
+function shareOfVoiceOwnTrends(
   rows: readonly ShareOfVoiceRow[],
   own: ShareOfVoiceRow | null,
   mentionSparklines: ReadonlyMap<string, GeoSparklinePoint[]>,
@@ -122,8 +121,6 @@ export function buildShareOfVoiceChartModel(
   otherLabel?: string
 ) {
   const ownBrand = { companyName, aliases };
-  // Mentions under an own-brand alias count for the company name, both in
-  // the totals and in the daily series behind the change indicators.
   const normalizeBrand = (brand: string) =>
     companyName && isOwnBrandName(brand, companyName, aliases)
       ? companyName
@@ -166,7 +163,6 @@ export function buildShareOfVoiceChartModel(
   const brandCount = ranked.some((row) => row.own)
     ? ranked.length
     : ranked.length + (own ? 1 : 0);
-  // Every brand with a rank, you included even without mentions.
   const allRanked =
     own && !ranked.some((row) => row.own) ? [...ranked, own] : ranked;
   const leaders = ranked.slice(0, limit);
@@ -188,8 +184,6 @@ export function buildShareOfVoiceChartModel(
           tracked: false,
         }
       : null;
-  // Daily mentions per brand; the aggregate sums every brand outside the
-  // displayed ranking, so it is built against the ranking rather than all rows.
   const mentionSparklines = buildShareOfVoiceMentionSparklines(
     normalizedTimeseries,
     rows,

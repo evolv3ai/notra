@@ -45,10 +45,6 @@ function minIso(left: string, right: string): string {
   return left <= right ? left : right;
 }
 
-function maxIso(left: string, right: string): string {
-  return left >= right ? left : right;
-}
-
 export function citationsEqual(
   left: GeoShelfCitationSummary,
   right: GeoShelfCitationSummary
@@ -66,11 +62,6 @@ export function citationsEqual(
   );
 }
 
-/**
- * Collapse raw mention-check URL groups onto canonical shelf URLs so
- * `www` / `old.reddit.com` / tracking-param variants count as one page.
- * Bare homepages are dropped: a brand's own root domain is not shelf space.
- */
 type FoldedCitationPage = GeoShelfCitedPage & {
   promptIds: Set<string>;
   checkIds: Set<string>;
@@ -131,14 +122,8 @@ export function foldShelfCitationRows(
       if (title) {
         existing.title = title;
       }
-    } else {
-      existing.citations.lastCitedAt = maxIso(
-        existing.citations.lastCitedAt ?? lastCitedAt,
-        lastCitedAt
-      );
-      if (!existing.title && title) {
-        existing.title = title;
-      }
+    } else if (!existing.title && title) {
+      existing.title = title;
     }
     for (const promptId of row.promptIds) {
       existing.promptIds.add(promptId);
@@ -153,7 +138,6 @@ export function foldShelfCitationRows(
       ...cited
     } = page;
     cited.citations.promptCount = promptIds.size;
-    cited.citations.engines = uniqueSorted(cited.citations.engines);
     return cited;
   });
 }

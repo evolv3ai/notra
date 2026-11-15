@@ -36,7 +36,7 @@ export function perplexitySourcesFromExcerpt(
   return sources;
 }
 
-export function perplexitySourcesFromStored(
+function perplexitySourcesFromStored(
   sources: readonly GeoAnswerSource[]
 ): GeoPerplexitySearchSource[] {
   return sources.flatMap((source) => {

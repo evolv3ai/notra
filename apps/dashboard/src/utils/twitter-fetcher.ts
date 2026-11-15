@@ -8,7 +8,7 @@ import type {
   TwitterVerificationResponse,
 } from "@/types/services/twitter";
 
-export class TwitterApiError extends Data.TaggedError("TwitterApiError")<{
+class TwitterApiError extends Data.TaggedError("TwitterApiError")<{
   readonly message: string;
   readonly cause?: unknown;
 }> {}
@@ -29,7 +29,7 @@ export interface TweetData {
 const TWEET_URL_REGEX =
   /(?:twitter\.com|x\.com)\/(?:#!\/)?(\w+)\/status(?:es)?\/(\d+)/;
 
-export function parseTweetId(url: string): string | null {
+function parseTweetId(url: string): string | null {
   const match = url.match(TWEET_URL_REGEX);
   return match?.[2] ?? null;
 }

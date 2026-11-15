@@ -1,0 +1,214 @@
+---
+title: "Posts and changelog entries"
+description: "Write blog posts and changelog entries with frontmatter, and manage authors, cover images, tags, drafts, hidden pages and variables."
+authors:
+  - handle: jan
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/sites/posts
+  type: reference
+  applies_to:
+    - notra
+  language: en
+  status: stable
+---
+
+Every post starts with a frontmatter block between `---` lines, and the rest of the file is Markdown or MDX, with [components](/sites/components/overview) if you need them.
+
+## Blog posts
+
+```mdx blog/2026/launch.mdx
+---
+title: "Introducing Acme Flow"
+description: "A calmer way to ship product updates."
+date: 2026-09-28
+updated: 2026-10-02
+author: [jan, dominik]
+image: /images/launch.png
+imageAlt: "The Acme Flow calendar"
+tags: [launch, product]
+featured: true
+---
+
+Today we're launching **Acme Flow**.
+```
+
+| Field | Type | Required | What it does |
+| --- | --- | --- | --- |
+| `title` | string | Yes | The headline, the page title and the share title |
+| `date` | date | Yes | Publish date as `YYYY-MM-DD`, and Notra sorts posts by it, newest first |
+| `description` | string | | Summary for cards, search results and link previews, and without it Notra uses the first paragraph |
+| `updated` | date | | Shown as "Updated" next to the date, and used in the sitemap and for search engines |
+| `author` | string, object or list | | Author ids from [`authors`](#authors) in `blog.json`, plain names, or [author objects](#authors-in-the-frontmatter) |
+| `image` | path or URL | | Cover image and social preview, as PNG or JPEG at 1200×630. [`blog.post.cover`](/sites/customize/layouts#posts) set to `false` keeps it off the post page |
+| `imageAlt` | string | | Describes the cover for screen readers and link previews |
+| `tags` | list | | Shown as links under the post and on cards, each with its own [tag page](#tags), and used in the RSS feed, search engine metadata and the Markdown version |
+| `featured` | boolean | | `true` pins the post on top of the blog index while `blog.featured` is `"none"` |
+| `draft` | boolean | | `true` hides the post on the live site, while it still shows in previews |
+| `hidden` | boolean | | Defaults to `false`. `true` keeps the published HTML and Markdown URLs reachable, but removes the post from discovery and forces `noindex` |
+| `noindex` | boolean | | `true` keeps a published post out of search engines, sitemaps and `llms.txt` |
+
+## Changelog entries
+
+```mdx changelog/2026-10-01.mdx
+---
+title: "Acme Flow is live"
+date: 2026-10-01
+version: v2.0.0
+tags: [Feature]
+---
+
+- Plan releases on a shared calendar.
+- Publish to your blog, changelog and social accounts at once.
+```
+
+| Field | Type | Required | What it does |
+| --- | --- | --- | --- |
+| `title` | string | Yes | The entry's headline |
+| `date` | date | Yes | Release date, and Notra sorts entries by it, newest first |
+| `version` | string | | Shown next to the date, for example `v2.0.0` |
+| `description` | string | | Summary for search results, link previews and compact layouts |
+| `tags` | list | | Labels like `Feature` or `Fix`, shown under the entry with a [tag page](#tags) each, and used in the RSS feed and metadata |
+| `image` | path or URL | | Image shown in the entry, and the social preview |
+| `imageAlt` | string | | Describes the image for screen readers and link previews |
+| `draft` | boolean | | `true` hides the entry on the live site, while it still shows in previews |
+| `hidden` | boolean | | Defaults to `false`. `true` keeps the published HTML and Markdown URLs reachable, but removes the entry from discovery and forces `noindex` |
+
+`author`, `updated`, `featured` and `noindex` only apply to blog posts, and Notra ignores unknown fields with a warning, like Mintlify's `sidebarTitle` or `icon`. When the frontmatter is missing or wrong, the build stops and names the file and the field.
+
+## Authors
+
+Describe the people who write for you once in `blog.json`, then name them by id in a post's `author`:
+
+```json blog.json
+{
+  "authors": {
+    "jan": {
+      "name": "Jan Burzinski",
+      "title": "Engineer",
+      "avatar": "/images/team/jan.jpg",
+      "bio": "Builds the publishing pipeline.",
+      "url": "https://jan.dev",
+      "x": "https://x.com/janburzinski",
+      "linkedin": "https://www.linkedin.com/in/janburzinski",
+      "github": "https://github.com/janburzinski"
+    }
+  }
+}
+```
+
+| Field | Rules |
+| --- | --- |
+| id (`jan`) | Lowercase letters, digits and dashes, up to 40 characters |
+| `name` | Required, up to 80 characters |
+| `title` | Up to 80 characters |
+| `avatar` | A path like `/images/team/jan.jpg` or an `https://` URL |
+| `bio` | Up to 300 characters |
+| `url`, `x`, `linkedin`, `github`, `youtube` | Full URLs |
+
+Notra lists a known author with avatar and title under "Written by", beside the post in the wide layout or under the title otherwise (in the sidebar with the [compact header](/sites/customize/layouts#compact-post-header)), and gives them an author page at `/blog/author/jan` listing their posts. Search engines and AI answers get a schema.org `Person` with the profile links, which ties the post to a real person. Notra shows any other value in `author`, like `author: Guest Writer`, as a plain name.
+
+### Authors in the frontmatter
+
+A post can also describe its author inline, which is what Notra writes when you publish from the editor:
+
+```mdx blog/2026/dark-mode.mdx
+---
+title: "Dark mode is here"
+date: 2026-10-07
+author:
+  id: jan
+  name: Jan Burzinski
+  title: Engineering
+  avatar: /images/team/jan.jpg
+  url: https://jan.dev
+---
+```
+
+An author object takes the same fields as an entry in `authors`, and only `name` is required. `author` can also be a list that mixes ids, names and objects.
+
+- With an `id` that's in `authors`, the `blog.json` entry wins for every field it sets, and the frontmatter fills in the rest.
+- With an `id` that isn't in `authors`, the author still gets an author page at `/blog/author/<id>` that lists their posts. When several posts describe the same id, the newest post's details win.
+- Without an `id`, Notra shows the name and avatar, but there's no author page.
+
+`blog.authorPage` switches author pages to a [stacked layout](/sites/customize/layouts#author-pages). Notra hides author pages from search engines unless you set `"seo": { "indexing": "all" }`.
+
+## Tags
+
+Tags are optional. Leave them out and the site shows no tags and builds no tag pages. A section only gets tag pages once at least one of its entries has a tag.
+
+Tags show as links under each post and changelog entry, and on blog cards (the first three). Each section gets a page that lists all tags with their post count, at `/blog/tags`, and one page per tag, like `/blog/tags/product`. Notra builds the address from the tag, so `Product` and `product` share one page, which shows the spelling of the newest post. To filter the blog index by tag, turn on the [category bar](/sites/customize/layouts#category-bar).
+
+Like author pages, tag pages stay out of search engines and the sitemap unless you set `"seo": { "indexing": "all" }`.
+
+## Images
+
+Put images in `public/` and use paths from the root of the site:
+
+```mdx
+![The new calendar view](/images/calendar.png)
+```
+
+- `image` in the frontmatter is the cover at the top of the post, on cards (see [`blog.card.image`](/sites/customize/layouts#cards)), in the RSS feed and the social preview, and since social networks don't show SVG, use PNG or JPEG.
+- `imageAlt` describes the cover. Notra uses it as the image's alt text on the post, on cards and in link previews. Without it, screen readers skip the cover.
+- Posts without an `image` get a generated share image with the title, your site name and your brand color. See [Share images](/sites/customize/seo#share-images).
+- Wrap a screenshot in [`<Frame>`](/sites/components/media#frame) to give it a border and a caption.
+
+## Drafts
+
+`draft: true` keeps a post off the live site, its feeds and sitemaps, but shows it in every [preview](/sites/previews). Remove the line or set it to `false` to publish.
+
+Files excluded by [`.notraignore`](/sites/repository#exclude-files-with-notraignore) stay out of previews too, regardless of `draft`.
+
+Drafts you write in the [Notra editor](/sites/publishing#the-editor) work differently, because they never reach the repository until you publish them.
+
+## Hidden pages
+
+Set `hidden: true` on a blog post or changelog entry to publish an unlisted page. Its HTML URL and Markdown version still work, but Notra leaves it out of indexes, featured posts, tag and author listings, previous/next links, RSS, sitemaps, structured-data lists, Markdown indexes, `llms.txt` and `llms-full.txt`. Hidden pages always use `noindex`, even with `seo.indexing: "all"`. This also applies in previews.
+
+```mdx blog/early-access.mdx
+---
+title: "Early access announcement"
+date: 2026-10-13
+hidden: true
+---
+
+Details for readers with the link.
+```
+
+With the blog mounted at `/blog`, readers can open this page at `/blog/early-access` or `/blog/early-access.md`. You can also enable **Unlisted** in the [content editor](/sites/publishing#publish-an-unlisted-post-from-content).
+
+Unlike `hidden`, a blog post's `noindex: true` only controls indexing: the post remains in public lists, RSS and the Markdown index. Hidden pages are not private; anyone with the URL can read or share them. A page with both `draft: true` and `hidden: true` still stays off the live site until you remove `draft`.
+
+To list the page again, remove `hidden` or set it to `false`, then deploy the change. A separate `noindex: true` still keeps the blog post out of search engines, sitemaps and generated AI indexes.
+
+Hidden-only tags and authors appear as text on the article instead of linking to missing listing pages. Tags and authors shared with listed posts keep their links.
+
+## Variables
+
+Define values once in `blog.json` and use them in any post with `{{ name }}`:
+
+```json blog.json
+{ "variables": { "product": "Acme Flow", "supportEmail": "help@acme.com" } }
+```
+
+```mdx
+Questions about {{ product }}? Write to {{ supportEmail }}.
+```
+
+Variables work in posts, changelog entries, their frontmatter, MDX snippets, `header.mdx`, `footer.mdx`, slots and `markdown.instructions`. Notra leaves them as they are inside code, so to show the braces themselves, put them in inline code like `` `{{ name }}` ``. An unknown name shows a warning in the build log and stays as written. In frontmatter, Notra doesn't replace variables in values that contain characters like `:`, `#`, `@` or quotes. See [`variables`](/sites/reference/blog-json#variables) for the rules.
+
+Manage variables in your site's **Settings**, under **Content variables**. Changes save as a draft in `blog.json` and leave your other settings untouched. Review and publish the draft in the editor to update your site, including existing posts that use those variables.
+
+Keep historical values, such as release version numbers, as fixed text.
+
+Placeholders inside JavaScript imports, exports and expressions stay unchanged. Use variables in the snippet's content, not in its JavaScript.
+
+<Warning>
+  Variable values appear in your repository and published pages. Never add API keys, passwords or other secrets.
+</Warning>
+
+## Posts published from Notra
+
+When you publish a post from Notra to a site, Notra writes the frontmatter for you with the title, description, date, the cover image and its alt text, tags, the authors as [author objects](#authors-in-the-frontmatter), and `featured`, `hidden` and `noindex` when you turn them on.

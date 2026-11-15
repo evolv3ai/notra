@@ -4,13 +4,10 @@ import {
   ACCOUNT_SERIES_COLORS,
   CHART_MEMORY_FILL_CLASS,
   CHART_MUTED_COLOR,
-  CHART_PRIMARY_COLOR,
   CHART_SEARCH_FILL_CLASS,
-  CHART_SECONDARY_COLOR,
 } from "@/constants/charts";
 import type { ChartColorPair, ChartSeriesColors } from "@/types/charts";
 
-/** How far toward white the far end of a donut sector fades, per theme. */
 const SOFT_GRADIENT_LIGHT_TINT = 0.45;
 const SOFT_GRADIENT_DARK_TINT = 0.3;
 
@@ -20,10 +17,6 @@ export function seriesColors(pair: ChartColorPair): ChartSeriesColors {
 
 export function geoModeFillClass(variant: "web" | "raw"): string {
   return variant === "web" ? CHART_SEARCH_FILL_CLASS : CHART_MEMORY_FILL_CLASS;
-}
-
-export function geoModeColor(variant: "web" | "raw"): ChartColorPair {
-  return variant === "web" ? CHART_PRIMARY_COLOR : CHART_SECONDARY_COLOR;
 }
 
 export function accountSeriesColorPair(index: number): ChartColorPair {

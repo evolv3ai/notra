@@ -1,70 +1,61 @@
 import { Loading03Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useLocale, useTranslations } from "next-intl";
+import { Progress } from "@notra/ui/components/ui/progress";
+import { useLocale, useTranslations } from "use-intl";
 
-import { useFormatRelative } from "@/lib/hooks/use-format-relative";
-import type {
-  GeoScanActivityStatusProps,
-  ScanActivityRelativeFormatter,
-  ScanActivityStatusTranslator,
-} from "@/types/geo-scan-activity";
+import type { GeoScanActivityStatusProps } from "@/types/geo-scan-activity";
 import { geoRunProgress } from "@/utils/geo-scan-activity";
 
-function scanSentence(
-  run: GeoScanActivityStatusProps["run"],
-  t: ScanActivityStatusTranslator,
-  formatRelative: ScanActivityRelativeFormatter,
-  locale: string
-): string {
-  if (!run) {
-    return t("starting");
-  }
-  if (run.status === "running") {
-    const checks = run.checks.toLocaleString(locale);
-    return run.plan
-      ? t("runningWithTotal", {
-          checks,
-          total: run.plan.totalChecks.toLocaleString(locale),
-        })
-      : t("running", { checks });
-  }
-  const when = formatRelative(run.finishedAt ?? run.startedAt);
-  return run.status === "failed"
-    ? t("failed", { when })
-    : t("finished", { when });
-}
-
-/** One-line scan status beside the answers filters, with live progress. */
-export function ScanActivityStatus({ run }: GeoScanActivityStatusProps) {
+/** One line above the answers table while a scan is starting or running. */
+export function ScanActivityStatus({
+  run,
+  starting,
+}: GeoScanActivityStatusProps) {
   const t = useTranslations("geo.scanActivityStatus");
   const locale = useLocale();
-  const formatRelative = useFormatRelative();
-  const running = !run || run.status === "running";
-  const progress = run ? geoRunProgress(run) : null;
-
-  return (
-    <div className="flex min-w-0 items-center gap-3">
-      <p className="text-muted-foreground flex min-w-0 items-center gap-2 text-sm tabular-nums">
-        {running ? (
+  if (run.status === "running") {
+    const total = run.plan?.totalChecks ?? null;
+    return (
+      <div className="flex min-w-0 items-center gap-3 text-sm">
+        <span className="text-foreground inline-flex shrink-0 items-center gap-2 font-medium">
           <HugeiconsIcon
             aria-hidden="true"
-            className="text-primary shrink-0 motion-safe:animate-spin"
+            className="text-primary motion-safe:animate-spin"
             icon={Loading03Icon}
             size={14}
           />
-        ) : null}
-        <span className="truncate">
-          {scanSentence(run, t, formatRelative, locale)}
+          {t("running")}
         </span>
-      </p>
-      {running && progress !== null ? (
-        <progress
-          aria-label={t("progressLabel")}
-          className="bg-border [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-border [&::-webkit-progress-value]:bg-primary h-1 w-24 shrink-0 overflow-hidden rounded-full"
-          max={100}
-          value={progress}
+        {total ? (
+          <>
+            <Progress
+              aria-label={t("progressLabel")}
+              className="w-32 shrink-0"
+              value={geoRunProgress(run)}
+            />
+            <span className="text-muted-foreground truncate tabular-nums">
+              {t("answered", {
+                checks: run.checks.toLocaleString(locale),
+                total: total.toLocaleString(locale),
+              })}
+            </span>
+          </>
+        ) : null}
+      </div>
+    );
+  }
+  if (starting) {
+    return (
+      <p className="text-foreground inline-flex min-w-0 items-center gap-2 text-sm font-medium">
+        <HugeiconsIcon
+          aria-hidden="true"
+          className="text-primary shrink-0 motion-safe:animate-spin"
+          icon={Loading03Icon}
+          size={14}
         />
-      ) : null}
-    </div>
-  );
+        {t("starting")}
+      </p>
+    );
+  }
+  return null;
 }

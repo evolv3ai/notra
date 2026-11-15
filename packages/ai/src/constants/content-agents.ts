@@ -1,6 +1,5 @@
 import type { ContentAgentProfile } from "@notra/ai/types/agents";
 
-/** What differs between the background content agents; everything else is shared. */
 export const CONTENT_AGENT_PROFILES = {
   changelog: {
     skillName: "changelog",

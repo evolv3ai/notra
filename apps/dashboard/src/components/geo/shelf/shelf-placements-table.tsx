@@ -10,8 +10,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@notra/ui/components/ui/select";
-import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { DataTable, type TableColumn } from "ui/table";
+import { useTranslations } from "use-intl";
 
 import {
   CompetitorChoicesFooter,
@@ -19,7 +20,6 @@ import {
 } from "@/components/geo/competitor-choices-search";
 import { CompetitorLogo } from "@/components/geo/competitor-logo";
 import { ShelfPlacementMark } from "@/components/geo/shelf/shelf-placement-badge";
-import { Table, type TableColumn } from "@/components/motion/table";
 import { GEO_COMPETITOR_CHOICES_SEARCH_THRESHOLD } from "@/constants/geo-competitors";
 import { TABLE_ROW_HEIGHT } from "@/constants/table";
 import { cn } from "@/lib/utils";
@@ -161,7 +161,7 @@ export function ShelfPlacementsTable({
   ];
 
   const table = (
-    <Table
+    <DataTable
       columns={columns}
       data={placements}
       getRowId={(placement) => placement.competitorId ?? "own"}

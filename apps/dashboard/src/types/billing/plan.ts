@@ -1,6 +1,7 @@
+import type { PostHogProperties } from "@notra/posthog/types/posthog";
 import type { useCustomer, useListPlans } from "autumn-js/react";
-import type { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
+import type { useTranslations } from "use-intl";
 
 import type { ProductFeature } from "@/types/hooks/billing";
 
@@ -54,8 +55,8 @@ export interface InvoicesTableProps {
   plans: BillingPlan[] | undefined;
 }
 
-export type AttachPlanFn = ReturnType<typeof useCustomer>["attach"];
-export type MultiAttachPlanFn = ReturnType<typeof useCustomer>["multiAttach"];
+type AttachPlanFn = ReturnType<typeof useCustomer>["attach"];
+type MultiAttachPlanFn = ReturnType<typeof useCustomer>["multiAttach"];
 
 export interface AttachPlanParams {
   attach: AttachPlanFn;
@@ -63,6 +64,7 @@ export interface AttachPlanParams {
   planId: string;
   includeZdr: boolean;
   successUrl?: string;
+  analytics?: PostHogProperties;
 }
 
 export interface AttachPlanResult {

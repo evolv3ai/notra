@@ -85,7 +85,6 @@ function buildResearchTools(params: {
   resolveContext?: ResolveIntegrationContext;
 }): Record<string, Tool> {
   const { scope, integrationId } = params;
-  // The researcher only ever reads the one repository it was given.
   const pinned = <T extends { integrationId: string }>(input: T): T => ({
     ...input,
     integrationId,
@@ -175,9 +174,7 @@ export function createCodeResearcherTool(params: {
       });
 
       const agent = new ToolLoopAgent({
-        model: createModel(params.organizationId, AGENT_DEFAULT_MODEL, {
-          disableMemory: true,
-        }),
+        model: createModel(params.organizationId, AGENT_DEFAULT_MODEL),
         providerOptions: withRouterDefaults(
           { gateway: { tags: ["code-research"] } },
           { modelId: AGENT_DEFAULT_MODEL }
@@ -203,8 +200,6 @@ export function createCodeResearcherTool(params: {
       });
       yield progress();
 
-      // Usage is summed per model step and billed in `finally`, so a run the
-      // user stops halfway still pays for the tokens it already used.
       let usage: AgentTokenUsage | null = null;
       try {
         const result = await agent.stream({
@@ -213,16 +208,23 @@ export function createCodeResearcherTool(params: {
         });
         for await (const part of result.fullStream) {
           if (part.type === "finish-step") {
-            // Price each step with the model the router actually used,
-            // which differs from the requested one after a fallback.
             const routeMetadata = getRouteMetadata(part.providerMetadata);
             const route = routeMetadata
               ? await enrichRouteMetadata(routeMetadata)
               : undefined;
-            usage = addStepUsage(usage, toAgentTokenUsage(part.usage), {
-              modelId: route?.model ?? part.response.modelId,
-              gateway: route?.gateway,
-            });
+            usage = addStepUsage(
+              usage,
+              {
+                ...toAgentTokenUsage(part.usage),
+                ...(route?.costUsd === undefined
+                  ? {}
+                  : { tokenCostUsd: route.costUsd }),
+              },
+              {
+                modelId: route?.model ?? part.response.modelId,
+                gateway: route?.gateway,
+              }
+            );
           } else if (part.type === "tool-call") {
             steps = startStep(
               steps,
@@ -259,7 +261,6 @@ export function createCodeResearcherTool(params: {
       }
     },
     toModelOutput: ({ output }) => {
-      // The chat model gets the brief; the step trail is only for the UI.
       const { steps: _steps, ...brief } = (output ?? {}) as unknown as Record<
         string,
         JSONValue

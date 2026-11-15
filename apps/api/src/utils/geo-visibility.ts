@@ -1,6 +1,5 @@
 import type {
   GeoLanguageSharePoint,
-  GeoOverviewEngine,
   GeoOverviewResponse,
   GeoPromptResult,
   GeoPromptResultsResponse,
@@ -21,7 +20,7 @@ interface VisibilityMetrics {
  * OpenAPI schema. Older check rows may omit citations/visibility fields; the
  * dashboard tolerates undefined but the API contract requires numbers.
  */
-export function normalizeVisibilityMetrics<T extends VisibilityMetrics>(
+function normalizeVisibilityMetrics<T extends VisibilityMetrics>(
   row: T
 ): T & {
   citations: number;
@@ -36,20 +35,12 @@ export function normalizeVisibilityMetrics<T extends VisibilityMetrics>(
   };
 }
 
-function normalizeOverviewEngine(engine: GeoOverviewEngine) {
-  return normalizeVisibilityMetrics(engine);
-}
-
 function normalizeTimeseriesPoint(point: GeoTimeseriesPoint) {
   return {
     ...point,
     citations: point.citations ?? 0,
     visibility: point.visibility ?? point.mentions,
   };
-}
-
-function normalizeLanguageSharePoint(point: GeoLanguageSharePoint) {
-  return normalizeVisibilityMetrics(point);
 }
 
 function normalizePromptResult(result: GeoPromptResult) {
@@ -73,7 +64,7 @@ function normalizePromptResult(result: GeoPromptResult) {
 export function normalizeOverviewResponse(value: GeoOverviewResponse) {
   return {
     configured: value.configured,
-    engines: value.engines.map(normalizeOverviewEngine),
+    engines: value.engines.map(normalizeVisibilityMetrics),
   };
 }
 
@@ -99,6 +90,6 @@ export function normalizeLanguageShareResponse(value: {
 }) {
   return {
     configured: value.configured,
-    points: value.points.map(normalizeLanguageSharePoint),
+    points: value.points.map(normalizeVisibilityMetrics),
   };
 }

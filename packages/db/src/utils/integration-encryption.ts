@@ -58,3 +58,18 @@ export function decryptIntegrationSecret(encryptedValue: string, key: Buffer) {
 
   return decrypted;
 }
+
+function integrationEncryptionKeyFromEnv() {
+  return decodeIntegrationEncryptionKey(process.env.INTEGRATION_ENCRYPTION_KEY);
+}
+
+export function encryptToken(token: string) {
+  return encryptIntegrationSecret(token, integrationEncryptionKeyFromEnv());
+}
+
+export function decryptToken(encryptedToken: string) {
+  return decryptIntegrationSecret(
+    encryptedToken,
+    integrationEncryptionKeyFromEnv()
+  );
+}

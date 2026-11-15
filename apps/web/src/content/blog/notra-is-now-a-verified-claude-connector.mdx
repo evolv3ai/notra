@@ -1,0 +1,45 @@
+---
+title: "Notra is now a verified Claude connector"
+description: "Notra is now a verified connector in the Claude directory, so you can add generative engine optimization (GEO) and answer engine optimization (AEO) tools to Claude without setting up a server URL or API key."
+date: "2026-10-16T16:00:00.000Z"
+updatedAt: "2026-10-16T16:00:00.000Z"
+author: "dominik"
+---
+
+<a href="https://claude.ai/directory/notra">
+  <img className="block dark:hidden" src="/blog/claude-directory-notra-light.png" alt="Notra's listing in the Claude connector directory with the verified badge, its description, tools and connector URL." />
+  <img className="hidden dark:block" src="/blog/claude-directory-notra-dark.png" alt="Notra's listing in the Claude connector directory with the verified badge, its description, tools and connector URL." />
+</a>
+
+Notra is now a verified connector in the Claude connector directory. You can find it at [claude.ai/directory/notra](https://claude.ai/directory/notra) and connect it to your Claude account without copying a server URL or creating an API key.
+
+## What changed [#what-changed]
+
+You could already use Notra in Claude by adding `https://mcp.usenotra.com/mcp` as a custom connector, but that meant trusting a URL you had pasted in yourself. Notra now has a verified listing next to the other connectors in Claude's directory, so your team can find it and add it the same way they add any other connector.
+
+## How to connect [#how-to-connect]
+
+Open [claude.ai/directory/notra](https://claude.ai/directory/notra) and add the connector. Claude sends you to Notra to sign in, where you pick the organization you want to use and an access level of Read only, Write only or Full access. Claude stores the session and refreshes it in the background, so you only sign in once.
+
+Claude Code connects to the same server with one command:
+
+```bash
+claude mcp add --transport http notra https://mcp.usenotra.com/mcp
+```
+
+If you want to use Notra in a tool we don't support yet, you can connect it through our [Composio integration](/blog/notra-is-now-available-on-composio), which works with ChatGPT, Cursor and agents you build yourself.
+
+## What you can do with it [#what-you-can-do-with-it]
+
+The connector has the same tools as our [MCP server](https://www.usenotra.com/docs/devtools/mcp), which covers GEO, AEO and content. Here are a few prompts to start with:
+
+- "Run a GEO scan for our tracked prompts and tell me where we dropped since last week."
+- "Which competitors show up in AI answers for prompts where we don't?"
+- "Find our biggest content gaps and draft a blog post for the first one in our brand voice."
+- "How much traffic did AI crawlers and agents send to our docs this month?"
+
+In one conversation, Claude can read your visibility data, compare it against competitors, plan a content brief and write the draft. Claude saves each draft as a post in Notra, where you review and publish it from the dashboard.
+
+## What's next [#whats-next]
+
+We'll add new tools to the connector as we ship them in Notra. If a tool is missing or doesn't work the way you expect, ask Claude to send us feedback through the connector or contact us directly, and we'll read every report.

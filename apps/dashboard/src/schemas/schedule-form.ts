@@ -7,6 +7,7 @@ import {
   MAX_SCHEDULE_NAME_LENGTH,
   SUPPORTED_AUTOMATION_OUTPUT_TYPES,
 } from "@notra/schemas/dashboard/integrations";
+import { automationNotifySchema } from "@notra/schemas/shared/automation";
 import { z } from "zod";
 
 import type { ScheduleFormTranslator } from "@/types/automation/schedule-i18n";
@@ -53,5 +54,6 @@ export function createScheduleFormSchema(t: ScheduleFormTranslator) {
     lookbackWindow: z.enum(LOOKBACK_WINDOWS),
     brandVoiceId: z.string(),
     autoPublish: z.boolean(),
+    notify: automationNotifySchema,
   });
 }

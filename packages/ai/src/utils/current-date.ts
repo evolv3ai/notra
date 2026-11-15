@@ -4,8 +4,8 @@ export function formatCurrentDate(timezone?: string): {
   formatted: string;
   timezone: string;
 } {
-  const resolvedTimezone = resolveTimezone(timezone);
-
+  const resolvedTimezone =
+    timezone && isValidTimezone(timezone) ? timezone : FALLBACK_TIMEZONE;
   const formatted = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
@@ -15,14 +15,6 @@ export function formatCurrentDate(timezone?: string): {
   });
 
   return { formatted, timezone: resolvedTimezone };
-}
-
-function resolveTimezone(timezone: string | undefined): string {
-  if (!timezone) {
-    return FALLBACK_TIMEZONE;
-  }
-
-  return isValidTimezone(timezone) ? timezone : FALLBACK_TIMEZONE;
 }
 
 export function isValidTimezone(timezone: string) {

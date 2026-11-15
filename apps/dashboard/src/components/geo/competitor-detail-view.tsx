@@ -3,10 +3,10 @@
 import {
   ArrowUpRight01Icon,
   PencilEdit02Icon,
+  PlusSignIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
-  COMPETITOR_PROMPTS_PAGE_TABLE_HEIGHT,
   COMPETITOR_PROMPTS_TABLE_HEIGHT,
   COMPETITORS_TABLE_ROW_HEIGHT,
   GEO_COMPETITOR_DETAIL_CHART_HEIGHT_CLASS,
@@ -25,8 +25,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@notra/ui/components/ui/tooltip";
-import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { InstrumentModule, InstrumentSection } from "ui/card";
+import { DataTable, type TableColumn } from "ui/table";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { EChartsBarChart } from "@/components/evilcharts/charts/echarts-bar-chart";
@@ -34,21 +36,22 @@ import { CompetitorEditDialog } from "@/components/geo/competitor-edit-dialog";
 import { CompetitorLogo } from "@/components/geo/competitor-logo";
 import { EngineIcon } from "@/components/geo/engine-icon";
 import { PromptDetailDialog } from "@/components/geo/prompt-detail-dialog";
-import {
-  BrandTrackingBadge,
-  TrackBrandButton,
-} from "@/components/geo/share-of-voice-brand-tag";
-import { Table, type TableColumn } from "@/components/motion/table";
 import { useOrganizationsContext } from "@/components/providers/organization-provider";
 import { CHART_PRIMARY_COLOR } from "@/constants/charts";
 import { GEO_PROMPT_DETAIL_SURFACES } from "@/constants/geo-analytics";
+import {
+  COMPETITOR_MENTIONS_BAR_MAX_WIDTH_PX,
+  COMPETITOR_MENTIONS_BAR_RADIUS_PX,
+} from "@/constants/geo-competitors";
 import { trackEvent } from "@/lib/analytics/posthog-client";
 import {
   useGeoCompetitorDetail,
   useGeoPromptResults,
   useGeoSettings,
 } from "@/lib/hooks/use-geo";
+import { useGeoActiveProject } from "@/lib/hooks/use-geo-active-project";
 import { useGeoCompetitorsDb } from "@/lib/hooks/use-geo-db";
+import { useCompanyLogo } from "@/lib/hooks/use-onboarding";
 import { cn } from "@/lib/utils";
 import type { ChartConfig } from "@/types/charts";
 import type {
@@ -56,14 +59,12 @@ import type {
   CompetitorPromptAppearancesProps,
   CompetitorSummaryStatsProps,
   GeoCompetitorDetailPoint,
-  GeoCompetitorMentionStats,
 } from "@/types/geo";
 import { seriesColors } from "@/utils/chart-colors";
 import { formatEngineFamily } from "@/utils/geo-charts";
 import {
   buildGeoCompetitorPoints,
   competitorChartHasIncompleteTail,
-  competitorMentionStats,
 } from "@/utils/geo-competitor";
 import {
   competitorPromptSummary,
@@ -113,7 +114,8 @@ function CompetitorMentionsChart({
   if (points.length >= GEO_COMPETITOR_DETAIL_MIN_POINTS) {
     return (
       <EChartsBarChart
-        animation={false}
+        barMaxWidth={COMPETITOR_MENTIONS_BAR_MAX_WIDTH_PX}
+        barRadius={COMPETITOR_MENTIONS_BAR_RADIUS_PX}
         className={cn("w-full", GEO_COMPETITOR_DETAIL_CHART_HEIGHT_CLASS)}
         config={chartConfig}
         data={points}
@@ -121,8 +123,8 @@ function CompetitorMentionsChart({
         xDataKey="day"
       >
         <EChartsBarChart.Grid />
-        <EChartsBarChart.XAxis dataKey="day" />
-        <EChartsBarChart.YAxis />
+        <EChartsBarChart.XAxis dataKey="day" hideDots />
+        <EChartsBarChart.YAxis hideDots />
         <EChartsBarChart.Bar
           bufferBar={incompleteTail}
           dataKey={GEO_COMPETITOR_DETAIL_SERIES_KEY}
@@ -139,40 +141,11 @@ function CompetitorMentionsChart({
   );
 }
 
-function CompetitorMentionStats({
-  stats,
-}: {
-  stats: GeoCompetitorMentionStats;
-}) {
-  const t = useTranslations("geo.competitorDetailView");
-  const locale = useLocale();
-  return (
-    <dl className="flex items-baseline gap-4 text-sm tabular-nums">
-      <div className="flex items-baseline gap-1.5">
-        <dt className="sr-only">{t("latestOn", { day: stats.latestDay })}</dt>
-        <dd>
-          <span className="text-foreground font-semibold">
-            {stats.latest.toLocaleString(locale)}
-          </span>{" "}
-          <span className="text-muted-foreground">{stats.latestDay}</span>
-        </dd>
-      </div>
-      <div className="flex items-baseline gap-1.5">
-        <dt className="text-muted-foreground">{t("peak")}</dt>
-        <dd className="text-foreground font-medium">
-          {stats.peak.toLocaleString(locale)}
-        </dd>
-      </div>
-    </dl>
-  );
-}
-
 function CompetitorSummaryStats({
   competitor,
   summary,
   unavailable,
 }: CompetitorSummaryStatsProps) {
-  const t = useTranslations("geo.competitorDetailView.stats");
   const tGeoShared = useTranslations("geo.shared");
   const tCommon = useTranslations("common");
   const locale = useLocale();
@@ -185,39 +158,47 @@ function CompetitorSummaryStats({
     {
       label: tGeoShared("answers"),
       value: summary?.answers.toLocaleString(locale) ?? missing,
-      detail: t("answersDetail", { competitor }),
+      aside: null,
     },
     {
       label: tCommon("labels.prompts"),
       value: summary?.prompts.toLocaleString(locale) ?? missing,
-      detail: t("promptsDetail"),
+      aside: null,
     },
     {
       label: tGeoShared("engines"),
       value: summary?.engines.toLocaleString(locale) ?? missing,
-      detail: tCommon("labels.aiEngines"),
+      aside: null,
     },
     {
       label: tGeoShared("withYourBrand"),
       value: summary ? `${withYouShare ?? 0}%` : missing,
-      detail: summary
-        ? t("withYourBrandDetail", {
-            own: summary.ownMentioned.toLocaleString(locale),
-            total: summary.answers.toLocaleString(locale),
-          })
-        : "",
+      aside: summary
+        ? `${summary.ownMentioned.toLocaleString(locale)}/${summary.answers.toLocaleString(locale)}`
+        : null,
     },
   ];
   return (
-    <dl className="bg-border grid grid-cols-2 gap-px overflow-hidden rounded-2xl border sm:grid-cols-4">
+    <dl
+      aria-label={competitor}
+      className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4"
+    >
       {stats.map((stat) => (
-        <div className="bg-background space-y-1 px-4 py-3" key={stat.label}>
+        <div className="flex min-w-0 flex-col gap-2" key={stat.label}>
           <dt className="text-muted-foreground text-xs">{stat.label}</dt>
-          <dd className="text-xl font-medium tracking-tight tabular-nums">
-            {stat.value ?? <Skeleton className="my-1 h-5 w-12" />}
-          </dd>
-          <dd className="text-muted-foreground truncate text-xs tabular-nums">
-            {stat.detail || "\u00a0"}
+          <dd className="flex items-baseline gap-1.5">
+            {stat.value === undefined ? (
+              <Skeleton className="h-6 w-12" />
+            ) : (
+              <span className="text-2xl leading-none font-semibold tracking-tight tabular-nums">
+                {stat.value}
+              </span>
+            )}
+            {stat.aside ? (
+              <span className="text-muted-foreground text-xs tabular-nums">
+                {stat.aside}
+              </span>
+            ) : null}
           </dd>
         </div>
       ))}
@@ -236,40 +217,33 @@ function CompetitorPromptAppearances({
 }: CompetitorPromptAppearancesProps) {
   const t = useTranslations("geo.competitorDetailView");
   return (
-    <Table
-      className="rounded-2xl"
-      columns={columns}
-      data={prompts}
-      defaultSort={{ key: "capturedAt", direction: "desc" }}
-      emptyState={
-        unavailable
-          ? t("promptsUnavailable")
-          : t("promptsEmpty", { competitor })
-      }
-      getRowId={(row) => `${row.promptId}-${row.engine}`}
-      height={showLoading ? tableHeightFor(3) : tableHeight}
-      key={competitor}
-      loading={showLoading}
-      onRowClick={onRowClick}
-      rowHeight={COMPETITORS_TABLE_ROW_HEIGHT}
-      toolbar={
-        <div className="space-y-0.5 px-4 py-3">
-          <h2 className="text-sm font-medium wrap-anywhere">
-            {t("whereShowsUp", { competitor })}
-          </h2>
-          <p className="text-muted-foreground text-xs wrap-anywhere">
-            {t("whereShowsUpDescription", { competitor })}
-          </p>
-        </div>
-      }
-    />
+    <InstrumentSection
+      description={t("whereShowsUpDescription", { competitor })}
+      eyebrow={t("whereShowsUp", { competitor })}
+    >
+      <DataTable
+        columns={columns}
+        data={prompts}
+        defaultSort={{ key: "capturedAt", direction: "desc" }}
+        emptyState={
+          unavailable
+            ? t("promptsUnavailable")
+            : t("promptsEmpty", { competitor })
+        }
+        getRowId={(row) => `${row.promptId}-${row.engine}`}
+        height={showLoading ? tableHeightFor(3) : tableHeight}
+        key={competitor}
+        loading={showLoading}
+        onRowClick={onRowClick}
+        rowHeight={COMPETITORS_TABLE_ROW_HEIGHT}
+      />
+    </InstrumentSection>
   );
 }
 
 export function CompetitorDetailView({
   organizationSlug,
   competitor,
-  variant = "modal",
 }: CompetitorDetailViewProps) {
   const t = useTranslations("geo.competitorDetailView");
   const tGeoShared = useTranslations("geo.shared");
@@ -289,9 +263,9 @@ export function CompetitorDetailView({
     }
     viewedRef.current = true;
     trackEvent(POSTHOG_EVENTS.GEO_COMPETITOR_DETAIL_VIEWED, {
-      surface: variant,
+      surface: "modal",
     });
-  }, [variant]);
+  }, []);
 
   const { competitors } = useGeoCompetitorsDb(organizationId);
   const { data: settingsData } = useGeoSettings(organizationId);
@@ -305,18 +279,26 @@ export function CompetitorDetailView({
     settingsData?.settings?.aliases
   );
   const discovered = entry === null && !ownBrand;
-  const domain = entry?.domain ?? null;
+  const { domain: projectDomain } = useGeoActiveProject(organizationId);
+  const knownDomain = ownBrand ? projectDomain : (entry?.domain ?? null);
+  const { data: brandLookup } = useCompanyLogo(
+    knownDomain,
+    knownDomain ? null : competitor
+  );
+  const domain = knownDomain ?? brandLookup?.domain ?? null;
+  let brandStatus = tGeoShared("tracked");
+  if (ownBrand) {
+    brandStatus = tGeoShared("yourBrand");
+  } else if (discovered) {
+    brandStatus = t("foundInAnswers");
+  }
   const [editOpen, setEditOpen] = useState(false);
   const { data, isPending, isError } = useGeoCompetitorDetail(
     organizationId,
     competitor
   );
   const showLoading = !organizationId || (isPending && !data);
-  // A failed request leaves `data` undefined with nothing pending — summarising
-  // that would read as a competitor with zero answers instead of a failure.
   const unavailable = isError && data === undefined;
-  // The answer sheet needs the prompt's full result set; the competitor
-  // detail only carries one row per prompt and engine.
   const { data: promptResults } = useGeoPromptResults(organizationId);
   const [selectedAnswer, setSelectedAnswer] = useState<{
     promptId: string;
@@ -328,10 +310,6 @@ export function CompetitorDetailView({
   const points = useMemo(
     () => buildGeoCompetitorPoints(data?.points ?? [], locale),
     [data, locale]
-  );
-  const stats = useMemo(
-    () => (showLoading || unavailable ? null : competitorMentionStats(points)),
-    [points, showLoading, unavailable]
   );
   const incompleteTail = competitorChartHasIncompleteTail(points);
   const prompts = data?.prompts ?? [];
@@ -413,37 +391,24 @@ export function CompetitorDetailView({
     },
   ];
 
-  const tableHeight =
-    variant === "page"
-      ? COMPETITOR_PROMPTS_PAGE_TABLE_HEIGHT
-      : Math.min(
-          COMPETITOR_PROMPTS_TABLE_HEIGHT,
-          tableHeightFor(prompts.length)
-        );
+  const tableHeight = Math.min(
+    COMPETITOR_PROMPTS_TABLE_HEIGHT,
+    tableHeightFor(prompts.length)
+  );
 
   return (
     <div className="space-y-6">
-      <div
-        className={cn(
-          "flex min-w-0 items-center gap-3",
-          variant === "modal" && "pr-10"
-        )}
-      >
+      <div className="flex min-w-0 items-center gap-3 pr-10">
         <CompetitorLogo
-          className="size-10 rounded-lg outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
+          className="size-11 rounded-xl outline outline-1 -outline-offset-1 outline-black/10 dark:outline-white/10"
           domain={domain}
           name={competitor}
         />
-        <div className="min-w-0 flex-1 leading-tight">
+        <div className="min-w-0 flex-1 space-y-0.5">
           <div className="flex min-w-0 items-center gap-1">
-            <p className="truncate text-lg font-semibold">{competitor}</p>
-            {ownBrand ? null : <BrandTrackingBadge tracked={entry !== null} />}
-            {discovered ? (
-              <TrackBrandButton
-                brand={competitor}
-                onTrack={() => setEditOpen(true)}
-              />
-            ) : null}
+            <p className="truncate text-lg leading-tight font-semibold">
+              {competitor}
+            </p>
             {entry ? (
               <Tooltip>
                 <TooltipTrigger
@@ -467,31 +432,53 @@ export function CompetitorDetailView({
               </Tooltip>
             ) : null}
           </div>
-          {domain ? (
-            <a
-              className="group text-muted-foreground hover:text-foreground inline-flex max-w-full items-center gap-1 text-xs transition-colors"
-              href={`https://${domain}`}
-              rel="noopener"
-              target="_blank"
-            >
-              <span
-                className="min-w-0 truncate underline underline-offset-4"
-                title={domain}
+          <p className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
+            {domain ? (
+              <a
+                className="group hover:text-foreground inline-flex min-w-0 items-center gap-0.5 transition-colors"
+                href={`https://${domain}`}
+                rel="noopener"
+                target="_blank"
               >
-                {domain}
-              </span>
-              <HugeiconsIcon
-                className="opacity-0 transition-opacity group-hover:opacity-100"
-                icon={ArrowUpRight01Icon}
-                size={12}
-              />
-            </a>
-          ) : (
-            <span className="text-muted-foreground text-xs">
-              {t("noWebsite")}
-            </span>
-          )}
+                <span className="min-w-0 truncate" title={domain}>
+                  {domain}
+                </span>
+                <HugeiconsIcon
+                  aria-hidden="true"
+                  className="shrink-0 opacity-60 transition-opacity group-hover:opacity-100"
+                  icon={ArrowUpRight01Icon}
+                  size={12}
+                />
+              </a>
+            ) : null}
+            {domain ? <span aria-hidden="true">·</span> : null}
+            <span className="shrink-0">{brandStatus}</span>
+          </p>
         </div>
+        {discovered ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  className="shrink-0"
+                  onClick={() => setEditOpen(true)}
+                  size="sm"
+                  variant="outline"
+                />
+              }
+            >
+              <HugeiconsIcon
+                aria-hidden="true"
+                className="size-4"
+                icon={PlusSignIcon}
+              />
+              {t("trackCompetitor")}
+            </TooltipTrigger>
+            <TooltipContent className="max-w-64">
+              {tGeoShared("discoveredBrandsComeFromScan")}
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
       </div>
 
       <CompetitorSummaryStats
@@ -500,13 +487,12 @@ export function CompetitorDetailView({
         unavailable={unavailable}
       />
 
-      <div className="space-y-2">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="text-base font-semibold text-pretty">
-            {tGeoShared("mentionsOverTime")}
-          </h2>
-          {stats ? <CompetitorMentionStats stats={stats} /> : null}
-        </div>
+      <InstrumentModule
+        bodyClassName="p-4"
+        eyebrow={tGeoShared("mentionsOverTime")}
+        hint={t("mentionsHint", { competitor })}
+        variant="table"
+      >
         <CompetitorMentionsChart
           competitor={competitor}
           incompleteTail={incompleteTail}
@@ -514,7 +500,7 @@ export function CompetitorDetailView({
           showLoading={showLoading}
           unavailable={unavailable}
         />
-      </div>
+      </InstrumentModule>
 
       <CompetitorPromptAppearances
         columns={columns}
@@ -542,6 +528,7 @@ export function CompetitorDetailView({
       {ownBrand ? null : (
         <CompetitorEditDialog
           competitor={entry}
+          initialDomain={entry ? null : domain}
           initialName={competitor}
           onOpenChange={setEditOpen}
           open={editOpen}

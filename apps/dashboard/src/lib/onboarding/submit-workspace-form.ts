@@ -5,13 +5,18 @@ import {
   saveOnboardingNotificationSettings,
   triggerOnboardingAgentSetup,
   triggerOnboardingBrandAnalysis,
+  validateOnboardingWebsiteUrl,
 } from "@/app/onboarding/workspace/actions";
 import { COMPANY_LOGO_SOURCE_HOSTS } from "@/constants/company-logo";
 import { authClient } from "@/lib/auth/client";
+import { continueAfterWorkspace } from "@/lib/onboarding/continue-after-workspace";
 import { dashboardOrpc } from "@/lib/orpc/query";
 import { uploadFile } from "@/lib/upload/client";
 import { generateOrganizationAvatar } from "@/lib/utils";
-import type { SubmitWorkspaceFormArgs } from "@/types/onboarding";
+import type {
+  SubmitWorkspaceFormArgs,
+  SubmitWorkspaceStepArgs,
+} from "@/types/onboarding";
 import { setLastVisitedOrganization } from "@/utils/cookies";
 
 function isAllowedLogoSourceUrl(sourceUrl: string): boolean {
@@ -52,8 +57,9 @@ async function applyOrganizationLogoFromUrl(
   await setOrganizationLogo(organizationId, publicUrl);
 }
 
-export async function submitWorkspaceForm({
+async function submitWorkspaceForm({
   existingOrg,
+  onOrganizationCreated,
   logoFile,
   logoSourceUrl,
   value,
@@ -67,6 +73,14 @@ export async function submitWorkspaceForm({
   let organizationId: string;
 
   if (existingOrg) {
+    if (parsed.data.websiteUrl && !existingOrg.hasBrand) {
+      const validation = await validateOnboardingWebsiteUrl(
+        parsed.data.websiteUrl
+      );
+      if (validation.error) {
+        throw new Error(validation.error.message);
+      }
+    }
     organizationId = existingOrg.id;
     if (logoFile || logoSourceUrl) {
       await authClient.organization.setActive({
@@ -75,6 +89,7 @@ export async function submitWorkspaceForm({
     }
   } else {
     const { data, error } = await authClient.organization.create({
+      websiteUrl: parsed.data.websiteUrl,
       name: parsed.data.name,
       slug: parsed.data.slug,
       logo: generateOrganizationAvatar(parsed.data.slug),
@@ -85,6 +100,11 @@ export async function submitWorkspaceForm({
     }
 
     organizationId = data.id;
+    onOrganizationCreated?.({
+      ...data,
+      dailySummary: parsed.data.dailySummary,
+      marketingEmails: parsed.data.marketingEmails,
+    });
 
     await authClient.organization.setActive({
       organizationId: data.id,
@@ -148,18 +168,14 @@ export async function submitWorkspaceForm({
       });
   }
 
-  if (parsed.data.websiteUrl) {
-    try {
-      await triggerOnboardingBrandAnalysis({
-        organizationId,
-        websiteUrl: parsed.data.websiteUrl,
-        name: parsed.data.name,
-      });
-    } catch (error) {
-      console.error("[Onboarding] Background brand analysis failed", {
-        organizationId,
-        error,
-      });
+  if (parsed.data.websiteUrl && !existingOrg?.hasBrand) {
+    const analysis = await triggerOnboardingBrandAnalysis({
+      organizationId,
+      websiteUrl: parsed.data.websiteUrl,
+      name: parsed.data.name,
+    });
+    if (analysis.error) {
+      throw new Error(analysis.error.message);
     }
   }
 
@@ -173,5 +189,25 @@ export async function submitWorkspaceForm({
       organizationId,
       error,
     });
+  }
+}
+
+export async function submitWorkspaceStep({
+  setSubmitting,
+  onError,
+  ...args
+}: SubmitWorkspaceStepArgs) {
+  setSubmitting(true);
+  let leaving = false;
+  try {
+    await submitWorkspaceForm(args);
+    await continueAfterWorkspace(args.existingOrg, args.value);
+    leaving = true;
+  } catch (error) {
+    onError(error);
+  } finally {
+    if (!leaving) {
+      setSubmitting(false);
+    }
   }
 }

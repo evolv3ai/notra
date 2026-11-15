@@ -42,7 +42,6 @@ export default function HtmlCodeEditor({
       <pre
         aria-hidden="true"
         className={cn(SHARED_CLASS, "text-foreground pointer-events-none")}
-        // biome-ignore lint/security/noDangerouslySetInnerHtml: tokens are escaped in highlightHtml
         dangerouslySetInnerHTML={{ __html: `${highlightHtml(value)}\n` }}
         ref={preRef}
       />

@@ -1,6 +1,8 @@
 import type { createDb } from "@notra/db/drizzle";
 import type {
   createGitHubIntegrationRequestSchema,
+  getGitHubActivityQuerySchema,
+  getGitHubActivityResponseSchema,
   getIntegrationsResponseSchema,
 } from "@notra/schemas/api/content";
 import type { z } from "zod";
@@ -68,3 +70,13 @@ export interface DeleteIntegrationProgramSuccess {
   disabledSchedules: { id: string; name: string | null }[];
   disabledEvents: { id: string; name: string | null }[];
 }
+
+export interface GetGitHubActivityProgramInput extends IntegrationProgramInput {
+  integrationId: string;
+  query: z.infer<typeof getGitHubActivityQuerySchema>;
+}
+
+export type GetGitHubActivityProgramSuccess = Omit<
+  z.infer<typeof getGitHubActivityResponseSchema>,
+  "organization"
+>;

@@ -33,9 +33,7 @@ function buildTaskMessage(options: AgentContentTaskOptions): string {
     linearIntegrations,
     "",
     getUserPrompt(options.contentLabel, options.promptInput),
-  ]
-    .filter((line) => line !== null)
-    .join("\n");
+  ].join("\n");
 }
 
 export async function generateContentViaAgentTask(
@@ -100,14 +98,6 @@ export async function generateContentViaAgentTask(
           ),
         })
       : [];
-    if (verified.length === 0) {
-      return {
-        status: "generation_failed",
-        reason:
-          "Agent task reported created posts that do not exist in the database",
-      };
-    }
-
     const verifiedIds = new Set(verified.map((post) => post.id));
     const confirmedPosts = parsed.data.posts.filter((post) =>
       verifiedIds.has(post.postId)

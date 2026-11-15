@@ -1,5 +1,11 @@
 # AGENTS.md
 
+## Project
+
+Notra is a Bun + Turborepo monorepo. See `README.md` and `CONTRIBUTING.md` for
+setup, architecture, and the standard workflow; use `package.json` for commands.
+Use the Bun and Node versions pinned there, not assumptions about a cloud image.
+
 ## Ponytail
 
 Codex, Claude Code, and OpenCode use Ponytail's native plugin; respect its current
@@ -9,84 +15,53 @@ defaulting to full unless the user chooses another level or disables Ponytail.
 Explicit requirements and this repo's conventions take precedence. Companion
 `ponytail-*` skills are available on request.
 
-## Cursor Cloud specific instructions
+## Repository-specific guidance
 
-This repo is a Bun + Turborepo monorepo (product: **Notra**, an AI content-generation
-platform). See `README.md` and `CONTRIBUTING.md` for the standard workflow and
-`package.json` scripts for the canonical commands. The notes below only cover
-non-obvious, durable gotchas for working in the Cursor Cloud environment.
+- The dashboard and public website use TanStack Start, Vite, and Nitro, not
+  Next.js. Existing `NEXT_PUBLIC_*` environment names are retained for
+  compatibility. Read `apps/dashboard/AGENTS.md` before changing the dashboard.
+- Dashboard authentication uses WorkOS AuthKit. Local impersonation requires
+  `DEV_AUTH_ENABLED=true` and `DEV_AUTH_EMAIL`, and only works on loopback.
+  Never enable it when exposing the app through a public tunnel; use WorkOS.
+- Run `bun install` before working with Effect when dependencies or
+  `.repos/effect` are missing. The existing prepare script bootstraps the source
+  checkout and intentionally skips Vercel, CI, and production. Do not add a
+  second bootstrap mechanism.
+- Use committed migrations for database setup (`bun run db:migrate`). The
+  journal starts with `0000_baseline`; do not replace it with schema export/push
+  workarounds or rewrite applied migrations. See CONTRIBUTING.md for validation.
+- New task environment variables must be declared in `turbo.json#globalEnv`
+  because Turbo uses strict environment filtering.
+- Use the repository's Ultracite/Oxlint/Oxfmt configuration, not a separate
+  style guide. Run `bun run check` and the affected workspaces' tests, type
+  checks, and builds as appropriate. Vite builds do not perform type checking.
+- The pre-commit hook formats staged supported files and runs Knip. Do not
+  overwrite unrelated or partially staged changes to make it pass.
+- Never use production credentials or customer data for verification.
+- Before adding or swapping any third-party SDK, external API, hosting
+  provider, AI model or provider, analytics or logging tool, or a new external
+  env var, and before editing the legal pages, data retention, deletion or AI
+  privacy flags, read and apply `.agents/skills/dpa-check/SKILL.md`. It is a
+  hard gate: a new sub-processor must be listed at `/subprocessors` at least 14
+  days before it receives customer data. No exceptions.
+- The Sites E2E suite (`apps/sites-e2e`) gates every production deploy. When a
+  change to `apps/sites`, `apps/sites-builder`, `packages/sites-*` or the Sites
+  dashboard code changes user-facing behaviour, update or extend its tests in
+  the same PR; a pure visual change must not need test edits. Follow
+  `apps/sites-e2e/README.md#keeping-the-suite-green`. It runs only before a
+  production deploy (real Box builds), not on pull requests: run it locally
+  or with `gh workflow run sites-e2e.yml --ref <branch>` before merging a
+  Sites change. A new external
+  service the Sites backend calls gets an emulator in `apps/sites-e2e/emulators`
+  and an override in `packages/sites-server/src/utils/provider-urls.ts`.
 
-### Toolchain
-- Runtime/package manager is **Bun `1.4.0`** (installed at `~/.bun`); tooling uses
-  **Node `24.11.1`** (installed via `nvm`, set as the default alias). Both are baked
-  into the VM snapshot and on `PATH` in a login shell. `bun install` is the startup
-  update script — run it manually when dependencies changed or `node_modules`
-  or `.repos/effect` is missing (for example, in a fresh worktree).
-- If `.repos/effect` is missing, run `bun install` from the repo root before
-  working with Effect. The existing `prepare` script runs
-  `scripts/prepare-effect.sh` to clone the Effect source; do not add another
-  bootstrap script or ask the user to choose a checkout strategy. Verify that
-  `.repos/effect` exists afterward. The bootstrap intentionally skips Vercel,
-  CI, and production environments.
-- Quality gates (run from repo root): lint `bun run check`, types `bun run check-types`,
-  build `bun run build` (use `--filter=dashboard` to scope). Husky `pre-commit` runs
-  `bun format` + `bun knip`.
+<!-- BEGIN:turborepo-agent-rules -->
 
-### Environment variables
-- Scripts wrap commands in `dotenv --`, so a **root `.env` is required** (it is
-  git-ignored and lives in the snapshot). If it is missing, copy `.env.example` to
-  `.env` and set at minimum: `DATABASE_URL` (local Postgres, below), the WorkOS
-  AuthKit vars (`WORKOS_API_KEY`, `WORKOS_CLIENT_ID`, `WORKOS_COOKIE_PASSWORD`
-  with 32+ chars), a base64-encoded **32-byte**
-  `INTEGRATION_ENCRYPTION_KEY` (`openssl rand -base64 32`), and the
-  `APP_URL` / `NEXT_PUBLIC_SITE_URL` / `NEXT_PUBLIC_APP_URL` = `http://localhost:3000`.
-- Most third-party keys are optional and degrade gracefully (Autumn billing, Resend,
-  Redis, R2, integrations). GEO scanning picks up extra engines when their keys are
-  set: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `PERPLEXITY_API_KEY`, and
-  `CURSOR_API_KEY` (Cursor runs locally via `@cursor/sdk`, not through a gateway).
-  Content/chat **generation** needs a real
-  `AI_GATEWAY_API_KEY` and/or `OPENROUTER_API_KEY` — the model router picks the
-  gateway per organization plan; background jobs/schedules need Upstash
-  Redis + QStash. `turbo.json` uses `envMode: "strict"`, so new env vars must be added
-  to its `globalEnv` list to be visible to tasks.
+# This is NOT the Turborepo you know
 
-### Local Postgres (required for the dashboard)
-- A local PostgreSQL 16 cluster is installed. Start it with:
-  `sudo pg_ctlcluster 16 main start`. The `notra` database and `postgres:postgres`
-  superuser are already provisioned; `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/notra`.
+Turborepo configuration, task behavior, and CLI commands can vary between installed versions and may differ from your training data. Resolve the `turbo` package from this file's directory or relevant workspace; in monorepos, it may not be visible from the repository root. For example, run `node -p "require.resolve('turbo/package.json')"` from a workspace that depends on `turbo`.
 
-### Database schema init gotcha (important)
-- `bun run db:migrate` does **not** work on a fresh DB: the committed migration chain
-  starts at `0001` and assumes base tables (e.g. `organizations`) already exist — no
-  migration creates them.
-- `bun run db:push` also fails on a fresh DB due to a drizzle-kit ordering bug: it emits
-  composite foreign keys (e.g. `mcpSessionToolActivations_org_tool_fk` →
-  `mcp_tool_index(organization_id, id)`) *before* creating the unique index they
-  reference, producing `there is no unique constraint matching given keys`.
-- Working approach (already applied in the snapshot; only redo if the DB is wiped):
-  export the schema DDL, reorder so all `CREATE [UNIQUE] INDEX` run before
-  `ALTER TABLE ... ADD ... FOREIGN KEY`, then apply with psql:
-  ```bash
-  bunx drizzle-kit export --config packages/db/drizzle.config.ts > /tmp/schema_init.sql
-  # reorder: emit CREATE TABLE/types, then all indexes, then FK ALTERs, then:
-  PGPASSWORD=postgres psql -h localhost -U postgres -d notra -v ON_ERROR_STOP=1 -f /tmp/schema_ordered.sql
-  ```
-  After this, `db:push` will still report a (harmless) diff because of the same
-  ordering bug — that is expected and does not mean the schema is incomplete.
+Read `docs/README.md` inside that installed package first, then read the relevant pages from its `docs/` directory before changing Turborepo configuration or commands. Heed deprecation notices. These bundled docs match the installed package version and are available without network access.
 
-### Services (dev)
-- `apps/dashboard` — **core product**, `next dev` on **port 3000**; self-contained
-  (its own oRPC `/rpc`, Better Auth `/api/auth`, chat). Run with
-  `bun run dev --filter=dashboard`. This is the app to exercise end-to-end.
-- `apps/web` (TanStack Start, port 3001), `apps/docs` (Mintlify, port 3005), `apps/api` (Hono;
-  defaults to port 3000 so set `PORT` to avoid clashing with the dashboard) — all
-  optional for the core flow.
-
-### Auth note
-- Email/password sign-up works without OAuth/email providers and does not require email
-  verification. The `haveIBeenPwned` plugin rejects breached passwords, so use a strong
-  unique password when signing up during tests.
-- Local-dev impersonation is opt-in: `DEV_AUTH_ENABLED=true` plus `DEV_AUTH_EMAIL`,
-  and only for loopback requests. `next dev` binds to `127.0.0.1` so a LAN
-  client cannot spoof `Host: localhost`. A missing WorkOS key in development no
-  longer auto-authenticates, and tunneled hosts never inherit a database user.
+This block is written and re-added by `turbo` before repository-scoped commands when an AI agent is detected. In the Turborepo source repository, its template is defined in `crates/turborepo-cli/src/cli/agent_guidance.rs`. Removing the managed block while updates are enabled means a later qualifying invocation will add it again. Set `"agentGuidance": false` in the root `turbo.json` or `turbo.jsonc` to opt out; this does not remove an existing block. Keep the block committed with your work to avoid an uncommitted change on the next agent invocation.
+<!-- END:turborepo-agent-rules -->

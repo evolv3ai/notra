@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { logError } from "@notra/ai/utils/server-log";
+import { Effect } from "effect";
 
 import {
   REFERENCE_SNAPSHOT_CONTENT_TYPE,
@@ -12,7 +14,7 @@ import type {
   SaveReferenceSnapshotInput,
 } from "../types/reference-snapshot";
 import { getOrganizationId } from "./organization";
-import { withTransientRetry } from "./retry";
+import { withTransientRetryEffect } from "./retry";
 
 const TRAILING_SLASHES_REGEX = /\/+$/;
 
@@ -72,6 +74,7 @@ function getReferenceSnapshotClient(): S3Client {
 export async function saveReferenceSnapshot({
   ctx,
   markdown,
+  signal,
 }: SaveReferenceSnapshotInput): Promise<ReferenceSnapshotDescriptor | null> {
   const organizationId = getOrganizationId(ctx);
   const normalizedMarkdown = markdown.trim();
@@ -85,27 +88,35 @@ export async function saveReferenceSnapshot({
   const sourceCapturedAt = new Date().toISOString();
   try {
     const env = getReferenceSnapshotStorageEnv();
-    await withTransientRetry(
-      () =>
-        getReferenceSnapshotClient().send(
-          new PutObjectCommand({
-            Body: body,
-            Bucket: env.bucketName,
-            CacheControl: "private, max-age=31536000, immutable",
-            ContentLength: body.byteLength,
-            ContentType: REFERENCE_SNAPSHOT_CONTENT_TYPE,
-            Key: sourceSnapshotKey,
-            Metadata: {
-              capturedAt: sourceCapturedAt,
-            },
-          })
-        ),
-      {
-        operationName: `R2 reference snapshot upload for ${sourceContentHash}`,
-      }
+    signal?.throwIfAborted();
+    await Effect.runPromise(
+      withTransientRetryEffect(
+        (abortSignal) =>
+          getReferenceSnapshotClient().send(
+            new PutObjectCommand({
+              Body: body,
+              Bucket: env.bucketName,
+              CacheControl: "private, max-age=31536000, immutable",
+              ContentLength: body.byteLength,
+              ContentType: REFERENCE_SNAPSHOT_CONTENT_TYPE,
+              Key: sourceSnapshotKey,
+              Metadata: {
+                capturedAt: sourceCapturedAt,
+              },
+            }),
+            { abortSignal }
+          ),
+        {
+          operationName: `R2 reference snapshot upload for ${sourceContentHash}`,
+        }
+      ),
+      { signal }
     );
   } catch (error) {
-    console.error("Failed to persist reference snapshot", error);
+    logError("Failed to persist reference snapshot", error, {
+      organizationId,
+      sourceContentHash,
+    });
     return null;
   }
 

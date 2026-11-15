@@ -6,8 +6,10 @@ export interface GeoCheckScope {
 }
 
 export interface GeoCheckFilterOptions {
-  sequences?: "single";
-  englishOnly?: boolean;
+  /** Drop persona and multi-turn rows, keeping only single tracked prompts. */
+  trackedPromptsOnly?: boolean;
+  /** Keep only rows in the project's prompt language, not its translations. */
+  promptLanguageOnly?: boolean;
 }
 
 export interface GeoCheckSourceItem {
@@ -24,6 +26,41 @@ export interface GeoCheckSource {
 export interface GeoCheckGrounding {
   queries: string[];
   sources: GeoCheckSource[];
+  /** Capture provenance stays with the stored answer when its engine keeps the same id. */
+  capture?: {
+    provider: "context.dev";
+    parserVersion: number;
+    requestId: string;
+  };
+}
+
+export interface GeoCheckSurfaceAd {
+  brand: string | null;
+  domain: string | null;
+  cards: number;
+}
+
+export interface GeoCheckSurfaceProduct {
+  title: string;
+  price: number | null;
+  currency: string | null;
+  vendors: string[];
+}
+
+/**
+ * What a consumer app rendered around its answer, as its scraper reported it.
+ * A module is null when the scraper didn't report it, so "no ads shown" ([])
+ * stays distinct from "this engine can't tell".
+ */
+export interface GeoCheckSurfaces {
+  provider: "olostep";
+  /** Model the app said it used, e.g. ChatGPT's `model_slug`. */
+  model: string | null;
+  webSearched: boolean | null;
+  ads: GeoCheckSurfaceAd[] | null;
+  products: GeoCheckSurfaceProduct[] | null;
+  shoppingCards: number | null;
+  relatedQueries: string[];
 }
 
 export interface GeoCheckWrite {
@@ -48,6 +85,7 @@ export interface GeoCheckWrite {
   grounding: GeoCheckGrounding;
   language: string;
   sources?: GeoCheckSourceItem[];
+  surfaces?: GeoCheckSurfaces | null;
   finishReason: string | null;
   promptTokens: number | null;
   outputTokens: number | null;
@@ -152,16 +190,40 @@ export interface GeoCheckCompetitorShareRow {
   mentions: number;
 }
 
-export interface GeoCheckCompetitorShareTimeseriesRow {
+export interface GeoCheckBrandKey {
+  key: string;
+  name: string;
+}
+
+export interface GeoCheckEngineBrandRow {
+  engine: string;
   brand: string;
+  mentions: number;
+}
+
+export interface GeoCheckEngineTotalRow {
+  engine: string;
+  checks: number;
+  mentions: number;
+}
+
+export interface GeoCheckOwnBrandShareRow {
+  projectId: string;
+  brand: string;
+  aliases: string[] | null;
   day: string;
   mentions: number;
 }
 
-export interface GeoCheckCompetitorShareTrendRow {
-  day: string;
+export interface GeoCheckOwnBrandShare {
+  namesByProject: Map<string, Set<string>>;
+  byBrand: Map<string, Map<string, number>>;
+}
+
+export interface GeoCheckCompetitorShareAggregateRow {
   brand: string;
-  share: number;
+  day: string | null;
+  mentions: number;
 }
 
 export interface GeoCheckCompetitorTimeseriesRow {
@@ -266,4 +328,36 @@ export interface GeoCheckScanComparison {
 export interface GeoCheckScanComparisonInput {
   projectId: string;
   window?: { from: Date; toExclusive: Date };
+}
+
+export type GeoCheckPeriod = "previous" | "current";
+
+export interface GeoCheckPeriodInput {
+  organizationId: string;
+  from: Date;
+  /** Checks captured at or after this belong to the current period. */
+  splitAt: Date;
+  toExclusive: Date;
+}
+
+export interface GeoCheckPeriodPromptRow {
+  period: GeoCheckPeriod;
+  projectId: string;
+  promptId: string;
+  engine: string;
+  prompt: string;
+  checks: number;
+  mentions: number;
+  avgPosition: number | null;
+}
+
+export interface GeoCheckPeriodCompetitorRow {
+  period: GeoCheckPeriod;
+  projectId: string;
+  promptId: string;
+  engine: string;
+  /** Trimmed, lowercased brand; the grouping key. */
+  brandKey: string;
+  brand: string;
+  checks: number;
 }

@@ -5,8 +5,13 @@ import type {
   GeoPersonaSnapshot,
 } from "@notra/db/types/geo-personas";
 import type { InferSelectModel } from "drizzle-orm";
+import type { z } from "zod";
 
-import type { GeoAnswerSource } from "./geo";
+import type {
+  geoGeneratedPersonaSchema,
+  geoPersonaGenerationSchema,
+} from "../schemas/geo-personas";
+import type { GeoAnswerSource, GeoSequenceRunResponse } from "./geo";
 
 export type GeoPersonaRow = InferSelectModel<typeof geoPersonas>;
 export type GeoPersonaMemoryRow = InferSelectModel<typeof geoPersonaMemories>;
@@ -117,32 +122,8 @@ export interface GeoPersonaResultsResponse {
   selectedScanId: string | null;
 }
 
-export interface GeoPersonaRunResponse {
-  checks: number;
-  mentions: number;
-  engines: string[];
-}
+export type GeoPersonaRunResponse = GeoSequenceRunResponse;
 
-export interface GeoGeneratedPersonaMemory {
-  kind: GeoPersonaMemoryKind;
-  content: string;
-}
+export type GeoGeneratedPersona = z.infer<typeof geoGeneratedPersonaSchema>;
 
-export interface GeoGeneratedPersona {
-  name: string;
-  role: string;
-  company: string;
-  summary: string;
-  searchStyle: string;
-  goals: string[];
-  painPoints: string[];
-  currentStack: string[];
-  buyingTriggers: string[];
-  objections: string[];
-  conversationPrompts: string[];
-  memories: GeoGeneratedPersonaMemory[];
-}
-
-export interface GeoPersonaGeneration {
-  personas: GeoGeneratedPersona[];
-}
+export type GeoPersonaGeneration = z.infer<typeof geoPersonaGenerationSchema>;

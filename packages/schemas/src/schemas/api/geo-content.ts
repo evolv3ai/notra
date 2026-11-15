@@ -1,5 +1,14 @@
 import "zod/compile";
 import { z } from "@hono/zod-openapi";
+import {
+  GEO_BRIEF_MAX_CHECKLIST,
+  GEO_BRIEF_MAX_CLAIMS,
+  GEO_BRIEF_MAX_LINKS,
+  GEO_BRIEF_MAX_QUESTIONS,
+  GEO_BRIEF_MAX_SECTIONS,
+  GEO_BRIEF_MAX_TITLE_LENGTH,
+  GEO_BRIEF_MIN_SECTIONS,
+} from "@notra/ai/constants/geo-writer";
 import { BLOG_POST_SUBTYPES } from "@notra/db/constants/content";
 import {
   GEO_CONTENT_BRIEF_STATUSES,
@@ -122,6 +131,23 @@ export const contentGapsResponseSchema = z
     organization: organizationResponseSchema,
   })
   .openapi("GeoContentGapsResponse");
+
+export const updateGapRequestSchema = z
+  .object({
+    ignored: z.boolean().openapi({
+      description:
+        "true hides the prompt gap from content gaps and brief planning; false brings it back.",
+    }),
+  })
+  .openapi("UpdateGeoContentGapRequest");
+
+export const updateGapResponseSchema = z
+  .object({
+    promptId: z.string(),
+    ignored: z.boolean(),
+    organization: organizationResponseSchema,
+  })
+  .openapi("UpdateGeoContentGapResponse");
 
 export const briefParamsSchema = projectParamsSchema.extend({
   briefId: resourceIdSchema("briefId").openapi({
@@ -268,6 +294,67 @@ export const planBriefRequestSchema = z
       }),
   })
   .openapi("PlanGeoContentBriefRequest");
+
+const briefLineSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .regex(/^[^\r\n]*$/, "Must be a single line");
+
+export const updateBriefRequestSchema = z
+  .object({
+    expectedUpdatedAt: z.iso.datetime().optional().openapi({
+      description:
+        "The brief's updatedAt from your last read. When set, the update fails with 409 if the brief changed since. Omit to overwrite the latest version.",
+    }),
+    workingTitle: briefLineSchema.max(GEO_BRIEF_MAX_TITLE_LENGTH).optional(),
+    targetPrompt: briefLineSchema.optional(),
+    intent: briefLineSchema.optional(),
+    audience: briefLineSchema.optional(),
+    jobToBeDone: briefLineSchema.optional(),
+    sections: z
+      .array(
+        z.object({
+          heading: briefLineSchema,
+          goal: briefLineSchema,
+          claims: z.array(briefLineSchema).max(GEO_BRIEF_MAX_CLAIMS),
+        })
+      )
+      .min(GEO_BRIEF_MIN_SECTIONS)
+      .max(GEO_BRIEF_MAX_SECTIONS)
+      .optional()
+      .openapi({
+        description:
+          "The outline. Replaces every section; send the full list in order.",
+      }),
+    questionsToAnswer: z
+      .array(briefLineSchema)
+      .max(GEO_BRIEF_MAX_QUESTIONS)
+      .optional()
+      .openapi({ description: "FAQ questions. Replaces the whole list." }),
+    internalLinks: z
+      .array(
+        z.object({
+          url: briefLineSchema,
+          anchor: briefLineSchema,
+          why: briefLineSchema,
+        })
+      )
+      .max(GEO_BRIEF_MAX_LINKS)
+      .optional()
+      .openapi({ description: "Replaces the whole list." }),
+    acceptanceChecklist: z
+      .array(briefLineSchema)
+      .max(GEO_BRIEF_MAX_CHECKLIST)
+      .optional()
+      .openapi({ description: "Replaces the whole list." }),
+  })
+  .refine(
+    ({ expectedUpdatedAt: _, ...fields }) =>
+      Object.values(fields).some((value) => value !== undefined),
+    { message: "Provide at least one field to update" }
+  )
+  .openapi("UpdateGeoContentBriefRequest");
 
 export const planBriefResponseSchema = z
   .object({

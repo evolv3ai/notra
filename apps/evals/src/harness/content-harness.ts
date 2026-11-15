@@ -1,8 +1,3 @@
-/**
- * Replica of the background content agent (packages/ai/src/agents/background-gen.ts)
- * with the real prompts and the real tool definitions. Only the tools' `execute`
- * functions are swapped for fixture data, so no DB, GitHub or Redis is touched.
- */
 import type { CONTENT_AGENT_PROFILES } from "@notra/ai/constants/content-agents";
 import { buildContentDispatcherInstructions } from "@notra/ai/prompts/content-dispatcher";
 import { getUserPrompt } from "@notra/ai/prompts/user";
@@ -40,7 +35,7 @@ import {
 
 import { PROD_GATEWAY_CACHING } from "../constants/gateway";
 import type { ContentScenario } from "../fixtures/content-scenarios";
-import { getGateway, runCost, toUsage } from "../models/gateway";
+import { getGateway, runCostDetails, toUsage } from "../models/gateway";
 import type { CallResult } from "../types/eval";
 
 export type ContentTypeId = keyof typeof CONTENT_AGENT_PROFILES;
@@ -59,17 +54,14 @@ export interface HarnessOutput {
   post?: HarnessPost;
   reason?: string;
   toolCalls: string[];
-  /** `name` of every getSkillByName call, in order. */
   skillsLoaded?: string[];
   steps: number;
-  /** Rejected or failed tool calls, e.g. a skip reason over 300 chars. */
   toolErrors?: string[];
 }
 
 const EVAL_ORG_ID = "org_eval";
 const EVAL_COLLECTION_ID = "col_eval";
 
-/** Same shape as apps/dashboard/src/workflows/steps/schedule-generation-step.ts */
 export function buildPromptInput(
   scenario: ContentScenario
 ): BaseTonePromptInput {
@@ -96,7 +88,6 @@ function skillCatalog() {
   return buildSystemSkills().sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** listAvailableSkills output. */
 function skillList() {
   const skills = skillCatalog().map((skill) => ({
     name: skill.name,
@@ -220,7 +211,6 @@ const fixtureData = {
   },
 };
 
-/** Keeps the real tool definition (schema, description) and swaps `execute`. */
 function withExecute<INPUT>(
   base: Tool,
   execute: (input: INPUT) => unknown
@@ -228,7 +218,6 @@ function withExecute<INPUT>(
   return { ...base, execute: async (input: INPUT) => execute(input) } as Tool;
 }
 
-/** Fixture posts are stored in order; `post_3` is index 2. */
 function postIndex(postId: string): number {
   return Number(postId.replace("post_", "")) - 1;
 }
@@ -238,7 +227,6 @@ interface HarnessState {
   posts: HarnessPost[];
 }
 
-/** Real tool definitions from @notra/ai with fixture-backed execute functions. */
 export function buildHarnessTools(
   scenario: ContentScenario,
   contentType: ContentAgentProfile,
@@ -253,8 +241,6 @@ export function buildHarnessTools(
     organizationId: EVAL_ORG_ID,
     allowedIntegrationIds: [scenario.integrationId],
   });
-  // Schedules only attach Linear tools when Linear is connected
-  // (dataPointSettings.includeLinearData = hasLinear); no scenario has Linear.
   const linear = buildLinearDataTools({
     organizationId: EVAL_ORG_ID,
     allowedIntegrationIds: [],
@@ -309,7 +295,6 @@ export function buildHarnessTools(
     (input: { name: string }) => skillPayload(input.name)
   );
 
-  // background-gen registers it as `createPost` for every content type.
   tools.createPost = withExecute(
     createCreatePostTool(config, state.result),
     (input: HarnessPost) => {
@@ -371,7 +356,6 @@ interface StepLike {
   content: readonly { type: string; toolName?: string; error?: unknown }[];
 }
 
-/** Tool calls the SDK rejected (invalid input) or whose execute threw. */
 function collectToolErrors(steps: readonly StepLike[]): string[] {
   const errors: string[] = [];
   for (const step of steps) {
@@ -441,7 +425,6 @@ interface LoopParams extends RunAgentParams {
   tag: string;
 }
 
-/** The runBackgroundGen agent: same instructions, tools and provider options. */
 async function runLoop(params: LoopParams): Promise<CallResult<HarnessOutput>> {
   const state: HarnessState = { result: {}, posts: [] };
   const agent = new ToolLoopAgent({
@@ -481,7 +464,7 @@ async function runLoop(params: LoopParams): Promise<CallResult<HarnessOutput>> {
   return {
     output,
     usage,
-    costUsd: await runCost(params.modelId, usage, result.steps),
+    ...(await runCostDetails(params.modelId, usage, result.steps)),
     transcript: transcriptFor(output),
   };
 }
@@ -495,7 +478,6 @@ function userPrompt(params: RunAgentParams): string {
 
 const MAX_AGENT_STEPS = 50;
 
-/** Full agent loop from the user prompt, like runBackgroundGen. */
 export function runContentAgent(
   params: RunAgentParams
 ): Promise<CallResult<HarnessOutput>> {
@@ -514,11 +496,6 @@ interface ReplayedCall {
   isError?: boolean;
 }
 
-/**
- * The tool calls a well-behaved agent makes before writing: skills, brand voice,
- * then every source the scenario has. Replayed so the draft stage starts from
- * identical context for every model.
- */
 export function gatheringCalls(
   scenario: ContentScenario,
   contentType: ContentAgentProfile
@@ -608,7 +585,6 @@ export function replayMessages(
 }
 
 export interface DraftParams extends RunAgentParams {
-  /** Extra messages appended after the replayed gathering calls. */
   followUp?: ModelMessage[];
 }
 
@@ -620,12 +596,6 @@ function hasFinished(state: HarnessState): boolean {
   );
 }
 
-/**
- * Draft stage only: the gathering calls are replayed, so every model writes
- * from identical context. The loop may still load a supporting skill or retry
- * a rejected call (e.g. a skip reason over 300 chars) and stops as soon as one
- * createPost/skip/fail lands.
- */
 export function runDraftStage(
   params: DraftParams
 ): Promise<CallResult<HarnessOutput>> {

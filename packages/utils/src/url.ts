@@ -12,10 +12,24 @@ const BLOCKED_HOSTNAME_SUFFIXES = [".internal", ".local", ".localhost"];
 const HEXTET_REGEX = /^[0-9a-f]{1,4}$/;
 
 export class PublicUrlValidationError extends Error {
-  constructor(message: string) {
+  readonly reason: "invalid" | "not_found" | "temporary";
+
+  constructor(
+    message: string,
+    reason: "invalid" | "not_found" | "temporary" = "invalid"
+  ) {
     super(message);
     this.name = "PublicUrlValidationError";
+    this.reason = reason;
   }
+}
+
+export function isSameUrl(url: string, previousUrl: string | null): boolean {
+  const current = URL.parse(url);
+  const previous = previousUrl ? URL.parse(previousUrl) : null;
+  return (
+    current !== null && previous !== null && current.href === previous.href
+  );
 }
 
 function ipv4ToNumber(ip: string): number | null {
@@ -42,14 +56,14 @@ function isPrivateOrReservedIpv4(ip: string): boolean {
   }
 
   const ranges: [number, number][] = [
-    [0x00_00_00_00, 0x00_ff_ff_ff], // 0.0.0.0/8
-    [0x0a_00_00_00, 0x0a_ff_ff_ff], // 10.0.0.0/8
-    [0x64_40_00_00, 0x64_7f_ff_ff], // 100.64.0.0/10 (CGNAT)
-    [0x7f_00_00_00, 0x7f_ff_ff_ff], // 127.0.0.0/8
-    [0xa9_fe_00_00, 0xa9_fe_ff_ff], // 169.254.0.0/16
-    [0xac_10_00_00, 0xac_1f_ff_ff], // 172.16.0.0/12
-    [0xc0_a8_00_00, 0xc0_a8_ff_ff], // 192.168.0.0/16
-    [0xe0_00_00_00, 0xff_ff_ff_ff], // 224.0.0.0/4 + 240.0.0.0/4 + broadcast
+    [0x00_00_00_00, 0x00_ff_ff_ff],
+    [0x0a_00_00_00, 0x0a_ff_ff_ff],
+    [0x64_40_00_00, 0x64_7f_ff_ff],
+    [0x7f_00_00_00, 0x7f_ff_ff_ff],
+    [0xa9_fe_00_00, 0xa9_fe_ff_ff],
+    [0xac_10_00_00, 0xac_1f_ff_ff],
+    [0xc0_a8_00_00, 0xc0_a8_ff_ff],
+    [0xe0_00_00_00, 0xff_ff_ff_ff],
   ];
 
   return ranges.some(([start, end]) => value >= start && value <= end);
@@ -194,6 +208,17 @@ function isBlockedHostname(hostname: string): boolean {
   );
 }
 
+function assertPublicIp(address: string, family: number): void {
+  const isPrivate =
+    (family === 4 && isPrivateOrReservedIpv4(address)) ||
+    (family === 6 && isPrivateOrReservedIpv6(address));
+  if (isPrivate) {
+    throw new PublicUrlValidationError(
+      "Private or reserved IP addresses are not allowed"
+    );
+  }
+}
+
 export function assertPublicHttpUrl(raw: string): void {
   let parsed: URL;
   try {
@@ -217,21 +242,8 @@ export function assertPublicHttpUrl(raw: string): void {
   }
 
   const ipVersion = isIP(hostname);
-  if (ipVersion === 4) {
-    if (isPrivateOrReservedIpv4(hostname)) {
-      throw new PublicUrlValidationError(
-        "Private or reserved IP addresses are not allowed"
-      );
-    }
-    return;
-  }
-
-  if (ipVersion === 6) {
-    if (isPrivateOrReservedIpv6(hostname)) {
-      throw new PublicUrlValidationError(
-        "Private or reserved IP addresses are not allowed"
-      );
-    }
+  if (ipVersion) {
+    assertPublicIp(hostname, ipVersion);
     return;
   }
 
@@ -265,18 +277,8 @@ export async function resolvePublicHttpUrl(
     throw new PublicUrlValidationError("URL hostname could not be resolved");
   }
 
-  for (const address of addresses) {
-    if (address.family === 4 && isPrivateOrReservedIpv4(address.address)) {
-      throw new PublicUrlValidationError(
-        "Private or reserved IP addresses are not allowed"
-      );
-    }
-
-    if (address.family === 6 && isPrivateOrReservedIpv6(address.address)) {
-      throw new PublicUrlValidationError(
-        "Private or reserved IP addresses are not allowed"
-      );
-    }
+  for (const { address, family } of addresses) {
+    assertPublicIp(address, family);
   }
 
   return addresses;

@@ -1,4 +1,3 @@
-// biome-ignore lint/performance/noNamespaceImport: Zod recommended way of importing
 import * as z from "zod";
 
 const IP_MAX_LENGTH = 64;
@@ -58,11 +57,4 @@ export const crawlerIpListPayloadSchema = z.object({
       ipv6Prefix: z.string().optional(),
     })
   ),
-});
-
-export const ipCheckerSearchSchema = z.object({
-  ip: z
-    .union([z.string(), z.number().transform(String)])
-    .optional()
-    .catch(undefined),
 });

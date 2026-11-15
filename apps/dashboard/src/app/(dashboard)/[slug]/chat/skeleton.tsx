@@ -38,3 +38,26 @@ export function ChatPageSkeleton() {
     </div>
   );
 }
+
+const SUGGESTION_SKELETON_COUNT = 3;
+
+/** The empty chat: greeting, composer and example prompts, vertically centred. */
+export function NewChatPageSkeleton() {
+  return (
+    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col items-center justify-center px-4">
+      <div className="mx-auto flex w-full max-w-2xl min-w-0 flex-col gap-4">
+        <div className="w-full space-y-1">
+          <Skeleton className="h-4 w-36" />
+          <Skeleton className="h-8 w-64" />
+        </div>
+        <Skeleton className="h-[6.25rem] w-full rounded-2xl" />
+        <Skeleton className="h-4 w-28" />
+        <div className="grid grid-cols-3 gap-2">
+          {Array.from({ length: SUGGESTION_SKELETON_COUNT }, (_, index) => (
+            <Skeleton className="h-[6.25rem] rounded-xl" key={index} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

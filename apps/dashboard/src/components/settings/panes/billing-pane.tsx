@@ -3,21 +3,16 @@
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
 import { Badge } from "@notra/ui/components/ui/badge";
 import { Skeleton } from "@notra/ui/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@notra/ui/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@notra/ui/components/ui/tabs";
 import { TitleCard } from "@notra/ui/components/ui/title-card";
 import { useListPlans } from "autumn-js/react";
-import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useQueryState } from "nuqs";
+import { useState } from "react";
 import { toast } from "sonner";
+import { DataTableSkeleton } from "ui/table";
+import { useLocale, useTranslations } from "use-intl";
 
+import { FreePlanCard } from "@/components/billing/free-plan-card";
 import { InvoicesTable } from "@/components/billing/invoices-table";
 import { PlanCard } from "@/components/billing/plan-card";
 import { ZdrAddonCard } from "@/components/billing/zdr-addon-card";
@@ -26,7 +21,9 @@ import { useOrganizationsContext } from "@/components/providers/organization-pro
 import { SettingsPane } from "@/components/settings/settings-pane";
 import { PLAN_SURFACES } from "@/constants/analytics-events";
 import {
-  BILLING_INVOICE_SKELETON_KEYS,
+  BILLING_INVOICE_SKELETON_ROWS,
+  CHECKOUT_PLAN_PARAM,
+  INVOICE_SKELETON_COLUMN_WIDTHS,
   BILLING_PLAN_FEATURE_SKELETON_KEYS,
   BILLING_PLAN_SKELETON_KEYS,
   FEATURED_PLAN_TIER,
@@ -40,8 +37,11 @@ import { trackEvent } from "@/lib/analytics/posthog-client";
 import { attachPlanWithAddons } from "@/lib/billing/attach-plan";
 import { useBillingCustomer } from "@/lib/hooks/use-billing-customer";
 import { useHasZdrEntitlement } from "@/lib/hooks/use-plan";
+import { useResumeCheckoutPlan } from "@/lib/hooks/use-resume-checkout-plan";
+import { useRouter } from "@/lib/navigation";
 import type { BillingPlanGroup, PlanCardButton } from "@/types/billing/plan";
 import {
+  checkoutPlanId,
   findZdrAddonPlan,
   getPricingButtonText,
   getProductFeatures,
@@ -51,6 +51,7 @@ import {
   isPlanInGroup,
   planGroupDescription,
   planRenewalTerms,
+  requestedYearly,
   selectPlanVariant,
   zdrAddonToggle,
 } from "@/utils/billing-plans";
@@ -81,46 +82,11 @@ function BillingPlanCardSkeleton() {
 }
 
 function InvoiceTableSkeleton() {
-  const tCommon2 = useTranslations("common");
   return (
-    <div className="border-border/80 border-b-border/40 bg-muted/80 overflow-hidden rounded-lg border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[140px]">
-              {tCommon2("labels.date")}
-            </TableHead>
-            <TableHead className="w-[40%]">
-              {tCommon2("labels.description")}
-            </TableHead>
-            <TableHead className="w-[120px]">
-              {tCommon2("labels.amount")}
-            </TableHead>
-            <TableHead className="w-[120px]">
-              {tCommon2("labels.status")}
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {BILLING_INVOICE_SKELETON_KEYS.map((key) => (
-            <TableRow key={key}>
-              <TableCell className="w-[140px]">
-                <Skeleton className="h-4 w-20" />
-              </TableCell>
-              <TableCell>
-                <Skeleton className="h-4 w-40" />
-              </TableCell>
-              <TableCell className="w-[120px]">
-                <Skeleton className="h-4 w-14" />
-              </TableCell>
-              <TableCell className="w-[120px]">
-                <Skeleton className="h-5 w-16 rounded-full" />
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <DataTableSkeleton
+      columnWidths={INVOICE_SKELETON_COLUMN_WIDTHS}
+      rows={BILLING_INVOICE_SKELETON_ROWS}
+    />
   );
 }
 
@@ -130,6 +96,7 @@ export function BillingSettingsPane() {
   const tCommon = useTranslations("common");
   const tBilling = useTranslations("billing");
   const locale = useLocale();
+  const router = useRouter();
   const { activeOrganization } = useOrganizationsContext();
   const { data: plans, isLoading: plansLoading } = useListPlans();
   const {
@@ -144,7 +111,11 @@ export function BillingSettingsPane() {
   });
   const [loading, setLoading] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
-  const [isYearly, setIsYearly] = useState(false);
+  const [checkoutPlanParam, setCheckoutPlanParam] =
+    useQueryState(CHECKOUT_PLAN_PARAM);
+  const [yearlyChoice, setIsYearly] = useState(() =>
+    requestedYearly(checkoutPlanParam)
+  );
   const [includeZdr, setIncludeZdr] = useState(false);
   const { hasZdr } = useHasZdrEntitlement();
   const [now] = useState(() => Date.now());
@@ -157,11 +128,7 @@ export function BillingSettingsPane() {
   const activePlanId =
     activeSubscription?.plan?.id ?? activeSubscription?.planId;
 
-  useEffect(() => {
-    if (activePlanId) {
-      setIsYearly(isAnnualPlanId(activePlanId));
-    }
-  }, [activePlanId]);
+  const isYearly = yearlyChoice ?? isAnnualPlanId(activePlanId);
 
   const isTrialing =
     activeSubscription?.trialEndsAt != null &&
@@ -184,14 +151,13 @@ export function BillingSettingsPane() {
     setIncludeZdr(checked);
   }
 
-  async function handleCheckout(planId: string) {
-    setLoading(planId);
+  async function checkout(planId: string, yearly: boolean) {
     trackEvent(
       POSTHOG_EVENTS.PLAN_SELECTED,
       planSelectedProperties({
         plans,
         planId,
-        isYearly,
+        isYearly: yearly,
         includeZdr,
         surface: PLAN_SURFACES.BILLING_PAGE,
       })
@@ -212,6 +178,8 @@ export function BillingSettingsPane() {
         window.location.assign(result.paymentUrl);
       } else {
         await refetch();
+        // Loaders resolve plan-gated actions such as Write article.
+        router.refresh();
       }
     } catch (err) {
       console.error("Attach error:", err);
@@ -225,8 +193,23 @@ export function BillingSettingsPane() {
           : tCommon("messages.couldNotUpdateBillingPlease")
       );
     }
+  }
+
+  async function handleCheckout(planId: string) {
+    setLoading(planId);
+    await checkout(planId, isYearly);
     setLoading(null);
   }
+
+  const pendingPlanId = useResumeCheckoutPlan({
+    planParam: checkoutPlanParam,
+    clearPlanParam: () => setCheckoutPlanParam(null),
+    loading: plansLoading || customerLoading,
+    customer,
+    activePlanId,
+    busyPlanId: loading,
+    checkout,
+  });
 
   async function handleManageSubscription() {
     setPortalLoading(true);
@@ -296,10 +279,10 @@ export function BillingSettingsPane() {
     }
     return {
       label:
-        loading === plan.id
+        pendingPlanId === plan.id
           ? tCommon("states.loading")
           : getPricingButtonText(plan, tBilling),
-      disabled: loading !== null,
+      disabled: pendingPlanId !== null,
       variant,
       onClick: () => handleCheckout(plan.id),
     };
@@ -384,6 +367,8 @@ export function BillingSettingsPane() {
               ))
             : planGroups.map(renderPlanCard)}
         </div>
+
+        {isBillingLoading ? null : <FreePlanCard />}
       </div>
 
       <div className="space-y-3">

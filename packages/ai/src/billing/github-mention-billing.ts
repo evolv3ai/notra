@@ -12,7 +12,7 @@ import { calculateAiCreditCostCents } from "./ai-credit-cost";
 import { allowUnmeteredAiInDevelopment, autumn } from "./autumn";
 import { checkAutumnFeature, finalizeAutumnLock } from "./autumn-locks";
 import { FEATURES } from "./features";
-import { shouldApplyMarkup } from "./token-pricing";
+import { shouldApplyMarkup, calculateTokenCostUsd } from "./token-pricing";
 
 const UNMETERED_RESERVATION: GitHubMentionBillingReservation = {
   allowed: true,
@@ -29,7 +29,13 @@ export function createGitHubMentionUsageCollector() {
   return {
     add(next: AgentTokenUsage) {
       const previousCost = usage?.tokenCostUsd ?? usage?.totalUsd;
-      const nextCost = next.tokenCostUsd ?? next.totalUsd;
+      const nextModel = next.route?.model ?? next.modelId;
+      const nextCost =
+        next.totalUsd ??
+        next.tokenCostUsd ??
+        (nextModel
+          ? calculateTokenCostUsd(next, nextModel, next.route?.gateway)
+          : undefined);
       const totalCost =
         previousCost === undefined || nextCost === undefined
           ? undefined
@@ -56,7 +62,7 @@ export function createGitHubMentionUsageCollector() {
             totalUsd: totalCost,
             route: next.route ?? usage.route,
           }
-        : { ...next };
+        : { ...next, tokenCostUsd: nextCost, totalUsd: nextCost };
     },
     get(): AgentTokenUsage | null {
       return usage;
@@ -77,7 +83,6 @@ function buildLockId(mentionKey: string, featureId: string) {
  */
 export async function reserveGitHubMentionBilling(input: {
   organizationId: string;
-  /** Webhook delivery id, or the comment id when GitHub sent no delivery. */
   mentionKey: string;
 }): Promise<GitHubMentionBillingReservation> {
   if (!autumn || allowUnmeteredAiInDevelopment) {
@@ -103,7 +108,6 @@ export async function reserveGitHubMentionBilling(input: {
       mode: "pull_request_credits",
       featureId: FEATURES.PULL_REQUEST_CREDITS,
       lockId: planLockId,
-      // Plan credits reset every month, so they never carry the top-up markup.
       useMarkup: false,
     };
   }
@@ -120,9 +124,6 @@ export async function reserveGitHubMentionBilling(input: {
   });
 
   if (credits.duplicateLock || credits.response?.allowed) {
-    // A duplicate lock answers without a balance, so the markup the first
-    // attempt decided on has to be read again. Defaulting it away would bill a
-    // run paid from a top-up at the plan rate.
     const balance = credits.duplicateLock
       ? (
           await checkAutumnFeature({
@@ -167,17 +168,18 @@ export async function reserveGitHubMentionBilling(input: {
 }
 
 /**
- * Deducts what the run actually cost. Without usage the run still spent model
- * calls somewhere, so it pays the minimum rather than nothing.
+ * Deducts what the run actually cost and returns the credits charged (0 when
+ * unmetered). Without usage the run still spent model calls somewhere, so it
+ * pays the minimum rather than nothing.
  */
 export async function confirmGitHubMentionBilling(input: {
   reservation: GitHubMentionBillingReservation;
   usage: AgentTokenUsage | null;
   properties?: Record<string, string | number | boolean>;
-}): Promise<void> {
+}): Promise<number> {
   const { reservation } = input;
   if (!(autumn && reservation.lockId)) {
-    return;
+    return 0;
   }
   const cost = input.usage
     ? calculateAiCreditCostCents(
@@ -200,6 +202,7 @@ export async function confirmGitHubMentionBilling(input: {
     ...(input.usage ? { total_tokens: input.usage.totalTokens } : {}),
     ...input.properties,
   });
+  return costCents;
 }
 
 /** Gives the hold back when the run never reached the model. */

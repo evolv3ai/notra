@@ -10,6 +10,12 @@ export function toClickHouseDateTime(date: Date): string {
   )}`;
 }
 
+export function toClickHouseDateTime64(date: Date): string {
+  return `${toClickHouseDateTime(date)}.${String(
+    date.getUTCMilliseconds()
+  ).padStart(3, "0")}`;
+}
+
 export function parseClickHouseDateTime(value: string): Date {
   const normalized = value.includes("T")
     ? value

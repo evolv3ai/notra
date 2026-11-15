@@ -1,17 +1,13 @@
-import { githubIntegrations } from "@notra/db/schema";
 import {
   createEventTriggerRequestSchema,
   eventTriggerOutputConfigSchema,
   eventTriggerSourceConfigSchema,
   eventTriggerTargetsSchema,
 } from "@notra/schemas/api/event-triggers";
-import { and, eq, inArray } from "drizzle-orm";
 import { Effect } from "effect";
-// biome-ignore lint/performance/noNamespaceImport: Zod recommended way of importing
 import * as z from "zod";
 
 import type { EventTriggerDatabaseError } from "../errors/event-triggers";
-import type { DbClient } from "../types/db";
 import type {
   EventTriggerDomainError,
   EventTriggerRow,
@@ -22,36 +18,6 @@ export function runEventTriggerProgram<A, E extends EventTriggerDomainError>(
   program: Effect.Effect<A, E | EventTriggerDatabaseError>
 ) {
   return Effect.runPromise(Effect.result(program));
-}
-
-export async function ensureEventTriggerTargetsExist(
-  db: DbClient,
-  organizationId: string,
-  repositoryIds: string[],
-  message: string
-) {
-  if (repositoryIds.length === 0) {
-    return null;
-  }
-
-  const integrations = await db.query.githubIntegrations.findMany({
-    where: and(
-      eq(githubIntegrations.organizationId, organizationId),
-      inArray(githubIntegrations.id, repositoryIds)
-    ),
-    columns: { id: true },
-  });
-
-  const existingIds = new Set(
-    integrations.map((integration) => integration.id)
-  );
-  const missingIds = repositoryIds.filter((id) => !existingIds.has(id));
-
-  if (missingIds.length > 0) {
-    return { error: message, missingIntegrationIds: missingIds };
-  }
-
-  return null;
 }
 
 export function serializeEventTrigger(trigger: EventTriggerRow) {

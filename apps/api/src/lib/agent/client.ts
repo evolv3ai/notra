@@ -7,7 +7,6 @@ import {
   AGENT_USE_MARKUP_HEADER,
   AGENT_USER_HEADER,
 } from "@notra/ai/constants/agent";
-import { getVercelOidcToken } from "@vercel/oidc";
 import { Client } from "eve/client";
 
 import type { ApiAgentScope } from "../../types/agent";
@@ -61,7 +60,9 @@ export async function createAgentClient(scope: ApiAgentScope): Promise<Client> {
     });
   }
 
-  const token = await getVercelOidcToken().catch(() => null);
+  const token = await import("@vercel/oidc")
+    .then(({ getVercelOidcToken }) => getVercelOidcToken())
+    .catch(() => null);
   if (token) {
     return new Client({ ...clientOptions, auth: { vercelOidc: { token } } });
   }

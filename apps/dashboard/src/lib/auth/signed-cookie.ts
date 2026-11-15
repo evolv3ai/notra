@@ -1,13 +1,14 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+import {
+  deleteCookie,
+  getCookie,
+  getCookies,
+  setCookie,
+} from "@tanstack/react-start/server";
 import type * as z from "zod";
 
-import {
-  clearShortLivedCookie,
-  clearShortLivedCookiesWithPrefix,
-  readShortLivedCookie,
-  storeShortLivedCookie,
-} from "@/lib/auth/short-lived-cookie";
+import { cookieAttributes } from "@/utils/cookie-attributes";
 
 const SIGNATURE_SEPARATOR = ".";
 const KEY_CONTEXT = "notra-signed-cookie";
@@ -32,18 +33,19 @@ export async function storeSignedCookie(
   maxAgeSeconds: number
 ) {
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  await storeShortLivedCookie(
-    name,
-    `${encoded}${SIGNATURE_SEPARATOR}${sign(encoded)}`,
-    maxAgeSeconds
-  );
+  setCookie(name, `${encoded}${SIGNATURE_SEPARATOR}${sign(encoded)}`, {
+    httpOnly: true,
+    ...cookieAttributes(),
+    path: "/",
+    maxAge: maxAgeSeconds,
+  });
 }
 
 export async function readSignedCookie<T>(
   name: string,
   schema: z.ZodType<T>
 ): Promise<T | null> {
-  const raw = await readShortLivedCookie(name);
+  const raw = getCookie(name);
   if (!raw) {
     return null;
   }
@@ -70,10 +72,14 @@ export async function readSignedCookie<T>(
   }
 }
 
-export function clearSignedCookie(name: string) {
-  return clearShortLivedCookie(name);
+export async function clearSignedCookie(name: string) {
+  deleteCookie(name, { path: "/", ...cookieAttributes() });
 }
 
-export function clearSignedCookiesWithPrefix(prefix: string) {
-  return clearShortLivedCookiesWithPrefix(prefix);
+export async function clearSignedCookiesWithPrefix(prefix: string) {
+  for (const name of Object.keys(getCookies())) {
+    if (name.startsWith(prefix)) {
+      deleteCookie(name, { path: "/", ...cookieAttributes() });
+    }
+  }
 }

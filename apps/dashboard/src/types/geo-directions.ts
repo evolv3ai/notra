@@ -1,8 +1,4 @@
-export type GeoDirectionKey =
-  | "instrument"
-  | "leaderboard"
-  | "cockpit"
-  | "report";
+type GeoDirectionKey = "instrument" | "leaderboard" | "cockpit" | "report";
 
 export interface GeoDirectionTab {
   key: GeoDirectionKey;
@@ -26,7 +22,7 @@ export interface GeoDirectionTrendRow {
   [key: string]: string | number;
 }
 
-export interface GeoDirectionPromptPosition {
+interface GeoDirectionPromptPosition {
   engine: string;
   position: number | null;
 }
@@ -42,7 +38,7 @@ export interface GeoDirectionPromptEngine {
   label: string;
 }
 
-export type GeoDirectionSourceKind = "crawl" | "referral";
+type GeoDirectionSourceKind = "crawl" | "referral";
 
 export interface GeoDirectionSourceRow {
   source: string;

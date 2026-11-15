@@ -2,17 +2,15 @@ import {
   ALLOWED_CHAT_MIME_TYPES,
   ALLOWED_OPENAI_CHAT_MIME_TYPES,
 } from "@notra/schemas/constants/dashboard/upload";
+import { IMAGE_MIME_EXTENSIONS } from "@notra/sites-core/constants/uploads";
 
 const MIME_EXTENSION_MAP: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/gif": "gif",
-  "image/webp": "webp",
-  "image/avif": "avif",
-  "image/svg+xml": "svg",
+  ...IMAGE_MIME_EXTENSIONS,
   "application/pdf": "pdf",
   "text/plain": "txt",
   "text/markdown": "md",
+  "video/mp4": "mp4",
+  "video/webm": "webm",
 };
 
 export function getFileExtension(fileType: string) {

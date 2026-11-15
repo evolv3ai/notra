@@ -1,0 +1,20 @@
+{
+  "name": "@notra/memory",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit --incremental --tsBuildInfoFile .cache/typecheck.tsbuildinfo"
+  },
+  "dependencies": {
+    "@pierre/storage": "1.17.1"
+  },
+  "devDependencies": {
+    "@notra/typescript-config": "workspace:*",
+    "@types/node": "^24.19.2",
+    "typescript": "catalog:"
+  }
+}

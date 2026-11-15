@@ -3,7 +3,6 @@ import type {
   GeoPromptResultSummary,
   GeoPromptSummary,
 } from "../types/geo";
-import { engineFamilyLabel, engineFamilyOf } from "./geo-engine-family";
 
 const GROUNDED_ENGINE_PATTERN =
   /(-direct)?-grounded$|^perplexity-sonar$|^google\/ai-overview$/;
@@ -72,52 +71,4 @@ export function summarizePromptResults(
       presence: classifyPromptPresence(group.results),
     }))
     .sort((a, b) => b.mentioned / b.total - a.mentioned / a.total);
-}
-
-export function sortWinningPromptSummaries(
-  summaries: readonly GeoPromptSummary[]
-): GeoPromptSummary[] {
-  return summaries
-    .filter((summary) => summary.mentioned > 0)
-    .sort((a, b) => {
-      const aRank = a.bestPosition ?? Number.MAX_SAFE_INTEGER;
-      const bRank = b.bestPosition ?? Number.MAX_SAFE_INTEGER;
-      if (aRank !== bRank) {
-        return aRank - bRank;
-      }
-      return b.mentioned / b.total - a.mentioned / a.total;
-    });
-}
-
-function uniqueEngineFamilies(
-  summary: GeoPromptSummary,
-  mentionedOnly: boolean
-): string[] {
-  const families = new Set<string>();
-  for (const result of summary.results) {
-    if (mentionedOnly && !result.mentioned) {
-      continue;
-    }
-    families.add(engineFamilyOf(result.engine));
-  }
-  return [...families].sort((a, b) =>
-    engineFamilyLabel(a).localeCompare(engineFamilyLabel(b))
-  );
-}
-
-export function mentionedEngineFamilies(summary: GeoPromptSummary): string[] {
-  return uniqueEngineFamilies(summary, true);
-}
-
-export function scannedEngineFamilies(summary: GeoPromptSummary): string[] {
-  return uniqueEngineFamilies(summary, false);
-}
-
-export function unseenPromptSummaries(
-  summaries: readonly GeoPromptSummary[]
-): GeoPromptSummary[] {
-  return summaries
-    .filter((summary) => summary.mentioned === 0)
-    .slice()
-    .sort((left, right) => left.prompt.localeCompare(right.prompt));
 }

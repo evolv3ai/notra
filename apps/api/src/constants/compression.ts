@@ -1,0 +1,3 @@
+export const API_COMPRESSION_MIN_BYTES = 1024;
+export const API_COMPRESSION_MAX_BYTES = 1024 * 1024;
+export const API_COMPRESSION_LEVEL = 1;

@@ -99,8 +99,6 @@ export function rangeIncludesToday(range: AnalyticsDateRange): boolean {
 export function buildTimelineRange(range: AnalyticsDateRange): string[] {
   const end = parseLocalDay(range.dateTo);
   const start = parseLocalDay(range.dateFrom);
-  // Cap very long ranges (e.g. "all time") to the most recent window so the
-  // chart anchors on where the data actually is instead of empty early days.
   const capStart = new Date(end);
   capStart.setDate(capStart.getDate() - (MAX_TIMELINE_DAYS - 1));
   const cursor = start.getTime() < capStart.getTime() ? capStart : start;

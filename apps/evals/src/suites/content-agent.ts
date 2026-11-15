@@ -24,7 +24,6 @@ interface ContentInput {
 
 type ContentExpected = ContentScenario["expected"];
 
-/** Scenario × content type pairs. Skip scenarios run once (as changelog). */
 function buildCases(
   types: readonly ContentTypeId[]
 ): EvalCase<ContentInput, ContentExpected>[] {
@@ -53,15 +52,12 @@ const ALL_TYPES: readonly ContentTypeId[] = [
   "twitter_post",
 ];
 
-/** Tool-use expectations on top of the post score, only for the full loop. */
 function processFields(
   output: HarnessOutput,
   input: ContentInput
 ): FieldScore[] {
   const calls = output.toolCalls;
   const skills = output.skillsLoaded ?? [];
-  // The dispatcher allows a better-fitting skill than the hint, so any
-  // writing skill counts; unslop has to be loaded by name.
   const loadedSkill = skills.some((name) => name !== "unslop");
   const unslopLoaded = skills.includes("unslop");
   const fetchedData =
@@ -70,7 +66,6 @@ function processFields(
   const fields: FieldScore[] = [
     { field: "fetched-sources", score: fetchedData ? 1 : 0 },
   ];
-  // Skipping without loading the writing skills is fine.
   if (output.decision === "create") {
     fields.push({
       field: "loaded-skill",

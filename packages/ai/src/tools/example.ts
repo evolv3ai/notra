@@ -1,3 +1,5 @@
+import { setTimeout as sleep } from "node:timers/promises";
+
 import { toolDescription } from "@notra/ai/utils/description";
 import { type Tool, tool } from "ai";
 import z from "zod";
@@ -27,7 +29,7 @@ Safe to call freely; has no side effects.`,
     }),
     execute: async ({ message, delayMs }) => {
       if (delayMs > 0) {
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        await sleep(delayMs);
       }
 
       return {

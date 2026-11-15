@@ -74,7 +74,6 @@ export function useMobileNavMenu(
   }, [setOpen]);
 
   return function closeAfterPaint() {
-    // Let the click commit before unmounting the overlay.
     requestAnimationFrame(() => setOpen(false));
   };
 }
