@@ -79,6 +79,17 @@ deletes older ones only by that name pattern. Any failure exits non-zero, so it
 shows up in the journal. `NOTRA_BACKUP_DIR`, `NOTRA_BACKUP_KEEP`, `NOTRA_DIR`
 and `NOTRA_ENV_FILE` override the defaults.
 
+After a successful dump it copies the file off the host with the existing
+rclone remote `dropbox` to `dropbox:06_AI/backups/notra/`. That folder is
+private and not under any shared or daily-report folder. It keeps the newest 14
+there too, pruning by the same name pattern. If the upload fails, the script
+logs `notra-backup: WARNING: off-host copy ... failed` and still exits 0,
+because the local backup has already succeeded. Search the journal for that
+line. `NOTRA_BACKUP_REMOTE` changes the destination (an empty value turns the
+upload off), and `NOTRA_BACKUP_UPLOAD_TIMEOUT` (default `15m`) limits each
+rclone call. The rclone config is `~/.config/rclone/rclone.conf` for
+`evolv3ai`, which the system unit reads because it runs as that user.
+
 The systemd units `notra-backup.service` and `notra-backup.timer` run it at
 03:30 Central (`Nice=10`, idle I/O). They are system units that run as
 `evolv3ai` with the `docker` group: the long-lived user manager predates the
@@ -99,15 +110,28 @@ sudo systemctl start notra-backup.service   # run once now
 journalctl -u notra-backup.service -n 20
 systemctl list-timers notra-backup.timer
 ls -lh ~/backups/notra/
+rclone lsl dropbox:06_AI/backups/notra/     # off-host copies
 ```
 
-Possible follow-up: copy the dumps offsite (for example to Dropbox); today they
-live only on this host.
+To restore from Dropbox, fetch a dump first:
+`rclone copy dropbox:06_AI/backups/notra/notra-YYYY-MM-DDTHHMMSS.dump ~/backups/notra/`.
 
 ### Restore
 
-Restore into a scratch database first, never the live `notra` database unless
-you mean to replace it:
+`restore-test.sh` checks that a dump actually restores. It loads the newest dump
+(or the one passed as an argument) into a throwaway `postgres:16-alpine`
+container with no network and no volume. It then counts the rows of every table
+in both the restored copy and the live database (the live read runs in a
+read-only transaction), prints both counts, and removes the container on exit.
+It fails if the restore fails or a live table is missing from the restore. Live
+counts can be higher than the dump's for rows written after the dump.
+
+```bash
+/home/evolv3ai/dev/notra/deploy/omarchy/restore-test.sh
+```
+
+To restore by hand, use a scratch database first, never the live `notra`
+database unless you mean to replace it:
 
 ```bash
 dump=~/backups/notra/notra-YYYY-MM-DDTHHMMSS.dump
