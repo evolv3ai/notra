@@ -18,7 +18,8 @@ with HTTPS. Neither is on the public internet.
 
 ## Services
 
-- `dashboard`: the Next.js app (`apps/dashboard/Dockerfile`, standalone build).
+- `dashboard`: the TanStack Start app (`apps/dashboard/Dockerfile`, a Nitro
+  `node-server` build).
 - `api`: the public REST API (`apps/api/Dockerfile`, Bun). It authenticates
   `ntra_` keys through Unkey (see [Use the API](#use-the-api)).
 - `migrate`: runs the drizzle migrations from the same image, then exits. The
@@ -204,7 +205,7 @@ Every API request calls Unkey Cloud, so the api needs outbound internet access.
 
 - Features whose keys are unset stay off: GEO website discovery during
   onboarding needs `CONTEXT_DEV_API_KEY` (use **Skip this step**), email needs
-  `RESEND_API_KEY` (the log shows `Resend API key not set`; nothing breaks),
+  `BREW_API_KEY` (without it no email is sent; nothing breaks),
   repository-based content needs the GitHub App.
 - QStash schedules and webhooks call back to the app, so they need a public URL.
   Content you start from the dashboard does not; it runs in Vercel Workflow's
