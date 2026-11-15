@@ -32,7 +32,7 @@ permissions:
 jobs:
   lifecycle:
     name: Lifecycle (PostgreSQL + Upstash Box)
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     outputs:
       failures: ${{ steps.summary.outputs.failures }}
@@ -107,7 +107,7 @@ jobs:
 
   browser:
     name: Browser (Playwright)
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
       failures: ${{ steps.summary.outputs.failures }}
@@ -188,7 +188,7 @@ jobs:
   vendor-scripts:
     name: Vendor analytics scripts (live)
     continue-on-error: true
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Checkout

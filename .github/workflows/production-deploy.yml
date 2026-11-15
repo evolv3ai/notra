@@ -26,7 +26,7 @@ concurrency:
 jobs:
   release:
     if: github.ref == 'refs/heads/main' && github.repository == 'usenotra/notra'
-    runs-on: depot-ubuntu-24.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
       sha: ${{ steps.release.outputs.sha }}
@@ -79,7 +79,7 @@ jobs:
   agents:
     needs: release
     if: ${{ !inputs.dry_run }}
-    runs-on: depot-ubuntu-24.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout release commit
@@ -128,7 +128,7 @@ jobs:
   # sites-e2e and agents job of this run to succeed before anything goes live.
   deploy:
     needs: release
-    runs-on: depot-ubuntu-24.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
       - name: Checkout release commit
@@ -178,7 +178,7 @@ jobs:
   notify:
     needs: [release, sites-e2e, agents, deploy]
     if: ${{ failure() }}
-    runs-on: depot-ubuntu-24.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Alert Slack

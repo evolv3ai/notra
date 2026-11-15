@@ -16,7 +16,7 @@ jobs:
   # PRs only run the checks their diff can affect; main pushes run everything
   # because they gate production releases.
   changes:
-    runs-on: depot-ubuntu-24.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       checks: ${{ steps.plan.outputs.checks }}
@@ -68,7 +68,7 @@ jobs:
   checks:
     name: Quality (${{ matrix.check }})
     needs: changes
-    runs-on: depot-ubuntu-24.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -197,7 +197,7 @@ jobs:
   infrastructure:
     needs: changes
     if: needs.changes.outputs.infrastructure == 'true'
-    runs-on: depot-ubuntu-24.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     services:
       postgres:
@@ -269,7 +269,7 @@ jobs:
   quality:
     if: always()
     needs: [changes, checks, infrastructure]
-    runs-on: depot-ubuntu-24.04
+    runs-on: ubuntu-24.04
     # Depot runner boot counts against this budget and can take several minutes.
     timeout-minutes: 10
     steps:
