@@ -12,9 +12,7 @@ const QUALITY_PREFIX = "q=";
 const DEFAULT_QUALITY = 1;
 
 /** "de-DE" → "German". Null for locales we cannot track. */
-export function geoLanguageFromLocale(
-  locale: string
-): SupportedLanguage | null {
+function geoLanguageFromLocale(locale: string): SupportedLanguage | null {
   const code =
     locale.trim().split(LOCALE_SUBTAG_PATTERN)[0]?.toLowerCase() ?? "";
   return Object.hasOwn(GEO_LOCALE_LANGUAGES, code)

@@ -2,6 +2,7 @@
 
 import { MessageResponse } from "@notra/ui/components/ai-elements/message";
 import { PerplexityFavicon } from "@notra/ui/components/ai-skins/perplexity/perplexity-favicon";
+import { cn } from "@notra/ui/lib/utils";
 import type { ComponentProps } from "react";
 
 import type { CommentBodyProps } from "@/types/comments";
@@ -35,12 +36,15 @@ function CommentLink({ children, href }: ComponentProps<"a">) {
 
 const commentComponents = { a: CommentLink };
 
-export function CommentBody({ body }: CommentBodyProps) {
+export function CommentBody({ body, className }: CommentBodyProps) {
   return (
     <MessageResponse
       mode="static"
       components={commentComponents}
-      className="mt-1 h-auto text-sm leading-6 [&_ol]:my-2 [&_p]:my-2 [&_p]:whitespace-pre-wrap [&_ul]:my-2"
+      className={cn(
+        "mt-1 h-auto text-sm leading-6 [&_ol]:my-2 [&_p]:my-2 [&_p]:whitespace-pre-wrap [&_ul]:my-2",
+        className
+      )}
     >
       {body}
     </MessageResponse>

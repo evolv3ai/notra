@@ -18,28 +18,10 @@ import type {
   SentimentThemesStateInput,
 } from "@/types/geo-sentiment";
 
-export function isolatedSentimentPointIndices(
-  points: readonly Pick<GeoSentimentResponse["points"][number], "score">[]
-): number[] {
-  return points.flatMap((point, index) =>
-    point.score !== null &&
-    points[index - 1]?.score == null &&
-    points[index + 1]?.score == null
-      ? [index]
-      : []
-  );
-}
-
 export function sentimentHasDisplayableData(
   summary?: GeoSentimentResponse["summary"]
 ): boolean {
   return Boolean(summary && summary.classifiedMentions > 0);
-}
-
-export function sentimentSummaryShowsEmpty(
-  summary?: GeoSentimentResponse["summary"]
-): boolean {
-  return Boolean(summary && !sentimentHasDisplayableData(summary));
 }
 
 export function sentimentEmptyMessageKey(

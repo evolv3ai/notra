@@ -1,18 +1,19 @@
-import type { RequestCookies } from "next/dist/compiled/@edge-runtime/cookies";
-import type { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
-
 import {
   LAST_VISITED_ORGANIZATION_COOKIE,
   LAST_VISITED_ORGANIZATION_COOKIE_MAX_AGE,
   LAST_VISITED_PROJECT_COOKIE,
   LAST_VISITED_PROJECT_COOKIE_MAX_AGE,
+  ONBOARDING_BANNER_DISMISSED_COOKIE_MAX_AGE,
+  ONBOARDING_BANNER_DISMISSED_COOKIE_PREFIX,
   SIDEBAR_MODE_COOKIE,
   SIDEBAR_MODE_COOKIE_MAX_AGE,
+  TRAFFIC_LAYOUT_COOKIE,
+  TRAFFIC_LAYOUT_COOKIE_MAX_AGE,
 } from "@/constants/cookies";
 import type { SidebarMode } from "@/types/components/nav";
+import type { CookieJar } from "@/types/cookies";
+import type { TrafficPageLayout } from "@/types/geo";
 import { isSidebarMode } from "@/utils/nav";
-
-type CookieJar = RequestCookies | ReadonlyRequestCookies;
 
 function parseLastVisitedProject(
   value: string | undefined,
@@ -72,9 +73,7 @@ async function setClientCookie(
       sameSite: "lax",
     };
 
-    await cookieStore.set(cookieOptions).catch(() => {
-      // Failed to set cookie - silently continue
-    });
+    await cookieStore.set(cookieOptions).catch(() => {});
     return;
   }
 
@@ -129,6 +128,24 @@ export const getLastVisitedProjectFromClient = (
     organizationSlug
   );
 
+export const onboardingBannerDismissedCookie = (organizationId: string) =>
+  `${ONBOARDING_BANNER_DISMISSED_COOKIE_PREFIX}${organizationId}`;
+
+export const isOnboardingBannerDismissedFromClient = (
+  organizationId: string
+): boolean =>
+  readClientCookie(onboardingBannerDismissedCookie(organizationId)) === "1";
+
+export const setOnboardingBannerDismissedCookie = async (
+  organizationId: string
+): Promise<void> => {
+  await setClientCookie(
+    onboardingBannerDismissedCookie(organizationId),
+    "1",
+    ONBOARDING_BANNER_DISMISSED_COOKIE_MAX_AGE
+  );
+};
+
 export const setSidebarModeCookie = async (
   mode: SidebarMode,
   maxAge: number = SIDEBAR_MODE_COOKIE_MAX_AGE
@@ -142,3 +159,30 @@ export const getSidebarModeFromCookies = (
   const value = cookies.get(SIDEBAR_MODE_COOKIE)?.value;
   return isSidebarMode(value) ? value : null;
 };
+
+function toTrafficPageLayout(
+  value: string | undefined
+): TrafficPageLayout | null {
+  return value === "visitors" || value === "agents" ? value : null;
+}
+
+export const setTrafficLayoutCookie = async (
+  layout: TrafficPageLayout
+): Promise<void> => {
+  if (readClientCookie(TRAFFIC_LAYOUT_COOKIE) === layout) {
+    return;
+  }
+  await setClientCookie(
+    TRAFFIC_LAYOUT_COOKIE,
+    layout,
+    TRAFFIC_LAYOUT_COOKIE_MAX_AGE
+  );
+};
+
+export const getTrafficLayoutFromCookies = (
+  cookies: CookieJar
+): TrafficPageLayout | null =>
+  toTrafficPageLayout(cookies.get(TRAFFIC_LAYOUT_COOKIE)?.value);
+
+export const getTrafficLayoutFromClient = (): TrafficPageLayout | null =>
+  toTrafficPageLayout(readClientCookie(TRAFFIC_LAYOUT_COOKIE));

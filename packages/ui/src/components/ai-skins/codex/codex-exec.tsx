@@ -26,7 +26,6 @@ export function CodexShellCommand({ command }: { command: string }) {
     <>
       {tokenizeShellCommand(command).map((token, index) => (
         <span
-          // Tokens are positional; the command string never reorders.
           // oxlint-disable-next-line react/no-array-index-key
           key={index}
           style={{ color: SHELL_TOKEN_COLOR[token.kind] }}

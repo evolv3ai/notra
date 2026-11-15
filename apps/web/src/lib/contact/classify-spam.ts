@@ -13,7 +13,6 @@ export async function isContactSpam(
     questions: CONTACT_SPAM_QUESTION,
   });
 
-  // A failed or unavailable classifier must not silently discard a real inquiry.
   return (
     (evaluation?.answers.spam.probability ?? 0) >= EVALUATION_BOOLEAN_THRESHOLD
   );

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://usenotra.com/schemas/blog.json",
+  "name": "Demo 12",
+  "description": "Custom navbar and content buttons from the site CSS.",
+  "navbar": {
+    "links": [
+      {
+        "label": "Docs",
+        "href": "https://usenotra.com/docs"
+      }
+    ],
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/usenotra"
+    },
+    "cta": {
+      "label": "Dashboard",
+      "href": "https://app.usenotra.com"
+    }
+  },
+  "blog": {
+    "title": "Demo Blog",
+    "description": "Bring your own buttons."
+  },
+  "logo": {
+    "light": "https://media.brand.dev/dd94a82e-c6c3-4a60-876b-ab30ed68a583.svg",
+    "dark": "https://media.brand.dev/22cdc864-7770-4d53-ace2-922fcd806986.png"
+  },
+  "fonts": {
+    "heading": {
+      "family": "Instrument Serif"
+    }
+  },
+  "banner": {
+    "content": "test 12",
+    "dismissible": true
+  }
+}

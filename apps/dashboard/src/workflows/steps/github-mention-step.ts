@@ -1,3 +1,4 @@
+import "@/workflows/runtime";
 import { flushLogs } from "@notra/ai/evlog";
 import type {
   GitHubMentionContext,
@@ -13,6 +14,7 @@ import {
 } from "@notra/ai/utils/github-mention-log";
 import { processGitHubMention } from "@notra/ai/utils/github-mention-process";
 
+import { handleAutopilotMention } from "@/lib/autopilot/mentions";
 import { writeMentionWebhookLog } from "@/lib/webhooks/github-mention-log";
 import { startContentPublicationSyncRepair } from "@/lib/workflows/start";
 
@@ -33,11 +35,17 @@ export async function processGitHubMentionStep(context: GitHubMentionContext) {
     buildAcceptedMentionWebhookLog(context),
     context.deliveryId
   );
+  // Content questions on product PRs go to Autopilot; everything else to the agent.
+  const autopilot = await handleAutopilotMention(context);
+  if (autopilot) {
+    return autopilot;
+  }
+  if (context.comment.edited) {
+    return { status: "ignored" as const, reason: "edited_feedback_only" };
+  }
   return await processGitHubMention(context, startContentPublicationSyncRepair);
 }
 
-// A killed attempt may have committed or replied before its result persisted.
-// Replaying the whole agent is unsafe; it must be reconciled first.
 processGitHubMentionStep.maxRetries = 0;
 
 export async function completeGitHubMentionStep(

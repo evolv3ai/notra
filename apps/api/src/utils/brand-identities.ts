@@ -52,7 +52,6 @@ export function serializeBrandIdentity(brandIdentity: BrandIdentityRow) {
   };
 }
 
-/** Leave unexpected database errors to Hono's central error handler. */
 export function runBrandIdentityProgram<A, E extends BrandIdentityDomainError>(
   program: Effect.Effect<A, E | BrandIdentityDatabaseError>
 ) {
@@ -71,6 +70,9 @@ export function respondToBrandIdentityFailure(
   c: Context,
   failure: BrandIdentityDomainError
 ) {
+  if (failure._tag === "BrandIdentityWebsiteUrlError") {
+    return c.json({ error: failure.message }, failure.temporary ? 503 : 400);
+  }
   if (failure._tag === "BrandIdentityNotFoundError") {
     return c.json({ error: "Brand identity not found" }, 404);
   }
@@ -104,7 +106,5 @@ export function respondToBrandIdentityFailure(
     return c.json({ error: "Brand identity analysis job not found" }, 404);
   }
 
-  if (failure._tag === "BrandAnalysisQueueFailedError") {
-    return c.json({ error: "Failed to queue brand identity analysis" }, 503);
-  }
+  return c.json({ error: "Failed to queue brand identity analysis" }, 503);
 }

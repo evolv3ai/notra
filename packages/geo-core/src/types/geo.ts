@@ -1,6 +1,7 @@
 import type { AgentTokenUsage } from "@notra/ai/types/agents";
 import type { ContentBillingReservation } from "@notra/ai/types/billing";
 import type { GeoLogEventName } from "@notra/ai/types/evlog";
+import type { GatewayModelOptions } from "@notra/ai/types/gateway";
 import type {
   GeoContentBrief,
   GeoContentSubtype,
@@ -8,14 +9,22 @@ import type {
 import type {
   GeoCheckGrounding,
   GeoCheckSourceItem,
+  GeoCheckSurfaces,
   GeoCheckWrite,
 } from "@notra/db/types/geo-checks";
 import type { GeoPersonaSnapshotV2 } from "@notra/db/types/geo-personas";
 import type { GeoScanUsageByRole } from "@notra/db/types/geo-scan";
 import type { GeoContentBriefStatus } from "@notra/db/types/geo-writer";
 import type { FinishReason, LanguageModel, ToolSet } from "ai";
+import type { z } from "zod";
 
+import type { GEO_TRAFFIC_SITES_MODES } from "../constants/geo";
 import type { GEO_AUDIENCE_TYPES } from "../constants/geo-model-catalog";
+import type {
+  geoCompetitorSuggestionsResponseSchema,
+  geoJudgeResultSchema,
+} from "../schemas/geo";
+import type { geoGatewayModelSchema } from "../schemas/geo-model-feed";
 import type { GeoModelTokenUsage } from "./token-usage";
 
 export interface GeoProject {
@@ -27,7 +36,7 @@ export interface GeoProject {
   languages?: string[];
 }
 
-export interface GeoProjectRow {
+interface GeoProjectRow {
   id: string;
   organizationId: string;
   name: string;
@@ -88,6 +97,8 @@ export interface GeoSettings {
   trackWithoutSearch: boolean;
   pausedAutoPromptIds: string[];
   removedAutoPromptIds: string[];
+  /** Discovered brands the user dismissed from competitor suggestions. */
+  ignoredCompetitors: string[];
   enabled: boolean;
   scanIntervalHours: number;
   scanStartedAt: string | null;
@@ -119,6 +130,7 @@ export interface GeoSettingsRow {
   trackWithoutSearch: boolean;
   pausedAutoPromptIds: string[];
   removedAutoPromptIds: string[];
+  ignoredCompetitors: string[];
   enabled: boolean;
   scanIntervalHours: number;
   nextScanAt: Date | null;
@@ -155,7 +167,16 @@ export interface GeoTimeseriesPoint {
   avgPosition?: number | null;
 }
 
-export type GeoStatDeltaKind = "rate" | "mentions" | "position" | "score";
+/**
+ * `position` is an average position where lower is better, shown as the raw
+ * change. `rank` is a leaderboard rank, shown as places gained or lost.
+ */
+export type GeoStatDeltaKind =
+  | "rate"
+  | "mentions"
+  | "position"
+  | "rank"
+  | "score";
 
 export type GeoStatDeltaTone = "up" | "down" | "flat";
 
@@ -188,6 +209,8 @@ export interface GeoEngineAnswer {
    * (for example Google did not show an AI Overview for the query).
    */
   absent?: boolean;
+  /** Ads, shopping and model info a consumer-app scrape reported. */
+  surfaces?: GeoCheckSurfaces | null;
 }
 
 export interface GeoGroundedAnswer extends GeoEngineAnswer {
@@ -223,8 +246,7 @@ export type GeoScanSkipReason =
   | "superseded"
   | "already_running"
   | "scoped_prompts_missing"
-  | "scoped_engines_missing"
-  | "no_search_engines";
+  | "scoped_engines_missing";
 
 export interface GeoErrorFields {
   errorName: string;
@@ -375,6 +397,15 @@ export interface GeoPromptRescanInput extends GeoScopeInput {
   engines?: readonly string[];
 }
 
+export interface GeoCompetitorDomainFillInput extends GeoScopeInput {
+  domains: { name: string; domain: string }[];
+}
+
+export interface GeoCompetitorIgnoreInput extends GeoScopeInput {
+  name: string;
+  ignored: boolean;
+}
+
 export interface GeoPromptGapIgnoreInput extends GeoScopeInput {
   promptId: string;
   ignored: boolean;
@@ -385,7 +416,7 @@ export interface GeoRescanForPostInput {
   postId: string;
 }
 
-export type GeoPostRescanStatus = "started" | "deferred" | "skipped";
+type GeoPostRescanStatus = "started" | "deferred" | "skipped";
 
 export interface GeoPostRescanOutcome {
   status: GeoPostRescanStatus;
@@ -423,6 +454,25 @@ export interface GeoCompetitorShareTimeseriesPoint {
   brand: string;
   day: string;
   mentions: number;
+}
+
+interface GeoEngineCheckTotal {
+  engine: string;
+  checks: number;
+  /** Own-brand mentions. */
+  mentions: number;
+}
+
+interface GeoEngineBrandMentions {
+  engine: string;
+  brand: string;
+  mentions: number;
+}
+
+export interface GeoCompetitorEngineMatrixResponse {
+  configured: boolean;
+  engines: GeoEngineCheckTotal[];
+  cells: GeoEngineBrandMentions[];
 }
 
 export interface GeoCompetitorShareResponse {
@@ -614,6 +664,9 @@ export interface GeoSequenceRunResponse {
   checks: number;
   mentions: number;
   engines: string[];
+  /** Scoped scan running the consumer-app engines in the background. */
+  queuedScanId: string | null;
+  queuedEngines: string[];
 }
 
 export interface GeoSequenceResultsResponse {
@@ -633,6 +686,8 @@ export interface GeoScanPlannedTask {
   prompt: GeoPromptDefinition;
   language: string;
   zdr: GeoZdrMode;
+  /** Olostep result handle, attached once the engine's batch has completed. */
+  olostepRetrieveId?: string;
 }
 
 export interface GeoScanPlannedSequence {
@@ -643,6 +698,8 @@ export interface GeoScanPlannedSequence {
   engine: string;
   groundedKey: string | null;
   zdr: GeoZdrMode;
+  /** Olostep result handle per step; null where the item never finished. */
+  olostepRetrieveIds?: (string | null)[];
 }
 
 export interface GeoScanPlannedPersona {
@@ -650,8 +707,11 @@ export interface GeoScanPlannedPersona {
   prompts: string[];
   snapshot: GeoPersonaSnapshotV2;
   engine: string;
-  groundedKey: string;
+  /** Null for consumer apps scraped through Olostep. */
+  groundedKey: string | null;
   zdr: GeoZdrMode;
+  /** Olostep result handle per prompt; null where the item never finished. */
+  olostepRetrieveIds?: (string | null)[];
 }
 
 export interface GeoScanProjectContext {
@@ -661,6 +721,8 @@ export interface GeoScanProjectContext {
   runId: string;
   companyName: string;
   aliases: string[];
+  /** What the company does; tells the judge which brands are real rivals. */
+  companyDescription?: string | null;
   /** Canonical brand website used to recognize citations from owned subdomains. */
   websiteUrl?: string | null;
   /** Additional project domains whose citations count as owned sources. */
@@ -700,6 +762,11 @@ export interface GeoScanBatchOutcome {
   billedChecks?: number;
   /** Usage this batch bills as AI credits; defaults to `usage`. */
   billedUsage?: AgentTokenUsage;
+  /**
+   * Planned items (e.g. paused/archived personas) this batch skipped and
+   * omitted from the scan plan; they don't count as attempted. Defaults to 0.
+   */
+  omitted?: number;
 }
 
 export interface GeoScanFailureMetadata {
@@ -709,16 +776,7 @@ export interface GeoScanFailureMetadata {
   readonly retryable: boolean | null;
 }
 
-export interface GeoScanProjectTotals {
-  checks: number;
-  mentions: number;
-  dropped: number;
-  usage: AgentTokenUsage;
-  engineUsage?: AgentTokenUsage;
-  judgeUsage?: AgentTokenUsage;
-  billedChecks?: number;
-  billedUsage?: AgentTokenUsage;
-}
+export type GeoScanProjectTotals = GeoScanBatchOutcome;
 
 export interface GeoScanFinishTotals {
   runId: string;
@@ -735,23 +793,6 @@ export interface GeoScanFinishTotals {
   usageByRole: GeoScanUsageByRole;
 }
 
-export interface GeoScanProgramOptions {
-  projectId?: string;
-  claimedAt?: Date;
-  scanId?: string;
-  /** Explicit project subset for a retry pass; overrides `projectId` scoping. */
-  projectIds?: readonly string[];
-  promptIds?: readonly string[];
-  /** This-run engine selection from the catalog. Omitted runs every tracked engine. */
-  engines?: readonly string[];
-}
-
-export interface GeoProjectScanOutcome {
-  checks: number;
-  mentions: number;
-  usage: AgentTokenUsage;
-}
-
 export interface GeoPromptDefinition {
   id: string;
   text: string;
@@ -763,6 +804,7 @@ export interface GeoCheckTask {
   prompt: GeoPromptDefinition;
   language: string;
   zdr: GeoZdrMode;
+  olostepRetrieveId?: string;
 }
 
 /** Log context for the scan-time ZDR entitlement re-check. */
@@ -784,8 +826,6 @@ export interface GeoZdrPolicy {
   nonEnforcedMode?: GeoZdrMode;
 }
 
-/** Engine a scan will actually call after ZDR skip/fallback. */
-
 export interface GeoCheckContext {
   catalog: GeoModelCatalog;
   organizationId: string;
@@ -795,6 +835,8 @@ export interface GeoCheckContext {
   capturedAt: Date;
   companyName: string;
   aliases: string[];
+  /** What the company does; tells the judge which brands are real rivals. */
+  companyDescription?: string | null;
   websiteUrl?: string | null;
   domains?: string[];
 }
@@ -834,6 +876,8 @@ export type GeoGroundedProvider =
   | "gateway-anthropic"
   | "gateway-google"
   | "gateway-perplexity"
+  | "gateway-meta"
+  | "gateway-spacexai"
   | "direct-openai"
   | "direct-anthropic"
   | "direct-perplexity";
@@ -865,6 +909,7 @@ export interface GeoGroundedInvocation {
 export interface GeoGroundedInvocationOptions {
   organizationId?: string;
   zdr?: GeoZdrMode;
+  logContext?: GatewayModelOptions["logContext"];
 }
 
 export interface GeoDiscoveredPrompt {
@@ -950,18 +995,9 @@ export interface GeoOnboardingBrandResult {
   promptsAdded: number;
 }
 
-export interface GeoCompetitorSuggestion {
-  name: string;
-  domain: string | null;
-  description: string | null;
-  confidence: "high" | "medium" | null;
-}
-
-export interface GeoCompetitorSuggestionsResponse {
-  domain: string;
-  field: string | null;
-  competitors: GeoCompetitorSuggestion[];
-}
+export type GeoCompetitorSuggestionsResponse = z.infer<
+  typeof geoCompetitorSuggestionsResponseSchema
+>;
 
 export interface GeoBrandSearchResult {
   domain: string;
@@ -973,16 +1009,11 @@ export interface GeoBrandSearchResponse {
   results: GeoBrandSearchResult[];
 }
 
-export interface GeoJudgeResult {
-  mentioned: boolean;
-  position: number | null;
-  sentiment: "positive" | "neutral" | "negative" | null;
-  competitors: string[];
-  excerpt: string;
+export type GeoJudgeResult = z.infer<typeof geoJudgeResultSchema> & {
   usage?: GeoModelTokenUsage;
-}
+};
 
-export type GeoMentionSentiment = NonNullable<GeoJudgeResult["sentiment"]>;
+type GeoMentionSentiment = NonNullable<GeoJudgeResult["sentiment"]>;
 
 /** Sentiment and list position from the typed evaluation model. */
 export interface GeoMentionEvaluation {
@@ -994,6 +1025,7 @@ export interface GeoMentionEvaluation {
 
 export interface GeoMentionEvaluationInput {
   organizationId: string;
+  logContext?: GatewayModelOptions["logContext"];
   companyName: string;
   aliases: readonly string[];
   prompt: string;
@@ -1022,7 +1054,9 @@ export interface GeoTrafficSource {
   visits: number;
   previousVisits?: number;
   markdownVisits: number;
+  previousMarkdownVisits?: number;
   paths: number;
+  previousPaths?: number;
   lastSeenAt: string;
 }
 
@@ -1070,6 +1104,9 @@ export interface GeoTrafficLogVisitorOption {
 export interface GeoTrafficLogPurposeOption {
   value: GeoTrafficLogPurposeFilter;
 }
+
+/** Notra Sites traffic filter; undefined keeps sites and SDK hosts together. */
+export type GeoTrafficSitesMode = (typeof GEO_TRAFFIC_SITES_MODES)[number];
 
 export interface GeoTrafficLogFilters {
   visitorTypes: GeoTrafficLogVisitorFilter[];
@@ -1182,18 +1219,17 @@ export interface GeoTrafficFunnelStage {
   description: string;
 }
 
-export interface TrafficMetricDeltas {
-  crawler: number | null;
-  aiReferral: number | null;
-  total: number | null;
-}
-
 export interface AiTrafficResponse {
   configured: boolean;
   totals: GeoTrafficTotals;
   previousConversions: number | null;
   sources: GeoTrafficSource[];
   points: GeoTrafficPoint[];
+}
+
+export interface AiTrafficSourcesResponse {
+  configured: boolean;
+  sources: GeoTrafficSource[];
 }
 
 export interface GeoTrafficPage {
@@ -1217,9 +1253,14 @@ export type GeoIngestFramework =
   | "netlify"
   | "tanstack"
   | "astro"
-  | "sveltekit";
+  | "sveltekit"
+  | "reactRouter";
 
 export type GeoIngestPackageManager = "bun" | "pnpm" | "yarn" | "npm";
+
+export type GeoDrainProvider = "vercel" | "cloudflare";
+
+export type GeoIngestMethod = "sdk" | GeoDrainProvider;
 
 /** Install snippet per supported framework. */
 export type GeoIngestSnippets = Record<GeoIngestFramework, string>;
@@ -1229,6 +1270,23 @@ export interface GeoIngestIdentity {
   organizationId: string;
   projectId: string | null;
   generation: number;
+  site?: GeoIngestSiteScope;
+}
+
+interface GeoIngestSiteScope {
+  id: string;
+  hosts: string[];
+  mounts: string[];
+}
+
+export interface GeoIngestSite extends GeoIngestSiteScope {
+  organizationId: string;
+  projectId: string;
+}
+
+export interface GeoIngestSitePrefix {
+  host: string;
+  mounts: string[];
 }
 
 /** Everything needed to install tracking except the token itself. */
@@ -1236,6 +1294,7 @@ export interface GeoIngestSetupInfo {
   ingestUrl: string;
   snippet: string;
   snippets: GeoIngestSnippets;
+  drainUrls: Record<GeoDrainProvider, string>;
 }
 
 export interface GeoIngestSetupResponse extends GeoIngestSetupInfo {
@@ -1359,6 +1418,7 @@ export type EngineIconKey =
   | "cursor"
   | "claude-code"
   | "codex"
+  | "fx"
   | "apple"
   | "duckduckgo"
   | "cloudflare"
@@ -1415,23 +1475,25 @@ export type GeoModelProviderId =
   | "cursor"
   | "opencode"
   | "claude-code"
-  | "codex";
+  | "codex"
+  | "microsoft"
+  | "fx";
 
 /** Zero-data-retention coverage as reported by the Vercel AI Gateway feed. */
-export type GeoModelZdr = "all" | "some" | "none";
+type GeoModelZdr = "all" | "some" | "none";
 
 /**
  * Where a model is served. `cursor` runs through the Cursor SDK, `box`
- * through OpenCode, Claude Code, and Codex in Upstash Box, and `serpapi`
- * through SerpApi's Google AI Overview endpoint — none of those go through
- * the AI router.
+ * through OpenCode, Claude Code, Codex, and fx in Upstash Box. `olostep` and
+ * `context` capture consumer surfaces in hosted browsers, outside the AI router.
  */
 export type GeoModelGateway =
   | "vercel"
   | "openrouter"
   | "cursor"
   | "box"
-  | "serpapi";
+  | "olostep"
+  | "context";
 
 export interface GeoModelProvider {
   id: GeoModelProviderId;
@@ -1454,8 +1516,8 @@ export interface GeoModelCatalogEntry {
   /** Gateways that serve the model; OpenRouter-only models are pinned. */
   gateways: readonly GeoModelGateway[];
   /**
-   * Superseded or niche model: still scannable for projects that track it,
-   * but not offered in the picker.
+   * Legacy model (superseded, niche, or without web search): still scannable
+   * for projects that track it, but not offered for new selections.
    */
   hidden?: boolean;
 }
@@ -1487,16 +1549,7 @@ export interface GeoScanSizeInput {
 }
 
 /** One model as published by the Vercel AI Gateway feed. */
-export interface GeoGatewayModel {
-  id: string;
-  name: string;
-  owned_by: string;
-  type: string;
-  zdr: GeoModelZdr;
-  released?: number;
-  deprecated_at?: number | string | null;
-  tags?: string[];
-}
+export type GeoGatewayModel = z.infer<typeof geoGatewayModelSchema>;
 
 /** How strictly a scan asks the router for zero data retention. */
 export type GeoZdrMode = "required" | "preferred" | "none";
@@ -1624,8 +1677,6 @@ export interface GeoSuggestionKeyword {
   impressions: number;
   position: number;
 }
-
-// --- GEO writer ---
 
 export type GeoWriterSourceKind =
   | "manual"
@@ -1755,6 +1806,8 @@ export interface GeoPromptGapRow {
   opportunity: number;
   won: boolean;
   brief: GeoGapBriefRef | null;
+  /** Whether an existing page already covers the prompt; absent in older snapshots. */
+  recommendation?: GeoSearchGapRecommendation;
 }
 
 export interface GeoSearchGapRow {
@@ -1771,7 +1824,7 @@ export interface GeoSearchGapRow {
 
 export type GeoSearchGapAction = "create" | "update" | "merge" | "ignore";
 
-export type GeoContentCollisionKind = "page" | "post";
+type GeoContentCollisionKind = "page" | "post";
 
 export interface GeoContentCollisionCandidate {
   kind: GeoContentCollisionKind;
@@ -1933,6 +1986,14 @@ export interface GeoChangesResponse {
   events: GeoChangeEvent[];
 }
 
+export interface GeoScanDiff {
+  previousScanId: string | null;
+  currentScanId: string | null;
+  previous: GeoScanCheckSnapshot[];
+  current: GeoScanCheckSnapshot[];
+  events: GeoChangeEvent[];
+}
+
 /** Stored state of one prompt in one translated language. */
 export interface GeoPromptTranslationRecord {
   promptId: string;
@@ -1996,4 +2057,114 @@ export interface GeoWebsiteGenerationWrite {
   seedEngines: string[] | null;
   /** Null for projects created before prompt languages; first = prompt language. */
   seedLanguages: readonly string[] | null;
+}
+
+export interface WebAnalyticsScope {
+  organizationId: string;
+  projectId: string | null;
+  includeUnassigned: boolean;
+  siteId: string;
+  hosts: string[];
+}
+
+interface WebAnalyticsTotals {
+  views: number;
+  previousViews: number;
+  visitors: number;
+  previousVisitors: number;
+  sessions: number;
+  previousSessions: number;
+  engagedSessions: number;
+  aiVisitors: number;
+  previousAiVisitors: number;
+}
+
+export interface WebAnalyticsPoint {
+  day: string;
+  views: number;
+  visitors: number;
+}
+
+interface WebAnalyticsPage {
+  host: string;
+  path: string;
+  views: number;
+  previousViews: number;
+  visitors: number;
+  landings: number;
+  aiVisitors: number;
+}
+
+export interface WebAnalyticsSource {
+  group: string;
+  source: string;
+  aiProduct: string;
+  sessions: number;
+  previousSessions: number;
+  visitors: number;
+}
+
+export interface WebAnalyticsBreakdown {
+  value: string;
+  visitors: number;
+  previousVisitors?: number | null;
+}
+
+export interface WebAnalyticsOutcome {
+  source: string;
+  sessions: number;
+  pagesPerSession: number;
+  engagedRate: number;
+}
+
+interface WebAnalyticsHost {
+  host: string;
+  siteId: string;
+  views: number;
+}
+
+/**
+ * Which queries a web analytics read runs: the summary (totals, trend, hosts)
+ * gates the page, the breakdown tables fill in after it.
+ */
+export type WebAnalyticsPart = "all" | "summary" | "breakdowns";
+
+export interface WebAnalyticsResponse {
+  configured: boolean;
+  hosts: WebAnalyticsHost[];
+  totals: WebAnalyticsTotals;
+  points: WebAnalyticsPoint[];
+  pages: WebAnalyticsPage[];
+  sources: WebAnalyticsSource[];
+  countries: WebAnalyticsBreakdown[];
+  devices: WebAnalyticsBreakdown[];
+  outcomes: WebAnalyticsOutcome[];
+}
+
+export interface SiteAnalyticsInput {
+  id: string;
+  organizationId: string;
+  projectId: string | null;
+  publicOrigin: string;
+}
+
+interface WebEngagementPage {
+  host: string;
+  path: string;
+  views: number;
+  avgSeconds: number;
+}
+
+export interface WebEngagement {
+  /** Page views that reported a visible time; zero before the script ran. */
+  views: number;
+  avgSeconds: number;
+  previousAvgSeconds: number;
+  pages: WebEngagementPage[];
+}
+
+export interface SiteAnalyticsResponse {
+  web: WebAnalyticsResponse;
+  traffic: AiTrafficResponse;
+  engagement: WebEngagement;
 }

@@ -1,55 +1,5 @@
 "use client";
 
-/**
- * Vendored from Kibo UI.
- * Upstream: https://raw.githubusercontent.com/haydenbleasel/kibo/main/packages/kanban/index.tsx
- *
- * Divergences from upstream (keep in sync when re-syncing):
- *
- * Structural / cosmetic
- *  1. Imports resolve through `@notra/ui/*` instead of the upstream `@/*` alias.
- *  2. `KanbanItemProps`, `KanbanColumnProps` and `KanbanContextProps` are exported.
- *  3. `ScrollArea`/`ScrollBar` around `KanbanCards` removed: columns run flush and
- *     the whole board scrolls horizontally in the consumer instead.
- *  4. Grab/grabbing cursors live on the sortable wrapper (the card inherits them)
- *     rather than on the `Card` itself.
- *  5. `CSS.Translate.toString` instead of `CSS.Transform.toString` so cards are not
- *     scaled while dragging.
- *  6. `DragOverlay` uses `dropAnimation={null}` (the overlay is a portal clone, the
- *     upstream drop animation flashes against the re-rendered board).
- *  7. Context value is memoized and `activeCardId` lives in its own context so cards
- *     do not re-render for every board data change.
- *
- * Behaviour
- *  8. Immutable updates + index guards: upstream mutates `data[activeIndex].column`
- *     in place and calls `arrayMove` with `-1` indexes when the drop target is a
- *     column rather than a card.
- *  9. No `arrayMove` anywhere. A drop only changes column membership; ordering stays
- *     owned by whatever feeds `data`, so it cannot drift from the source of truth.
- * 10. `dropDisabledColumnIds`: listed columns render as a rejected drop target,
- *     never receive a card on drag over or drag end (cards can still be dragged
- *     *out* of them).
- * 11. `data` is snapshotted on drag start and restored in a provider level
- *     `handleDragCancel`, so `Escape` reverts cross-column drag-over moves.
- * 12. `onDragEnd` receives a `KanbanDragEndEvent` carrying the resolved, validated
- *     `targetColumnId` (null when the drop was rejected and reverted), so consumers
- *     never have to diff state to find out what happened.
- * 13. Upstream's `columns[0]?.id` fallback for an unresolvable drop target is gone:
- *     an unknown target is a rejected drop, not a drop into the first column.
- * 14. `KanbanCard` gained `disabled` (locks dragging while a row mutation is in
- *     flight) and `onActivate` (click / Enter opens the card). The wrapper is the
- *     single interactive element, so nothing nests inside dnd-kit's `role="button"`.
- * 15. `touch-none` removed from the card wrapper (upstream has none either) in
- *     favour of `touch-manipulation`; the touch sensor uses a delay + tolerance
- *     so touch scrolling still wins.
- * 16. Sensors: activation constraints, `sortableKeyboardCoordinates`, and keyboard
- *     codes that reserve `Enter` for activation and leave `Space` to lift a card.
- * 17. Announcements resolve `over.id` against both cards and columns, speak the
- *     column *name*, and announce rejected drop targets.
- * 18. Cards are never droppables and collision detection is column based
- *     (`pointerWithin`, then `rectIntersection`, then `closestCenter`), so a drop
- *     lands in the column under the pointer even when it is tall or empty.
- */
 
 import type {
   Announcements,
@@ -102,10 +52,6 @@ const POINTER_ACTIVATION_DISTANCE = 6;
 const TOUCH_ACTIVATION_DELAY_MS = 150;
 const TOUCH_ACTIVATION_TOLERANCE = 8;
 
-/**
- * `Enter` is deliberately not a start/end code: it stays available for activating
- * a card. `Space` lifts and drops, which is what dnd-kit announces by default.
- */
 const KEYBOARD_CODES = {
   start: ["Space"],
   cancel: ["Escape"],
@@ -114,13 +60,6 @@ const KEYBOARD_CODES = {
 
 const EMPTY_DROP_DISABLED_COLUMN_IDS: ReadonlySet<string> = new Set<string>();
 
-/**
- * Columns are the only droppables, so a drop resolves to whichever column the
- * pointer is inside. Keyboard drags have no pointer and fall back to the
- * overlay rectangle, then to the nearest column centre. `closestCenter` alone
- * mis-targets tall or empty columns because their centre sits far below the
- * pointer while a neighbouring column's cards are closer.
- */
 const columnCollision: CollisionDetection = (args) => {
   const withinPointer = pointerWithin(args);
   if (withinPointer.length > 0) {
@@ -215,8 +154,6 @@ export const KanbanCard = <T extends KanbanItemProps = KanbanItemProps>({
   onActivate,
 }: KanbanCardProps<T>) => {
   const activeCardId = useContext(KanbanActiveCardContext);
-  // Cards are draggable only: order inside a column is derived from `data`, so
-  // the column is the sole drop target and collisions never land on a card.
   const sortableDisabled = useMemo(
     () => ({ draggable: disabled, droppable: true }),
     [disabled]
@@ -400,7 +337,6 @@ export const KanbanProvider = <
     })
   );
 
-  /** Resolves a droppable id to a column id, whether it is a column or a card. */
   const columnIdFor = (overId: UniqueIdentifier | undefined): string | null => {
     if (overId === undefined) {
       return null;

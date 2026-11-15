@@ -1,3 +1,4 @@
+import { GITHUB_API_VERSION } from "@notra/ai/constants/github";
 import { Data, Effect } from "effect";
 import type { GitHubRepo, GitHubUser } from "~types/github";
 
@@ -25,7 +26,7 @@ function buildFetchOptions(token: string): RequestInit {
     headers: {
       Accept: "application/vnd.github+json",
       Authorization: `Bearer ${token}`,
-      "X-GitHub-Api-Version": "2022-11-28",
+      "X-GitHub-Api-Version": GITHUB_API_VERSION,
       "User-Agent": "notra-star-video",
     },
     cache: "no-store",
@@ -51,10 +52,6 @@ const readGitHubJson = <T>(response: Response) =>
     catch: (cause) => new GitHubRequestFailed({ cause }),
   });
 
-/**
- * Avatar sources are best effort: a failed or non-OK request yields `null` so
- * the next source can be tried. Only a rejected token is a real failure.
- */
 function fetchAvatarSource<T>(
   url: string,
   token: string,

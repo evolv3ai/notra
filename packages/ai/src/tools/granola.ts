@@ -84,6 +84,7 @@ export function createGetGranolaNotesTool(
   const cached = getAICachedTools({
     organizationId: config?.organizationId,
     namespace: "granola",
+    scope: config,
   });
   const resolveIntegrationContext = createGranolaIntegrationContextResolver(
     config,
@@ -153,6 +154,7 @@ export function createGetGranolaNoteTool(
   const cached = getAICachedTools({
     organizationId: config?.organizationId,
     namespace: "granola",
+    scope: config,
   });
   const resolveIntegrationContext = createGranolaIntegrationContextResolver(
     config,
@@ -205,6 +207,7 @@ export function createGetGranolaFoldersTool(
   const cached = getAICachedTools({
     organizationId: config?.organizationId,
     namespace: "granola",
+    scope: config,
   });
   const resolveIntegrationContext = createGranolaIntegrationContextResolver(
     config,

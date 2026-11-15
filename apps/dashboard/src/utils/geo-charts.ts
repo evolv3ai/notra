@@ -37,21 +37,17 @@ import {
   engineFamilyOf,
   engineModelOf,
 } from "@notra/geo-core/utils/geo-engine-family";
-import { hasGroundedVariant } from "@notra/geo-core/utils/geo-grounded-engines";
+import { geoEngineUsedWebSearch } from "@notra/geo-core/utils/geo-engines";
 import { isGroundedEngine } from "@notra/geo-core/utils/geo-presence";
 import { sumGeoSparklinePoints } from "@notra/geo-core/utils/geo-sparkline";
 
 import {
-  CHART_MIN_BAR_PERCENT,
   SHARE_OF_VOICE_AGGREGATE_ID,
   SHARE_OF_VOICE_AGGREGATE_LABEL,
   CHART_PERCENT_SCALE,
 } from "@/constants/charts";
 import type { GeoStatDeltaLabels } from "@/types/geo";
-import type {
-  GeoEngineAnswerMode,
-  GeoMentionTrendEmptyState,
-} from "@/types/geo-shared";
+import type { GeoMentionTrendEmptyState } from "@/types/geo-shared";
 
 import { chartKey } from "./chart-keys";
 import {
@@ -138,8 +134,14 @@ export function toShareOfVoiceDonutSlices(
   }));
 }
 
+const MIN_ROUNDED_RATE_PERCENT = 0.5;
+
 export function formatMentionRate(rate: number): string {
-  return `${Math.round(rate * CHART_PERCENT_SCALE)}%`;
+  const percent = rate * CHART_PERCENT_SCALE;
+  if (percent > 0 && percent < MIN_ROUNDED_RATE_PERCENT) {
+    return "<1%";
+  }
+  return `${Math.round(percent)}%`;
 }
 
 export function formatChartPercent(value: number): string {
@@ -159,13 +161,6 @@ export function formatUsageShare(share: number): string {
     return `<${MIN_SHARE_PERCENT}%`;
   }
   return `${Math.round(percent * SHARE_DECIMALS) / SHARE_DECIMALS}%`;
-}
-
-export function barWidthPercent(value: number, max: number): number {
-  if (max <= 0 || value <= 0) {
-    return 0;
-  }
-  return Math.max((value / max) * CHART_PERCENT_SCALE, CHART_MIN_BAR_PERCENT);
 }
 
 export function fitMentionTrendLine(
@@ -291,8 +286,6 @@ export function buildMentionTrendRows(
 ): MentionTrend {
   const byDay = new Map<string, Map<string, GeoTimeseriesPoint>>();
   for (const point of points) {
-    // Hover/picker series are provider families (ChatGPT, Claude), not every
-    // model variant — a day can otherwise list a dozen near-duplicate rows.
     const family = engineFamilyOf(point.engine);
     const dayPoints: Map<string, GeoTimeseriesPoint> =
       byDay.get(point.day) ?? new Map();
@@ -353,26 +346,6 @@ export function formatEngineFamily(engine: string): string {
     GEO_ENGINE_LABELS[`${model}-grounded`] ??
     formatModelLabel(model)
   );
-}
-
-export function engineAnswerMode(engine: string): GeoEngineAnswerMode | null {
-  if (isGroundedEngine(engine)) {
-    return null;
-  }
-  return hasGroundedVariant(engine) ? "withoutSearch" : null;
-}
-
-export function sharedEngineAnswerMode(
-  engines: readonly string[]
-): GeoEngineAnswerMode | null {
-  const first = engines[0];
-  if (!first) {
-    return null;
-  }
-  const mode = engineAnswerMode(first);
-  return engines.every((engine) => engineAnswerMode(engine) === mode)
-    ? mode
-    : null;
 }
 
 export function engineFamilySources(
@@ -451,6 +424,14 @@ export function engineFamilyTotals(
   family: GeoEngineFamily
 ): GeoEngineFamilyTotals | null {
   return totalsForEngines(engineFamilySources(family));
+}
+
+export function engineFamilyWithoutWebSearch(family: GeoEngineFamily): boolean {
+  return family.variants.every(
+    (variant) =>
+      variant.web === null &&
+      (variant.raw === null || !geoEngineUsedWebSearch(variant.raw.engine))
+  );
 }
 
 export function engineFamilyMentionTotals(
@@ -765,7 +746,8 @@ export function geoStatDeltaTone(
   }
   const oneDecimal = kind === "position" || kind === "score";
   const rounded = oneDecimal ? Math.round(delta * 10) / 10 : Math.round(delta);
-  const effective = kind === "position" ? -rounded : rounded;
+  const lowerIsBetter = kind === "position" || kind === "rank";
+  const effective = lowerIsBetter ? -rounded : rounded;
   if (effective > 0) {
     return "up";
   }
@@ -800,6 +782,13 @@ export function formatGeoStatDelta(
     const rounded = Math.round(delta);
     const points = labels.points(rounded);
     return signed && rounded >= 0 ? `+${points}` : points;
+  }
+  if (kind === "rank") {
+    const gained = -Math.round(delta);
+    if (!signed) {
+      return String(Math.abs(gained));
+    }
+    return gained > 0 ? `+${gained}` : String(gained);
   }
   const rounded = Math.round(delta * 10) / 10;
   const text = new Intl.NumberFormat(locale, {

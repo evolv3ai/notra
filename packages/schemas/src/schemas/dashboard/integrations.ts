@@ -12,15 +12,13 @@ import {
   GITHUB_URL_PATTERNS,
 } from "../../constants/dashboard/github";
 import {
+  automationNotifySchema,
   cronAnchorDateSchema as sharedCronAnchorDateSchema,
   cronFrequencySchema,
   cronIntervalDaysSchema as sharedCronIntervalDaysSchema,
   eventTriggerSourceConfigSchema,
   webhookEventTypeSchema,
 } from "../shared/automation";
-
-export const INTEGRATION_CATEGORIES = ["input", "output"] as const;
-export type IntegrationCategory = (typeof INTEGRATION_CATEGORIES)[number];
 
 export const INPUT_INTEGRATION_TYPES = [
   "github",
@@ -31,14 +29,11 @@ export const INPUT_INTEGRATION_TYPES = [
 ] as const;
 export type InputIntegrationType = (typeof INPUT_INTEGRATION_TYPES)[number];
 
-export const OUTPUT_INTEGRATION_TYPES = ["webflow", "framer"] as const;
+const OUTPUT_INTEGRATION_TYPES = ["webflow", "framer"] as const;
 
-export const EXTENSION_INTEGRATION_TYPES = ["raycast"] as const;
-export type ExtensionIntegrationType =
-  (typeof EXTENSION_INTEGRATION_TYPES)[number];
-export type OutputIntegrationType = (typeof OUTPUT_INTEGRATION_TYPES)[number];
+const EXTENSION_INTEGRATION_TYPES = ["raycast"] as const;
 
-export const INTEGRATION_TYPES = [
+const INTEGRATION_TYPES = [
   ...INPUT_INTEGRATION_TYPES,
   ...OUTPUT_INTEGRATION_TYPES,
   ...EXTENSION_INTEGRATION_TYPES,
@@ -118,9 +113,6 @@ export const createGitHubIntegrationRequestSchema = z.object({
   branch: z.string().optional().nullable(),
   token: githubPersonalAccessTokenSchema.optional().nullable(),
 });
-export type CreateGitHubIntegrationRequest = z.infer<
-  typeof createGitHubIntegrationRequestSchema
->;
 
 export const addRepositoryFormSchema = z.object({
   repository: z
@@ -155,17 +147,10 @@ export const addRepositoryRequestSchema = z.object({
       { type: "investor_update", enabled: false },
     ]),
 });
-export type AddRepositoryRequest = z.infer<typeof addRepositoryRequestSchema>;
-
-export const getIntegrationsQuerySchema = z.object({
-  organizationId: z.string().min(1, "Organization ID is required"),
-});
-export type GetIntegrationsQuery = z.infer<typeof getIntegrationsQuerySchema>;
 
 export const integrationIdParamSchema = z.object({
   integrationId: z.string().min(1, "Integration ID is required"),
 });
-export type IntegrationIdParam = z.infer<typeof integrationIdParamSchema>;
 
 export const integrationInputSchema = organizationIdInputSchema.extend({
   integrationId: integrationIdParamSchema.shape.integrationId,
@@ -174,7 +159,6 @@ export const integrationInputSchema = organizationIdInputSchema.extend({
 export const repositoryIdParamSchema = z.object({
   repositoryId: z.string().min(1, "Repository ID is required"),
 });
-export type RepositoryIdParam = z.infer<typeof repositoryIdParamSchema>;
 
 export const repositoryInputSchema = organizationIdInputSchema.extend({
   repositoryId: repositoryIdParamSchema.shape.repositoryId,
@@ -183,7 +167,6 @@ export const repositoryInputSchema = organizationIdInputSchema.extend({
 export const outputIdParamSchema = z.object({
   outputId: z.string().min(1, "Output ID is required"),
 });
-export type OutputIdParam = z.infer<typeof outputIdParamSchema>;
 
 export const outputInputSchema = organizationIdInputSchema.extend({
   outputId: outputIdParamSchema.shape.outputId,
@@ -216,7 +199,6 @@ export const updateIntegrationBodySchema = z
       message: "At least one field must be provided",
     }
   );
-export type UpdateIntegrationBody = z.infer<typeof updateIntegrationBodySchema>;
 
 export const editGitHubIntegrationFormSchema = z.object({
   displayName: z.string().min(1, "Display name is required"),
@@ -247,9 +229,8 @@ export const updateRepositoryBodySchema = z
       message: "At least one field must be provided",
     }
   );
-export type UpdateRepositoryBody = z.infer<typeof updateRepositoryBodySchema>;
 
-export const repositoryBranchNameSchema = z
+const repositoryBranchNameSchema = z
   .string()
   .trim()
   .min(1, "Branch name is required")
@@ -361,24 +342,30 @@ export const repositoryImagePathTemplateSchema = repositoryRelativePathSchema
   );
 
 export const repositoryContentDirectoryConfigSchema = z.looseObject({
+  siteId: z.string().min(1).nullable().optional(),
   directory: repositoryContentDirectorySchema.optional(),
   contentPath: repositoryContentPathTemplateSchema.nullable().optional(),
   imagePath: repositoryImagePathTemplateSchema.nullable().optional(),
 });
 
 export const repositoryContentDirectoryInputSchema = z.object({
+  contentId: z.string().min(1).optional(),
   contentType: z.enum(GITHUB_PUBLISH_CONTENT_TYPES),
 });
 
 export const updateRepositoryContentDirectoryBodySchema =
   repositoryContentDirectoryInputSchema
     .extend({
+      reviewProcess: z.enum(["pull_request", "direct"]).optional(),
+      siteId: z.string().min(1).nullable().optional(),
       directory: repositoryContentDirectorySchema.optional(),
       contentPath: repositoryContentPathTemplateSchema.nullable().optional(),
       imagePath: repositoryImagePathTemplateSchema.nullable().optional(),
     })
     .refine(
       (value) =>
+        value.reviewProcess !== undefined ||
+        value.siteId !== undefined ||
         value.directory !== undefined ||
         value.contentPath !== undefined ||
         value.imagePath !== undefined,
@@ -392,20 +379,17 @@ export const listRepositoryDirectoriesInputSchema = z.object({
 export const updateOutputBodySchema = z.object({
   enabled: z.boolean(),
 });
-export type UpdateOutputBody = z.infer<typeof updateOutputBodySchema>;
 
 export const configureOutputBodySchema = z.object({
   outputType: z.enum(OUTPUT_CONTENT_TYPES),
   enabled: z.boolean(),
   config: z.record(z.string(), z.unknown()).optional(),
 });
-export type ConfigureOutputBody = z.infer<typeof configureOutputBodySchema>;
 
 export const WEBHOOK_EVENT_TYPES = webhookEventTypeSchema.options;
 export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];
 
 export const CRON_FREQUENCIES = cronFrequencySchema.options;
-export type CronFrequency = (typeof CRON_FREQUENCIES)[number];
 
 export const cronIntervalDaysSchema = sharedCronIntervalDaysSchema;
 export const cronAnchorDateSchema = sharedCronAnchorDateSchema;
@@ -421,7 +405,7 @@ export type LookbackWindow = (typeof LOOKBACK_WINDOWS)[number];
 
 export const MAX_SCHEDULE_NAME_LENGTH = 120;
 
-export const triggerSourceTypeSchema = z.enum([
+const triggerSourceTypeSchema = z.enum([
   "github_webhook",
   "linear_webhook",
   "cron",
@@ -461,10 +445,11 @@ export const triggerOutputConfigSchema = z
       .min(1)
       .max(MAX_SCHEDULE_INSTRUCTIONS_LENGTH)
       .optional(),
+    notify: automationNotifySchema.optional(),
   })
   .optional();
 
-export const configureTriggerBodySchema = z.object({
+const configureTriggerBodySchema = z.object({
   sourceType: triggerSourceTypeSchema,
   sourceConfig: triggerSourceConfigSchema,
   targets: triggerTargetsSchema,
@@ -473,7 +458,6 @@ export const configureTriggerBodySchema = z.object({
   enabled: z.boolean(),
   autoPublish: z.boolean().default(false),
 });
-export type ConfigureTriggerBody = z.infer<typeof configureTriggerBodySchema>;
 
 export const SUPPORTED_AUTOMATION_OUTPUT_TYPES = [
   "changelog",
@@ -494,11 +478,21 @@ export const configureEventTriggerBodySchema =
     sourceConfig: eventTriggerSourceConfigSchema,
     outputType: z.enum(SUPPORTED_AUTOMATION_OUTPUT_TYPES),
   });
-export type ConfigureEventTriggerBody = z.infer<
-  typeof configureEventTriggerBodySchema
->;
+
+export const scheduleTargetsSchema = z
+  .object({
+    repositoryIds: z.array(z.string().min(1)),
+    linearIntegrationIds: z.array(z.string().min(1)).optional(),
+  })
+  .refine(
+    (targets) =>
+      targets.repositoryIds.length > 0 ||
+      (targets.linearIntegrationIds?.length ?? 0) > 0,
+    { message: "Select at least one data source" }
+  );
 
 export const configureScheduleBodySchema = configureTriggerBodySchema.extend({
+  targets: scheduleTargetsSchema,
   name: z.string().trim().min(1).max(MAX_SCHEDULE_NAME_LENGTH),
   sourceType: z.literal("cron"),
   sourceConfig: z.object({
@@ -515,12 +509,10 @@ export const configureScheduleBodySchema = configureTriggerBodySchema.extend({
   outputType: z.enum(SUPPORTED_AUTOMATION_OUTPUT_TYPES),
   lookbackWindow: z.enum(LOOKBACK_WINDOWS).default("last_7_days"),
 });
-export type ConfigureScheduleBody = z.infer<typeof configureScheduleBodySchema>;
 
 export const getSchedulesQuerySchema = z.object({
   repositoryIds: z.array(z.string().min(1)).optional(),
 });
-export type GetSchedulesQuery = z.infer<typeof getSchedulesQuerySchema>;
 
 export const triggerInputSchema = organizationIdInputSchema.extend({
   triggerId: z.string().min(1, "Trigger ID is required"),
@@ -530,20 +522,20 @@ export const schedulesListInputSchema = organizationIdInputSchema.and(
   getSchedulesQuerySchema
 );
 
-export const affectedTriggerSchema = z.object({
+const affectedTriggerSchema = z.object({
   id: z.string(),
   name: z.string(),
   enabled: z.boolean(),
 });
 export type AffectedTrigger = z.infer<typeof affectedTriggerSchema>;
 
-export const affectedTriggersDataSchema = z.object({
+const affectedTriggersDataSchema = z.object({
   affectedSchedules: z.array(affectedTriggerSchema).optional(),
   affectedEvents: z.array(affectedTriggerSchema).optional(),
 });
 export type AffectedTriggersData = z.infer<typeof affectedTriggersDataSchema>;
 
-export const deleteResourceResponseSchema = z.object({
+const deleteResourceResponseSchema = z.object({
   success: z.boolean(),
   disabledSchedules: z
     .array(
@@ -568,7 +560,7 @@ export type DeleteResourceResponse = z.infer<
 
 export const MCP_URL_PROTOCOL_REGEX = /^https?:\/\//i;
 
-export const mcpUrlSchema = z
+const mcpUrlSchema = z
   .string()
   .trim()
   .min(1, "Server URL is required")
@@ -600,7 +592,7 @@ export const mcpHeaderValueSchema = z
 
 export const MAX_MCP_HEADERS = 5;
 
-export const mcpHeadersSchema = z
+const mcpHeadersSchema = z
   .record(
     mcpHeaderNameSchema.pipe(z.string().min(1, "Header name is required")),
     mcpHeaderValueSchema.pipe(z.string().min(1, "Header value is required"))
@@ -610,11 +602,10 @@ export const mcpHeadersSchema = z
   })
   .default({});
 
-export const mcpHeaderRowSchema = z.object({
+const mcpHeaderRowSchema = z.object({
   name: mcpHeaderNameSchema,
   value: mcpHeaderValueSchema,
 });
-export type McpHeaderRow = z.infer<typeof mcpHeaderRowSchema>;
 
 export const addMcpServerFormFieldsSchema = z.object({
   authType: z.enum(["none", "headers", "oauth"]),
@@ -625,35 +616,6 @@ export const addMcpServerFormFieldsSchema = z.object({
     .array(mcpHeaderRowSchema)
     .max(MAX_MCP_HEADERS, `You can add up to ${MAX_MCP_HEADERS} headers`),
 });
-
-export const addMcpServerFormSchema = addMcpServerFormFieldsSchema.superRefine(
-  (value, ctx) => {
-    if (value.authType !== "headers") {
-      return;
-    }
-
-    let hasCompleteHeader = false;
-    value.headers.forEach((row, index) => {
-      const hasName = row.name.trim() !== "";
-      const hasValue = row.value.trim() !== "";
-      hasCompleteHeader ||= hasName && hasValue;
-      if (hasName !== hasValue) {
-        ctx.addIssue({
-          code: "custom",
-          message: "Header name and value are required together",
-          path: ["headers", index, hasValue ? "name" : "value"],
-        });
-      }
-    });
-    if (!hasCompleteHeader) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Add at least one authentication header",
-        path: ["headers"],
-      });
-    }
-  }
-);
 
 export type AddMcpServerFormValues = z.infer<
   typeof addMcpServerFormFieldsSchema
@@ -751,7 +713,6 @@ export const updateMcpServerBodySchema = z
       message: "At least one field must be provided",
     }
   );
-export type UpdateMcpServerBody = z.infer<typeof updateMcpServerBodySchema>;
 
 export const mcpServerIdParamSchema = z.object({
   serverId: z.string().min(1, "MCP server ID is required"),
@@ -767,4 +728,3 @@ export const testMcpServerRequestSchema =
     url: true,
     headers: true,
   });
-export type TestMcpServerRequest = z.infer<typeof testMcpServerRequestSchema>;

@@ -13,13 +13,19 @@ import type {
   PostHogProperties,
   PostHogServerEventInput,
   PostHogServerExceptionInput,
+  PostHogServerFlush,
 } from "@notra/posthog/types/posthog";
 import { PostHog } from "posthog-node";
 
 const PROJECT_TOKEN_ENV = "NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN";
 
+type CaptureActor = Omit<PostHogServerExceptionInput, "error">;
+
 let client: PostHog | null | undefined;
 let warnedMissingToken = false;
+let captureRevision = 0;
+let activeFlush: PostHogServerFlush | undefined;
+let activeShutdown: Promise<void> | undefined;
 
 function readHost(): string {
   const host = process.env.NEXT_PUBLIC_POSTHOG_HOST?.trim();
@@ -39,7 +45,7 @@ function warnMissingToken(): void {
   );
 }
 
-export function getPostHogServer(): PostHog | null {
+function getPostHogServer(): PostHog | null {
   if (client !== undefined) {
     return client;
   }
@@ -59,10 +65,6 @@ export function getPostHogServer(): PostHog | null {
   });
 
   return client;
-}
-
-export function isPostHogServerEnabled(): boolean {
-  return getPostHogServer() !== null;
 }
 
 function buildGroups(input: {
@@ -94,10 +96,28 @@ function compactProperties(
   return compacted;
 }
 
-function resolveServiceDistinctId(
-  organizationId: string | null | undefined
-): string {
-  return `${POSTHOG_SERVICE_DISTINCT_ID_PREFIX}${organizationId ?? "anonymous"}`;
+function resolveDistinctId(input: CaptureActor): string {
+  return (
+    input.distinctId ??
+    `${POSTHOG_SERVICE_DISTINCT_ID_PREFIX}${input.organizationId ?? "anonymous"}`
+  );
+}
+
+function buildProperties(
+  input: CaptureActor,
+  scoped: Record<string, unknown>
+): Record<string, unknown> {
+  const properties: Record<string, unknown> = {
+    ...compactProperties(input.properties),
+    ...scoped,
+  };
+  if (input.sessionId) {
+    properties.$session_id = input.sessionId;
+  }
+  if (!input.distinctId) {
+    properties.$process_person_profile = false;
+  }
+  return properties;
 }
 
 export function captureServerEvent(input: PostHogServerEventInput): void {
@@ -106,28 +126,16 @@ export function captureServerEvent(input: PostHogServerEventInput): void {
     return;
   }
 
-  const hasIdentifiedActor = Boolean(input.distinctId);
-  const distinctId =
-    input.distinctId ?? resolveServiceDistinctId(input.organizationId);
-
-  const properties: Record<string, unknown> = {
-    ...compactProperties(input.properties),
-    organization_id: input.organizationId ?? undefined,
-    project_id: input.projectId ?? undefined,
-  };
-  if (input.sessionId) {
-    properties.$session_id = input.sessionId;
-  }
-  if (!hasIdentifiedActor) {
-    properties.$process_person_profile = false;
-  }
-
   posthog.capture({
-    distinctId,
+    distinctId: resolveDistinctId(input),
     event: input.event,
-    properties,
+    properties: buildProperties(input, {
+      organization_id: input.organizationId ?? undefined,
+      project_id: input.projectId ?? undefined,
+    }),
     groups: buildGroups(input),
   });
+  captureRevision += 1;
 }
 
 export function captureServerException(
@@ -138,23 +146,15 @@ export function captureServerException(
     return;
   }
 
-  const distinctId =
-    input.distinctId ?? resolveServiceDistinctId(input.organizationId);
-  const properties: Record<string, unknown> = {
-    ...compactProperties(input.properties),
+  const properties = buildProperties(input, {
     organization_id: input.organizationId ?? undefined,
-  };
-  if (input.sessionId) {
-    properties.$session_id = input.sessionId;
-  }
-  if (!input.distinctId) {
-    properties.$process_person_profile = false;
-  }
+  });
   if (input.organizationId) {
     properties.$groups = buildGroups(input);
   }
 
-  posthog.captureException(input.error, distinctId, properties);
+  posthog.captureException(input.error, resolveDistinctId(input), properties);
+  captureRevision += 1;
 }
 
 export function identifyServerGroup(input: PostHogGroupIdentifyInput): void {
@@ -170,6 +170,7 @@ export function identifyServerGroup(input: PostHogGroupIdentifyInput): void {
     distinctId:
       input.distinctId ?? `${POSTHOG_SERVICE_DISTINCT_ID_PREFIX}groups`,
   });
+  captureRevision += 1;
 }
 
 export function setServerPersonProperties(
@@ -187,29 +188,68 @@ export function setServerPersonProperties(
       $set_once: compactProperties(input.setOnce),
     },
   });
+  captureRevision += 1;
 }
 
 export async function flushPostHogServer(): Promise<void> {
+  if (activeShutdown) {
+    return activeShutdown;
+  }
   const posthog = getPostHogServer();
   if (!posthog) {
     return;
   }
+  const targetRevision = captureRevision;
+  let previous = activeFlush;
+  while (previous?.client === posthog) {
+    const succeeded = await previous.promise;
+    if (!succeeded || previous.revision >= targetRevision) {
+      return;
+    }
+    previous = activeFlush;
+  }
+
+  const pending: PostHogServerFlush = {
+    client: posthog,
+    revision: captureRevision,
+    promise: Promise.resolve()
+      .then(() => posthog.flush())
+      .then(
+        () => true,
+        (error) => {
+          console.error("[posthog] flush failed", error);
+          return false;
+        }
+      ),
+  };
+  activeFlush = pending;
   try {
-    await posthog.flush();
-  } catch (error) {
-    console.error("[posthog] flush failed", error);
+    await pending.promise;
+  } finally {
+    if (activeFlush === pending) {
+      activeFlush = undefined;
+    }
   }
 }
 
 export async function shutdownPostHogServer(): Promise<void> {
+  if (activeShutdown) {
+    return activeShutdown;
+  }
   const posthog = getPostHogServer();
   if (!posthog) {
     return;
   }
-  try {
-    await posthog.shutdown();
-  } catch (error) {
-    console.error("[posthog] shutdown failed", error);
-  }
-  client = undefined;
+  const draining =
+    activeFlush?.client === posthog ? flushPostHogServer() : Promise.resolve();
+  activeShutdown = draining
+    .then(() => posthog.shutdown())
+    .catch((error) => {
+      console.error("[posthog] shutdown failed", error);
+    })
+    .finally(() => {
+      client = undefined;
+      activeShutdown = undefined;
+    });
+  return activeShutdown;
 }

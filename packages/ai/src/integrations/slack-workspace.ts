@@ -1,9 +1,12 @@
 import { db } from "@notra/db/drizzle";
 import { slackIntegrations } from "@notra/db/schema";
+import {
+  decryptToken,
+  encryptToken,
+} from "@notra/db/utils/integration-encryption";
 import { and, eq } from "drizzle-orm";
 import { customAlphabet } from "nanoid";
 
-import { decryptToken, encryptToken } from "../crypto/token-encryption";
 import type {
   CreateSlackIntegrationParams,
   UpdateSlackIntegrationParams,
@@ -11,6 +14,11 @@ import type {
 import { hasOrganizationAccess } from "../utils/organization-access";
 
 const nanoid = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 16);
+const createdByUserRelation = {
+  createdByUser: {
+    columns: { id: true, name: true, email: true, image: true },
+  },
+} as const;
 
 export async function createSlackIntegration(
   params: CreateSlackIntegrationParams
@@ -30,12 +38,10 @@ export async function createSlackIntegration(
   }
 
   const encryptedBotToken = encryptToken(botToken);
-  const id = `slk_${nanoid()}`;
-
   const [integration] = await db
     .insert(slackIntegrations)
     .values({
-      id,
+      id: `slk_${nanoid()}`,
       organizationId,
       createdByUserId: userId,
       displayName,
@@ -44,8 +50,24 @@ export async function createSlackIntegration(
       slackTeamName: slackTeamName ?? null,
       slackBotUserId: slackBotUserId ?? null,
     })
+    .onConflictDoUpdate({
+      target: slackIntegrations.slackTeamId,
+      set: {
+        enabled: true,
+        encryptedBotToken,
+        slackTeamName: slackTeamName ?? null,
+        slackBotUserId: slackBotUserId ?? null,
+      },
+      // Reauthorization must never move a workspace between organizations.
+      setWhere: eq(slackIntegrations.organizationId, organizationId),
+    })
     .returning();
 
+  if (!integration) {
+    throw new Error(
+      "This Slack workspace is connected to another organization."
+    );
+  }
   return integration;
 }
 
@@ -58,16 +80,7 @@ export async function getSlackIntegrationById(
       eq(slackIntegrations.id, integrationId),
       eq(slackIntegrations.organizationId, organizationId)
     ),
-    with: {
-      createdByUser: {
-        columns: {
-          id: true,
-          name: true,
-          email: true,
-          image: true,
-        },
-      },
-    },
+    with: createdByUserRelation,
   });
 
   return integration ?? null;
@@ -78,16 +91,7 @@ export async function getSlackIntegrationsByOrganization(
 ) {
   return db.query.slackIntegrations.findMany({
     where: eq(slackIntegrations.organizationId, organizationId),
-    with: {
-      createdByUser: {
-        columns: {
-          id: true,
-          name: true,
-          email: true,
-          image: true,
-        },
-      },
-    },
+    with: createdByUserRelation,
   });
 }
 

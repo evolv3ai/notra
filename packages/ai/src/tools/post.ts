@@ -5,6 +5,7 @@ import {
   POST_SLUG_REGEX,
   supportsPostSlug,
 } from "@notra/ai/schemas/post";
+import { generatedPostMetadataShape } from "@notra/ai/schemas/post-metadata";
 import type {
   PostToolsConfig,
   PostToolsResult,
@@ -14,8 +15,10 @@ import { toolDescription } from "@notra/ai/utils/description";
 import {
   createPostRecord,
   ensureChatPostCollection,
-  updatePostRecord,
+  updateAiPostRecord as updatePostRecord,
+  updatePostSiteMetadata,
 } from "@notra/ai/utils/post-service";
+import { applyPostTextEdits } from "@notra/ai/utils/post-text-edits";
 import { getCreatePostToolName } from "@notra/ai/utils/post-tool-name";
 import {
   serializeAvailablePost,
@@ -28,8 +31,6 @@ import { and, eq, or } from "drizzle-orm";
 // biome-ignore lint/performance/noNamespaceImport: Zod recommended way to import
 import * as z from "zod";
 
-export { getCreatePostToolName };
-
 const postSlugSchema = z
   .string()
   .trim()
@@ -40,8 +41,6 @@ const postSlugSchema = z
     "Slug must contain lowercase letters, numbers, and hyphens only"
   );
 
-// Rejecting the call makes the model retry instead of saving a post whose body
-// contains the rest of its broken tool call (and the recommendations).
 const postTextSchema = z
   .string()
   .refine(
@@ -67,6 +66,7 @@ const createPostBaseInputShape = {
 
 const createPostSlugInputShape = {
   ...createPostBaseInputShape,
+  ...generatedPostMetadataShape,
   slug: postSlugSchema
     .nullable()
     .optional()
@@ -84,11 +84,28 @@ export function createCreatePostTool(
   const toolName = getCreatePostToolName(contentType);
   const withSlug = supportsPostSlug(contentType);
 
+  const recordPost = (
+    postId: string,
+    input: { title: string; recommendations?: string | null }
+  ) => {
+    result.posts ??= [];
+    result.posts.push({
+      postId,
+      title: input.title,
+      recommendations: input.recommendations ?? null,
+    });
+    result.postId ??= postId;
+    result.title ??= input.title;
+    return result.posts.length;
+  };
+
   const execute = async (input: {
     title: string;
     slug?: string | null;
     markdown: string;
     recommendations?: string | null;
+    tags?: string[];
+    excerpt?: string;
   }) => {
     const collectionId =
       config.collectionId ??
@@ -119,18 +136,18 @@ export function createCreatePostTool(
       if (status === "not_found") {
         throw new Error("The draft post to update was not found.");
       }
-      result.posts ??= [];
-      result.posts.push({
-        postId: config.targetPostId,
-        title: input.title,
-        recommendations: input.recommendations ?? null,
-      });
-      result.postId ??= config.targetPostId;
-      result.title ??= input.title;
+      if (withSlug) {
+        await updatePostSiteMetadata({
+          organizationId: config.organizationId,
+          postId: config.targetPostId,
+          tags: input.tags,
+          excerpt: input.excerpt,
+        });
+      }
       return {
         postId: config.targetPostId,
         status,
-        totalCreated: result.posts.length,
+        totalCreated: recordPost(config.targetPostId, input),
       };
     }
 
@@ -145,19 +162,13 @@ export function createCreatePostTool(
       recommendations: input.recommendations ?? null,
       autoPublish: config.autoPublish,
       sourceMetadata,
+      tags: input.tags,
+      excerpt: input.excerpt,
     });
-    result.posts ??= [];
-    result.posts.push({
-      postId,
-      title: input.title,
-      recommendations: input.recommendations ?? null,
-    });
-    result.postId ??= postId;
-    result.title ??= input.title;
     return {
       postId,
       status: "created",
-      totalCreated: result.posts.length,
+      totalCreated: recordPost(postId, input),
     };
   };
 
@@ -180,7 +191,8 @@ export function createCreatePostTool(
 
 export function createUpdatePostTool(
   config: PostToolsConfig,
-  result: PostToolsResult
+  result: PostToolsResult,
+  options: { onlyRunPosts?: boolean } = {}
 ): Tool {
   const withSlug = supportsPostSlug(config.contentType);
 
@@ -219,6 +231,13 @@ export function createUpdatePostTool(
     markdown?: string;
     recommendations?: string | null;
   }) => {
+    if (
+      options.onlyRunPosts &&
+      !result.posts?.some((entry) => entry.postId === input.postId)
+    ) {
+      return { postId: input.postId, status: "not_found" as const };
+    }
+
     const { status } = await updatePostRecord({
       organizationId: config.organizationId,
       postId: input.postId,
@@ -232,26 +251,19 @@ export function createUpdatePostTool(
       return { postId: input.postId, status };
     }
 
+    const existingPost = result.posts?.find(
+      (entry) => entry.postId === input.postId
+    );
     if (input.title !== undefined) {
-      const existingPost = result.posts?.find(
-        (entry) => entry.postId === input.postId
-      );
       if (existingPost) {
         existingPost.title = input.title;
       }
-
       if (result.postId === input.postId) {
         result.title = input.title;
       }
     }
-
-    if (input.recommendations !== undefined) {
-      const existingPost = result.posts?.find(
-        (entry) => entry.postId === input.postId
-      );
-      if (existingPost) {
-        existingPost.recommendations = input.recommendations;
-      }
+    if (existingPost && input.recommendations !== undefined) {
+      existingPost.recommendations = input.recommendations;
     }
 
     return { postId: input.postId, status };
@@ -270,6 +282,68 @@ export function createUpdatePostTool(
       withSlug ? updatePostSlugInputShape : updatePostBaseInputShape
     ),
     execute,
+  });
+}
+
+export function createEditPostTool(config: PostToolsConfig): Tool {
+  return tool({
+    description: toolDescription({
+      toolName: "editPost",
+      intro:
+        "Changes specific passages of an existing post's body with exact find/replace edits.",
+      whenToUse:
+        "For targeted revisions such as rewording a paragraph, fixing a fact, or changing the intro. Use updatePost instead when most of the post changes or you change the title.",
+      usageNotes:
+        "Read the post with viewPost first. Each find must be copied exactly from the current markdown and match one place only; edits apply in order. If an edit fails, nothing is saved.",
+    }),
+    inputSchema: z.object({
+      postId: z.string().describe("The ID of the post to edit"),
+      edits: z
+        .array(
+          z.object({
+            find: z
+              .string()
+              .min(1)
+              .describe("Exact text from the current markdown to replace"),
+            replace: postTextSchema.describe("The replacement text"),
+          })
+        )
+        .min(1)
+        .max(20),
+    }),
+    execute: async ({ postId, edits }) => {
+      const post = await db.query.posts.findFirst({
+        columns: { markdown: true },
+        where: and(
+          eq(posts.id, postId),
+          eq(posts.organizationId, config.organizationId)
+        ),
+      });
+      if (!post) {
+        return { postId, status: "not_found" as const };
+      }
+
+      const applied = applyPostTextEdits(post.markdown ?? "", edits);
+      if (!applied.ok) {
+        return { postId, status: "edit_failed" as const, error: applied.error };
+      }
+
+      const { status } = await updatePostRecord({
+        organizationId: config.organizationId,
+        postId,
+        markdown: applied.markdown,
+        expectedMarkdown: post.markdown,
+      });
+      if (status === "not_found") {
+        return {
+          postId,
+          status: "edit_failed" as const,
+          error:
+            "The post changed while editing. Call viewPost again and redo the edits on the current text.",
+        };
+      }
+      return { postId, status, editCount: edits.length };
+    },
   });
 }
 

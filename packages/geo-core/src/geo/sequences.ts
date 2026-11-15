@@ -22,6 +22,7 @@ import {
 import { lockGeoProject } from "./lock";
 import { toGeoSequence } from "./mappers";
 import { geoCheckScope, requireGeoProject, resolveGeoScope } from "./projects";
+import { geoTransaction } from "./transaction";
 
 export const listGeoSequences = Effect.fn("geo.sequencesList")(function* (
   input: GeoScopeInput
@@ -51,27 +52,29 @@ export const createGeoSequence = Effect.fn("geo.sequenceCreate")(function* (
   sequence: GeoSequenceCreateInput
 ) {
   const scope = yield* requireGeoProject(input);
-  const result = yield* geoDb("sequence create failed", () =>
-    db.transaction(async (tx) => {
-      await Effect.runPromise(lockGeoProject(tx, scope.projectId));
-      const current = await tx
-        .select({ count: count() })
-        .from(geoPromptSequences)
-        .where(eq(geoPromptSequences.projectId, scope.projectId));
-      if ((current.at(0)?.count ?? 0) >= GEO_MAX_SEQUENCES) {
-        return { status: "limit" as const };
-      }
-      const rows = await tx
-        .insert(geoPromptSequences)
-        .values({
-          id: sequence.id ?? crypto.randomUUID(),
-          organizationId: scope.organizationId,
-          projectId: scope.projectId,
-          name: sequence.name,
-          steps: sequence.steps,
-        })
-        .returning();
-      return { status: "created" as const, row: rows.at(0) };
+  const result = yield* geoTransaction("sequence create failed", (tx) =>
+    Effect.gen(function* () {
+      yield* lockGeoProject(tx, scope.projectId);
+      return yield* geoDb("sequence create failed", async () => {
+        const current = await tx
+          .select({ count: count() })
+          .from(geoPromptSequences)
+          .where(eq(geoPromptSequences.projectId, scope.projectId));
+        if ((current.at(0)?.count ?? 0) >= GEO_MAX_SEQUENCES) {
+          return { status: "limit" as const };
+        }
+        const rows = await tx
+          .insert(geoPromptSequences)
+          .values({
+            id: sequence.id ?? crypto.randomUUID(),
+            organizationId: scope.organizationId,
+            projectId: scope.projectId,
+            name: sequence.name,
+            steps: sequence.steps,
+          })
+          .returning();
+        return { status: "created" as const, row: rows.at(0) };
+      });
     })
   );
 

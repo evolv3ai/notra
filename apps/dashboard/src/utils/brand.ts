@@ -1,4 +1,3 @@
-import { brandIdentityToolOutputSchema } from "@notra/schemas/dashboard/brand";
 import { googleFaviconUrl } from "@notra/utils/google-favicon";
 import { logoLinkUrl } from "@notra/utils/logo-link";
 
@@ -22,27 +21,4 @@ export function getBrandFaviconUrl(websiteUrl: string | null) {
 
 export function getGoogleFaviconUrl(domain: string | null): string | undefined {
   return googleFaviconUrl(domain) ?? undefined;
-}
-
-export function getBrandFaviconFromToolOutput(
-  toolName: string,
-  output: unknown
-) {
-  const parsed = brandIdentityToolOutputSchema.safeParse(output);
-  if (!parsed.success) {
-    return undefined;
-  }
-
-  if (toolName === "getBrandIdentity") {
-    return getBrandFaviconUrl(parsed.data.brandIdentity?.websiteUrl ?? null);
-  }
-
-  if (toolName === "listBrandIdentities") {
-    const identities = parsed.data.brandIdentities;
-    if (identities?.length === 1) {
-      return getBrandFaviconUrl(identities[0]?.websiteUrl ?? null);
-    }
-  }
-
-  return undefined;
 }

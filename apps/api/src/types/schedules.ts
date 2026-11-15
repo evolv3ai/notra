@@ -7,11 +7,12 @@ import type {
 import type { z } from "zod";
 
 import type {
-  ScheduleDatabaseError,
+  ScheduleDisabledError,
   ScheduleDuplicateError,
   ScheduleMissingTargetsError,
   ScheduleNotFoundError,
   ScheduleQstashError,
+  ScheduleRunStartError,
 } from "../errors/schedules";
 import type { QstashEnv } from "./qstash";
 
@@ -27,7 +28,9 @@ export type ScheduleDomainError =
   | ScheduleNotFoundError
   | ScheduleDuplicateError
   | ScheduleMissingTargetsError
-  | ScheduleQstashError;
+  | ScheduleQstashError
+  | ScheduleDisabledError
+  | ScheduleRunStartError;
 
 interface ScheduleProgramInput {
   db: ReturnType<typeof createDb>;
@@ -47,6 +50,17 @@ export interface PatchScheduleProgramInput extends ScheduleProgramInput {
 export interface CreateScheduleProgramInput extends ScheduleProgramInput {
   body: z.infer<typeof createScheduleRequestSchema>;
   env: QstashEnv;
+}
+
+export interface RunScheduleProgramInput extends ScheduleProgramInput {
+  scheduleId: string;
+  actorId: string;
+  env: { WORKFLOW_BASE_URL?: string };
+}
+
+export interface ScheduleRunsProgramInput extends ScheduleProgramInput {
+  scheduleId: string;
+  limit: number;
 }
 
 export interface DeleteScheduleProgramInput extends ScheduleProgramInput {

@@ -1,24 +1,21 @@
-import type { WebhookEventType } from "@notra/schemas/dashboard/integrations";
-
 import type { useEventTriggerForm } from "@/lib/hooks/use-event-trigger-form";
+import type { EventTriggerPreset } from "@/types/automation/automations";
+import type { SourceOption } from "@/types/automation/source-picker";
 import type { BrandSettings } from "@/types/hooks/brand-analysis";
 import type { Trigger } from "@/types/triggers/triggers";
 
 export type { EventTriggerFormValues } from "@notra/schemas/dashboard/automation/event-trigger-form";
 
-export interface CreateEventTriggerDialogProps {
+export interface EventTriggerFormProps {
   organizationId: string;
   onSuccess?: (trigger: Trigger) => void;
-  trigger?: React.ReactElement;
   editTrigger?: Trigger;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-}
-
-export interface EventTypeCardProps {
-  eventType: WebhookEventType;
-  selected: boolean;
-  onSelect: () => void;
+  /** Starting values for a new trigger, e.g. from a template. */
+  preset?: EventTriggerPreset | null;
+  /** Lets a new automation switch to another trigger kind. */
+  kindPicker?: React.ReactNode;
 }
 
 export interface TriggerSwitchRowProps {
@@ -40,29 +37,21 @@ export interface IgnoreCommitPatternsFieldProps {
 export interface UseEventTriggerFormProps {
   organizationId: string;
   editTrigger?: Trigger;
+  enabled: boolean;
   open: boolean;
+  preset?: EventTriggerPreset | null;
   onSuccess?: (trigger: Trigger) => void;
   onClose: () => void;
 }
 
-export type EventTriggerFormApi = ReturnType<
-  typeof useEventTriggerForm
->["form"];
+type EventTriggerFormApi = ReturnType<typeof useEventTriggerForm>["form"];
 
-export interface EventTriggerFormSectionProps {
-  form: EventTriggerFormApi;
-}
-
-export interface RepositoryOption {
-  value: string;
-  label: string;
-}
-
-export interface EventTriggerRepositoriesSectionProps {
+export interface EventTriggerSectionProps {
   form: EventTriggerFormApi;
   isLoading: boolean;
-  options: RepositoryOption[];
+  options: SourceOption[];
   onAddRepository: () => void;
+  kindPicker?: React.ReactNode;
 }
 
 export interface EventTriggerRulesSectionProps {
@@ -75,12 +64,6 @@ export interface EventTriggerDialogFooterProps {
   isEditMode: boolean;
   isPending: boolean;
   onCancel: () => void;
-  repositoryCount: number;
-}
-
-export interface EventTriggerFooterStatusProps {
-  errorMessage: string | null;
-  repositoryCount: number;
 }
 
 export interface RepositoryConnectionDialogsProps {

@@ -135,8 +135,6 @@ function competitorsByDomain(
   return byDomain;
 }
 
-// Tracked domains can overlap (example.com and cloud.example.com), so the
-// longest matching domain wins: an exact host beats any parent domain.
 function competitorForDomain(
   domain: string,
   competitors: readonly GeoCompetitor[]
@@ -161,8 +159,6 @@ function competitorForDomain(
   return null;
 }
 
-// Engines reshuffle their web sources on every run, so third-party domain
-// churn is noise. Only owned pages and tracked competitors are reported.
 function citationEvents(
   previous: GeoScanCheckSnapshot,
   current: GeoScanCheckSnapshot,

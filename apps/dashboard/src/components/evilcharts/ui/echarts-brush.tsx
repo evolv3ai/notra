@@ -8,15 +8,9 @@ import {
 
 type EChartsInstance = ReturnType<typeof echarts.init>;
 
-const BRUSH_BORDER_OPACITY = 1; // brush frame, × border alpha (evil-brush uses the full token)
+const BRUSH_BORDER_OPACITY = 1;
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Brush marker — the declarative `<Chart.Brush/>` child. Rendering nothing, its
-// PRESENCE turns the brush on (replacing the old showBrush prop) and its props
-// carry the brush's height, handle-label formatter, and range callback. Shared
-// so every cartesian chart attaches the SAME component to its root.
-// ─────────────────────────────────────────────────────────────────────────────
 
 export interface BrushProps {
   height?: number; // brush preview strip height in px (default 56)
@@ -24,17 +18,8 @@ export interface BrushProps {
   onChange?: (range: { startIndex: number; endIndex: number }) => void; // fires as the range moves
 }
 
-/** Declares the zoom brush below the chart. Presence renders it; renders nothing itself. */
 export const Brush: FC<BrushProps> = () => null;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Brush overlays — the evil-brush look: a rounded border around the SELECTED
-// range, dimmed unselected sides, centered grip-dot handle pills, and range
-// label pills below the frame. None of that is a dataZoom capability. They are
-// raw zrender elements updated imperatively — routing them through setOption
-// re-renders the dataZoom component mid-drag, resetting its drag anchor (the
-// handle progressively lags the pointer).
-// ─────────────────────────────────────────────────────────────────────────────
 
 export type BrushRange = { start: number; end: number };
 export type BrushGeometry = { bottom: number; height: number };
@@ -142,8 +127,6 @@ export function syncBrushOverlay(
     lineWidth: 1,
   });
 
-  // Handle pills: evil-brush's 6×16 grip pill, centered on the selection edge,
-  // brightening to foreground on hover/drag.
   const pill = (el: ZrRect, x: number, hovered: boolean) => {
     el.setShape({ x: x - 3, y: centerY - 8, width: 6, height: 16, r: 3 });
     el.setStyle({ fill: hovered ? tokens.foreground : tokens.mutedForeground });
@@ -162,10 +145,6 @@ export function syncBrushOverlay(
     rightGrip.setStyle({ fill: gripFill });
   });
 
-  // Range label pills straddle the frame's bottom line — an overlay, so they
-  // occupy no layout space; half the pill sits above the line, half below. Each
-  // pill grows INWARD from its handle with a small inset, like the Recharts
-  // labels, instead of hanging past the frame edge.
   const label = (
     el: ZrText,
     text: string,
@@ -193,13 +172,6 @@ export function syncBrushOverlay(
   label(els.labelEnd, labels?.end ?? "", selectionRight, "right");
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// dataZoom slider — the transparent drag layer laid over the mini chart. Fully
-// chart-agnostic: the visible frame/handles/labels are the graphic overlays
-// above; this provides interaction only. Both zoom entries target only the MAIN
-// x-axis (index 0), so the mini chart never filters itself. The per-chart
-// mini-series (which differ per chart type) are built by the chart, not here.
-// ─────────────────────────────────────────────────────────────────────────────
 
 export function buildBrushDataZoom(params: {
   brushBottom: number;
@@ -218,18 +190,11 @@ export function buildBrushDataZoom(params: {
       right: 8,
       bottom: brushBottom,
       height: brushHeight,
-      // Carry the live range through every rebuild — a notMerge push
-      // without start/end would reset the zoom to the full extent.
       start: brushRange.start,
       end: brushRange.end,
       brushSelect: false,
-      // Range labels are overlay pills below the frame (see
-      // syncBrushOverlay) — the native detail text renders INSIDE the
-      // track, which is not the evil-brush look.
       showDetail: false,
       backgroundColor: "transparent",
-      // The visible frame is the graphic overlay riding the selection —
-      // the component's own static border stays hidden.
       borderColor: "transparent",
       fillerColor,
       dataBackground: { lineStyle: { opacity: 0 }, areaStyle: { opacity: 0 } },
@@ -237,8 +202,6 @@ export function buildBrushDataZoom(params: {
         lineStyle: { opacity: 0 },
         areaStyle: { opacity: 0 },
       },
-      // Interaction only — the visible pills are graphic overlays (see
-      // syncBrushOverlay). Kept generous for an easy grab target.
       handleIcon:
         "path://M -3 -5 L -3 5 A 3 3 0 0 0 3 5 L 3 -5 A 3 3 0 0 0 -3 -5 Z",
       handleSize: "35%",

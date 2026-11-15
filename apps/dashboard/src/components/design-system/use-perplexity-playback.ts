@@ -5,17 +5,12 @@ import {
   PERPLEXITY_THINKING_MS,
   perplexitySearchDuration,
 } from "@notra/ui/components/ai-skins/perplexity/perplexity-search-timing";
+import { sleep } from "@notra/utils/sleep";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { PerplexityStoryMessage } from "@/types/design-system-perplexity";
 
 const TOKEN_SPLIT = /(\s+)/;
-
-function wait(ms: number) {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}
 
 export function usePerplexityPlayback(
   script: readonly PerplexityStoryMessage[],
@@ -50,7 +45,8 @@ export function usePerplexityPlayback(
       message: PerplexityStoryMessage,
       alive: () => boolean
     ): Promise<void> => {
-      const delay = (ms: number) => wait(reducedMotion ? Math.min(ms, 70) : ms);
+      const delay = (ms: number) =>
+        sleep(reducedMotion ? Math.min(ms, 70) : ms);
 
       if (message.from === "user") {
         setMessages((current) => [...current, message]);

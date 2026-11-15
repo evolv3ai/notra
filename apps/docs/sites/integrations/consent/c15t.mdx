@@ -1,0 +1,214 @@
+---
+title: "c15t cookie banner"
+description: "Show a c15t cookie banner and privacy settings on your Notra site, and load analytics only after visitors consent."
+authors:
+  - handle: jan
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/sites/integrations/consent/c15t
+  type: how-to
+  applies_to:
+    - notra
+  language: en
+  status: stable
+---
+
+Notra can add a [c15t](https://c15t.com) cookie banner and privacy settings dialog to your site. Visitors save their choice to a c15t backend that you control, either an [Inth](https://inth.com) project or a c15t backend you host yourself. Notra does not run that backend for you, because the consent records belong to you.
+
+With the banner on, the [analytics providers](/sites/integrations/analytics/overview) in `integrations`, Notra's own visitor analytics and any custom scripts you list wait until a visitor allows them.
+
+## Set up the backend
+
+You need a c15t backend before the banner can save choices. Pick one:
+
+<Tabs>
+  <Tab title="Inth">
+    1. [Create an Inth project](https://inth.com) and turn on Consent for it. Sign-up is free.
+    2. Add policy rules that cover the `measurement` category, so visitors can allow your analytics.
+    3. In Notra, open **Studio → Sites**, select your site and open **Integrations**. Under **Cookie banner**, open **Inth** and stay on the **Managed by Inth** tab.
+    4. Click **Connect Inth account** and approve access in Inth.
+    5. Pick the project under **Inth project** and click **Use project**.
+
+    Notra adds every domain your site uses, including custom domains, to the project's trusted websites and saves the project's backend URL to `blog.json` as a draft. The dialog shows that configuration, and **Create PR** at the bottom of the Integrations page publishes it. If you add a domain later, the dialog lists it under **Domains** and offers to trust it.
+
+    Notra keeps the Inth connection on its own servers. Your published site only contains the public backend URL.
+  </Tab>
+  <Tab title="Self-hosted">
+    The **Self-hosted c15t** tab in the **Inth** dialog shows the configuration to copy.
+
+    1. Run [`@c15t/backend`](https://c15t.com/docs/self-host/quickstart) on your own server with PostgreSQL, MySQL or SQLite. You own its migrations, backups and uptime.
+    2. Serve it over HTTPS and allow your site's live origin in its CORS settings.
+    3. Copy the backend's base URL, including any path prefix, like `https://consent.acme.com/api/c15t`.
+  </Tab>
+</Tabs>
+
+The backend URL is public configuration, not a secret. It ends up in every page, so never put an API key or other credential in it.
+
+## Turn on the banner
+
+Connecting Inth writes the setting for you. To set it up in your repository instead, or for a self-hosted backend, add `c15t` to `integrations` in `blog.json`:
+
+```json blog.json
+{
+  "$schema": "https://usenotra.com/schemas/blog.json",
+  "name": "Acme",
+  "integrations": {
+    "posthog": {
+      "apiKey": "phc_abcdefghijklmnopqrstuvwxyz0123"
+    },
+    "c15t": {
+      "backendURL": "https://acme.inth.app",
+      "prompt": { "variant": "bar", "position": "bottom" },
+      "legalLinks": {
+        "privacyPolicy": { "href": "https://acme.com/privacy" }
+      }
+    }
+  }
+}
+```
+
+After you publish the change and the production deployment finishes, open your live site in a private window. The banner appears once the browser has loaded your policy from the backend, and the footer gets a **Privacy settings** link that reopens the dialog.
+
+## Analytics and consent
+
+With the banner on, Databuddy, Google Analytics, Plausible, PostHog and Umami load through c15t's official integrations, only after a visitor allows the measurement category, and they stay off for visitors who reject it. Each provider also appears as its own vendor, so a visitor can allow measurement and still turn off one provider. Google Analytics receives Consent Mode v2 signals, so it knows about a separate choice for marketing too. PostHog never falls back to cookieless capture after a rejection, and Databuddy keeps all its tracking options and stays disabled whenever measurement is withdrawn, and its session replay recorder stops with it. When a visitor withdraws consent later, the page reloads so that no analytics code keeps running.
+
+Notra's own analytics follow the same choice:
+
+- The script that measures time on page waits until the measurement category is allowed.
+- A page view counts only when the visitor allowed measurement, in every region and whatever your policy says. Visitors who reject or never answer the banner aren't counted.
+- The page a visitor lands on still counts once they allow measurement: the time-on-page script reports it with the address they came from, so the first page of a visit keeps its source. This also works behind a proxy that removes cookies.
+- AI crawlers and AI agents are always counted, because that tracking never touches the visitor's device. Visitors arriving from AI assistants are people, so they follow their choice like everyone else.
+
+## Custom scripts
+
+[Custom scripts](/sites/custom-scripts) load on every page unless you list them under `scripts`. Map each script's path in your repository to the category a visitor has to allow first:
+
+```json blog.json
+{
+  "integrations": {
+    "c15t": {
+      "backendURL": "https://acme.inth.app",
+      "scripts": {
+        "scripts/hotjar.js": "measurement",
+        "scripts/ads.js": "marketing"
+      }
+    }
+  }
+}
+```
+
+The categories are `measurement`, `marketing`, `functionality` and `experience`. A path that doesn't match a custom script stops the build, so a typo can't leave tracking code ungated. Scripts you leave out, like a script that only opens external links in a new tab, keep loading for everyone.
+
+## Previews and local development
+
+Preview deployments and `notra dev` show the banner and dialog with your settings, so you can check how they look. They keep the choice in the browser only and never contact your backend or load analytics.
+
+During `notra dev`, the [c15t DevTools](https://c15t.com/docs/frameworks/react/components/dev-tools) panel also opens from a button in the corner of the page. Use it to inspect the stored choice, try other locations and languages, and clear your consent to see the banner again. It never ships to previews or your live site. To hide it locally, set `devTools` to `false`:
+
+```json blog.json
+{
+  "integrations": {
+    "c15t": {
+      "backendURL": "https://acme.inth.app",
+      "devTools": false
+    }
+  }
+}
+```
+
+## Custom footers
+
+The theme's footer shows the **Privacy settings** link on its own. If you replaced it with `footer.mdx`, add the `<PrivacySettings />` built-in where the link should go. It renders nothing when c15t is off.
+
+```mdx footer.mdx
+<footer className="border-t border-border py-8 text-sm text-muted-foreground">
+  <div className="site-container flex gap-4">
+    <span>© 2026 Acme</span>
+    <PrivacySettings className="hover:text-foreground" />
+  </div>
+</footer>
+```
+
+Pass your own label as children, like `<PrivacySettings>Cookie settings</PrivacySettings>`.
+
+## Appearance
+
+By default the banner is a floating card in the bottom-left corner. It uses your site's fonts, surface, border and text colors and `colors.primary` for its buttons, and it follows your site's light and dark mode. Use these options to change its layout:
+
+| Setting | Values | Description |
+| --- | --- | --- |
+| `prompt.variant` | `floating`, `bar`, `widget`, `wall` | Shape of the banner. `floating` is a card, `bar` spans the edge of the screen, `widget` is a compact corner card and `wall` blocks the page until the visitor chooses. Defaults to `floating` |
+| `prompt.position` | Depends on `variant` | `floating` takes `bottom-left`, `bottom-right`, `top-left`, `top-right`, `bottom-center` or `top-center`. `bar` takes `top` or `bottom`. `widget` takes the four corners. `wall` has no position |
+| `prompt.blocking` | boolean | Dim the page and trap focus while the banner is open. Not available for `wall`, which always blocks |
+| `prompt.direction` | `row`, `column` | Lay the buttons out in a row or a column. Defaults to `row` |
+| `prompt.uiProfile` | `compact`, `balanced`, `strict` | `compact` sizes buttons to their labels, while `balanced` and `strict` stretch them to full width. Defaults to `compact` |
+| `preferences.blocking` | boolean | Dim the page while the privacy settings dialog is open. Defaults to `true` |
+| `preferences.direction` | `row`, `column` | Button layout in the dialog |
+| `preferences.uiProfile` | `compact`, `balanced`, `strict` | Button sizing in the dialog |
+| `disableAnimation` | boolean | Show the banner and dialog without animations. Visitors who prefer reduced motion never see them animate |
+
+Your c15t policy decides which buttons a visitor must see. If a layout hides a button the policy requires, c15t shows it anyway.
+
+### Colors and corners
+
+To give the banner its own look, set `theme`. Each color is a hex value, and any color you leave out keeps following your site:
+
+```json blog.json
+{
+  "integrations": {
+    "c15t": {
+      "backendURL": "https://acme.inth.app",
+      "theme": {
+        "colors": { "surface": "#FFFBF5", "primary": "#E4572E" },
+        "dark": { "surface": "#1C1917", "primary": "#F08A5D" },
+        "radius": "large"
+      },
+      "hideBranding": true
+    }
+  }
+}
+```
+
+| Setting | Values | Description |
+| --- | --- | --- |
+| `theme.colors` | Hex colors | Light mode colors. Keys are `primary`, `primaryHover`, `textOnPrimary`, `surface`, `surfaceHover`, `border`, `borderHover`, `text`, `textMuted`, `overlay`, `switchTrack`, `switchTrackActive` and `switchThumb` |
+| `theme.dark` | Hex colors | Dark mode colors, with the same keys |
+| `theme.radius` | `none`, `small`, `medium`, `large` | Corner rounding of the banner, dialog and buttons. Defaults to `medium` |
+| `hideBranding` | boolean | Hide the "Secured by c15t" badge on the banner. Check that your Inth plan allows it |
+
+## All options
+
+| Setting | Type | Default | Description |
+| --- | --- | --- | --- |
+| `backendURL` | `https://` URL | Required | Your Inth project URL or self-hosted c15t backend, including any path prefix |
+| `scripts` | Path to category | | Custom scripts that wait for a category, see [Custom scripts](#custom-scripts) |
+| `prompt` | object | Floating card | Banner layout, see [Appearance](#appearance) |
+| `preferences` | object | | Dialog layout, see [Appearance](#appearance) |
+| `legalLinks.privacyPolicy` | `{ href, label? }` | | Link shown in the banner and dialog. `href` is an `https://` URL or a path, and `label` replaces the translated link text |
+| `legalLinks.cookiePolicy` | `{ href, label? }` | | Same as above |
+| `legalLinks.termsOfService` | `{ href, label? }` | | Same as above |
+| `locale` | Language code | Visitor's browser language | Force one language: `bg`, `cs`, `cy`, `da`, `de`, `el`, `en`, `es`, `et`, `fi`, `fr`, `ga`, `gu`, `he`, `hi`, `hr`, `hu`, `id`, `is`, `it`, `lb`, `lt`, `lv`, `mt`, `nb`, `nl`, `nn`, `pl`, `pt`, `rm`, `ro`, `sk`, `sl`, `sv` or `zh` |
+| `crossSubdomain` | boolean | `false` | Share the consent cookie with every subdomain, so a choice on `blog.acme.com` also applies on `acme.com`. It only applies on your own domain: on a `notra.site` address Notra ignores it and shows a build warning, so other Notra sites can't read or change the choice. If your site also has a `notra.site` address, the choice made there stays in that browser for that address only |
+| `expiryDays` | 1 to 730 | `365` | Days until the stored choice expires and the banner shows again |
+| `disableAnimation` | boolean | `false` | Show the banner and dialog without animations |
+| `theme` | object | Your site's theme | Colors and corner rounding, see [Colors and corners](#colors-and-corners) |
+| `hideBranding` | boolean | `false` | Hide the "Secured by c15t" badge on the banner |
+| `devTools` | boolean | `true` | Show the c15t DevTools panel during `notra dev`. Never included in previews or the live site |
+
+The choice is stored in a cookie named `__Host-c15t`, which only your site's own address can set. With `crossSubdomain` on, c15t uses its default `c15t` cookie instead, because a `__Host-` cookie can't be shared across subdomains. A refusal saved earlier under the `c15t` name still applies. An earlier acceptance doesn't carry over, so those visitors see the banner once more.
+
+The [`blog.json` schema](https://usenotra.com/schemas/blog.json) checks every option, so your editor autocompletes the values above and flags a position that doesn't fit the variant.
+
+## Content-Security-Policy
+
+Notra adds your backend's origin to `connect-src` and allows the analytics scripts that c15t loads, so you don't need to touch `security.allowedOrigins`. See [Content-Security-Policy](/sites/custom-scripts#content-security-policy).
+
+## Troubleshooting
+
+If the banner never appears, check that your site's domain is trusted in the Inth project, or allowed in your self-hosted backend's CORS settings. With Inth connected, the **Inth** dialog under **Cookie banner** on the Integrations page lists domains that are missing and trusts them for you. The browser console shows the blocked `/init` request.
+
+If analytics never loads, make sure your policy has a `measurement` category and that you allowed it. Open **Privacy settings**, turn on the analytics switch and save.
+
+If the link is missing from a custom footer, add `<PrivacySettings />` to `footer.mdx`. The link stays hidden until the policy has loaded, and it stays hidden for visitors whose region needs no consent UI.

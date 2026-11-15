@@ -23,16 +23,10 @@ export const GEO_PROMPT_DETAIL_SURFACES = {
   OVERVIEW: "overview",
   COMPETITOR_DETAIL: "competitor_detail",
 } as const;
-
-export const GEO_COMPETITOR_DETAIL_SURFACES = {
-  PAGE: "page",
-  MODAL: "modal",
-} as const;
-
 export const GEO_WRITE_DIALOG_ENTRIES = {
   GAP: "gap",
   ENGINE_SHEET: "engine_sheet",
-  WRITE_PAGE: "write_page",
+  CONTENT_LIST: "content_list",
   NAV_PRIMARY: "nav_primary",
 } as const;
 
@@ -65,18 +59,13 @@ export const TRAFFIC_INSTALL_COPY_KINDS = {
   AGENT_PROMPT: "agent_prompt",
   INSTALL_COMMAND: "install_command",
   PROXY_SNIPPET: "proxy_snippet",
+  DRAIN_SETUP: "drain_setup",
 } as const;
 
 export const TRAFFIC_LOG_FILTER_KINDS = {
   VISITOR_TYPE: "visitor_type",
   PURPOSE: "purpose",
 } as const;
-
-export const GEO_SCAN_FAILURE_REASONS = {
-  RETRY_NO_SUCCESSFUL_CHECKS: "retry_no_successful_checks",
-  UNKNOWN: "unknown",
-} as const;
-
 export const GEO_RANGE_PRESET_LABEL_KEYS = {
   today: "today",
   yesterday: "yesterday",

@@ -1,8 +1,10 @@
 "use client";
 
 import { useReducedMotion } from "motion/react";
-import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { InstrumentGrid } from "ui/card/grid";
+import { InstrumentReveal } from "ui/card/reveal";
+import { useLocale, useTranslations } from "use-intl";
 
 import { AccountSeriesChartCard } from "@/components/analytics/account-series-chart-card";
 import { useAnalyticsAccounts } from "@/components/analytics/analytics-context";
@@ -11,8 +13,6 @@ import { ImpressionsShareCard } from "@/components/analytics/impressions-share-c
 import { PostingPerformanceCard } from "@/components/analytics/posting-performance-card";
 import { AnalyticsRangePicker } from "@/components/analytics/range-picker";
 import { TopPostsCard } from "@/components/analytics/top-posts-card";
-import { InstrumentGrid } from "@/components/instrument/instrument-grid";
-import { InstrumentReveal } from "@/components/instrument/instrument-reveal";
 import { CHART_MUTED_COLOR } from "@/constants/charts";
 import { buildTimelineRange } from "@/lib/analytics/date-range";
 import { useAnalyticsRange } from "@/lib/hooks/use-analytics-range";

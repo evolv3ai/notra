@@ -21,7 +21,6 @@ import type {
 const ROW = "grid min-w-0 grid-cols-[2ch_minmax(0,1fr)]";
 const RESULT_ROW = "grid min-w-0 grid-cols-[3ch_minmax(0,1fr)] pl-[2ch]";
 
-/** Strips the shadcn Button chrome so a trigger reads as terminal text. */
 const TRIGGER_CLASS =
   "text-claude-code-muted hover:text-claude-code-fg aria-expanded:text-claude-code-muted focus-visible:ring-claude-code-muted/60 h-auto justify-start rounded-sm border-0 p-0 text-start text-[length:inherit] leading-[inherit] font-normal whitespace-normal hover:bg-transparent focus-visible:border-transparent focus-visible:ring-2 active:not-aria-[haspopup]:translate-y-0 aria-expanded:bg-transparent dark:hover:bg-transparent";
 

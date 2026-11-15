@@ -1,7 +1,6 @@
 "use client";
 
 import { useQueries, useQueryClient } from "@tanstack/react-query";
-import { usePathname } from "next/navigation";
 import {
   createContext,
   type ReactNode,
@@ -14,6 +13,7 @@ import {
 } from "react";
 
 import { authClient } from "@/lib/auth/client";
+import { usePathname } from "@/lib/navigation";
 import type { ClientSessionData } from "@/types/auth/session";
 import { setLastVisitedOrganization } from "@/utils/cookies";
 import { getOrganizationSlugFromPathname } from "@/utils/organization-pathname";
@@ -134,7 +134,6 @@ export function OrganizationsProvider({
     : (activeOrganization ?? optimisticActiveOrg ?? seededActiveOrganization);
   const isLoading = resolvedActiveOrganization == null && isLoadingActive;
 
-  // Clear optimistic state when real data arrives
   const [prevActiveOrganization, setPrevActiveOrganization] =
     useState(activeOrganization);
   if (activeOrganization !== prevActiveOrganization) {
@@ -144,9 +143,6 @@ export function OrganizationsProvider({
     }
   }
 
-  // Sole mechanism that points the server session at the organization in the
-  // URL: `getAuthSession` resolves the active organization from this cookie, so
-  // writing it is equivalent to (and cheaper than) `organization.setActive`.
   useEffect(() => {
     if (!slugFromPath || resolvedActiveOrganization?.slug !== slugFromPath) {
       return;
@@ -164,9 +160,7 @@ export function OrganizationsProvider({
           });
         }
       })
-      .catch(() => {
-        // Non-fatal: the session keeps its previous active organization.
-      });
+      .catch(() => {});
   }, [
     resolvedActiveOrganization?.slug,
     resolvedActiveOrganization?.id,
@@ -174,7 +168,6 @@ export function OrganizationsProvider({
     queryClient,
   ]);
 
-  // Auto-select first organization if no active organization is set
   useEffect(() => {
     if (
       !(isOrganizationListLoading || isLoadingActive) &&

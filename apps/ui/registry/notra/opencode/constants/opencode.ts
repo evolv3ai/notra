@@ -31,7 +31,6 @@ export const OPENCODE_MCP_STATUS_CLASS: Record<OpencodeMcpStatus, string> = {
   Failed: "text-opencode-orange",
 };
 
-/** Glyph in front of each activity line, by kind. Thoughts have none. */
 export const OPENCODE_ACTIVITY_GLYPH: Record<OpencodeActivityKind, string> = {
   read: "→",
   search: "◈",
@@ -46,7 +45,6 @@ export const OPENCODE_ACTIVITY_LABEL: Record<OpencodeActivityKind, string> = {
   tool: "Tool",
 };
 
-/** Braille frames of the `Thinking` spinner. */
 export const OPENCODE_THINKING_FRAMES = [
   "⠋",
   "⠙",
@@ -62,45 +60,29 @@ export const OPENCODE_THINKING_FRAMES = [
 
 export const OPENCODE_THINKING_FRAME_MS = 80;
 
-/** Cells in the status-row scanner. */
 export const OPENCODE_PROGRESS_CELLS = 8;
 
 export const OPENCODE_PROGRESS_FRAME_MS = 90;
 
-/** Opacity of the head and the cells trailing behind it. */
 export const OPENCODE_PROGRESS_TRAIL = [1, 0.55, 0.32, 0.18] as const;
 
-/** Beat before the first search line during a replay. */
 export const OPENCODE_SEARCH_HEADER_MS = 140;
 
-/** Cadence between sequential search lines. */
 export const OPENCODE_SEARCH_QUERY_MS = 280;
 
-/** Delay between cited-source rows. */
 export const OPENCODE_SEARCH_STAGGER_MS = 56;
 
-/** Pause after the last query before the sources block. */
 export const OPENCODE_SEARCH_SOURCES_MS = 160;
 
-/** Pacing of a played-back turn in the demo chat. */
 export const OPENCODE_CHAT_TIMING = {
-  /** How long a thought shows the Thinking spinner. */
   thinkMs: 1300,
-  /** Beat after each tool line. */
   toolMs: 600,
-  /** Delay between reply blocks as they render. */
   blockMs: 260,
-  /** Cap on every delay when the user prefers reduced motion. */
   reducedMaxMs: 60,
 } as const;
 
 export const OPENCODE_REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
-/**
- * The wordmark on a 39 by 7 cell grid, one string per row.
- * `o` paints the dim "open" half, `c` the bright "code" half and `+` the
- * shaded counters inside the letters.
- */
 export const OPENCODE_LOGO_ROWS = [
   ".................................c.....",
   "oooo.oooo.oooo.ooo..cccc.cccc.cccc.cccc",
@@ -111,5 +93,4 @@ export const OPENCODE_LOGO_ROWS = [
   ".....o.................................",
 ] as const;
 
-/** Size of one logo cell in SVG units. */
 export const OPENCODE_LOGO_CELL = 6;

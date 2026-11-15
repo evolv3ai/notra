@@ -1,35 +1,41 @@
-export async function withBoxRetry<T>(
+import {
+  BOX_RETRY_ATTEMPTS,
+  BOX_RETRY_DELAY_MS,
+} from "@notra/ai/constants/box-retry";
+import {
+  isRetrySafeBoxNetworkError,
+  retryBoxOperation,
+} from "@notra/ai/utils/box-retry";
+import { Effect } from "effect";
+
+const RATE_LIMITED_STATUS = 429;
+
+/**
+ * Retries transient Box failures with linear backoff (1 s, 2 s, ...) and
+ * rejects with the last error. Only transport failures and 429s retry: the
+ * wrapped calls (create, exec) are not idempotent, so a 5xx after the server
+ * may have acted is surfaced instead.
+ */
+export function withBoxRetry<T>(
   callback: () => Promise<T>,
-  attempts = 3
-) {
-  let lastError: unknown;
-
-  for (let attempt = 1; attempt <= attempts; attempt++) {
-    try {
-      return await callback();
-    } catch (error) {
-      lastError = error;
-      if (attempt === attempts || !isTransientBoxError(error)) {
-        break;
-      }
-      await sleep(1000 * attempt);
-    }
-  }
-
-  throw lastError;
-}
-
-function isTransientBoxError(error: unknown) {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-  return (
-    error.message.includes("fetch failed") ||
-    error.message.includes("ECONNRESET") ||
-    error.message.includes("UND_ERR")
+  attempts = BOX_RETRY_ATTEMPTS
+): Promise<T> {
+  return Effect.runPromise(
+    retryBoxOperation(callback, {
+      attempts,
+      delayMs: BOX_RETRY_DELAY_MS,
+      shouldRetry: isTransientBoxError,
+    })
   );
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function isTransientBoxError(error: unknown) {
+  if (
+    error instanceof Error &&
+    "statusCode" in error &&
+    error.statusCode === RATE_LIMITED_STATUS
+  ) {
+    return true;
+  }
+  return isRetrySafeBoxNetworkError(error);
 }

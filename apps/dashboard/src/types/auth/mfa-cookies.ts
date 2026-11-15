@@ -4,14 +4,14 @@ export interface MfaAttempt {
   startedAt: number;
 }
 
-export interface PendingMfaChallenge {
+interface PendingMfaChallenge {
   kind: "challenge";
   pendingAuthenticationToken: string;
   authenticationChallengeId: string;
   email: string;
 }
 
-export interface PendingMfaEnrollment {
+interface PendingMfaEnrollment {
   kind: "enrollment";
   pendingAuthenticationToken: string;
   workosUserId: string;

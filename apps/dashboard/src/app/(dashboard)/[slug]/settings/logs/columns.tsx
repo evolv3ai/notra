@@ -9,13 +9,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@notra/ui/components/ui/dropdown-menu";
-import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
+import type { TableColumn } from "ui/table";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { IntegrationIcon } from "@/components/logs/integration-icon";
 import { LogStatusBadge } from "@/components/logs/log-status-badge";
-import type { TableColumn } from "@/components/motion/table";
 import { useLogSourceLabel } from "@/lib/hooks/use-log-source-label";
 import type { Log, StatusWithCode } from "@/types/webhooks/webhooks";
 import { isLogSourceFilter } from "@/utils/log-labels";

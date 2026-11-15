@@ -32,18 +32,16 @@ export function PromptAnswerContent({
 
   return (
     <>
-      <div
-        className={
-          view === "raw" ? "flex min-h-full flex-1 flex-col" : "hidden"
-        }
-      >
-        <LazyGeoPromptAnswerThread
-          organizationId={organizationId}
-          prompt={promptText}
-          result={result}
-          scrollable={scrollable}
-        />
-      </div>
+      {view === "raw" ? (
+        <div className="flex min-h-full flex-1 flex-col">
+          <LazyGeoPromptAnswerThread
+            organizationId={organizationId}
+            prompt={promptText}
+            result={result}
+            scrollable={scrollable}
+          />
+        </div>
+      ) : null}
       <div className={view === "analysis" ? undefined : "hidden"}>
         <PromptReceiptAnalysis
           scrollable={scrollable}

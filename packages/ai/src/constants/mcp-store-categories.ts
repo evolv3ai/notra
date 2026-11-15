@@ -10,5 +10,3 @@ export const MCP_STORE_CATEGORIES = [
   "Marketing",
   "Publishing",
 ] as const;
-
-export type McpStoreCategory = (typeof MCP_STORE_CATEGORIES)[number];

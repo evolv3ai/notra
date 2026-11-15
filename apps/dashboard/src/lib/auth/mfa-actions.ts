@@ -1,4 +1,27 @@
-"use server";
+import { createServerFn } from "@tanstack/react-start";
+
+const verifyMfaCodeServerFn = createServerFn({ method: "POST" })
+  .validator((data: Parameters<typeof verifyMfaCodeActionImpl>) => data)
+  .handler(({ data }) => verifyMfaCodeActionImpl(...data));
+export const verifyMfaCodeAction = (
+  ...data: Parameters<typeof verifyMfaCodeActionImpl>
+) => verifyMfaCodeServerFn({ data });
+
+const redeemBackupCodeServerFn = createServerFn({ method: "POST" })
+  .validator((data: Parameters<typeof redeemBackupCodeActionImpl>) => data)
+  .handler(({ data }) => redeemBackupCodeActionImpl(...data));
+export const redeemBackupCodeAction = (
+  ...data: Parameters<typeof redeemBackupCodeActionImpl>
+) => redeemBackupCodeServerFn({ data });
+
+const resumeSocialEnrollmentServerFn = createServerFn({ method: "POST" })
+  .validator(
+    (data: Parameters<typeof resumeSocialEnrollmentActionImpl>) => data
+  )
+  .handler(({ data }) => resumeSocialEnrollmentActionImpl(...data));
+export const resumeSocialEnrollmentAction = (
+  ...data: Parameters<typeof resumeSocialEnrollmentActionImpl>
+) => resumeSocialEnrollmentServerFn({ data });
 
 import { db } from "@notra/db/drizzle";
 import { users } from "@notra/db/schema";
@@ -15,7 +38,7 @@ import type {
   ResumeSocialEnrollmentInput,
   VerifyMfaCodeInput,
 } from "@notra/schemas/types/dashboard/auth";
-import { getWorkOS } from "@workos-inc/authkit-nextjs";
+import { getWorkOS } from "@workos/authkit-session";
 import { eq } from "drizzle-orm";
 import { Effect } from "effect";
 
@@ -31,15 +54,15 @@ import {
   runAuthFlow,
   signedIn,
   trackAuthEvent,
-  tryWorkOSAuth,
 } from "@/lib/auth/auth-flow";
 import {
   clearBackupCodes,
   consumeBackupCode,
   hasBackupCodes,
-  hasUnusedBackupCode,
+  releaseBackupCode,
   replaceBackupCodes,
 } from "@/lib/auth/backup-codes";
+import { tryWorkOSAuth } from "@/lib/auth/errors";
 import { beginTotpEnrollment } from "@/lib/auth/mfa";
 import {
   clearAllPendingMfaFlows,
@@ -85,7 +108,7 @@ const attemptAfterSignIn = <T>(run: () => Promise<T>, what: string) =>
     )
   );
 
-export async function verifyMfaCodeAction(
+async function verifyMfaCodeActionImpl(
   rawInput: VerifyMfaCodeInput
 ): Promise<AuthFlowResult> {
   const parsed = verifyMfaCodeInputSchema.safeParse(rawInput);
@@ -154,7 +177,7 @@ export async function verifyMfaCodeAction(
   );
 }
 
-export async function redeemBackupCodeAction(
+async function redeemBackupCodeActionImpl(
   rawInput: RedeemBackupCodeInput
 ): Promise<RedeemBackupCodeResult> {
   const parsed = redeemBackupCodeInputSchema.safeParse(rawInput);
@@ -197,10 +220,12 @@ export async function redeemBackupCodeAction(
         return rejected;
       }
 
-      const unused = yield* Effect.promise(() =>
-        hasUnusedBackupCode(localUser.id, parsed.data.code)
+      // Claim the code before touching WorkOS so a code can only recover
+      // once; the claim is released if the factors cannot be removed.
+      const claimed = yield* Effect.promise(() =>
+        consumeBackupCode(localUser.id, parsed.data.code)
       );
-      if (!unused) {
+      if (!claimed) {
         return rejected;
       }
 
@@ -226,9 +251,12 @@ export async function redeemBackupCodeAction(
         );
         return lockedOutFactors.length === totpFactors.length;
       });
-      const allFactorsRemoved = yield* removeLockedOutFactors;
-      yield* Effect.promise(() =>
-        consumeBackupCode(localUser.id, parsed.data.code)
+      const allFactorsRemoved = yield* removeLockedOutFactors.pipe(
+        Effect.tapError(() =>
+          Effect.tryPromise(() =>
+            releaseBackupCode(localUser.id, parsed.data.code)
+          ).pipe(Effect.ignore)
+        )
       );
 
       if (allFactorsRemoved) {
@@ -261,7 +289,7 @@ export async function redeemBackupCodeAction(
   );
 }
 
-export async function resumeSocialEnrollmentAction(
+async function resumeSocialEnrollmentActionImpl(
   rawInput: ResumeSocialEnrollmentInput
 ): Promise<AuthFlowResult> {
   const parsed = resumeSocialEnrollmentInputSchema.safeParse(rawInput);

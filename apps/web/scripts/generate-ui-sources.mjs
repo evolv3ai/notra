@@ -10,7 +10,6 @@ const pending = [];
 const visited = new Set();
 const sources = new Set();
 
-// Bun's scanner instead of the TypeScript API, which TypeScript 7 no longer ships.
 const transpilers = {
   ".js": new Bun.Transpiler({ loader: "js" }),
   ".jsx": new Bun.Transpiler({ loader: "jsx" }),
@@ -18,20 +17,15 @@ const transpilers = {
   ".ts": new Bun.Transpiler({ loader: "ts" }),
   ".tsx": new Bun.Transpiler({ loader: "tsx" }),
 };
-// Top-level import/export statements in MDX; one statement never spans a blank line.
 const MDX_IMPORT =
   /^(?:import\s*["'][^"'\n]+["']|(?:import|export)\b(?:[^\n]|\n(?!\s*\n))*?\bfrom\s*["'][^"'\n]+["']);?/gm;
 
-// Every static `import … from` / `export … from`, including type-only forms
-// (`import type`, `import { type X }`, `export { type X }`) the scanner drops.
 const STATIC_IMPORT =
   /^\s*(?:import|export)\b[^;]*?\bfrom\s*["']([^"']+)["']/gm;
 
 function importSpecifiers(filename) {
   const code = readFileSync(filename, "utf8");
-  // MDX is not JavaScript; only its top-level import/export lines are.
   if (path.extname(filename) === ".mdx") {
-    // Code samples can repeat an import, so scan each statement on its own.
     return (code.match(MDX_IMPORT) ?? []).flatMap((statement) =>
       transpilers[".js"].scanImports(statement).map((entry) => entry.path)
     );
@@ -67,7 +61,6 @@ function resolveSource(base) {
 }
 
 collect(path.join(webRoot, "src"));
-// These entry points may also import shared components outside src/.
 for (const filename of ["source.config.ts"]) {
   const entry = path.join(webRoot, filename);
   if (existsSync(entry)) {

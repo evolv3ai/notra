@@ -1,26 +1,16 @@
 "use client";
 
-import { Route01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { GEO_JOURNEY_DEEP_CRAWL_PAGES } from "@notra/geo-core/constants/geo";
 import type { GeoJourneySourceStats } from "@notra/geo-core/types/geo";
-import {
-  formatGeoSource,
-  trafficVisitDelta,
-} from "@notra/geo-core/utils/ai-traffic";
-import { useTranslations } from "next-intl";
+import { formatGeoSource } from "@notra/geo-core/utils/ai-traffic";
+import { InstrumentSection } from "ui/card";
+import { DataTable, type TableColumn } from "ui/table";
+import { useLocale, useTranslations } from "use-intl";
 
 import { EngineIcon } from "@/components/geo/engine-icon";
-import { JourneyCountCell } from "@/components/geo/journey-count-cell";
-import { JourneyStatCard } from "@/components/geo/journey-stat-card";
-import { Table, type TableColumn } from "@/components/motion/table";
+import { GeoCountCell } from "@/components/geo/geo-count-cell";
 import { TABLE_ROW_HEIGHT } from "@/constants/table";
 import type { JourneyOverviewCardProps } from "@/types/geo";
-import {
-  formatJourneyShare,
-  journeyAverageDepth,
-  journeyTotals,
-} from "@/utils/geo-journey";
+import { geoCountColumnWidth } from "@/utils/geo-count-column-width";
 import { tableHeightFor } from "@/utils/table";
 
 const sourceRowId = (row: GeoJourneySourceStats) =>
@@ -28,15 +18,15 @@ const sourceRowId = (row: GeoJourneySourceStats) =>
 
 export function JourneyOverviewCard({
   sources,
-  failed,
   previewRows,
   onOpenSource,
   loading = false,
 }: JourneyOverviewCardProps) {
   const t = useTranslations("geo.journeyOverviewCard");
+  const locale = useLocale();
   const tCommon = useTranslations("common");
   const tGeoShared = useTranslations("geo.shared");
-  const totals = journeyTotals(sources);
+  const rows = sources.filter((row) => row.journeys > 0);
   const columns: TableColumn<GeoJourneySourceStats>[] = [
     {
       key: "source",
@@ -47,8 +37,10 @@ export function JourneyOverviewCard({
       cell: (row) => (
         <span className="flex min-w-0 items-center gap-2 text-sm">
           <EngineIcon engine={row.source} />
-          <span className="truncate">{formatGeoSource(row.source)}</span>
-          <span className="text-muted-foreground shrink-0 text-xs">
+          <span className="max-w-full shrink-0 truncate">
+            {formatGeoSource(row.source)}
+          </span>
+          <span className="text-muted-foreground min-w-0 truncate text-xs">
             {row.visitorType === "crawler"
               ? tGeoShared("crawler")
               : tGeoShared("aiReferral")}
@@ -59,56 +51,35 @@ export function JourneyOverviewCard({
     {
       key: "journeys",
       header: tCommon("labels.journeys"),
-      width: "9.5rem",
+      width: geoCountColumnWidth(
+        rows.map((row) => ({
+          value: row.journeys,
+          previousValue: row.previousJourneys,
+        })),
+        locale,
+        tCommon("labels.new")
+      ),
       align: "right",
       sortable: true,
       cell: (row) => (
-        <JourneyCountCell
-          journeys={row.journeys}
+        <GeoCountCell
+          value={row.journeys}
           label={formatGeoSource(row.source)}
-          previousJourneys={row.previousJourneys}
+          previousValue={row.previousJourneys}
         />
       ),
     },
   ];
 
   return (
-    <JourneyStatCard
-      caption={t("caption", { count: totals.journeys })}
-      delta={trafficVisitDelta(totals.journeys, totals.previousJourneys)}
-      emptyMessage={failed ? t("loadFailed") : t("empty")}
-      emptyDescription={failed ? undefined : t("emptyDescription")}
-      emptyMedia={
-        failed ? undefined : (
-          <HugeiconsIcon icon={Route01Icon} className="size-5" />
-        )
-      }
-      emptySeed="geo-journey-overview"
-      eyebrow={tCommon("labels.journeys")}
-      stats={[
-        {
-          label: tGeoShared("avgDepth"),
-          value: tGeoShared("countPluralOnePageOther", {
-            count: journeyAverageDepth(totals.pages, totals.journeys),
-          }),
-        },
-        {
-          label: t("stats.singleFetch"),
-          value: formatJourneyShare(totals.singleFetch, totals.journeys),
-        },
-        {
-          label: tGeoShared("crawledPagesPages", {
-            pages: GEO_JOURNEY_DEEP_CRAWL_PAGES,
-          }),
-          value: formatJourneyShare(totals.deepCrawls, totals.journeys),
-        },
-      ]}
-      total={totals.journeys}
+    <InstrumentSection
+      className="h-full"
+      eyebrow={tCommon("labels.sources")}
+      readout={t("sourceCount", { count: rows.length })}
     >
-      <Table
-        className="rounded-2xl"
+      <DataTable
         columns={columns}
-        data={sources.filter((row) => row.journeys > 0)}
+        data={rows}
         defaultSort={{ key: "journeys", direction: "desc" }}
         getRowId={sourceRowId}
         height={tableHeightFor(previewRows)}
@@ -116,6 +87,6 @@ export function JourneyOverviewCard({
         onRowClick={onOpenSource}
         rowHeight={TABLE_ROW_HEIGHT}
       />
-    </JourneyStatCard>
+    </InstrumentSection>
   );
 }

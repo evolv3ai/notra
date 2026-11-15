@@ -18,19 +18,16 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@notra/ui/components/ui/select";
-import { Switch } from "@notra/ui/components/ui/switch";
 import { cn } from "@notra/ui/lib/utils";
-import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { useTranslations } from "use-intl";
 
 import { useGeoScanIntervalNoun } from "@/lib/hooks/use-geo-scan-interval-noun";
-import type {
-  GeoScanFrequencySelectProps,
-  GeoScanScheduleProps,
-} from "@/types/geo";
+import type { GeoScanFrequencySelectProps } from "@/types/geo";
 import { geoScanIntervalMessageKey } from "@/utils/geo-scan-interval-key";
 
 function parseIntervalDays(raw: string): number | null {
@@ -46,9 +43,13 @@ function parseIntervalDays(raw: string): number | null {
   return days;
 }
 
+const SCAN_OFF_VALUE = "off";
+
 export function GeoScanFrequencySelect({
   id,
+  enabled,
   intervalHours,
+  onEnabledChange,
   onIntervalChange,
   disabled = false,
 }: GeoScanFrequencySelectProps) {
@@ -66,6 +67,9 @@ export function GeoScanFrequencySelect({
     return key ? t(`short.${key}`) : intervalNoun(hours);
   };
   const intervalShortLabel = (value: string): string => {
+    if (value === SCAN_OFF_VALUE) {
+      return tCommon("labels.off");
+    }
     if (value === GEO_SCAN_CUSTOM_INTERVAL_VALUE) {
       return tCommon("labels.custom");
     }
@@ -79,9 +83,12 @@ export function GeoScanFrequencySelect({
   const [daysDraft, setDaysDraft] = useState(() =>
     String(geoScanIntervalDays(intervalHours))
   );
-  const selectValue = isCustom
-    ? GEO_SCAN_CUSTOM_INTERVAL_VALUE
-    : String(intervalHours);
+  let selectValue = String(intervalHours);
+  if (!enabled) {
+    selectValue = SCAN_OFF_VALUE;
+  } else if (isCustom) {
+    selectValue = GEO_SCAN_CUSTOM_INTERVAL_VALUE;
+  }
   const daysInvalid = parseIntervalDays(daysDraft) === null;
   const isPlural = parseIntervalDays(daysDraft) !== 1;
 
@@ -96,6 +103,11 @@ export function GeoScanFrequencySelect({
           if (value === null) {
             return;
           }
+          if (value === SCAN_OFF_VALUE) {
+            onEnabledChange(false);
+            return;
+          }
+          onEnabledChange(true);
           if (value === GEO_SCAN_CUSTOM_INTERVAL_VALUE) {
             setIsCustom(true);
             setDaysDraft(String(geoScanIntervalDays(intervalHours)));
@@ -127,9 +139,18 @@ export function GeoScanFrequencySelect({
           <SelectItem value={GEO_SCAN_CUSTOM_INTERVAL_VALUE}>
             {t("customOption")}
           </SelectItem>
+          <SelectSeparator />
+          <SelectItem value={SCAN_OFF_VALUE}>
+            <span className="flex items-baseline gap-2">
+              {tCommon("labels.off")}
+              <span className="text-muted-foreground text-xs">
+                {t("offHint")}
+              </span>
+            </span>
+          </SelectItem>
         </SelectContent>
       </Select>
-      {isCustom ? (
+      {enabled && isCustom ? (
         <div className="flex items-center gap-1.5">
           <Label className="sr-only" htmlFor={daysId}>
             {t("daysBetween")}
@@ -173,38 +194,6 @@ export function GeoScanFrequencySelect({
           </span>
         </div>
       ) : null}
-    </div>
-  );
-}
-
-export function GeoScanSchedule({
-  id,
-  enabled,
-  onEnabledChange,
-  intervalHours,
-}: GeoScanScheduleProps) {
-  const t = useTranslations("geo.geoScanSchedule");
-  const intervalNoun = useGeoScanIntervalNoun();
-  const summary = enabled
-    ? t.rich("summaryEnabled", {
-        interval: intervalNoun(intervalHours),
-        strong: (chunks) => (
-          <strong className="text-foreground font-semibold">{chunks}</strong>
-        ),
-      })
-    : t("summaryPaused");
-
-  return (
-    <div className="flex items-center justify-between gap-3 px-3 py-2.5">
-      <div className="space-y-0.5">
-        <Label htmlFor={`${id}-enabled`}>{t("automaticScans")}</Label>
-        <p className="text-muted-foreground text-xs">{summary}</p>
-      </div>
-      <Switch
-        checked={enabled}
-        id={`${id}-enabled`}
-        onCheckedChange={onEnabledChange}
-      />
     </div>
   );
 }

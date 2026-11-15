@@ -31,7 +31,7 @@ export function DeferredAnswerDemo({ children }: DeferredAnswerDemoProps) {
   }, []);
 
   return (
-    <div className="h-[40rem] min-w-0" ref={containerRef}>
+    <div className="min-w-0 lg:h-[40rem]" ref={containerRef}>
       <Suspense fallback={children}>
         {shouldLoad ? <AnswerExampleDemo /> : children}
       </Suspense>

@@ -1,17 +1,5 @@
-export interface LinearTokenResponse {
-  access_token: string;
-  token_type: string;
-  scope: string;
-  expires_in?: number;
-}
+import type { z } from "zod";
 
-export interface LinearOrganizationResponse {
-  id: string;
-  name: string;
-}
+import type { linearOAuthStateSchema } from "@/schemas/linear-oauth";
 
-export interface LinearOAuthState {
-  organizationId: string;
-  userId: string;
-  callbackPath: string;
-}
+export type LinearOAuthState = z.infer<typeof linearOAuthStateSchema>;

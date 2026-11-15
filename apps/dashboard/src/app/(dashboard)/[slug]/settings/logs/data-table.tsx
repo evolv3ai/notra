@@ -1,80 +1,55 @@
 "use client";
 
-import { AnalyticsUpIcon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { TablePagination } from "@notra/ui/components/shared/table-pagination";
-import { useTranslations } from "next-intl";
+import { DataTable } from "ui/table";
+import { useTranslations } from "use-intl";
 
-import { EmptyState } from "@/components/empty-state";
-import { Table } from "@/components/motion/table";
+import { SETTINGS_TABLE_EMPTY_HEIGHT } from "@/constants/settings";
 import { TABLE_ROW_HEIGHT } from "@/constants/table";
-import type { DataTableProps } from "@/types/logs/data-table";
-import { tableHeightFor } from "@/utils/table";
+import type { DataTableProps as LogsDataTableProps } from "@/types/logs/data-table";
+import { paginatedTableHeightFor } from "@/utils/table";
 
 const LOGS_SKELETON_ROW_COUNT = 10;
 
-export function DataTable<TData>({
+export function LogsDataTable<TData>({
   columns,
   data,
   getRowId,
   page,
   pageSize,
-  totalPages,
   onPageChange,
+  onPageSizeChange,
   isLoading,
   emptyState,
   onRowClick,
   sort,
   onSortChange,
   totalCount,
-}: DataTableProps<TData>) {
+}: LogsDataTableProps<TData>) {
   const t = useTranslations("settings.logs");
-  const totalItems = totalCount ?? data.length;
-  const rowCount =
-    isLoading && data.length === 0 ? LOGS_SKELETON_ROW_COUNT : data.length;
-
-  if (data.length === 0 && !isLoading && emptyState) {
-    return (
-      <EmptyState
-        actionLabel={emptyState.actionLabel}
-        actionVariant="outline"
-        className="min-h-64"
-        description={emptyState.description ?? ""}
-        onActionClick={emptyState.onActionClick}
-        title={emptyState.title}
-        titleIcon={
-          <HugeiconsIcon
-            aria-hidden="true"
-            className="text-muted-foreground size-5"
-            icon={AnalyticsUpIcon}
-          />
-        }
-      />
-    );
+  let height: number | undefined;
+  if (data.length === 0) {
+    height = isLoading
+      ? paginatedTableHeightFor(LOGS_SKELETON_ROW_COUNT, TABLE_ROW_HEIGHT)
+      : SETTINGS_TABLE_EMPTY_HEIGHT;
   }
 
   return (
-    <Table
-      className="rounded-2xl"
+    <DataTable
       columns={columns}
       data={data}
       defaultSort={{ key: "createdAt", direction: "desc" }}
-      emptyState={t("noResults")}
-      footer={
-        totalPages > 1 || data.length > 0 ? (
-          <TablePagination
-            itemLabel={t("itemLabel")}
-            page={page}
-            pageCount={totalPages}
-            pageRowCount={data.length}
-            pageSize={pageSize}
-            setPage={onPageChange}
-            totalItems={totalItems}
-          />
-        ) : undefined
-      }
+      emptyState={emptyState}
+      pagination={{
+        mode: "server",
+        page,
+        pageSize,
+        totalItems: totalCount,
+        onPageChange,
+        onPageSizeChange,
+        itemLabel: t("itemLabel"),
+      }}
       getRowId={getRowId}
-      height={tableHeightFor(rowCount, TABLE_ROW_HEIGHT)}
+      height={height}
       loading={isLoading}
       onRowClick={onRowClick}
       onSortChange={onSortChange}

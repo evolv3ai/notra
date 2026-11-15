@@ -31,7 +31,14 @@ function mapAnalyticsFlagEvaluation(
   return result.enabled ? "enabled" : "disabled";
 }
 
-export const evaluateAnalyticsFlag = Effect.fn("evaluateAnalyticsFlag")(
+function toFlagEvaluationError(cause: unknown) {
+  return new AnalyticsFlagEvaluationError({
+    message: "Failed to evaluate the analytics feature flag",
+    cause,
+  });
+}
+
+const evaluateAnalyticsFlag = Effect.fn("evaluateAnalyticsFlag")(
   function* (clientId: string, organizationId: string) {
     const params = new URLSearchParams({
       clientId,
@@ -39,8 +46,6 @@ export const evaluateAnalyticsFlag = Effect.fn("evaluateAnalyticsFlag")(
       properties: JSON.stringify({ organizationId }),
       keys: SOCIAL_ANALYTICS_FLAG_KEY,
     });
-    // Use the SDK's public endpoint directly: getFlag cannot accept a signal.
-    // Keep body consumption inside tryPromise so timeout aborts that too.
     const json = yield* Effect.tryPromise({
       try: async (signal) => {
         const response = await fetch(`${ANALYTICS_FLAGS_API_URL}?${params}`, {
@@ -52,38 +57,18 @@ export const evaluateAnalyticsFlag = Effect.fn("evaluateAnalyticsFlag")(
         }
         return await response.json();
       },
-      catch: (cause) =>
-        new AnalyticsFlagEvaluationError({
-          message: "Failed to evaluate the analytics feature flag",
-          cause,
-        }),
+      catch: toFlagEvaluationError,
     });
     const response = yield* Schema.decodeUnknownEffect(
       analyticsFlagsResponseSchema
-    )(json).pipe(
-      Effect.mapError(
-        (cause) =>
-          new AnalyticsFlagEvaluationError({
-            message: "Failed to evaluate the analytics feature flag",
-            cause,
-          })
-      )
-    );
+    )(json).pipe(Effect.mapError(toFlagEvaluationError));
     const entry = response.flags[SOCIAL_ANALYTICS_FLAG_KEY];
     if (entry === undefined) {
       return "disabled" as AnalyticsFlagState;
     }
     const result = yield* Schema.decodeUnknownEffect(analyticsFlagSchema)(
       entry
-    ).pipe(
-      Effect.mapError(
-        (cause) =>
-          new AnalyticsFlagEvaluationError({
-            message: "Failed to evaluate the analytics feature flag",
-            cause,
-          })
-      )
-    );
+    ).pipe(Effect.mapError(toFlagEvaluationError));
     return mapAnalyticsFlagEvaluation(result);
   },
   Effect.timeout(ANALYTICS_FLAG_REQUEST_TIMEOUT_MS),

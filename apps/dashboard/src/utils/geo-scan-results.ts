@@ -8,8 +8,6 @@ export async function invalidateGeoScanResultQueries(
   queryClient: QueryClient,
   input: GeoQueryScope
 ) {
-  // Aggregates are cached per check generation, which every check insert
-  // bumps, so one refetch already reads the scan's rows.
   await Promise.all(
     [
       dashboardOrpc.geo.sentiment.key({ input }),
@@ -23,13 +21,15 @@ export async function invalidateGeoScanResultQueries(
       dashboardOrpc.geo.changes.key({ input }),
       dashboardOrpc.geo.promptHistory.key({ input }),
       dashboardOrpc.geo.competitorShare.key({ input }),
+      dashboardOrpc.geo.competitorEngineMatrix.key({ input }),
       dashboardOrpc.geo.competitorDetail.key({ input }),
       dashboardOrpc.geo.languageShare.key({ input }),
+      dashboardOrpc.geo.sequenceResults.key({ input }),
+      dashboardOrpc.geo.personaResults.key({ input }),
     ].map((queryKey) => queryClient.invalidateQueries({ queryKey }))
   );
 }
 
-// A quick rescan can complete before settings ever report `isScanning`.
 export async function refreshSettingsAfterScanStart(
   queryClient: QueryClient,
   organizationId: string,

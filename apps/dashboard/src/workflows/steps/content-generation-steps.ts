@@ -1,9 +1,10 @@
-import { acquireClaim } from "@notra/ai/autonomy/claims";
+import "@/workflows/runtime";
 import {
   confirmContentBilling,
   releaseContentBilling,
   reserveContentBilling,
 } from "@notra/ai/billing/content-billing";
+import { redis } from "@notra/ai/utils/redis";
 import { db } from "@notra/db/drizzle";
 import {
   brandSettings,
@@ -12,8 +13,6 @@ import {
   githubIntegrations,
   linearIntegrations,
   members,
-  organizationNotificationSettings,
-  organizations,
   postCollections,
 } from "@notra/db/schema";
 import { buildPostCollectionName } from "@notra/db/utils/post-collections";
@@ -28,12 +27,14 @@ import {
   trackContentOutcomeAndFlush,
   trackWorkflowOutcomeAndFlush,
 } from "@/lib/analytics/workflow-lifecycle";
+import { postContentCreatedToSlack } from "@/lib/automation/content-notifications";
 import { checkLogRetention } from "@/lib/billing/check-log-retention";
 import {
   trackScheduledContentCreated,
   trackScheduledContentFailed,
   trackScheduledContentSkipped,
 } from "@/lib/databuddy";
+import { getNotificationData } from "@/lib/email/notification-data";
 import {
   addActiveGeneration,
   completeActiveGeneration,
@@ -54,6 +55,7 @@ import type { LogRetentionDays } from "@/types/webhooks/webhooks";
 import type {
   AppendAutomationLogInput,
   ClaimWorkflowExecutionInput,
+  ContentCreatedSlackInput,
   CreateGenerationCollectionInput,
   EnqueueDigestInput,
   FinalizeContentBillingInput,
@@ -75,18 +77,30 @@ import type {
 } from "@/types/workflows/workflows";
 
 const EXECUTION_CLAIM_TTL_SECONDS = 60 * 60 * 24;
-const EXECUTION_CLAIM_SCOPE = "workflow-execution";
+
+async function acquireExecutionClaim(
+  input: ClaimWorkflowExecutionInput
+): Promise<{ claimed: boolean }> {
+  if (!redis) {
+    return { claimed: process.env.NODE_ENV === "development" };
+  }
+  const key = `workflow:claim:${input.executionId}`;
+  const claimed = await redis.set(key, input.claimToken, {
+    nx: true,
+    ex: EXECUTION_CLAIM_TTL_SECONDS,
+  });
+  if (claimed === "OK") {
+    return { claimed: true };
+  }
+  const holder = await redis.get(key);
+  return { claimed: holder === input.claimToken };
+}
 
 export async function claimWorkflowExecution(
   input: ClaimWorkflowExecutionInput
 ): Promise<{ claimed: boolean }> {
   "use step";
-  const claim = await acquireClaim({
-    scope: EXECUTION_CLAIM_SCOPE,
-    claimKey: input.executionId,
-    ownerToken: input.claimToken,
-    ttlSeconds: EXECUTION_CLAIM_TTL_SECONDS,
-  });
+  const claim = await acquireExecutionClaim(input);
   if (!claim.claimed) {
     await trackServerEventAndFlush({
       event: POSTHOG_EVENTS.WORKFLOW_DUPLICATE_REJECTED,
@@ -100,11 +114,7 @@ export async function claimWorkflowExecution(
   return claim;
 }
 
-export async function fetchScheduleTriggerContext(triggerId: string): Promise<{
-  trigger: ScheduleTriggerData | null;
-  lookbackWindow: LookbackWindow;
-}> {
-  "use step";
+async function loadTriggerWithLookback(triggerId: string) {
   const [result, lookbackResult] = await Promise.all([
     db.query.contentTriggers.findFirst({
       where: eq(contentTriggers.id, triggerId),
@@ -113,8 +123,18 @@ export async function fetchScheduleTriggerContext(triggerId: string): Promise<{
       where: eq(contentTriggerLookbackWindows.triggerId, triggerId),
     }),
   ]);
+  return {
+    result,
+    lookbackWindow: parseLookbackWindow(lookbackResult?.window),
+  };
+}
 
-  const lookbackWindow = parseLookbackWindow(lookbackResult?.window);
+export async function fetchScheduleTriggerContext(triggerId: string): Promise<{
+  trigger: ScheduleTriggerData | null;
+  lookbackWindow: LookbackWindow;
+}> {
+  "use step";
+  const { result, lookbackWindow } = await loadTriggerWithLookback(triggerId);
   if (!result) {
     return { trigger: null, lookbackWindow };
   }
@@ -181,6 +201,7 @@ export async function clearWorkflowPause(input: {
 export async function fetchScheduleSources(input: {
   organizationId: string;
   repositoryIds: string[];
+  linearIntegrationIds?: string[];
 }): Promise<{
   repositories: ScheduleRepositoryData[];
   linearIntegrationRefs: Array<{ integrationId: string; teamName?: string }>;
@@ -212,7 +233,10 @@ export async function fetchScheduleSources(input: {
       .where(
         and(
           eq(linearIntegrations.organizationId, input.organizationId),
-          eq(linearIntegrations.enabled, true)
+          eq(linearIntegrations.enabled, true),
+          input.linearIntegrationIds !== undefined
+            ? inArray(linearIntegrations.id, input.linearIntegrationIds)
+            : undefined
         )
       ),
   ]);
@@ -351,16 +375,7 @@ export async function fetchEventTrigger(triggerId: string): Promise<{
   lookbackWindow: LookbackWindow;
 }> {
   "use step";
-  const [result, lookbackResult] = await Promise.all([
-    db.query.contentTriggers.findFirst({
-      where: eq(contentTriggers.id, triggerId),
-    }),
-    db.query.contentTriggerLookbackWindows.findFirst({
-      where: eq(contentTriggerLookbackWindows.triggerId, triggerId),
-    }),
-  ]);
-
-  const lookbackWindow = parseLookbackWindow(lookbackResult?.window);
+  const { result, lookbackWindow } = await loadTriggerWithLookback(triggerId);
   if (!result) {
     return { trigger: null, lookbackWindow };
   }
@@ -493,10 +508,7 @@ export async function appendAutomationLogBestEffort(
 ): Promise<void> {
   const [result] = await Promise.allSettled([appendAutomationLog(input)]);
   if (result?.status === "rejected") {
-    console.error(
-      "[ActivityLog] Failed to record activity log:",
-      result.reason
-    );
+    console.error("[ActivityLog] Failed to record activity log", result.reason);
   }
 }
 
@@ -505,117 +517,49 @@ export async function trackContentOutcome(
 ): Promise<void> {
   "use step";
   await trackContentOutcomeAndFlush(input);
-  try {
-    if (input.kind === "created") {
-      const trackingResults = await Promise.allSettled(
-        (input.postIds ?? []).map((postId) =>
-          trackScheduledContentCreated({
-            triggerId: input.triggerId,
-            organizationId: input.organizationId,
-            postId,
-            outputType: input.outputType,
-            creationMode: input.creationMode,
-            lookbackWindow: input.lookbackWindow,
-            repositoryCount: input.repositoryCount,
-            source: input.source,
-          })
-        )
-      );
-      const failures = trackingResults.filter(
-        (result) => result.status === "rejected"
-      );
-      if (failures.length > 0) {
-        console.warn(
-          `[${input.logPrefix}] Failed to track some created posts`,
-          {
-            triggerId: input.triggerId,
-            failureCount: failures.length,
-          }
-        );
-      }
-      return;
-    }
-
-    if (input.kind === "failed") {
-      await trackScheduledContentFailed({
-        triggerId: input.triggerId,
-        organizationId: input.organizationId,
-        outputType: input.outputType,
-        creationMode: input.creationMode,
-        reason: input.reason ?? "unknown",
-        lookbackWindow: input.lookbackWindow,
-        repositoryCount: input.repositoryCount,
-        source: input.source,
-      });
-      return;
-    }
-
-    await trackScheduledContentSkipped({
-      triggerId: input.triggerId,
-      organizationId: input.organizationId,
-      outputType: input.outputType,
-      creationMode: input.creationMode,
-      reason: input.reason ?? "unknown",
-      lookbackWindow: input.lookbackWindow,
-      repositoryCount: input.repositoryCount,
-      source: input.source,
-    });
-  } catch (trackingError) {
-    console.warn(`[${input.logPrefix}] Failed to track content outcome`, {
-      triggerId: input.triggerId,
-      kind: input.kind,
-      error: trackingError,
-    });
+  const event = {
+    triggerId: input.triggerId,
+    organizationId: input.organizationId,
+    outputType: input.outputType,
+    creationMode: input.creationMode,
+    lookbackWindow: input.lookbackWindow,
+    repositoryCount: input.repositoryCount,
+    source: input.source,
+  };
+  if (input.kind === "created") {
+    await Promise.all(
+      (input.postIds ?? []).map((postId) =>
+        trackScheduledContentCreated({ ...event, postId })
+      )
+    );
+    return;
   }
+  const track =
+    input.kind === "failed"
+      ? trackScheduledContentFailed
+      : trackScheduledContentSkipped;
+  await track({ ...event, reason: input.reason ?? "unknown" });
 }
 
 export async function fetchNotificationData(input: {
   organizationId: string;
   setting: NotificationSettingKey;
+  force?: boolean;
 }): Promise<NotificationData> {
   "use step";
-  const notificationSettings =
-    await db.query.organizationNotificationSettings.findFirst({
-      where: eq(
-        organizationNotificationSettings.organizationId,
-        input.organizationId
-      ),
-    });
-
-  if (!notificationSettings?.[input.setting]) {
-    return {
-      enabled: false,
-      ownerEmails: [],
-      organizationName: "",
-      organizationSlug: "",
-    };
-  }
-
-  const [org, ownerMemberships] = await Promise.all([
-    db.query.organizations.findFirst({
-      where: eq(organizations.id, input.organizationId),
-      columns: { name: true, slug: true },
-    }),
-    db.query.members.findMany({
-      where: and(
-        eq(members.organizationId, input.organizationId),
-        eq(members.role, "owner")
-      ),
-      with: { users: { columns: { email: true } } },
-    }),
-  ]);
-
-  return {
-    enabled: true,
-    ownerEmails: ownerMemberships.map((membership) => membership.users.email),
-    organizationName: org?.name ?? "Your organization",
-    organizationSlug: org?.slug ?? "",
-  };
+  return getNotificationData(input);
 }
 
 export async function enqueueDigest(input: EnqueueDigestInput): Promise<void> {
   "use step";
   await enqueueContentEmailDigest(input);
+}
+
+export async function notifyContentCreatedInSlack(
+  input: ContentCreatedSlackInput
+): Promise<void> {
+  "use step";
+  await postContentCreatedToSlack(input);
 }
 
 export async function cleanupEmptyCollection(input: {

@@ -12,8 +12,8 @@ import {
   GEO_OPENCODE_ENGINE_ID,
 } from "./geo";
 
-export const GEO_SAMPLE_DAYS = 30;
-export const GEO_SAMPLE_PROJECT_NAME = "Notra demo";
+const GEO_SAMPLE_DAYS = 30;
+const GEO_SAMPLE_PROJECT_NAME = "Notra demo";
 export const GEO_SAMPLE_LANGUAGES = ["English", "German"] as const;
 
 export const GEO_SAMPLE_ENGINES: readonly {
@@ -60,7 +60,7 @@ export const GEO_SAMPLE_SEARCH_QUERY_MAX = 3;
 export const GEO_SAMPLE_SOURCE_MIN = 2;
 export const GEO_SAMPLE_SOURCE_MAX = 4;
 
-export const GEO_SAMPLE_OPENCODE_SOURCES: readonly GeoCheckSource[] = [
+const GEO_SAMPLE_OPENCODE_SOURCES: readonly GeoCheckSource[] = [
   {
     title: "ChatGPT",
     url: "https://chatgpt.com/",
@@ -98,7 +98,7 @@ export const GEO_SAMPLE_OPENCODE_SOURCES: readonly GeoCheckSource[] = [
   },
 ];
 
-export const GEO_SAMPLE_SOURCES: readonly GeoCheckSource[] = [
+const GEO_SAMPLE_SOURCES: readonly GeoCheckSource[] = [
   {
     title: "Best AI Content Marketing Tools in 2026",
     url: "https://www.g2.com/categories/ai-content-creation",
@@ -141,7 +141,7 @@ export const GEO_SAMPLE_SOURCES: readonly GeoCheckSource[] = [
   },
 ];
 
-export const GEO_SAMPLE_COMPETITORS: readonly GeoCompetitorSeed[] = [
+const GEO_SAMPLE_COMPETITORS: readonly GeoCompetitorSeed[] = [
   {
     name: "Jasper",
     domain: "jasper.ai",
@@ -186,7 +186,7 @@ export const GEO_SAMPLE_COMPETITORS: readonly GeoCompetitorSeed[] = [
   },
 ];
 
-export const GEO_SAMPLE_PROMPTS: readonly {
+const GEO_SAMPLE_PROMPTS: readonly {
   english: string;
   german: string;
 }[] = [
@@ -233,7 +233,7 @@ export const GEO_SAMPLE_PROMPTS: readonly {
   },
 ];
 
-export const GEO_SAMPLE_SEQUENCES = [
+const GEO_SAMPLE_SEQUENCES = [
   {
     name: "Buyer research",
     steps: [
@@ -252,7 +252,7 @@ export const GEO_SAMPLE_SEQUENCES = [
   },
 ] as const;
 
-export const GEO_SAMPLE_TRAFFIC_PATHS: readonly string[] = [
+const GEO_SAMPLE_TRAFFIC_PATHS: readonly string[] = [
   "/changelog",
   "/blog/geo-guide",
   "/docs/sdk",

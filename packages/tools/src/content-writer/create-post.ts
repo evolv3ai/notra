@@ -53,6 +53,8 @@ export function createWriterCreatePostTool() {
         recommendations: input.recommendations ?? null,
         autoPublish,
         sourceMetadata,
+        tags: input.tags,
+        excerpt: input.excerpt,
         postId: deriveDeterministicPostId(
           ctx,
           `create_post:${contentType}:${input.title} ${input.markdown}`

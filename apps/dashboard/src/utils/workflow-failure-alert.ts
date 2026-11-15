@@ -1,7 +1,9 @@
 import { redis } from "@notra/ai/utils/redis";
+import { websiteLogUrl } from "@notra/ai/utils/website-log-url";
 
 import { WORKFLOW_FAILURE_ALERT } from "@/constants/workflow-failure-alert";
 import type { WorkflowFailureAlertInput } from "@/types/workflow-failure-alert";
+import { formatFailureDiagnostics } from "@/utils/workflow-failure";
 import { logWorkflowTelemetry } from "@/utils/workflow-telemetry";
 
 const pendingKey = "workflow:failure-alerts:pending";
@@ -17,10 +19,14 @@ export async function enqueueWorkflowFailure(
   }
   await redis
     .multi()
-    .set(`workflow:failure-alert:payload:${input.runId}`, input, {
-      nx: true,
-      ex: WORKFLOW_FAILURE_ALERT.payloadSeconds,
-    })
+    .set(
+      `workflow:failure-alert:payload:${input.runId}`,
+      { ...input, websiteUrl: websiteLogUrl(input.websiteUrl) },
+      {
+        nx: true,
+        ex: WORKFLOW_FAILURE_ALERT.payloadSeconds,
+      }
+    )
     .zadd(pendingKey, { nx: true }, { score: Date.now(), member: input.runId })
     .exec();
 }
@@ -37,7 +43,6 @@ async function alertWorkflowFailure(
   }
 
   const sentKey = `workflow:failure-alert:${input.runId}:sent`;
-  // A short lock lets another sweep retry if this worker disappears mid-send.
   const claimed = await redis.set(
     `workflow:failure-alert:${input.runId}:lock`,
     "1",
@@ -53,6 +58,8 @@ async function alertWorkflowFailure(
     if (await redis.exists(sentKey)) {
       return;
     }
+    const websiteUrl = websiteLogUrl(input.websiteUrl);
+    const diagnostics = formatFailureDiagnostics(input.diagnostics);
     const response = await fetch(webhook, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -61,11 +68,18 @@ async function alertWorkflowFailure(
           ":warning: Workflow failed",
           `Workflow: ${input.workflow}`,
           `Run: ${input.runId}`,
+          ...(websiteUrl ? [`Website: ${websiteUrl}`] : []),
           ...(input.organizationId
             ? [`Organization: ${input.organizationId}`]
             : []),
           ...(input.projectId ? [`Project: ${input.projectId}`] : []),
+          ...(input.phase ? [`Phase: ${input.phase}`] : []),
+          ...(input.classification
+            ? [`Classification: ${input.classification}`]
+            : []),
+          ...(input.errorCode ? [`Code: ${input.errorCode}`] : []),
           ...(input.reason ? [`Reason: ${input.reason.slice(0, 500)}`] : []),
+          ...(diagnostics ? [`Diagnostics: ${diagnostics}`] : []),
         ].join("\n"),
       }),
       signal: AbortSignal.timeout(5000),

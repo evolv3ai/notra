@@ -27,16 +27,7 @@ import {
   shiftDay,
 } from "../utils/demo-pipe";
 
-/**
- * The public demo has no Tinybird. Social analytics are generated from the
- * organization's (fictional) connected and tracked accounts: every account
- * and day seeds its own random stream, so history is stable while "now"
- * moves forward and newly tracked accounts get data straight away. These
- * mirror the endpoints in `pipes/social.ts`.
- */
-
 const HOUR_MS = 3_600_000;
-/** Snapshot time of the daily follower count, in UTC hours. */
 const FOLLOWER_SNAPSHOT_HOUR = 6;
 
 const providerSlot = demoProviderSlot<DemoSocialSourceProvider>(
@@ -55,7 +46,6 @@ function hashString(value: string): number {
   return hash >>> 0;
 }
 
-/** mulberry32: small, fast and good enough for believable demo numbers. */
 function seededRandom(seed: string): () => number {
   let state = hashString(seed);
   return () => {
@@ -165,7 +155,6 @@ function postMetrics(
   postedAt: Date,
   now: Date
 ) {
-  // Fresh posts are still collecting impressions.
   const ageHours = (now.getTime() - postedAt.getTime()) / HOUR_MS;
   const maturity = Math.min(1, 0.3 + ageHours / 72);
   const impressions = Math.round(
@@ -186,7 +175,6 @@ function postMetrics(
   };
 }
 
-/** Posts the visitor published from the demo, with generated stats. */
 function publishedPosts(
   accounts: DemoSocialAccount[],
   published: DemoPublishedPost[],
@@ -608,7 +596,6 @@ export async function queryDemoSocialPipe<TRow>(
   if (!handler || !provider) {
     return null;
   }
-  // Every caller passes the pipe's typed params (`InferParams`).
   const parsed = params as DemoSocialParams;
   const now = new Date();
   const { accounts, published } = await provider(parsed.organization_id);

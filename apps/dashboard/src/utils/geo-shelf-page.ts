@@ -38,7 +38,7 @@ export function resolveGeoShelfPageStatus(
  * moves the row out of the current filter, and the URL fallback survives the
  * id swap after an optimistic add.
  */
-export function resolveSelectedShelfSource(
+function resolveSelectedShelfSource(
   sources: readonly GeoShelfSource[],
   selected: GeoShelfSource | null
 ): GeoShelfSource | null {

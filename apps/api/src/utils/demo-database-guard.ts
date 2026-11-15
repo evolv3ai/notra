@@ -1,7 +1,6 @@
 import { createDb } from "@notra/db/drizzle";
 import { hasNonDemoOrganizations } from "@notra/db/utils/demo";
 
-/** demo-api must never run against a database with real customers. */
 export async function assertDedicatedDemoDatabase(databaseUrl: string) {
   if (await hasNonDemoOrganizations(createDb(databaseUrl))) {
     console.error(

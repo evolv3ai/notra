@@ -77,5 +77,6 @@ export default defineConfig({
       mono: "geist-mono",
     },
   },
+  react: { compiler: false },
   title: "Notra UI",
 });

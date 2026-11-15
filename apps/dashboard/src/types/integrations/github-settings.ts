@@ -7,7 +7,7 @@ export interface GitHubInstallResumeParams {
   callbackPath: string;
   organizationId: string;
 }
-export type GitHubSettingsState = ReturnType<typeof useGitHubSettings>;
+type GitHubSettingsState = ReturnType<typeof useGitHubSettings>;
 export type GitHubRepositoriesSectionProps = Pick<
   GitHubSettingsState,
   | "githubIntegrations"

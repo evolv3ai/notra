@@ -1,4 +1,8 @@
-import type { GeoScanPlanSnapshot } from "@notra/db/types/geo-scan";
+import type {
+  GeoScanPlannedAnswer,
+  GeoScanPlanSnapshot,
+} from "@notra/db/types/geo-scan";
+import type { SQL } from "drizzle-orm";
 import type { z } from "zod";
 
 import type {
@@ -30,4 +34,12 @@ export interface GeoScanResultSummary {
   sequenceId: string | null;
   sources: number;
   capturedAt: string;
+}
+
+export interface GeoLiveScanRowsInput {
+  tasks: GeoScanPlannedAnswer[];
+  offset: number;
+  savedKeys: ReadonlySet<string>;
+  taskStates: NonNullable<GeoScanPlanSnapshot["taskStates"]>;
+  scopeFilter: SQL | undefined;
 }

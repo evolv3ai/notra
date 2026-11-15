@@ -1,16 +1,9 @@
-import { useTranslations } from "next-intl";
+import { TruncateWithTooltip } from "@notra/ui/components/shared/truncate-with-tooltip";
+import { useTranslations } from "use-intl";
 
-import { JourneyPathPill } from "@/components/geo/journey-path-pill";
 import type { JourneyPathSummaryProps } from "@/types/geo";
-import {
-  normalizeGeoJourneyPath,
-  toGeoJourneyPathNode,
-} from "@/utils/geo-journey";
+import { normalizeGeoJourneyPath } from "@/utils/geo-journey";
 
-/**
- * Entry page plus a count of the rest. A full trail cannot fit a table cell
- * without clipping mid-pill; the journey sheet shows the whole path.
- */
 export function JourneyPathSummary({
   entryPath,
   paths,
@@ -24,13 +17,12 @@ export function JourneyPathSummary({
   const more = Math.max(distinctPaths, sampled) - 1;
 
   return (
-    <span className="flex min-w-0 items-center gap-2" title={paths.join(" → ")}>
-      <JourneyPathPill
-        className="min-w-0"
-        node={toGeoJourneyPathNode(entryPath)}
-      />
+    <span className="flex min-w-0 items-center gap-2">
+      <TruncateWithTooltip className="w-auto font-mono text-sm">
+        {normalizeGeoJourneyPath(entryPath)}
+      </TruncateWithTooltip>
       {more > 0 ? (
-        <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+        <span className="text-muted-foreground shrink-0 text-sm tabular-nums">
           {t("morePages", { count: more })}
         </span>
       ) : null}

@@ -18,37 +18,32 @@ import {
   runSequenceResponseSchema,
   sequenceResponseSchema,
 } from "@notra/schemas/api/geo-sequences";
+import { Effect } from "effect";
 
 import { API_TRIGGER_SOURCE } from "../constants/analytics";
 import {
   GEO_COMMON_ERROR_RESPONSES,
   GEO_OPENAPI_TAG,
 } from "../constants/geo-openapi";
-import { runGeoEffect } from "../runtime/geo";
-import {
-  GEO_REMOTE_SEQUENCE_RUN,
-  resolveRemoteGeoUrl,
-  runConfiguredRemoteGeoEffect,
-} from "../runtime/geo-remote";
+import { runGeoEffect, runRemoteGeoEffect } from "../runtime/geo";
+import { GEO_REMOTE_SEQUENCE_RUN } from "../runtime/geo-remote";
 import { trackApiEvent } from "../utils/analytics";
 import {
   attachGeoOrganization,
-  geoErrorResponse,
-  geoRemoteUnavailableResponse,
+  geoOutcomeResponse,
+  geoRemoteErrorResponse,
 } from "../utils/geo";
+import { getInternalWorkflowUrl } from "../utils/internal-workflow";
 import { createOpenApiApp } from "../utils/openapi-app";
 import { errorResponse, rateLimitResponse } from "../utils/openapi-responses";
 import { enforceRatelimit, RATE_LIMITS, ratelimit } from "../utils/ratelimit";
 
 export const geoSequencesRoutes = createOpenApiApp();
 
-const GEO_TAG = GEO_OPENAPI_TAG;
-const commonErrors = GEO_COMMON_ERROR_RESPONSES;
-
 const listSequencesRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/sequences",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "listGeoSequences",
   summary: "List GEO prompt sequences",
   request: { params: projectParamsSchema },
@@ -57,14 +52,14 @@ const listSequencesRoute = createRoute({
       description: "Sequences fetched successfully",
       content: { "application/json": { schema: listSequencesResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const createSequenceRoute = createRoute({
   method: "post",
   path: "/projects/{projectId}/geo/sequences",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "createGeoSequence",
   summary: "Create a GEO prompt sequence",
   request: {
@@ -79,14 +74,14 @@ const createSequenceRoute = createRoute({
       description: "Sequence created successfully",
       content: { "application/json": { schema: sequenceResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const patchSequenceRoute = createRoute({
   method: "patch",
   path: "/projects/{projectId}/geo/sequences/{sequenceId}",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "updateGeoSequence",
   summary: "Update a GEO prompt sequence",
   request: {
@@ -101,14 +96,14 @@ const patchSequenceRoute = createRoute({
       description: "Sequence updated successfully",
       content: { "application/json": { schema: sequenceResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const deleteSequenceRoute = createRoute({
   method: "delete",
   path: "/projects/{projectId}/geo/sequences/{sequenceId}",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "deleteGeoSequence",
   summary: "Delete a GEO prompt sequence",
   request: { params: sequenceParamsSchema },
@@ -117,25 +112,26 @@ const deleteSequenceRoute = createRoute({
       description: "Sequence deleted successfully",
       content: { "application/json": { schema: deleteSequenceResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const runSequenceRoute = createRoute({
   method: "post",
   path: "/projects/{projectId}/geo/sequences/{sequenceId}/run",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "runGeoSequence",
   summary: "Run a GEO prompt sequence now",
   description:
-    "Runs the sequence synchronously and answers with its result. The call is not queued: the request stays open for the whole run, which plays every turn against every available answer engine and can take several minutes. Use a client timeout of at least five minutes; after four minutes the API stops waiting and answers 409 while the run finishes on its own. Do not retry; read the result from the project's GEO checks. The work happens inside the Notra dashboard, which owns the model credentials and billing gates; the public API never calls an answer engine itself. Results also land in the project's GEO checks.",
+    "Runs the sequence now. API-based answer engines run synchronously: the request stays open while every turn plays against each of them, which can take several minutes, and `checks`, `mentions` and `engines` report their result. Tracked consumer apps (ChatGPT, Perplexity, Gemini, AI Mode, Copilot) answer far more slowly, so they are queued as a background scan instead: `queuedScanId` names it and `queuedEngines` lists the apps it covers. Poll `GET /v1/projects/{projectId}/geo/scans/{scanId}` for that part. A run with only consumer apps answers right away with `checks: 0`. Runs also work while automatic scans are paused. Use a client timeout of at least five minutes; after four minutes the API stops waiting and answers 409 while the run finishes on its own. Do not retry; read the result from the project's GEO checks. The work happens inside the Notra dashboard, which owns the model credentials and billing gates; the public API never calls an answer engine itself. Results also land in the project's GEO checks.",
   request: { params: sequenceParamsSchema },
   responses: {
     200: {
-      description: "Sequence run completed",
+      description:
+        "API-based engines finished; a queued consumer-app scan is named by queuedScanId",
       content: { "application/json": { schema: runSequenceResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
     409: errorResponse(
       "Sequence execution is still running after the internal timeout; do not retry the run"
     ),
@@ -151,16 +147,11 @@ geoSequencesRoutes.openapi(listSequencesRoute, async (c) => {
   const { projectId } = c.req.valid("param");
   const outcome = await runGeoEffect(
     "sequencesList",
-    listGeoSequences({ organizationId: base.organizationId, projectId })
+    listGeoSequences({ organizationId: base.organizationId, projectId }).pipe(
+      Effect.map(({ sequences }) => ({ sequences }))
+    )
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json(
-    { sequences: outcome.value.sequences, organization: base.organization },
-    200
-  );
+  return geoOutcomeResponse(c, outcome, 200);
 });
 
 geoSequencesRoutes.openapi(createSequenceRoute, async (c) => {
@@ -172,73 +163,46 @@ geoSequencesRoutes.openapi(createSequenceRoute, async (c) => {
     createGeoSequence(
       { organizationId: base.organizationId, projectId },
       { name, steps }
-    )
+    ).pipe(Effect.map((sequence) => ({ sequence })))
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json(
-    { sequence: outcome.value, organization: base.organization },
-    201
-  );
+  return geoOutcomeResponse(c, outcome, 201);
 });
 
 geoSequencesRoutes.openapi(patchSequenceRoute, async (c) => {
   const base = c.get("geo");
   const { projectId, sequenceId } = c.req.valid("param");
-  const update = c.req.valid("json");
-
   const outcome = await runGeoEffect(
     "sequenceUpdate",
     updateGeoSequence(
       { organizationId: base.organizationId, projectId },
-      { sequenceId, ...update }
-    )
+      { sequenceId, ...c.req.valid("json") }
+    ).pipe(Effect.map((sequence) => ({ sequence })))
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json(
-    { sequence: outcome.value, organization: base.organization },
-    200
-  );
+  return geoOutcomeResponse(c, outcome, 200);
 });
 
 geoSequencesRoutes.openapi(deleteSequenceRoute, async (c) => {
   const base = c.get("geo");
   const { projectId, sequenceId } = c.req.valid("param");
-
   const outcome = await runGeoEffect(
     "sequenceDelete",
     deleteGeoSequence(
       { organizationId: base.organizationId, projectId },
       sequenceId
-    )
+    ).pipe(Effect.as({ id: sequenceId }))
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json({ id: sequenceId, organization: base.organization }, 200);
+  return geoOutcomeResponse(c, outcome, 200);
 });
 
 geoSequencesRoutes.openapi(runSequenceRoute, async (c) => {
   const base = c.get("geo");
   const { projectId, sequenceId } = c.req.valid("param");
 
-  const url = resolveRemoteGeoUrl(c.env, GEO_REMOTE_SEQUENCE_RUN);
+  const url = getInternalWorkflowUrl(c.env, GEO_REMOTE_SEQUENCE_RUN.path);
   if (!url) {
-    return geoRemoteUnavailableResponse(
-      c,
-      GEO_REMOTE_SEQUENCE_RUN.unavailableMessage
-    );
+    return c.json({ error: GEO_REMOTE_SEQUENCE_RUN.unavailableMessage }, 503);
   }
 
-  // Charged immediately before the remote run. Project ownership and service
-  // availability have already been established; the canonical sequence lookup
-  // happens in `runGeoSequenceNow` inside the internal endpoint.
   const rateLimited = await enforceRatelimit(
     c,
     ratelimit.sequenceRun,
@@ -248,22 +212,16 @@ geoSequencesRoutes.openapi(runSequenceRoute, async (c) => {
     return rateLimited;
   }
 
-  // Synchronous by necessity: there is no GEO sequence workflow to hand off
-  // to, so the dashboard runs the sequence to completion and we relay its real
-  // result. Returning 202 with a made-up run id — as this route used to — named
-  // nothing a client could poll.
-  //
-  // TODO(Phase 6 — durable workflow): once the sequence run is a durable
-  // workflow, hand off and return a real run id plus a status endpoint.
-  const outcome = await runConfiguredRemoteGeoEffect(
-    GEO_REMOTE_SEQUENCE_RUN,
-    url,
-    { organizationId: base.organizationId, projectId, sequenceId }
-  );
+  const outcome = await runRemoteGeoEffect(GEO_REMOTE_SEQUENCE_RUN, url, {
+    organizationId: base.organizationId,
+    projectId,
+    sequenceId,
+  });
   if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
+    return geoRemoteErrorResponse(c, outcome.failure);
   }
 
+  const { checks, mentions, engines } = outcome.value;
   trackApiEvent(c, {
     event: POSTHOG_EVENTS.GEO_SEQUENCE_RUN,
     organizationId: base.organizationId,
@@ -271,15 +229,17 @@ geoSequencesRoutes.openapi(runSequenceRoute, async (c) => {
     properties: {
       trigger: API_TRIGGER_SOURCE,
       sequence_id: sequenceId,
-      check_count: outcome.value.checks,
+      check_count: checks,
     },
   });
 
   return c.json(
     attachGeoOrganization(base.organization, {
-      checks: outcome.value.checks,
-      mentions: outcome.value.mentions,
-      engines: outcome.value.engines,
+      checks,
+      mentions,
+      engines,
+      queuedScanId: outcome.value.queuedScanId,
+      queuedEngines: outcome.value.queuedEngines,
     }),
     200
   );

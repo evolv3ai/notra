@@ -1,4 +1,4 @@
-import { currentSkillContent } from "@notra/ai/skills/functions/current-content";
+import { ensureSystemSkillRegistry } from "@notra/ai/skills/registry";
 import { db } from "@notra/db/drizzle";
 import { skills } from "@notra/db/schema";
 import { and, eq } from "drizzle-orm";
@@ -14,14 +14,13 @@ export function createGetSkillTool() {
     inputSchema: skillNameInputSchema,
     async execute({ name }, ctx) {
       const organizationId = requireOrganizationId(ctx);
+      await ensureSystemSkillRegistry();
       const rows = await db
         .select({
           name: skills.name,
           description: skills.description,
           content: skills.content,
           isSystem: skills.isSystem,
-          createdAt: skills.createdAt,
-          updatedAt: skills.updatedAt,
         })
         .from(skills)
         .where(
@@ -36,7 +35,7 @@ export function createGetSkillTool() {
       return {
         name: skill.name,
         description: skill.description,
-        content: currentSkillContent(skill),
+        content: skill.content,
         isSystem: skill.isSystem,
       };
     },

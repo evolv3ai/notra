@@ -118,21 +118,25 @@ import { HERO_DITHER } from "../constants/hero-dither";
         });
       };
 
+      let started = false;
       const observer = new IntersectionObserver(
         (entries) => {
           isInView = entries.some((entry) => entry.isIntersecting);
           syncSpeed();
+          if (!isInView || started) {
+            return;
+          }
+          started = true;
+          if (isMobile) {
+            whenLoadedAndIdle(run);
+          } else {
+            run();
+          }
         },
         { rootMargin: HERO_DITHER_VIEWPORT_MARGIN }
       );
       observer.observe(this);
       document.addEventListener("visibilitychange", syncSpeed);
-
-      if (isMobile) {
-        whenLoadedAndIdle(run);
-      } else {
-        run();
-      }
 
       this.cleanup = () => {
         disposed = true;

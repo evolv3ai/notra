@@ -1,6 +1,5 @@
-// Bound multipart uploads by bytes actually consumed even when the declared length is absent or false.
 export async function readBoundedRequestBody(
-  request: Request,
+  request: Request | Response,
   maxBytes: number
 ): Promise<Uint8Array<ArrayBuffer> | null> {
   if (!request.body) {

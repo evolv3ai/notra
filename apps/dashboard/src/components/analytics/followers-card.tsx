@@ -1,17 +1,15 @@
 "use client";
 
+import { TrendBadge } from "@notra/ui/components/trend-badge";
 import {
   Avatar,
   AvatarFallback,
   AvatarImage,
 } from "@notra/ui/components/ui/avatar";
-import { useFormatter, useTranslations } from "next-intl";
+import { InstrumentEmpty, InstrumentModule } from "ui/card";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { ChartSparkline } from "@/components/charts/chart-sparkline";
-import {
-  InstrumentEmpty,
-  InstrumentModule,
-} from "@/components/instrument/instrument-module";
 import { useFormatMetric } from "@/lib/hooks/use-format-metric";
 import { cn } from "@/lib/utils";
 import type {
@@ -49,22 +47,14 @@ function DeltaBadge({ series }: { series: number[] }) {
     );
   }
   const delta = last - first;
-  if (delta === 0) {
-    return (
-      <span className="text-muted-foreground font-mono text-[0.6875rem]">
-        ±0
-      </span>
-    );
-  }
+  const direction = delta > 0 ? "up" : "down";
   return (
-    <span
-      className={cn(
-        "font-mono text-[0.6875rem] tabular-nums",
-        delta > 0 ? "text-success" : "text-destructive"
-      )}
-    >
-      {delta > 0 ? "▲" : "▼"} {format.number(Math.abs(delta))}
-    </span>
+    <TrendBadge size="sm" tone={delta === 0 ? "flat" : direction}>
+      <span aria-hidden="true">{format.number(Math.abs(delta))}</span>
+      <span className="sr-only">
+        {format.number(delta, { signDisplay: "exceptZero" })}
+      </span>
+    </TrendBadge>
   );
 }
 

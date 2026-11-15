@@ -1,3 +1,8 @@
 import { createGetReleaseByTagTool } from "@notra/tools/assistant/get-release-by-tag";
 
-export default createGetReleaseByTagTool();
+import { withToolActivityLabel } from "../lib/utils/tool-activity";
+
+export default withToolActivityLabel(
+  createGetReleaseByTagTool(),
+  "Reading GitHub release notes"
+);

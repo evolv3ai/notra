@@ -3,6 +3,11 @@ import { organizationIdSchema } from "@notra/schemas/dashboard/auth/organization
 // biome-ignore lint/performance/noNamespaceImport: Zod recommended way of importing
 import * as z from "zod";
 
+import {
+  PUBLISH_CONTENT_MAX_LENGTH,
+  PUBLISH_MEDIA_MAX_COUNT,
+} from "../../constants/dashboard/social-accounts";
+
 export const socialConnectPlatformSchema = z.enum(["twitter", "linkedin"]);
 
 export type SocialConnectPlatform = z.infer<typeof socialConnectPlatformSchema>;
@@ -18,19 +23,24 @@ export type SocialConnectOAuthState = z.infer<
   typeof socialConnectOAuthStateSchema
 >;
 
-const PUBLISH_CONTENT_MAX_LENGTH = 25_000;
+const socialMediaUrlSchema = z.url().max(2048);
 
-export const socialPublishSurfaceSchema = z.enum(["editor", "chat_preview"]);
+const socialPublishSurfaceSchema = z.enum(["editor", "chat_preview"]);
 
 export type SocialPublishSurface = z.infer<typeof socialPublishSurfaceSchema>;
 
-export const publishSocialPostBodySchema = z.object({
+const publishSocialPostBodySchema = z.object({
   accountId: z.string().min(1),
   content: z
     .string()
     .trim()
     .min(1, "Post content is required")
     .max(PUBLISH_CONTENT_MAX_LENGTH, "Post content is too long"),
+  /** Public video URLs attached to the post (e.g. R2 `publicUrl`). */
+  mediaUrls: z
+    .array(socialMediaUrlSchema)
+    .max(PUBLISH_MEDIA_MAX_COUNT)
+    .optional(),
   from: socialPublishSurfaceSchema.optional(),
 });
 

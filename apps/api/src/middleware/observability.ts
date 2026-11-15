@@ -1,7 +1,36 @@
-import { runWithOperationalContext } from "@notra/ai/utils/operational-context";
+import { useLogger as getRequestLogger, withEvlog } from "@notra/ai/evlog";
+import {
+  getOperationalContext,
+  runWithOperationalContext,
+} from "@notra/ai/utils/operational-context";
 import type { Context, Next } from "hono";
 
-import { logApiRequest } from "../utils/analytics";
+import {
+  type AuthData,
+  getOrganizationIdFromAuth,
+  isOAuthAuth,
+} from "../types/auth";
+import { apiRequestLogFields } from "../utils/analytics";
+
+export async function apiAuthTelemetryMiddleware(
+  c: Context,
+  next: Next
+): Promise<void> {
+  const parent = getOperationalContext();
+  const auth: AuthData | undefined = c.get("auth");
+  if (!parent || !auth) {
+    await next();
+    return;
+  }
+  await runWithOperationalContext(
+    {
+      ...parent,
+      organizationId: getOrganizationIdFromAuth(auth),
+      userId: isOAuthAuth(auth) ? auth.userId : undefined,
+    },
+    next
+  );
+}
 
 export async function apiObservabilityMiddleware(
   c: Context,
@@ -11,13 +40,32 @@ export async function apiObservabilityMiddleware(
   const requestId = crypto.randomUUID();
   c.header("X-Request-Id", requestId);
   await runWithOperationalContext({ requestId }, async () => {
-    try {
-      await next();
-    } finally {
-      // Hono handles downstream errors before next() resolves. Reapply the ID
-      // because an error handler can replace the response and its headers.
-      c.header("X-Request-Id", requestId);
-      logApiRequest(c, Math.round(performance.now() - startedAt));
+    const response = await withEvlog(async (_request: Request) => {
+      const log = getRequestLogger();
+      c.set("log", log);
+      try {
+        await next();
+      } finally {
+        // Hono handles downstream errors before next() resolves. Reapply the
+        // ID because an error handler can replace the response and its headers.
+        c.header("X-Request-Id", requestId);
+        const fields = apiRequestLogFields(
+          c,
+          Math.round(performance.now() - startedAt)
+        );
+        log.set(fields);
+        if (fields.errorKind === "client_error") {
+          if (!("error" in log.getContext())) {
+            log.setLevel("warn");
+          }
+        } else if (fields.outcome === "error") {
+          log.setLevel("error");
+        }
+      }
+      return c.res;
+    })(c.req.raw);
+    if (response !== c.res) {
+      c.res = response;
     }
   });
 }

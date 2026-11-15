@@ -40,8 +40,6 @@ export async function gscSyncWorkflow(
     let completed = 0;
     let failed = 0;
     let skippedReason: string | undefined;
-    // The shared OAuth integration row is a compare-and-swap sync lease.
-    // Sequential durable steps retry only the failed project.
     for (const projectId of projectIds) {
       try {
         const outcome = await runGscProjectSyncStep(organizationId, projectId);
@@ -125,8 +123,6 @@ export async function gscSyncWorkflow(
   });
 
   if (result.status === "failed") {
-    // Each project step has already retried independently. Do not replay the
-    // whole workflow and replace suggestions committed by successful projects.
     throw new FatalError(result.reason ?? "Search Console sync failed");
   }
 

@@ -2,6 +2,8 @@ import type { ComponentType, SVGProps } from "react";
 
 export type PricingIconKey =
   | "tracking"
+  | "traffic"
+  | "feedback"
   | "images"
   | "content"
   | "social"
@@ -38,7 +40,6 @@ interface PricingCta {
 
 export interface PricingPlan {
   id: string;
-  /** Monthly `ai_answers` quota; `null` means unlimited (Enterprise). */
   answersPerMonth: number | null;
   name: string;
   description: string;
@@ -46,6 +47,14 @@ export interface PricingPlan {
   priceSuffix?: Record<BillingPeriod, string>;
   variant: "default" | "featured";
   hasAnnualBadge?: boolean;
+  cta: PricingCta;
+  features: PricingFeature[];
+}
+
+export interface PricingFreePlan {
+  name: string;
+  description: string;
+  price: string;
   cta: PricingCta;
   features: PricingFeature[];
 }

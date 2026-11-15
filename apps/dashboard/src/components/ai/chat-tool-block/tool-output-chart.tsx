@@ -6,8 +6,8 @@ import type {
   ChartArtifact,
   PieChartArtifact,
 } from "@notra/ai/types/chart-artifact";
-import { useLocale, useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { useLocale, useTranslations } from "use-intl";
 
 import { EChartsAreaChart } from "@/components/evilcharts/charts/echarts-area-chart";
 import { EChartsPieChart } from "@/components/evilcharts/charts/echarts-pie-chart";
@@ -17,8 +17,10 @@ import {
   CHAT_TOOL_CHART_OPTIONS,
   CHAT_TOOL_RANK_TRACK_CLASS,
   CHART_SEARCH_FILL_CLASS,
+  DONUT_CORNER_RADIUS,
   DONUT_INNER_RADIUS,
   DONUT_OUTER_RADIUS,
+  DONUT_PADDING_ANGLE,
 } from "@/constants/charts";
 import { cn } from "@/lib/utils";
 import type { ChartConfig } from "@/types/charts";
@@ -36,6 +38,8 @@ import {
 import { formatChartEngineLabel } from "@/utils/geo-model-display";
 
 const VALUE_KEY = "value";
+const RANK_STAGGER_MS = 40;
+const RANK_STAGGER_MAX_STEPS = 8;
 
 function ChartFrame({
   title,
@@ -47,7 +51,7 @@ function ChartFrame({
   children: ReactNode;
 }) {
   return (
-    <div className="border-border bg-muted/20 mt-3 overflow-hidden rounded-lg border">
+    <div className="border-border bg-muted/20 duration-normal ease-emphasized mt-3 translate-y-0 overflow-hidden rounded-lg border opacity-100 transition-[opacity,transform] motion-reduce:transition-none starting:translate-y-1.5 starting:opacity-0">
       <div className="px-3 pt-2.5 pb-1 wrap-anywhere">
         <p className="text-foreground text-sm font-medium">{title}</p>
         {subtitle ? (
@@ -111,7 +115,7 @@ function AreaArtifactChart({ chart }: { chart: AreaChartArtifact }) {
   );
 }
 
-function RankMeter({ row }: { row: ToolOutputRankRow }) {
+function RankMeter({ index, row }: { index: number; row: ToolOutputRankRow }) {
   return (
     <li className="flex items-center gap-2">
       <EngineIcon className="size-4" engine={row.engine} />
@@ -134,8 +138,16 @@ function RankMeter({ row }: { row: ToolOutputRankRow }) {
           role="meter"
         >
           <div
-            className={cn("h-full rounded-full", CHART_SEARCH_FILL_CLASS)}
-            style={{ width: `${row.widthPercent}%` }}
+            className={cn(
+              "h-full origin-left scale-x-100 rounded-full transition-transform delay-(--rank-delay) duration-500 ease-out motion-reduce:transition-none starting:scale-x-0",
+              CHART_SEARCH_FILL_CLASS
+            )}
+            style={
+              {
+                "--rank-delay": `${Math.min(index, RANK_STAGGER_MAX_STEPS) * RANK_STAGGER_MS}ms`,
+                width: `${row.widthPercent}%`,
+              } as CSSProperties
+            }
           />
         </div>
       </div>
@@ -158,8 +170,8 @@ function BarArtifactChart({ chart }: { chart: BarChartArtifact }) {
 
   return (
     <ul className="flex flex-col gap-2 px-3 pt-1 pb-3">
-      {rows.map((row) => (
-        <RankMeter key={row.engine} row={row} />
+      {rows.map((row, index) => (
+        <RankMeter index={index} key={row.engine} row={row} />
       ))}
     </ul>
   );
@@ -195,6 +207,8 @@ function PieArtifactChart({ chart }: { chart: PieChartArtifact }) {
       <EChartsPieChart.Pie
         innerRadius={DONUT_INNER_RADIUS}
         outerRadius={DONUT_OUTER_RADIUS}
+        cornerRadius={DONUT_CORNER_RADIUS}
+        paddingAngle={DONUT_PADDING_ANGLE}
       />
       <EChartsPieChart.Tooltip />
       <EChartsPieChart.Legend />

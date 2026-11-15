@@ -1,4 +1,5 @@
 import { checkContentBilling } from "@notra/ai/billing/content-billing";
+import { GITHUB_API_VERSION_HEADERS } from "@notra/ai/constants/github";
 import { getTokenForIntegrationId } from "@notra/ai/integrations/github";
 import {
   getDecryptedLinearToken,
@@ -6,25 +7,50 @@ import {
 } from "@notra/ai/integrations/linear";
 import { type ContentType, contentTypeSchema } from "@notra/ai/schemas/content";
 import { supportsPostSlug } from "@notra/ai/schemas/post";
+import { postCoverImageSchema } from "@notra/ai/schemas/post-metadata";
 import {
   createLinearClient,
   getLinearIssuePreviews,
 } from "@notra/ai/utils/linear";
 import { createOctokit } from "@notra/ai/utils/octokit";
+import { stripLeadingFrontmatter } from "@notra/ai/utils/post-markdown";
+import {
+  isPostSlugConflict,
+  listOrganizationTags,
+} from "@notra/ai/utils/post-service";
 import { sanitizeMarkdownHtml } from "@notra/ai/utils/sanitize";
+import { logError } from "@notra/ai/utils/server-log";
 import { db } from "@notra/db/drizzle";
-import { githubIntegrations, postCollections, posts } from "@notra/db/schema";
+import {
+  siteDeployments,
+  sites,
+  contentAuthors,
+  githubIntegrations,
+  postCollections,
+  posts,
+} from "@notra/db/schema";
 import type { BlogPostSubtype } from "@notra/db/types/content";
+import { isPgUniqueViolation } from "@notra/db/utils/pg-errors";
 import { buildPostCollectionName } from "@notra/db/utils/post-collections";
+import {
+  checkpointPostHistory,
+  setPostHistoryContext,
+  supportsPostHistory,
+} from "@notra/db/utils/post-history";
 import { extractImageArtifactHtml } from "@notra/db/utils/post-image-artifacts";
 import {
+  contentAuthorsInOrganization,
+  postMetadataUpdateData,
+} from "@notra/db/utils/post-metadata";
+import { publishedAtForStatusChange } from "@notra/db/utils/post-published-at";
+import {
   isProjectInOrganization,
+  projectScopedCollectionIds,
   projectScopeFilter,
 } from "@notra/db/utils/projects";
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
 import {
   contentListQuerySchema,
-  contentRecentsQuerySchema,
   dashboardHomeContentQuerySchema,
 } from "@notra/schemas/dashboard/api-params";
 import type {
@@ -33,6 +59,7 @@ import type {
 } from "@notra/schemas/dashboard/content";
 import {
   contentInputSchema,
+  deleteContentInputSchema,
   contentOrganizationIdInputSchema,
   contentPreviewRequestSchema,
   createPostCollectionInputSchema,
@@ -43,13 +70,15 @@ import {
   postGitHubPublishSchema,
   publishContentToGitHubSchema,
   renamePostCollectionInputSchema,
+  updateContentMetadataInputSchema,
   updateContentSchema,
   updateExpectedPostCountInputSchema,
 } from "@notra/schemas/dashboard/content";
+import { saveContentDocumentSchema } from "@notra/schemas/dashboard/content-history";
 import { clearCompletedGenerationSchema } from "@notra/schemas/dashboard/generations";
+import type { PostMetadata } from "@notra/schemas/shared/post-metadata";
+import { primaryMountUrl } from "@notra/sites-server/utils/urls";
 import { slugify } from "@notra/utils/slugify";
-import { publishEventInTransaction } from "@notra/webhooks/drizzle";
-import { postPublishedInput } from "@notra/webhooks/utils/posts";
 import {
   and,
   asc,
@@ -66,22 +95,22 @@ import {
 } from "drizzle-orm";
 import { marked } from "marked";
 import { nanoid } from "nanoid";
-import { getTranslations } from "next-intl/server";
-import { after } from "next/server";
 
+import { TAG_SUGGESTIONS_LIMIT } from "@/constants/content-overview";
 import {
   DASHBOARD_HOME_POST_LIMIT,
   GITHUB_API_MAX_PAGES,
   GITHUB_API_MAX_RESULTS,
   GITHUB_API_PAGE_SIZE,
 } from "@/constants/content-preview";
+import { SOCIAL_VIDEO } from "@/constants/social-video";
 import { trackServerEvent } from "@/lib/analytics/posthog-server";
 import { getEnabledDataPoints } from "@/lib/analytics/studio-events";
-import { assertOrganizationAccess } from "@/lib/auth/organization";
 import { assertActiveSubscription } from "@/lib/billing/subscription";
 import { getUtcDayRange } from "@/lib/content/content-calendar";
 import { getContentPublishingMetrics } from "@/lib/content/content-publishing-metrics.server";
-import { projectScopedCollectionIds } from "@/lib/content/project-scope";
+import { githubRepositoryClient } from "@/lib/content/scheduled-publication-destinations";
+import { afterResponse } from "@/lib/framework/after-response";
 import {
   addActiveGeneration,
   clearCompletedGeneration,
@@ -90,17 +119,33 @@ import {
   getCompletedGenerations,
 } from "@/lib/generations/tracking";
 import { requestGeoRescanForPublishedPost } from "@/lib/geo/rescan";
+import { getTranslations } from "@/lib/i18n/server";
+import { assertContentPublishAllowed } from "@/lib/integrations/github/assert-content-publish";
+import { withContentPublicationLock } from "@/lib/integrations/github/content-publication-lock";
+import { getContentPullRequestState } from "@/lib/integrations/github/content-pull-request";
 import { publishSavedContentToGitHub } from "@/lib/integrations/github/publish-saved-content";
-import { baseProcedure } from "@/lib/orpc/base";
+import { removePublishedContent } from "@/lib/integrations/github/remove-published-content";
+import { baseProcedure, withOrganizationAccess } from "@/lib/orpc/base";
+import { contentAuthorsRouter } from "@/lib/orpc/routers/content-authors";
+import { contentHistoryRouter } from "@/lib/orpc/routers/content-history";
+import { contentRecentsProcedure } from "@/lib/orpc/routers/content-recents";
+import { isOwnSocialVideo } from "@/lib/social-connect/media-urls";
 import { startOnDemandRun } from "@/lib/workflows/start";
+import type { PostMetadataColumns } from "@/types/content/overview";
 import type {
   CommitPreview,
+  ContentListPreviewVariant,
   LinearIntegrationPreviewItem,
   PullRequestPreview,
   ReleasePreview,
   RepositoryPreview,
   RepositoryPreviewFailure,
 } from "@/types/content/preview";
+import type {
+  ContentUpdateDataInput,
+  ContentUpdatePost,
+} from "@/types/content/update";
+import { getContentListPreview } from "@/utils/content-list-preview";
 import { resolveLookbackRange } from "@/utils/lookback";
 import { ratelimit } from "@/utils/ratelimit";
 
@@ -111,17 +156,15 @@ import {
   internalServerError,
   notFound,
   paymentRequired,
-  tooManyRequests,
 } from "../utils/errors";
 
 const TITLE_REGEX = /^#\s+(.+)$/m;
 
-// Upper bound for the sibling rail on the content detail response; matches the
-// maximum page size of the content list.
 const CONTENT_SIBLING_LIMIT = 100;
 
 const postReadColumns = {
   id: true,
+  revision: true,
   organizationId: true,
   collectionId: true,
   title: true,
@@ -135,13 +178,17 @@ const postReadColumns = {
   createdAt: true,
   sourceMetadata: true,
   githubPublish: true,
+  coverImage: true,
+  tags: true,
+  excerpt: true,
+  authorIds: true,
+  featured: true,
+  noindex: true,
+  hidden: true,
+  displayDate: true,
   status: true,
   updatedAt: true,
 } as const;
-
-// List consumers (sidebar "Recent", dashboard home cards) render a title, a
-// status and a two-line preview, so text bodies stay in the database.
-const POST_LIST_MARKDOWN_PREVIEW_CHARS = 2000;
 
 const postListColumns = {
   id: true,
@@ -153,6 +200,7 @@ const postListColumns = {
   createdAt: true,
   status: true,
   updatedAt: true,
+  markdown: true,
 } as const;
 
 const postListExtras = {
@@ -160,33 +208,30 @@ const postListExtras = {
     sql<string>`case when ${posts.contentType} = 'image' then ${posts.content} else '' end`.as(
       "content"
     ),
-  markdown: sql<
-    string | null
-  >`case when ${posts.contentType} = 'image' then ${posts.markdown} else left(${posts.markdown}, ${POST_LIST_MARKDOWN_PREVIEW_CHARS}) end`.as(
-    "markdown"
-  ),
 };
 
-function serializePost(post: {
-  content: string;
-  contentType: string;
-  contentSubtype: BlogPostSubtype | null;
-  createdAt: Date;
-  htmlUrl: string | null;
-  id: string;
-  markdown: string | null;
-  slug: string | null;
-  status: "draft" | "published";
-  title: string;
-  updatedAt: Date;
-}): PostsResponse["posts"][number] {
+function serializePost(
+  post: {
+    content: string;
+    contentType: string;
+    contentSubtype: BlogPostSubtype | null;
+    createdAt: Date;
+    htmlUrl: string | null;
+    id: string;
+    markdown: string | null;
+    slug: string | null;
+    status: "draft" | "published";
+    title: string;
+    updatedAt: Date;
+  },
+  variant: ContentListPreviewVariant = "collection"
+) {
   return {
     id: post.id,
     title: post.title,
     slug: post.slug,
-    content: post.content,
+    ...getContentListPreview(post, variant),
     htmlUrl: post.contentType === "image" ? post.htmlUrl : null,
-    markdown: post.markdown,
     contentType:
       post.contentType as PostsResponse["posts"][number]["contentType"],
     contentSubtype: post.contentSubtype,
@@ -196,24 +241,44 @@ function serializePost(post: {
   };
 }
 
-function serializeContent(post: {
-  content: string;
-  contentType: string;
-  createdAt: Date;
-  htmlUrl: string | null;
-  id: string;
-  markdown: string | null;
-  recommendations: string | null;
-  slug: string | null;
-  sourceMetadata: unknown;
-  githubPublish: unknown;
-  status: "draft" | "published";
-  title: string;
-}): ContentResponse {
+function serializePostMetadata(post: PostMetadataColumns): PostMetadata {
+  const cover = postCoverImageSchema.safeParse(post.coverImage);
+  return {
+    coverImage: cover.success ? cover.data : null,
+    tags: post.tags,
+    excerpt: post.excerpt,
+    authorIds: post.authorIds,
+    featured: post.featured,
+    noindex: post.noindex,
+    hidden: post.hidden,
+    displayDate: post.displayDate
+      ? post.displayDate.toISOString().slice(0, 10)
+      : null,
+  };
+}
+
+function serializeContent(
+  post: PostMetadataColumns & {
+    content: string;
+    contentType: string;
+    createdAt: Date;
+    htmlUrl: string | null;
+    id: string;
+    markdown: string | null;
+    recommendations: string | null;
+    slug: string | null;
+    sourceMetadata: unknown;
+    githubPublish: unknown;
+    status: "draft" | "published";
+    title: string;
+    revision: number;
+  }
+): ContentResponse {
   const githubPublish = postGitHubPublishSchema.safeParse(post.githubPublish);
 
   return {
     id: post.id,
+    revision: post.revision,
     title: post.title,
     slug: post.slug,
     content: post.content,
@@ -226,24 +291,47 @@ function serializeContent(post: {
     date: post.createdAt.toISOString(),
     sourceMetadata: post.sourceMetadata as ContentResponse["sourceMetadata"],
     githubPublish: githubPublish.success ? githubPublish.data : null,
+    metadata: serializePostMetadata(post),
   };
 }
 
 function normalizeContentTypes(contentTypes: string[]): ContentType[] {
-  const normalized: ContentType[] = [];
-
+  const normalized = new Set<ContentType>();
   for (const contentType of contentTypes) {
     const parsed = contentTypeSchema.safeParse(contentType);
-    if (parsed.success && !normalized.includes(parsed.data)) {
-      normalized.push(parsed.data);
+    if (parsed.success) {
+      normalized.add(parsed.data);
     }
   }
-
-  return normalized;
+  return [...normalized];
 }
 
 function normalizeContentType(contentType: string): ContentType {
   return contentTypeSchema.parse(contentType);
+}
+
+function storedContentTypes(contentTypes: unknown): string[] {
+  return Array.isArray(contentTypes)
+    ? contentTypes.filter((type): type is string => typeof type === "string")
+    : [];
+}
+
+function isCollectionGenerating(collection: {
+  completedPostCount: number;
+  expectedPostCount: number | null;
+}) {
+  return (
+    collection.expectedPostCount !== null &&
+    collection.completedPostCount < collection.expectedPostCount
+  );
+}
+
+async function toSlugConflict(error: unknown) {
+  if (isPgUniqueViolation(error)) {
+    const tErrors = await getTranslations("errors.content");
+    return conflict(tErrors("slugTaken"));
+  }
+  return error;
 }
 
 function formatFailureMessage(error: unknown): string {
@@ -255,12 +343,8 @@ function formatFailureMessage(error: unknown): string {
 }
 
 export async function buildContentUpdateData(
-  existingTitle: string,
-  input: {
-    markdown?: string;
-    status?: "draft" | "published";
-    title?: string;
-  }
+  existingPost: ContentUpdatePost,
+  input: ContentUpdateDataInput
 ) {
   const updateData: Record<string, unknown> = { updatedAt: new Date() };
 
@@ -269,20 +353,30 @@ export async function buildContentUpdateData(
   }
 
   if (input.markdown !== undefined) {
-    const titleMatch = input.markdown.match(TITLE_REGEX);
-    updateData.markdown = input.markdown;
+    const markdown = stripLeadingFrontmatter(input.markdown);
+    const titleMatch = markdown.match(TITLE_REGEX);
+    updateData.markdown = markdown;
 
     if (input.title === undefined) {
-      updateData.title = titleMatch?.[1] ?? existingTitle;
+      updateData.title = titleMatch?.[1] ?? existingPost.title;
     }
 
-    updateData.content = sanitizeMarkdownHtml(
-      await marked.parse(input.markdown)
-    );
+    updateData.content = sanitizeMarkdownHtml(await marked.parse(markdown));
   }
 
   if (input.status !== undefined) {
     updateData.status = input.status;
+    const publishedAt = publishedAtForStatusChange(
+      existingPost.status,
+      input.status
+    );
+    if (publishedAt !== undefined) {
+      updateData.publishedAt = publishedAt;
+    }
+  }
+
+  if (input.socialVideo !== undefined) {
+    updateData.sourceMetadata = sql`(case when jsonb_typeof(${posts.sourceMetadata}) = 'object' then ${posts.sourceMetadata} else '{}'::jsonb end) || jsonb_build_object('socialVideo', ${JSON.stringify(input.socialVideo)}::jsonb)`;
   }
 
   return updateData;
@@ -307,7 +401,7 @@ async function fetchReleasesPreview(params: {
         repo,
         per_page: GITHUB_API_PAGE_SIZE,
         page,
-        headers: { "X-GitHub-Api-Version": "2022-11-28" },
+        headers: GITHUB_API_VERSION_HEADERS,
       }
     );
 
@@ -372,7 +466,7 @@ async function fetchMergedPullRequestsPreview(params: {
       direction: "desc",
       per_page: GITHUB_API_PAGE_SIZE,
       page,
-      headers: { "X-GitHub-Api-Version": "2022-11-28" },
+      headers: GITHUB_API_VERSION_HEADERS,
     });
 
     const pullRequests = response.data;
@@ -451,7 +545,7 @@ async function fetchCommitsPreview(params: {
         until: end.toISOString(),
         per_page: GITHUB_API_PAGE_SIZE,
         page,
-        headers: { "X-GitHub-Api-Version": "2022-11-28" },
+        headers: GITHUB_API_VERSION_HEADERS,
       }
     );
 
@@ -483,17 +577,14 @@ async function fetchCommitsPreview(params: {
 }
 
 export const contentRouter = {
+  history: contentHistoryRouter,
   home: {
     get: baseProcedure
       .input(
         contentOrganizationIdInputSchema.and(dashboardHomeContentQuerySchema)
       )
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         const dateRange = getUtcDayRange("today");
         const filters = [eq(posts.organizationId, input.organizationId)];
         const collectionIds = projectScopedCollectionIds(
@@ -520,48 +611,15 @@ export const contentRouter = {
         });
 
         return {
-          posts: items.map(serializePost),
+          posts: items.map((post) => serializePost(post, "dashboard")),
         };
       }),
   },
-  recents: baseProcedure
-    .input(contentOrganizationIdInputSchema.and(contentRecentsQuerySchema))
-    .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-      });
-
-      const filters = [eq(posts.organizationId, input.organizationId)];
-      const collectionIds = projectScopedCollectionIds(
-        input.organizationId,
-        input.projectId
-      );
-      if (collectionIds) {
-        filters.push(inArray(posts.collectionId, collectionIds));
-      }
-
-      const items = await db.query.posts.findMany({
-        where: and(...filters),
-        orderBy: [desc(posts.createdAt), desc(posts.id)],
-        limit: input.limit,
-        columns: {
-          id: true,
-          title: true,
-          status: true,
-        },
-      });
-
-      return { posts: items };
-    }),
+  recents: contentRecentsProcedure,
   list: baseProcedure
     .input(contentOrganizationIdInputSchema.and(contentListQuerySchema))
-    .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-      });
-
+    .use(withOrganizationAccess)
+    .handler(async ({ input }) => {
       const dateRange = getUtcDayRange(input.date ?? null);
 
       if (input.date && !dateRange) {
@@ -605,7 +663,7 @@ export const contentRouter = {
       const totalPages = Math.max(1, Math.ceil(totalCount / input.pageSize));
 
       return {
-        posts: items.map(serializePost),
+        posts: items.map((post) => serializePost(post)),
         pagination: {
           page: input.page,
           pageSize: input.pageSize,
@@ -616,12 +674,8 @@ export const contentRouter = {
     }),
   get: baseProcedure
     .input(contentInputSchema)
-    .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-      });
-
+    .use(withOrganizationAccess)
+    .handler(async ({ input }) => {
       const post = await db.query.posts.findFirst({
         where: and(
           eq(posts.id, input.contentId),
@@ -647,8 +701,6 @@ export const contentRouter = {
               contentType: true,
               status: true,
             },
-            // The current post is excluded in SQL, and the rail is bounded: a
-            // collection can hold hundreds of posts.
             where: ne(posts.id, post.id),
             orderBy: [asc(posts.createdAt), asc(posts.id)],
             limit: CONTENT_SIBLING_LIMIT,
@@ -673,13 +725,84 @@ export const contentRouter = {
           : null,
       };
     }),
+  pullRequestState: baseProcedure
+    .input(contentInputSchema)
+    .use(withOrganizationAccess)
+    .handler(async ({ input }) => {
+      const post = await db.query.posts.findFirst({
+        where: and(
+          eq(posts.id, input.contentId),
+          eq(posts.organizationId, input.organizationId)
+        ),
+        columns: { githubPublish: true },
+      });
+      const publish = postGitHubPublishSchema.safeParse(post?.githubPublish);
+      if (!(publish.success && publish.data)) {
+        return { status: null, siteName: null, previewUrl: null };
+      }
+      const { pullRequestNumber, repositoryId } = publish.data;
+      const site = publish.data.siteId
+        ? await db.query.sites.findFirst({
+            where: and(
+              eq(sites.id, publish.data.siteId),
+              eq(sites.organizationId, input.organizationId)
+            ),
+            columns: { name: true },
+          })
+        : null;
+      const deployment =
+        pullRequestNumber && publish.data.siteId
+          ? await db.query.siteDeployments.findFirst({
+              where: and(
+                eq(siteDeployments.siteId, publish.data.siteId),
+                eq(siteDeployments.pullRequestNumber, pullRequestNumber),
+                eq(siteDeployments.status, "ready")
+              ),
+              orderBy: [desc(siteDeployments.createdAt)],
+              columns: { target: true },
+            })
+          : null;
+      const details = {
+        siteName: site?.name ?? null,
+        previewUrl: deployment
+          ? primaryMountUrl(
+              deployment.target.publicOrigin,
+              deployment.target.mounts
+            )
+          : null,
+      };
+      if (!pullRequestNumber) {
+        return { status: "merged" as const, ...details };
+      }
+      // No GitHub App, a revoked token or a deleted repository just falls
+      // back to a plain link.
+      const state = await githubRepositoryClient(
+        input.organizationId,
+        repositoryId
+      )
+        .then((client) =>
+          client
+            ? getContentPullRequestState(client.octokit, {
+                owner: client.owner,
+                repo: client.repo,
+                pullNumber: pullRequestNumber,
+              })
+            : null
+        )
+        .catch(() => null);
+      if (!state) {
+        return { status: null, ...details };
+      }
+      return {
+        ...details,
+        status: state.status === "open" && state.draft ? "draft" : state.status,
+      } as const;
+    }),
   create: baseProcedure
     .input(createPostInputSchema)
+    .use(withOrganizationAccess)
     .handler(async ({ context, input }) => {
-      const auth = await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-      });
+      const { auth } = context;
       await assertActiveSubscription(input.organizationId);
 
       if (
@@ -697,7 +820,7 @@ export const contentRouter = {
       const now = new Date();
       const collectionId = nanoid();
       const contentId = nanoid();
-      const markdown = input.markdown ?? "";
+      const markdown = stripLeadingFrontmatter(input.markdown ?? "");
       const content =
         markdown.length > 0
           ? sanitizeMarkdownHtml(await marked.parse(markdown))
@@ -705,6 +828,10 @@ export const contentRouter = {
 
       try {
         await db.transaction(async (tx) => {
+          await setPostHistoryContext(tx, {
+            actorUserId: auth.user.id,
+            source: "editor_save",
+          });
           await tx.insert(postCollections).values({
             id: collectionId,
             organizationId: input.organizationId,
@@ -736,16 +863,7 @@ export const contentRouter = {
           });
         });
       } catch (error) {
-        if (
-          typeof error === "object" &&
-          error !== null &&
-          "code" in error &&
-          error.code === "23505"
-        ) {
-          const tErrors = await getTranslations("errors.content");
-          throw conflict(tErrors("slugTaken"));
-        }
-        throw error;
+        throw await toSlugConflict(error);
       }
 
       trackServerEvent({
@@ -761,13 +879,120 @@ export const contentRouter = {
 
       return { contentId, collectionId };
     }),
+  saveDocument: baseProcedure
+    .input(saveContentDocumentSchema)
+    .use(withOrganizationAccess)
+    .handler(async ({ context, input }) => {
+      const { auth } = context;
+      await assertActiveSubscription(input.organizationId);
+      const [existingPost, tErrors] = await Promise.all([
+        db.query.posts.findFirst({
+          where: and(
+            eq(posts.id, input.contentId),
+            eq(posts.organizationId, input.organizationId)
+          ),
+          columns: { title: true, contentType: true, status: true },
+        }),
+        getTranslations("errors.content"),
+      ]);
+      if (!existingPost) {
+        throw notFound(tErrors("historyNotFound"));
+      }
+      const updateData = await buildContentUpdateData(existingPost, input);
+      if (input.slug !== undefined) {
+        if (!supportsPostSlug(existingPost.contentType)) {
+          throw badRequest(tErrors("slugNotSupported"));
+        }
+        updateData.slug = input.slug;
+      }
+      try {
+        const [saved] = await db.transaction(async (tx) => {
+          await setPostHistoryContext(tx, {
+            actorUserId: auth.user.id,
+            source: input.autosave ? "editor_autosave" : "editor_save",
+          });
+          const updated = await tx
+            .update(posts)
+            .set(updateData)
+            .where(
+              and(
+                eq(posts.id, input.contentId),
+                eq(posts.organizationId, input.organizationId),
+                eq(posts.revision, input.expectedRevision)
+              )
+            )
+            .returning({
+              id: posts.id,
+              title: posts.title,
+              slug: posts.slug,
+              markdown: posts.markdown,
+              content: posts.content,
+              revision: posts.revision,
+              updatedAt: posts.updatedAt,
+            });
+          const document = updated[0];
+          if (
+            document &&
+            !input.autosave &&
+            document.revision === input.expectedRevision &&
+            supportsPostHistory(existingPost.contentType)
+          ) {
+            await checkpointPostHistory(tx, {
+              organizationId: input.organizationId,
+              postId: input.contentId,
+              expectedRevision: document.revision,
+              actorUserId: auth.user.id,
+              source: "editor_save",
+            });
+          }
+          return updated;
+        });
+        if (!saved) {
+          const current = await db.query.posts.findFirst({
+            where: and(
+              eq(posts.id, input.contentId),
+              eq(posts.organizationId, input.organizationId)
+            ),
+            columns: { revision: true },
+          });
+          if (!current) {
+            throw notFound(tErrors("historyNotFound"));
+          }
+          throw conflict(tErrors("concurrentEdit"), {
+            currentRevision: current.revision,
+          });
+        }
+        if (
+          input.markdown !== undefined &&
+          saved.revision > input.expectedRevision
+        ) {
+          trackServerEvent({
+            event: POSTHOG_EVENTS.CONTENT_SAVED,
+            headers: context.headers,
+            userId: auth.user.id,
+            organizationId: input.organizationId,
+            properties: {
+              content_id: input.contentId,
+              type: existingPost.contentType,
+            },
+          });
+        }
+        return {
+          success: true,
+          document: { ...saved, updatedAt: saved.updatedAt.toISOString() },
+        };
+      } catch (error) {
+        if (isPostSlugConflict(error)) {
+          throw conflict(tErrors("slugTaken"));
+        }
+        throw error;
+      }
+    }),
   update: baseProcedure
     .input(contentInputSchema.and(updateContentSchema))
+    .use(withOrganizationAccess)
     .handler(async ({ context, input }) => {
-      const auth = await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-      });
+      const { auth } = context;
       await assertActiveSubscription(input.organizationId);
 
       const existingPost = await db.query.posts.findFirst({
@@ -786,10 +1011,18 @@ export const contentRouter = {
         throw notFound("Content not found");
       }
 
-      const updateData = await buildContentUpdateData(
-        existingPost.title,
-        input
-      );
+      if (
+        input.socialVideo &&
+        !(
+          SOCIAL_VIDEO.contentTypes.has(existingPost.contentType) &&
+          isOwnSocialVideo(input.socialVideo, input.organizationId)
+        )
+      ) {
+        const tErrors = await getTranslations("errors.content");
+        throw badRequest(tErrors("socialVideoNotAllowed"));
+      }
+
+      const updateData = await buildContentUpdateData(existingPost, input);
 
       if (input.slug !== undefined) {
         if (!supportsPostSlug(existingPost.contentType)) {
@@ -801,7 +1034,11 @@ export const contentRouter = {
 
       try {
         const [updatedPost] = await db.transaction(async (tx) => {
-          const rows = await tx
+          await setPostHistoryContext(tx, {
+            actorUserId: auth.user.id,
+            source: "system",
+          });
+          return await tx
             .update(posts)
             .set(updateData)
             .where(
@@ -812,6 +1049,7 @@ export const contentRouter = {
             )
             .returning({
               id: posts.id,
+              revision: posts.revision,
               organizationId: posts.organizationId,
               collectionId: posts.collectionId,
               title: posts.title,
@@ -824,24 +1062,17 @@ export const contentRouter = {
               createdAt: posts.createdAt,
               sourceMetadata: posts.sourceMetadata,
               githubPublish: posts.githubPublish,
+              coverImage: posts.coverImage,
+              tags: posts.tags,
+              excerpt: posts.excerpt,
+              authorIds: posts.authorIds,
+              featured: posts.featured,
+              noindex: posts.noindex,
+              hidden: posts.hidden,
+              displayDate: posts.displayDate,
               status: posts.status,
               updatedAt: posts.updatedAt,
             });
-          const [row] = rows;
-          if (
-            row &&
-            row.status === "published" &&
-            existingPost.status !== "published"
-          ) {
-            await publishEventInTransaction(
-              tx,
-              postPublishedInput({
-                organizationId: input.organizationId,
-                postId: row.id,
-              })
-            );
-          }
-          return rows;
         });
 
         if (!updatedPost) {
@@ -884,7 +1115,7 @@ export const contentRouter = {
           updatedPost.status === "published" &&
           existingPost.status !== "published"
         ) {
-          after(() =>
+          afterResponse(() =>
             requestGeoRescanForPublishedPost({
               organizationId: input.organizationId,
               postId: updatedPost.id,
@@ -897,52 +1128,128 @@ export const contentRouter = {
           content: serializeContent(updatedPost),
         };
       } catch (error) {
-        if (
-          typeof error === "object" &&
-          error !== null &&
-          "code" in error &&
-          error.code === "23505"
-        ) {
-          const tErrors = await getTranslations("errors.content");
-          throw conflict(tErrors("slugTaken"));
-        }
-        throw error;
+        throw await toSlugConflict(error);
       }
+    }),
+  updateMetadata: baseProcedure
+    .input(updateContentMetadataInputSchema)
+    .use(withOrganizationAccess)
+    .handler(async ({ context, input }) => {
+      const { auth } = context;
+      await assertActiveSubscription(input.organizationId);
+
+      const existingPost = await db.query.posts.findFirst({
+        where: and(
+          eq(posts.id, input.contentId),
+          eq(posts.organizationId, input.organizationId)
+        ),
+        columns: { contentType: true },
+      });
+      if (!existingPost) {
+        throw notFound("Content not found");
+      }
+      const tErrors = await getTranslations("errors.content");
+      if (!supportsPostSlug(existingPost.contentType)) {
+        throw badRequest(tErrors("metadataNotSupported"));
+      }
+
+      const { metadata } = input;
+      if (metadata.authorIds && metadata.authorIds.length > 0) {
+        const known = await db
+          .select({ id: contentAuthors.id })
+          .from(contentAuthors)
+          .where(
+            contentAuthorsInOrganization(
+              input.organizationId,
+              metadata.authorIds
+            )
+          );
+        if (known.length !== metadata.authorIds.length) {
+          throw badRequest(tErrors("unknownAuthor"));
+        }
+      }
+
+      const [updated] = await db.transaction(async (tx) => {
+        await setPostHistoryContext(tx, {
+          actorUserId: auth.user.id,
+          source: "editor_autosave",
+        });
+        return await tx
+          .update(posts)
+          .set({
+            ...postMetadataUpdateData(metadata),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(posts.id, input.contentId),
+              eq(posts.organizationId, input.organizationId)
+            )
+          )
+          .returning();
+      });
+      if (!updated) {
+        throw notFound("Content not found");
+      }
+      const linked = postGitHubPublishSchema.safeParse(updated.githubPublish);
+      let githubSyncError: string | null = null;
+      if (
+        linked.success &&
+        (updated.contentType === "blog_post" ||
+          updated.contentType === "changelog")
+      ) {
+        try {
+          await assertContentPublishAllowed(auth.user.id, input.organizationId);
+          await publishSavedContentToGitHub(
+            {
+              organizationId: input.organizationId,
+              contentId: input.contentId,
+              contentType: updated.contentType,
+              repositoryId: linked.data.repositoryId,
+              linkedOnly: true,
+            },
+            { publisherUserId: auth.user.id }
+          );
+        } catch (error) {
+          logError("Metadata saved, but GitHub sync failed", error, {
+            contentId: input.contentId,
+          });
+          githubSyncError = (await getTranslations("content.gitPublishing"))(
+            "savedSyncFailed"
+          );
+        }
+      }
+      return { content: serializeContent(updated), githubSyncError };
+    }),
+  authors: contentAuthorsRouter,
+  tagSuggestions: baseProcedure
+    .input(contentOrganizationIdInputSchema)
+    .use(withOrganizationAccess)
+    .handler(async ({ input }) => {
+      return {
+        tags: await listOrganizationTags(
+          input.organizationId,
+          TAG_SUGGESTIONS_LIMIT
+        ),
+      };
     }),
   publishChangelogToGitHub: baseProcedure
     .input(contentInputSchema.and(publishContentToGitHubSchema))
+    .use(withOrganizationAccess)
     .handler(async ({ context, input }) => {
-      const auth = await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-      });
+      const { auth } = context;
       await assertActiveSubscription(input.organizationId);
-      // The demo's repository is fictional; GitHub writes need a real one.
-      assertNotDemo();
+      await assertContentPublishAllowed(auth.user.id, input.organizationId);
 
-      if (
-        process.env.UPSTASH_REDIS_REST_URL &&
-        process.env.UPSTASH_REDIS_REST_TOKEN
-      ) {
-        const { success: withinLimit } = await ratelimit.githubPublish.limit(
-          `${auth.user.id}:${input.organizationId}`
-        );
-        if (!withinLimit) {
-          const tErrors = await getTranslations("errors.content");
-          throw tooManyRequests(tErrors("tooManyPublishRequests"));
-        }
-      }
-
-      return publishSavedContentToGitHub(input);
+      return publishSavedContentToGitHub(input, {
+        publisherUserId: auth.user.id,
+      });
     }),
   delete: baseProcedure
-    .input(contentInputSchema)
+    .input(deleteContentInputSchema)
+    .use(withOrganizationAccess)
     .handler(async ({ context, input }) => {
-      const auth = await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-      });
-
+      const { auth } = context;
       const existingPost = await db.query.posts.findFirst({
         where: and(
           eq(posts.id, input.contentId),
@@ -958,14 +1265,24 @@ export const contentRouter = {
         throw notFound("Content not found");
       }
 
-      await db
-        .delete(posts)
-        .where(
-          and(
-            eq(posts.id, input.contentId),
-            eq(posts.organizationId, input.organizationId)
-          )
-        );
+      await withContentPublicationLock(
+        input.organizationId,
+        input.contentId,
+        async () => {
+          if (input.removeFromRepository) {
+            assertNotDemo();
+            await removePublishedContent(input.organizationId, input.contentId);
+          }
+          await db
+            .delete(posts)
+            .where(
+              and(
+                eq(posts.id, input.contentId),
+                eq(posts.organizationId, input.organizationId)
+              )
+            );
+        }
+      );
 
       trackServerEvent({
         event: POSTHOG_EVENTS.CONTENT_DELETED,
@@ -983,12 +1300,8 @@ export const contentRouter = {
   collections: {
     list: baseProcedure
       .input(postCollectionsListInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         const whereClause = and(
           eq(postCollections.organizationId, input.organizationId),
           projectScopeFilter(postCollections.projectId, input.projectId)
@@ -1012,8 +1325,6 @@ export const contentRouter = {
         ]);
 
         const collectionIds = collectionRows.map((collection) => collection.id);
-        // One row per collection: counting and de-duplicating the content types
-        // in Postgres avoids shipping every post of every listed collection.
         const aggregateRows =
           collectionIds.length > 0
             ? await db
@@ -1053,20 +1364,12 @@ export const contentRouter = {
 
         const collections = collectionRows.map((collection) => {
           const aggregate = aggregates.get(collection.id);
-          const storedTypes = Array.isArray(collection.contentTypes)
-            ? collection.contentTypes.filter(
-                (type): type is string => typeof type === "string"
-              )
-            : [];
           const contentTypes = normalizeContentTypes(
             aggregate && aggregate.types.length > 0
               ? aggregate.types
-              : storedTypes
+              : storedContentTypes(collection.contentTypes)
           );
           const postCount = aggregate?.total ?? 0;
-          const isGenerating =
-            collection.expectedPostCount !== null &&
-            collection.completedPostCount < collection.expectedPostCount;
 
           return {
             id: collection.id,
@@ -1083,7 +1386,7 @@ export const contentRouter = {
                   }
                 : null,
             expectedPostCount: collection.expectedPostCount,
-            isGenerating,
+            isGenerating: isCollectionGenerating(collection),
             statusSummary: {
               total: postCount,
               draft: aggregate?.draft ?? 0,
@@ -1108,12 +1411,8 @@ export const contentRouter = {
       }),
     get: baseProcedure
       .input(postCollectionInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         const collection = await db.query.postCollections.findFirst({
           where: and(
             eq(postCollections.id, input.collectionId),
@@ -1124,7 +1423,6 @@ export const contentRouter = {
               columns: {
                 id: true,
                 title: true,
-                content: true,
                 markdown: true,
                 contentType: true,
                 contentSubtype: true,
@@ -1132,6 +1430,7 @@ export const contentRouter = {
                 createdAt: true,
                 updatedAt: true,
               },
+              extras: postListExtras,
               orderBy: [asc(posts.createdAt), asc(posts.id)],
             },
           },
@@ -1141,21 +1440,9 @@ export const contentRouter = {
           throw notFound("Post collection not found");
         }
 
-        const storedTypes = Array.isArray(collection.contentTypes)
-          ? collection.contentTypes.filter(
-              (type): type is string => typeof type === "string"
-            )
-          : [];
-        const postTypes: string[] = [];
-        for (const post of collection.posts) {
-          if (!postTypes.includes(post.contentType)) {
-            postTypes.push(post.contentType);
-          }
-        }
-        const isGenerating =
-          collection.expectedPostCount !== null &&
-          collection.completedPostCount < collection.expectedPostCount;
-
+        const postTypes = [
+          ...new Set(collection.posts.map((post) => post.contentType)),
+        ];
         return {
           collection: {
             id: collection.id,
@@ -1163,16 +1450,17 @@ export const contentRouter = {
             source: collection.source,
             nameSource: collection.nameSource,
             contentTypes: normalizeContentTypes(
-              postTypes.length > 0 ? postTypes : storedTypes
+              postTypes.length > 0
+                ? postTypes
+                : storedContentTypes(collection.contentTypes)
             ),
             expectedPostCount: collection.expectedPostCount,
-            isGenerating,
+            isGenerating: isCollectionGenerating(collection),
             createdAt: collection.createdAt.toISOString(),
             posts: collection.posts.map((post) => ({
               id: post.id,
               title: post.title,
-              content: post.content,
-              markdown: post.markdown,
+              ...getContentListPreview(post),
               contentType: normalizeContentType(post.contentType),
               contentSubtype: post.contentSubtype,
               status: post.status,
@@ -1184,11 +1472,9 @@ export const contentRouter = {
       }),
     rename: baseProcedure
       .input(renamePostCollectionInputSchema)
+      .use(withOrganizationAccess)
       .handler(async ({ context, input }) => {
-        const auth = await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
+        const { auth } = context;
         await assertActiveSubscription(input.organizationId);
 
         const [updatedCollection] = await db
@@ -1230,12 +1516,8 @@ export const contentRouter = {
       }),
     delete: baseProcedure
       .input(postCollectionInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         const [deletedCollection] = await db
           .delete(postCollections)
           .where(
@@ -1273,11 +1555,8 @@ export const contentRouter = {
       }),
     updateExpectedPostCount: baseProcedure
       .input(updateExpectedPostCountInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         await assertActiveSubscription(input.organizationId);
 
         const [updatedCollection] = await db
@@ -1304,23 +1583,15 @@ export const contentRouter = {
   metrics: {
     get: baseProcedure
       .input(contentOrganizationIdInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         return getContentPublishingMetrics(input.organizationId);
       }),
   },
   preview: baseProcedure
     .input(contentOrganizationIdInputSchema.and(contentPreviewRequestSchema))
-    .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-      });
-
+    .use(withOrganizationAccess)
+    .handler(async ({ input }) => {
       const lookback = resolveLookbackRange(
         input.lookbackWindow,
         input.timezone
@@ -1403,77 +1674,46 @@ export const contentRouter = {
             };
           }
 
-          const octokit = createOctokit(token ?? undefined);
+          const fetchParams = {
+            octokit: createOctokit(token ?? undefined),
+            owner: repository.owner,
+            repo: repository.repo,
+            start: lookback.start,
+            end: lookback.end,
+          };
           const [commitsResult, pullsResult, releasesResult] =
             await Promise.allSettled([
               input.includeCommits
-                ? fetchCommitsPreview({
-                    octokit,
-                    owner: repository.owner,
-                    repo: repository.repo,
-                    start: lookback.start,
-                    end: lookback.end,
-                  })
+                ? fetchCommitsPreview(fetchParams)
                 : Promise.resolve([]),
               input.includePullRequests
-                ? fetchMergedPullRequestsPreview({
-                    octokit,
-                    owner: repository.owner,
-                    repo: repository.repo,
-                    start: lookback.start,
-                    end: lookback.end,
-                  })
+                ? fetchMergedPullRequestsPreview(fetchParams)
                 : Promise.resolve([]),
               input.includeReleases
-                ? fetchReleasesPreview({
-                    octokit,
-                    owner: repository.owner,
-                    repo: repository.repo,
-                    start: lookback.start,
-                    end: lookback.end,
-                  })
+                ? fetchReleasesPreview(fetchParams)
                 : Promise.resolve([]),
             ]);
 
           const repoFailures: RepositoryPreviewFailure[] = [];
-          const commits =
-            commitsResult.status === "fulfilled" ? commitsResult.value : [];
-
-          if (commitsResult.status === "rejected") {
+          const valueOrFailure = <T>(
+            result: PromiseSettledResult<T[]>,
+            stage: "commits" | "pull_requests" | "releases"
+          ): T[] => {
+            if (result.status === "fulfilled") {
+              return result.value;
+            }
             repoFailures.push({
               repositoryId: repository.id,
               owner: repository.owner,
               repo: repository.repo,
-              stage: "commits",
-              message: formatFailureMessage(commitsResult.reason),
+              stage,
+              message: formatFailureMessage(result.reason),
             });
-          }
-
-          const pullRequests =
-            pullsResult.status === "fulfilled" ? pullsResult.value : [];
-
-          if (pullsResult.status === "rejected") {
-            repoFailures.push({
-              repositoryId: repository.id,
-              owner: repository.owner,
-              repo: repository.repo,
-              stage: "pull_requests",
-              message: formatFailureMessage(pullsResult.reason),
-            });
-          }
-
-          const releases =
-            releasesResult.status === "fulfilled" ? releasesResult.value : [];
-
-          if (releasesResult.status === "rejected") {
-            repoFailures.push({
-              repositoryId: repository.id,
-              owner: repository.owner,
-              repo: repository.repo,
-              stage: "releases",
-              message: formatFailureMessage(releasesResult.reason),
-            });
-          }
+            return [];
+          };
+          const commits = valueOrFailure(commitsResult, "commits");
+          const pullRequests = valueOrFailure(pullsResult, "pull_requests");
+          const releases = valueOrFailure(releasesResult, "releases");
 
           return {
             repository: {
@@ -1511,29 +1751,28 @@ export const contentRouter = {
 
         linearIntegrationPreviews = await Promise.all(
           enabledIntegrations.map(async (integration) => {
+            const empty = {
+              integrationId: integration.id,
+              displayName: integration.displayName,
+              issues: [],
+            };
             try {
               const token = await getDecryptedLinearToken(integration.id);
               if (!token) {
-                return {
-                  integrationId: integration.id,
-                  displayName: integration.displayName,
-                  issues: [],
-                };
+                return empty;
               }
 
               const client = createLinearClient(token);
               const filter: Record<string, unknown> = {
-                completedAt: { null: false },
+                completedAt: {
+                  gte: lookback.start.toISOString(),
+                  lte: lookback.end.toISOString(),
+                },
               };
 
               if (integration.linearTeamId) {
                 filter.team = { id: { eq: integration.linearTeamId } };
               }
-
-              filter.completedAt = {
-                gte: lookback.start.toISOString(),
-                lte: lookback.end.toISOString(),
-              };
 
               const issues = await getLinearIssuePreviews(client, {
                 filter,
@@ -1547,15 +1786,10 @@ export const contentRouter = {
                 issues,
               };
             } catch (error) {
-              console.error(
-                `[Preview] Failed to fetch Linear issues for ${integration.id}:`,
-                error
-              );
-              return {
+              logError("[Preview] Failed to fetch Linear issues", error, {
                 integrationId: integration.id,
-                displayName: integration.displayName,
-                issues: [],
-              };
+              });
+              return empty;
             }
           })
         );
@@ -1572,11 +1806,8 @@ export const contentRouter = {
     }),
   createCollection: baseProcedure
     .input(createPostCollectionInputSchema)
-    .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-      });
+    .use(withOrganizationAccess)
+    .handler(async ({ input }) => {
       await assertActiveSubscription(input.organizationId);
 
       if (
@@ -1608,11 +1839,9 @@ export const contentRouter = {
     }),
   generate: baseProcedure
     .input(generateContentInputSchema)
+    .use(withOrganizationAccess)
     .handler(async ({ context, input }) => {
-      const auth = await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-      });
+      const { auth } = context;
       await assertActiveSubscription(input.organizationId);
 
       const collection = await db.query.postCollections.findFirst({
@@ -1750,12 +1979,8 @@ export const contentRouter = {
   activeGenerations: {
     list: baseProcedure
       .input(contentOrganizationIdInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         const [generations, results] = await Promise.all([
           getActiveGenerations(input.organizationId),
           getCompletedGenerations(input.organizationId),
@@ -1767,11 +1992,8 @@ export const contentRouter = {
       .input(
         contentOrganizationIdInputSchema.and(clearCompletedGenerationSchema)
       )
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         await assertActiveSubscription(input.organizationId);
 
         await clearCompletedGeneration(input.organizationId, input.runId);

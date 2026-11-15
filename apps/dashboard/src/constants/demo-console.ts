@@ -1,15 +1,8 @@
 import type { DemoConsolePreset } from "@/types/demo";
 
-/** Replaced with a short random suffix each time a preset is loaded. */
 export const DEMO_CONSOLE_UNIQUE_TOKEN = "{unique}";
 export const DEMO_CONSOLE_UNIQUE_LENGTH = 6;
 
-/**
- * Starting points for the in-app API console. `{projectId}` is filled with
- * the sandbox's GEO project and `{unique}` with a fresh suffix, so presets
- * that create named records can run more than once. `section` picks the
- * preset that matches the page the visitor is on.
- */
 export const DEMO_CONSOLE_PRESETS: readonly DemoConsolePreset[] = [
   {
     id: "listPosts",
@@ -71,7 +64,6 @@ export const DEMO_CONSOLE_PRESETS: readonly DemoConsolePreset[] = [
     method: "POST",
     path: "/v1/skills",
     body: {
-      // The seeded workspace already has "fieldnote-voice".
       name: "launch-checklist-{unique}",
       description:
         "Check every launch post covers who, what and how to try it.",
@@ -83,7 +75,6 @@ export const DEMO_CONSOLE_PRESETS: readonly DemoConsolePreset[] = [
 
 export const DEMO_CONSOLE_METHODS = ["GET", "POST", "PATCH", "DELETE"] as const;
 
-/** Maps a dashboard route segment to the preset section shown first. */
 export const DEMO_CONSOLE_SECTION_BY_SEGMENT: Readonly<Record<string, string>> =
   {
     geo: "geo",

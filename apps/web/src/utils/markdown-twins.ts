@@ -7,16 +7,25 @@ import type {
 
 import { changelog } from "@/../.source/server";
 import { FEATURE_DETAIL_SLUGS } from "@/constants/feature-pages/paths";
+import { STATE_OF_AI_SEARCH_PATH } from "@/constants/state-of-ai-search";
 import { buildAgentPageMarkdown } from "@/lib/agent/markdown";
 import {
   buildBlogAuthorMarkdown,
   listBlogAuthorMarkdownPages,
 } from "@/lib/blog/author-markdown";
+import {
+  buildCompareIndexMarkdown,
+  buildCompareMarkdown,
+  listCompareMarkdownPages,
+} from "@/lib/compare/markdown";
 import { buildContributorsMarkdown } from "@/lib/contributors/markdown";
 import { buildFeedbackMdPageMarkdown } from "@/lib/feedback-md/markdown";
 import {
   buildIntegrationMarkdown,
   buildIntegrationsMarkdown,
+  buildGithubIntegrationMarkdown,
+  buildGranolaIntegrationMarkdown,
+  buildLinearIntegrationMarkdown,
   buildSlackIntegrationMarkdown,
   listIntegrationMarkdownEntries,
 } from "@/lib/integrations/markdown";
@@ -27,14 +36,20 @@ import {
   buildMcpUseCasesMarkdown,
   listMcpUseCaseMarkdownEntries,
 } from "@/lib/mcp/markdown";
+import {
+  buildStateOfAiSearchIndexMarkdown,
+  buildStateOfAiSearchReportMarkdown,
+} from "@/lib/state-of-ai-search/markdown";
+import { listSummaries, loadReport } from "@/lib/state-of-ai-search/reports";
 import type { BlogAuthorMarkdownPage } from "@/types/blog-author";
-import { listNotraBlogPosts } from "@/utils/blog";
+import { listNotraBlogPosts, listVisibleNotraBlogPosts } from "@/utils/blog";
 import {
   getChangelogPostHref,
   listNotraChangelogPosts,
 } from "@/utils/changelog";
 import { buildCtaBannerMarkdown } from "@/utils/cta-banner-markdown";
 import { stripFrontmatter } from "@/utils/markdown";
+import { readAppMarkdownSource } from "@/utils/markdown-source";
 import { MarkdownNotFoundError } from "@/utils/not-found";
 import {
   getShowcaseCompany,
@@ -47,6 +62,7 @@ import {
   buildLandingMarkdown,
   buildPricingMarkdown,
 } from "@/utils/site-markdown";
+import { reportPath } from "@/utils/state-of-ai-search";
 import { SITE_URL } from "@/utils/urls";
 
 interface MarkdownTwinData {
@@ -70,9 +86,24 @@ const LEGAL_PAGES = [
     filename: "terms.mdx",
   },
   {
+    pattern: "/partner-terms",
+    title: "Partner Terms and Conditions",
+    filename: "partner-terms.mdx",
+  },
+  {
     pattern: "/legal",
     title: "Legal Notice",
     filename: "legal.mdx",
+  },
+  {
+    pattern: "/dpa",
+    title: "Data Processing Agreement",
+    filename: "dpa.mdx",
+  },
+  {
+    pattern: "/subprocessors",
+    title: "Sub-processors",
+    filename: "subprocessors.mdx",
   },
 ] as const;
 
@@ -99,43 +130,6 @@ function markdownFromTitleAndBody(title: string, body: string) {
   const content = stripFrontmatter(body).trim();
 
   return withTrailingNewline([`# ${title}`, "", content].join("\n"));
-}
-
-const CONTENT_SOURCES = import.meta.glob<string>(
-  [
-    "/src/content/pages/*.md",
-    "/src/content/pages/features/*.md",
-    "/src/content/legal/*.mdx",
-    "/src/content/changelog/**/*.mdx",
-  ],
-  { query: "?raw", import: "default", eager: true }
-);
-
-async function readAppMarkdownSource(...segments: string[]) {
-  const source = CONTENT_SOURCES[`/src/content/${segments.join("/")}`];
-
-  if (source === undefined) {
-    throw new Error(`Unable to load markdown source: ${segments.join("/")}`);
-  }
-
-  return source;
-}
-
-async function getShowcaseEntryMarkdown(
-  name: string,
-  slug: string,
-  entry: (typeof changelog)[number]
-) {
-  try {
-    return stripFrontmatter(await entry.getText("raw"));
-  } catch {
-    const source = await readAppMarkdownSource(
-      "changelog",
-      name,
-      `${slug}.mdx`
-    );
-    return stripFrontmatter(source);
-  }
 }
 
 function renderDatedEntry(entry: MarkdownTwinEntry) {
@@ -200,7 +194,9 @@ async function getShowcaseEntries(name: string): Promise<MarkdownTwinEntry[]> {
           dateLabel: entry.date,
           publishedDate: new Date(entry.date),
         },
-        body: await getShowcaseEntryMarkdown(name, slug, entry),
+        body: stripFrontmatter(
+          readAppMarkdownSource("changelog", entry.info.path)
+        ),
       };
     })
   );
@@ -234,7 +230,7 @@ function getMcpUseCaseEntries() {
 }
 
 async function buildBlogIndexMarkdown() {
-  const posts = await listNotraBlogPosts();
+  const posts = await listVisibleNotraBlogPosts();
   const list = posts
     .map(
       (post) =>
@@ -245,7 +241,7 @@ async function buildBlogIndexMarkdown() {
   return [
     "# Notra Blog",
     "",
-    "Insights, guides, and stories from the Notra team.",
+    "Insights, guides and stories from the Notra team.",
     "",
     "## Posts",
     "",
@@ -266,7 +262,7 @@ async function buildNotraChangelogIndexMarkdown() {
   return [
     "# Notra Changelog",
     "",
-    "The latest product updates, release notes, and improvements from the Notra team.",
+    "The latest product updates, release notes and improvements from the Notra team.",
     "",
     "## Entries",
     "",
@@ -344,11 +340,39 @@ export function buildDualmarkStaticPages(): StaticPageConfig[] {
     { pattern: "/agent", render: () => buildAgentPageMarkdown() },
     { pattern: "/mcp", render: () => buildMcpMarkdown() },
     { pattern: "/mcp/use-cases", render: () => buildMcpUseCasesMarkdown() },
+    { pattern: "/compare", render: () => buildCompareIndexMarkdown() },
+    {
+      pattern: STATE_OF_AI_SEARCH_PATH,
+      render: () => buildStateOfAiSearchIndexMarkdown(),
+    },
+    ...listSummaries().map((summary) => ({
+      pattern: reportPath(summary.slug, summary.edition),
+      render: async () => {
+        const report = await loadReport(summary.slug, summary.edition);
+        return report ? buildStateOfAiSearchReportMarkdown(report) : "";
+      },
+    })),
+    ...listCompareMarkdownPages().map((page) => ({
+      pattern: page.pattern,
+      render: () => buildCompareMarkdown(page.slug) ?? "",
+    })),
     { pattern: "/contributors", render: () => buildContributorsMarkdown() },
     { pattern: "/integrations", render: () => buildIntegrationsMarkdown() },
     {
       pattern: "/integrations/slack",
       render: () => buildSlackIntegrationMarkdown(),
+    },
+    {
+      pattern: "/integrations/github",
+      render: () => buildGithubIntegrationMarkdown(),
+    },
+    {
+      pattern: "/integrations/linear",
+      render: () => buildLinearIntegrationMarkdown(),
+    },
+    {
+      pattern: "/integrations/granola",
+      render: () => buildGranolaIntegrationMarkdown(),
     },
     {
       pattern: "/features/marketing/assets",

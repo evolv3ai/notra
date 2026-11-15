@@ -4,7 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { BrandAssetCard } from "@/components/brand-asset-card";
 import { BrandColorSwatch } from "@/components/brand-color-swatch";
 import { MarketingHeroWash } from "@/components/marketing-hero-wash";
-import { NotraMark } from "@/components/notra-mark";
+import instrumentCore from "@/fonts/subsets/instrument-core.woff2?url";
 import {
   BRAND_ASSETS,
   BRAND_COLORS,
@@ -54,7 +54,22 @@ const metadata: Metadata = {
 };
 
 export const Route = createFileRoute("/_site/brand")({
-  head: () => buildHead(metadata),
+  head: () => {
+    const head = buildHead(metadata);
+    return {
+      ...head,
+      links: [
+        ...(head.links ?? []),
+        {
+          rel: "preload",
+          href: instrumentCore,
+          as: "font",
+          type: "font/woff2",
+          crossOrigin: "anonymous",
+        },
+      ],
+    };
+  },
   component: BrandPage,
 });
 
@@ -62,7 +77,6 @@ function BrandPage() {
   return (
     <div className="border-border/70 flex w-full flex-col items-center justify-start overflow-hidden border-b">
       <script
-        // biome-ignore lint/security/noDangerouslySetInnerHtml: server-built JSON-LD
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(breadcrumbJsonLd) }}
         type="application/ld+json"
       />
@@ -94,8 +108,9 @@ function BrandPage() {
               Logo
             </h2>
             <p className="text-muted-foreground text-sm leading-6">
-              The Notra mark. Keep it on a light surface and give it room to
-              breathe. Hover a card to download the logo as SVG or PNG.
+              Keep the Notra mark on a light surface with clear space around it.
+              On dark surfaces, use the version on a cream tile. Hover a card to
+              download the logo as SVG or PNG.
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -103,20 +118,18 @@ function BrandPage() {
               asset={BRAND_ASSETS.mark}
               copyLabel="Copy logo as SVG"
               downloadName="notra-mark"
+              previewAlt="Notra logo"
+              previewClassName="size-20"
               variant="light"
-            >
-              <NotraMark className="size-20 shrink-0" />
-            </BrandAssetCard>
+            />
             <BrandAssetCard
-              asset={BRAND_ASSETS.mark}
+              asset={BRAND_ASSETS.markDark}
               copyLabel="Copy logo as SVG"
-              downloadName="notra-mark"
+              downloadName="notra-mark-dark"
+              previewAlt="Notra logo on a cream tile"
+              previewClassName="size-24"
               variant="dark"
-            >
-              <span className="flex size-24 items-center justify-center rounded-2xl bg-[#F6F3F1]">
-                <NotraMark className="size-14 shrink-0" />
-              </span>
-            </BrandAssetCard>
+            />
           </div>
         </section>
 
@@ -136,28 +149,18 @@ function BrandPage() {
               asset={BRAND_ASSETS.wordmark}
               copyLabel="Copy wordmark as SVG"
               downloadName="notra-wordmark"
+              previewAlt="Notra wordmark"
+              previewClassName="h-12 w-auto"
               variant="light"
-            >
-              <span className="flex items-center gap-3">
-                <NotraMark className="size-10 shrink-0" />
-                <span className="text-3xl font-semibold text-neutral-950">
-                  Notra
-                </span>
-              </span>
-            </BrandAssetCard>
+            />
             <BrandAssetCard
               asset={BRAND_ASSETS.wordmarkDark}
               copyLabel="Copy wordmark as SVG"
               downloadName="notra-wordmark-dark"
+              previewAlt="Notra wordmark for dark surfaces"
+              previewClassName="h-14 w-auto"
               variant="dark"
-            >
-              <span className="flex items-center gap-3">
-                <span className="flex size-14 items-center justify-center rounded-xl bg-[#F6F3F1]">
-                  <NotraMark className="size-10 shrink-0" />
-                </span>
-                <span className="text-3xl font-semibold text-white">Notra</span>
-              </span>
-            </BrandAssetCard>
+            />
           </div>
         </section>
 
@@ -167,7 +170,7 @@ function BrandPage() {
               Colors
             </h2>
             <p className="text-muted-foreground text-sm leading-6">
-              Our palette pairs a violet primary with the lavender, ink, and
+              Our palette pairs a violet primary with the lavender, ink and
               cream of the mark. Click a swatch to copy its hex value.
             </p>
           </div>
@@ -184,8 +187,8 @@ function BrandPage() {
               Typography
             </h2>
             <p className="text-muted-foreground text-sm leading-6">
-              Satoshi sets marketing headlines. Inter carries product UI and
-              body copy. Instrument Serif is a rare editorial accent.
+              Marketing headlines use Satoshi, and product UI and body copy use
+              Inter. Instrument Serif is a rare editorial accent.
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

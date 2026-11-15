@@ -1,8 +1,3 @@
-/**
- * Probe which privacy flags the current Vercel AI Gateway team accepts.
- *
- *   bun packages/ai/evals/router/vercel-flags-check.ts
- */
 import { createGateway } from "@ai-sdk/gateway";
 import type { JSONObject } from "@ai-sdk/provider";
 import { generateText } from "ai";

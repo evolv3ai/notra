@@ -17,9 +17,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@notra/ui/components/ui/select";
-import { useTranslations } from "next-intl";
 import { useReducer } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { FONT_ROLE_OPTIONS } from "@/constants/brand-guideline-ui";
@@ -180,7 +180,11 @@ export function GuidelinesFontEditDialog({
           >
             {tCommon("cancel")}
           </Button>
-          <Button disabled={update.isPending} onClick={handleSave}>
+          <Button
+            data-dialog-confirm
+            disabled={update.isPending}
+            onClick={handleSave}
+          >
             {update.isPending ? tCommon("saving") : tCommon("save")}
           </Button>
         </ResponsiveDialogFooter>

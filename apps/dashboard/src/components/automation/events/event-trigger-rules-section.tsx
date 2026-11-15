@@ -1,7 +1,11 @@
 import { useStore } from "@tanstack/react-form";
-import { useTranslations } from "next-intl";
+import { useTranslations } from "use-intl";
 
-import { BrandIdentityRadioGroup } from "@/components/brand-identity-radio-group";
+import {
+  EditorBox,
+  EditorSection,
+  PickerSelect,
+} from "@/components/automation/editor/editor-parts";
 import { OUTPUT_TYPE_LABEL_KEYS } from "@/constants/automation-output-types";
 import { supportsAutoPublish } from "@/constants/schedule-output-types";
 import type { EventTriggerRulesSectionProps } from "@/types/automation/event-trigger";
@@ -28,49 +32,50 @@ export function EventTriggerRulesSection({
   }
 
   return (
-    <section className="space-y-3">
-      <div className="space-y-1">
-        <h3 className="text-base font-semibold">
-          {tSchedules("dialog.rules", {
-            type: tCommon(`labels.${OUTPUT_TYPE_LABEL_KEYS[outputType]}`),
-          })}
-        </h3>
-        <p className="text-muted-foreground text-sm">{t("rulesHint")}</p>
-      </div>
-
-      {brandVoices.length > 1 && (
-        <form.Field name="brandVoiceId">
-          {(field) => (
-            <BrandIdentityRadioGroup
-              description={tSchedules("dialog.brandVoiceDescription")}
-              emptyOption={{
-                label: defaultBrandVoiceLabel,
-                description: tSchedules("dialog.brandVoiceDefaultDescription"),
-                voice: defaultBrandVoice,
-              }}
-              id={field.name}
-              label={tCommon("labels.brandVoice")}
-              onChange={field.handleChange}
-              value={field.state.value}
-              voices={nonDefaultBrandVoices}
-            />
-          )}
-        </form.Field>
-      )}
-
-      {supportsAutoPublish(outputType) && (
-        <form.Field name="autoPublish">
-          {(field) => (
-            <TriggerSwitchRow
-              checked={field.state.value}
-              id={field.name}
-              label={tSchedules("dialog.autoPublish")}
-              onCheckedChange={field.handleChange}
-              tooltip={tSchedules("dialog.autoPublishHint")}
-            />
-          )}
-        </form.Field>
-      )}
-    </section>
+    <EditorSection
+      hint={t("rulesHint")}
+      label={tSchedules("dialog.rules", {
+        type: tCommon(`labels.${OUTPUT_TYPE_LABEL_KEYS[outputType]}`),
+      })}
+    >
+      <EditorBox>
+        {brandVoices.length > 1 && (
+          <div className="flex min-h-12 items-center justify-between gap-3 px-4 py-2.5">
+            <span className="text-sm font-medium">
+              {tCommon("labels.brandVoice")}
+            </span>
+            <form.Field name="brandVoiceId">
+              {(field) => (
+                <PickerSelect
+                  ariaLabel={tCommon("labels.brandVoice")}
+                  onChange={field.handleChange}
+                  options={[
+                    { value: "", label: defaultBrandVoiceLabel },
+                    ...nonDefaultBrandVoices.map((voice) => ({
+                      value: voice.id,
+                      label: voice.name,
+                    })),
+                  ]}
+                  value={field.state.value}
+                />
+              )}
+            </form.Field>
+          </div>
+        )}
+        {supportsAutoPublish(outputType) && (
+          <form.Field name="autoPublish">
+            {(field) => (
+              <TriggerSwitchRow
+                checked={field.state.value}
+                id={field.name}
+                label={tSchedules("dialog.autoPublish")}
+                onCheckedChange={field.handleChange}
+                tooltip={tSchedules("dialog.autoPublishHint")}
+              />
+            )}
+          </form.Field>
+        )}
+      </EditorBox>
+    </EditorSection>
   );
 }

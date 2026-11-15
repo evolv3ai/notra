@@ -2,6 +2,7 @@ import { db } from "@notra/db/drizzle";
 import { contentTriggers } from "@notra/db/schema";
 import { and, eq } from "drizzle-orm";
 
+import { finishAutomationRun, startAutomationRun } from "@/lib/automation/runs";
 import { checkLogRetention } from "@/lib/billing/check-log-retention";
 import { appendWebhookLog } from "@/lib/webhooks/logging";
 import { startEventRun, startScheduleRun } from "@/lib/workflows/start";
@@ -137,46 +138,11 @@ export async function triggerManualAutomationRun({
   }
 
   const triggerName = getTriggerName(trigger);
-
-  let workflowRunId: string;
-  let kind: ManualRunKind;
-  let payload: Record<string, unknown>;
-
-  if (trigger.sourceType === "cron") {
-    kind = "schedule";
-    workflowRunId = (await startScheduleRun({ triggerId, manual: true })).runId;
-    payload = {
-      triggerId,
-      scheduleName: triggerName,
-      sourceType: trigger.sourceType,
-      outputType: trigger.outputType,
-      workflowRunId,
-      triggeredBy,
-    };
-  } else if (trigger.sourceType === "github_webhook") {
-    kind = "event";
-    const eventPayload = buildManualEventPayload(trigger);
-    workflowRunId = (
-      await startEventRun({
-        triggerId,
-        repositoryId: eventPayload.repositoryId,
-        eventType: eventPayload.eventType,
-        eventAction: eventPayload.eventAction,
-        eventData: eventPayload.eventData,
-      })
-    ).runId;
-    payload = {
-      triggerId,
-      sourceType: trigger.sourceType,
-      outputType: trigger.outputType,
-      workflowRunId,
-      triggeredBy,
-      repositoryId: eventPayload.repositoryId,
-      eventType: eventPayload.eventType,
-      eventAction: eventPayload.eventAction,
-      manualRun: true,
-    };
-  } else {
+  const eventPayload =
+    trigger.sourceType === "github_webhook"
+      ? buildManualEventPayload(trigger)
+      : null;
+  if (!(trigger.sourceType === "cron" || eventPayload)) {
     throw new ManualTriggerRunError(
       `Manual runs are not supported for source type '${trigger.sourceType}'`,
       {
@@ -184,6 +150,67 @@ export async function triggerManualAutomationRun({
         code: "UNSUPPORTED_SOURCE_TYPE",
       }
     );
+  }
+
+  // Doubles as the workflow's execution ID, so the run shows up as running
+  // right away and the workflow settles this same row.
+  const executionId = crypto.randomUUID();
+  await startAutomationRun({
+    id: executionId,
+    organizationId,
+    automationId: triggerId,
+    manual: true,
+  });
+
+  let workflowRunId: string;
+  let kind: ManualRunKind;
+  let payload: Record<string, unknown>;
+
+  try {
+    if (eventPayload) {
+      kind = "event";
+      workflowRunId = (
+        await startEventRun({
+          triggerId,
+          repositoryId: eventPayload.repositoryId,
+          eventType: eventPayload.eventType,
+          eventAction: eventPayload.eventAction,
+          eventData: eventPayload.eventData,
+          executionId,
+        })
+      ).runId;
+      payload = {
+        triggerId,
+        sourceType: trigger.sourceType,
+        outputType: trigger.outputType,
+        workflowRunId,
+        triggeredBy,
+        repositoryId: eventPayload.repositoryId,
+        eventType: eventPayload.eventType,
+        eventAction: eventPayload.eventAction,
+        manualRun: true,
+      };
+    } else {
+      kind = "schedule";
+      workflowRunId = (
+        await startScheduleRun({ triggerId, manual: true, executionId })
+      ).runId;
+      payload = {
+        triggerId,
+        scheduleName: triggerName,
+        sourceType: trigger.sourceType,
+        outputType: trigger.outputType,
+        workflowRunId,
+        triggeredBy,
+      };
+    }
+  } catch (error) {
+    await finishAutomationRun({
+      id: executionId,
+      status: "failed",
+      errorMessage: "The run could not be started",
+    });
+    throw error;
   }
 
   const logRetentionDays = await checkLogRetention(organizationId);
@@ -202,6 +229,7 @@ export async function triggerManualAutomationRun({
 
   return {
     kind,
+    runId: executionId,
     workflowRunId,
   };
 }

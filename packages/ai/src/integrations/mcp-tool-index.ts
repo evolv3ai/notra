@@ -1,10 +1,13 @@
 import { createMCPClient, type MCPClient } from "@ai-sdk/mcp";
+import { logError, logWarn } from "@notra/ai/utils/server-log";
 import { db } from "@notra/db/drizzle";
 import {
   mcpServerIntegrations,
   mcpSessionToolActivations,
   mcpToolIndex,
 } from "@notra/db/schema";
+import { advisoryXactLock } from "@notra/db/utils/advisory-xact-lock";
+import { isPgUniqueViolation } from "@notra/db/utils/pg-errors";
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
 import { captureServerEvent, flushPostHogServer } from "@notra/posthog/server";
 import { assertPublicHttpUrlResolution } from "@notra/utils/url";
@@ -25,8 +28,10 @@ import { customAlphabet } from "nanoid";
 
 import {
   MCP_ACTIVATE_BATCH_LIMIT,
+  MCP_INDEX_MAX_PAGES,
+  MCP_INDEX_MAX_TOOLS,
   MCP_INDEX_TIMEOUT_MS,
-  MCP_MAX_RUNTIME_WRAPPERS,
+  MCP_INDEX_TOTAL_TIMEOUT_MS,
   MCP_SEARCH_LIMIT_DEFAULT,
   MCP_SEARCH_LIMIT_MAX,
   MCP_SESSION_ACTIVE_TOOL_LIMIT,
@@ -48,6 +53,18 @@ import { getMcpRequestAuth, withMcpOAuthRetry } from "./mcp-auth";
 import { createMcpRuntimeToolName } from "./mcp-tool-name";
 
 const nanoid = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 16);
+const LIKE_SPECIAL_CHARS_REGEX = /[%_\\]/g;
+const RUNTIME_TOOL_NAME_CONSTRAINT = "mcpToolIndex_org_runtime_tool_uidx";
+
+const indexedToolColumns = {
+  tool: mcpToolIndex,
+  serverName: mcpServerIntegrations.name,
+  serverUrl: mcpServerIntegrations.url,
+  serverEnabled: mcpServerIntegrations.enabled,
+  serverLogoLightUrl: mcpServerIntegrations.logoLightUrl,
+  serverLogoDarkUrl: mcpServerIntegrations.logoDarkUrl,
+};
+
 export async function refreshMcpToolIndexForOrganization({
   organizationId,
 }: {
@@ -75,10 +92,9 @@ export async function refreshMcpToolIndexForOrganization({
         })
       );
     } catch (error) {
-      console.error("[MCP Tool Index Organization Refresh Error]", {
+      logError("[MCP Tool Index] Organization refresh failed", error, {
         organizationId,
         integrationId: integration.id,
-        error: error instanceof Error ? error.message : String(error),
       });
     }
   }
@@ -189,37 +205,18 @@ export async function refreshMcpToolIndexForIntegration({
         });
       }
 
-      if (seenToolNames.size > 0) {
-        await tx
-          .update(mcpToolIndex)
-          .set({
-            status: "stale",
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(mcpToolIndex.serverIntegrationId, integrationId),
-              notInArray(
-                mcpToolIndex.serverToolName,
-                Array.from(seenToolNames)
-              ),
-              sql`coalesce(${mcpToolIndex.meta} ->> 'notraManual', 'false') <> 'true'`
-            )
-          );
-      } else {
-        await tx
-          .update(mcpToolIndex)
-          .set({
-            status: "stale",
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(mcpToolIndex.serverIntegrationId, integrationId),
-              sql`coalesce(${mcpToolIndex.meta} ->> 'notraManual', 'false') <> 'true'`
-            )
-          );
-      }
+      await tx
+        .update(mcpToolIndex)
+        .set({ status: "stale", updatedAt: new Date() })
+        .where(
+          and(
+            eq(mcpToolIndex.serverIntegrationId, integrationId),
+            seenToolNames.size > 0
+              ? notInArray(mcpToolIndex.serverToolName, [...seenToolNames])
+              : undefined,
+            sql`coalesce(${mcpToolIndex.meta} ->> 'notraManual', 'false') <> 'true'`
+          )
+        );
 
       const [toolCount] = await tx
         .select({ value: count() })
@@ -259,10 +256,9 @@ export async function refreshMcpToolIndexForIntegration({
       })
       .where(eq(mcpServerIntegrations.id, integrationId));
 
-    console.error("[MCP Tool Index Refresh Error]", {
+    logError("[MCP Tool Index] Refresh failed", error, {
       integrationId,
       organizationId,
-      error: message,
     });
     throw error;
   } finally {
@@ -283,6 +279,7 @@ export async function searchMcpToolIndex({
 }) {
   const normalizedQuery = query.replace(/\s+/g, " ").trim();
   const boundedLimit = Math.min(Math.max(limit, 1), MCP_SEARCH_LIMIT_MAX);
+  const likePattern = `%${normalizedQuery.replace(LIKE_SPECIAL_CHARS_REGEX, "\\$&")}%`;
 
   const activeCount = await db
     .select({ value: count() })
@@ -304,9 +301,8 @@ export async function searchMcpToolIndex({
   if (activeCount === 0) {
     await refreshMcpToolIndexForOrganization({ organizationId }).catch(
       (error) => {
-        console.error("[MCP Tool Index Refresh During Search Error]", {
+        logError("[MCP Tool Index] Refresh during search failed", error, {
           organizationId,
-          error: error instanceof Error ? error.message : String(error),
         });
       }
     );
@@ -323,21 +319,16 @@ export async function searchMcpToolIndex({
     normalizedQuery
       ? or(
           sql`to_tsvector('english', ${mcpToolIndex.searchText}) @@ plainto_tsquery('english', ${normalizedQuery})`,
-          ilike(mcpToolIndex.searchText, `%${normalizedQuery}%`),
-          ilike(mcpToolIndex.runtimeToolName, `%${normalizedQuery}%`),
-          ilike(mcpServerIntegrations.name, `%${normalizedQuery}%`)
+          ilike(mcpToolIndex.searchText, likePattern),
+          ilike(mcpToolIndex.runtimeToolName, likePattern),
+          ilike(mcpServerIntegrations.name, likePattern)
         )
       : undefined
   );
 
   return db
     .select({
-      tool: mcpToolIndex,
-      serverName: mcpServerIntegrations.name,
-      serverUrl: mcpServerIntegrations.url,
-      serverEnabled: mcpServerIntegrations.enabled,
-      serverLogoLightUrl: mcpServerIntegrations.logoLightUrl,
-      serverLogoDarkUrl: mcpServerIntegrations.logoDarkUrl,
+      ...indexedToolColumns,
       rank: normalizedQuery
         ? sql<number>`ts_rank_cd(to_tsvector('english', ${mcpToolIndex.searchText}), plainto_tsquery('english', ${normalizedQuery}))`
         : sql<number>`0`,
@@ -355,61 +346,7 @@ export async function searchMcpToolIndex({
       mcpToolIndex.runtimeToolName
     )
     .limit(boundedLimit)
-    .then((rows) =>
-      rows.map((row) =>
-        toIndexedMcpTool(row.tool, {
-          serverName: row.serverName,
-          serverUrl: row.serverUrl,
-          serverEnabled: row.serverEnabled,
-          serverLogoLightUrl: row.serverLogoLightUrl,
-          serverLogoDarkUrl: row.serverLogoDarkUrl,
-        })
-      )
-    );
-}
-
-export async function getIndexedMcpToolsForRuntime({
-  organizationId,
-  limit = MCP_MAX_RUNTIME_WRAPPERS,
-}: {
-  organizationId: string;
-  limit?: number;
-}) {
-  return db
-    .select({
-      tool: mcpToolIndex,
-      serverName: mcpServerIntegrations.name,
-      serverUrl: mcpServerIntegrations.url,
-      serverEnabled: mcpServerIntegrations.enabled,
-      serverLogoLightUrl: mcpServerIntegrations.logoLightUrl,
-      serverLogoDarkUrl: mcpServerIntegrations.logoDarkUrl,
-    })
-    .from(mcpToolIndex)
-    .innerJoin(
-      mcpServerIntegrations,
-      eq(mcpToolIndex.serverIntegrationId, mcpServerIntegrations.id)
-    )
-    .where(
-      and(
-        eq(mcpToolIndex.organizationId, organizationId),
-        eq(mcpToolIndex.status, "active"),
-        eq(mcpServerIntegrations.enabled, true),
-        eq(mcpServerIntegrations.resourceType, "connection")
-      )
-    )
-    .orderBy(mcpToolIndex.runtimeToolName)
-    .limit(limit)
-    .then((rows) =>
-      rows.map((row) =>
-        toIndexedMcpTool(row.tool, {
-          serverName: row.serverName,
-          serverUrl: row.serverUrl,
-          serverEnabled: row.serverEnabled,
-          serverLogoLightUrl: row.serverLogoLightUrl,
-          serverLogoDarkUrl: row.serverLogoDarkUrl,
-        })
-      )
-    );
+    .then((rows) => rows.map((row) => toIndexedMcpTool(row)));
 }
 
 export async function hasActiveIndexedMcpToolsForOrganization({
@@ -457,13 +394,8 @@ async function querySessionActivatedMcpTools({
   const now = new Date();
   return database
     .select({
+      ...indexedToolColumns,
       activation: mcpSessionToolActivations,
-      tool: mcpToolIndex,
-      serverName: mcpServerIntegrations.name,
-      serverUrl: mcpServerIntegrations.url,
-      serverEnabled: mcpServerIntegrations.enabled,
-      serverLogoLightUrl: mcpServerIntegrations.logoLightUrl,
-      serverLogoDarkUrl: mcpServerIntegrations.logoDarkUrl,
     })
     .from(mcpSessionToolActivations)
     .innerJoin(
@@ -495,13 +427,7 @@ async function querySessionActivatedMcpTools({
     .orderBy(mcpSessionToolActivations.activatedAt)
     .then((rows) =>
       rows.map((row) => ({
-        ...toIndexedMcpTool(row.tool, {
-          serverName: row.serverName,
-          serverUrl: row.serverUrl,
-          serverEnabled: row.serverEnabled,
-          serverLogoLightUrl: row.serverLogoLightUrl,
-          serverLogoDarkUrl: row.serverLogoDarkUrl,
-        }),
+        ...toIndexedMcpTool(row),
         activationId: row.activation.id,
         sourceQuery: row.activation.sourceQuery,
         activatedAt: row.activation.activatedAt,
@@ -559,10 +485,9 @@ export async function activateSessionMcpTools({
       organizationId,
       integrationId,
     }).catch((error) => {
-      console.error("[MCP Tool Index Stale Refresh Error]", {
+      logError("[MCP Tool Index] Stale refresh failed", error, {
         organizationId,
         integrationId,
-        error: error instanceof Error ? error.message : String(error),
       });
     });
   }
@@ -578,8 +503,9 @@ export async function activateSessionMcpTools({
   }
 
   const activated = await db.transaction(async (tx) => {
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`mcp-session-tool-activation:${organizationId}:${sessionId}:${surface}`}, 0))`
+    await advisoryXactLock(
+      tx,
+      `mcp-session-tool-activation:${organizationId}:${sessionId}:${surface}`
     );
 
     const existing = await querySessionActivatedMcpTools({
@@ -743,14 +669,7 @@ export async function getIndexedMcpToolByRuntimeName({
   runtimeToolName: string;
 }) {
   const [row] = await db
-    .select({
-      tool: mcpToolIndex,
-      serverName: mcpServerIntegrations.name,
-      serverUrl: mcpServerIntegrations.url,
-      serverEnabled: mcpServerIntegrations.enabled,
-      serverLogoLightUrl: mcpServerIntegrations.logoLightUrl,
-      serverLogoDarkUrl: mcpServerIntegrations.logoDarkUrl,
-    })
+    .select(indexedToolColumns)
     .from(mcpToolIndex)
     .innerJoin(
       mcpServerIntegrations,
@@ -767,15 +686,7 @@ export async function getIndexedMcpToolByRuntimeName({
     )
     .limit(1);
 
-  return row
-    ? toIndexedMcpTool(row.tool, {
-        serverName: row.serverName,
-        serverUrl: row.serverUrl,
-        serverEnabled: row.serverEnabled,
-        serverLogoLightUrl: row.serverLogoLightUrl,
-        serverLogoDarkUrl: row.serverLogoDarkUrl,
-      })
-    : null;
+  return row ? toIndexedMcpTool(row) : null;
 }
 
 export async function isMcpToolActivatedForSession({
@@ -878,6 +789,8 @@ async function listMcpToolsForIndex(
   organizationId: string,
   requestAuth: McpRequestAuth
 ) {
+  // One deadline bounds initialization and every page.
+  const deadline = AbortSignal.timeout(MCP_INDEX_TOTAL_TIMEOUT_MS);
   const client = await createMCPClient({
     clientName: "notra",
     version: "0.0.1",
@@ -888,27 +801,64 @@ async function listMcpToolsForIndex(
       fetch: publicMcpRuntimeFetch,
       redirect: "error",
     },
+    initializationOptions: {
+      signal: AbortSignal.any([
+        AbortSignal.timeout(MCP_INDEX_TIMEOUT_MS),
+        deadline,
+      ]),
+    },
     onUncaughtError: (error) => {
-      console.error("[MCP Index Client Error]", {
+      logError("[MCP Tool Index] Uncaught client error", error, {
         integrationId,
         organizationId,
-        error: error instanceof Error ? error.message : String(error),
       });
     },
   });
 
   try {
     const definitions: McpToolDefinition[] = [];
+    const seenCursors = new Set<string>();
     let cursor: string | undefined;
+    let pages = 0;
     do {
+      // Past the total deadline the listing throws and the existing index is
+      // kept; a partial list would mark the unlisted tools stale.
       const result = await client.listTools({
         params: cursor ? { cursor } : undefined,
         options: {
-          signal: AbortSignal.timeout(MCP_INDEX_TIMEOUT_MS),
+          signal: AbortSignal.any([
+            AbortSignal.timeout(MCP_INDEX_TIMEOUT_MS),
+            deadline,
+          ]),
         },
       });
-      definitions.push(...result.tools);
+      pages += 1;
+      for (const tool of result.tools.slice(
+        0,
+        MCP_INDEX_MAX_TOOLS - definitions.length
+      )) {
+        definitions.push(tool);
+      }
+      if (cursor) {
+        seenCursors.add(cursor);
+      }
       cursor = result.nextCursor;
+      // Index what fits instead of failing the whole sync on huge or looping
+      // servers; tools beyond the cap are treated as missing.
+      if (
+        cursor &&
+        (seenCursors.has(cursor) ||
+          pages >= MCP_INDEX_MAX_PAGES ||
+          definitions.length >= MCP_INDEX_MAX_TOOLS)
+      ) {
+        logWarn("[MCP Tool Index] Tool listing truncated", {
+          integrationId,
+          organizationId,
+          pages,
+          tools: definitions.length,
+        });
+        break;
+      }
     } while (cursor);
     return { client, definitions };
   } catch (error) {
@@ -971,7 +921,7 @@ async function upsertIndexedTool({
       })
     );
   } catch (error) {
-    if (!isRuntimeToolNameConflict(error)) {
+    if (!isPgUniqueViolation(error, RUNTIME_TOOL_NAME_CONSTRAINT)) {
       throw error;
     }
 
@@ -1068,20 +1018,9 @@ async function upsertIndexedToolWithRuntimeName({
     });
 }
 
-async function getToolsByIds(organizationId: string, toolIds: string[]) {
-  if (!toolIds.length) {
-    return [];
-  }
-
+function getToolsByIds(organizationId: string, toolIds: string[]) {
   return db
-    .select({
-      tool: mcpToolIndex,
-      serverName: mcpServerIntegrations.name,
-      serverUrl: mcpServerIntegrations.url,
-      serverEnabled: mcpServerIntegrations.enabled,
-      serverLogoLightUrl: mcpServerIntegrations.logoLightUrl,
-      serverLogoDarkUrl: mcpServerIntegrations.logoDarkUrl,
-    })
+    .select(indexedToolColumns)
     .from(mcpToolIndex)
     .innerJoin(
       mcpServerIntegrations,
@@ -1095,29 +1034,20 @@ async function getToolsByIds(organizationId: string, toolIds: string[]) {
         eq(mcpServerIntegrations.resourceType, "connection")
       )
     )
-    .then((rows) =>
-      rows.map((row) =>
-        toIndexedMcpTool(row.tool, {
-          serverName: row.serverName,
-          serverUrl: row.serverUrl,
-          serverEnabled: row.serverEnabled,
-          serverLogoLightUrl: row.serverLogoLightUrl,
-          serverLogoDarkUrl: row.serverLogoDarkUrl,
-        })
-      )
-    );
+    .then((rows) => rows.map((row) => toIndexedMcpTool(row)));
 }
 
-function toIndexedMcpTool(
-  row: typeof mcpToolIndex.$inferSelect,
-  server: {
-    serverName: string;
-    serverUrl: string;
-    serverEnabled: boolean;
-    serverLogoLightUrl: string | null;
-    serverLogoDarkUrl: string | null;
-  }
-): IndexedMcpTool {
+function toIndexedMcpTool({
+  tool: row,
+  ...server
+}: {
+  tool: typeof mcpToolIndex.$inferSelect;
+  serverName: string;
+  serverUrl: string;
+  serverEnabled: boolean;
+  serverLogoLightUrl: string | null;
+  serverLogoDarkUrl: string | null;
+}): IndexedMcpTool {
   return {
     id: row.id,
     organizationId: row.organizationId,
@@ -1226,7 +1156,7 @@ function schemaPropertyNames(inputSchema: unknown) {
   ) {
     return "";
   }
-  const properties = (inputSchema as { properties?: unknown }).properties;
+  const { properties } = inputSchema;
   if (typeof properties !== "object" || properties === null) {
     return "";
   }
@@ -1235,17 +1165,4 @@ function schemaPropertyNames(inputSchema: unknown) {
 
 function sanitizeErrorMessage(message: string) {
   return message.replace(/\s+/g, " ").trim().slice(0, 1000);
-}
-
-function isRuntimeToolNameConflict(error: unknown) {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-  return (
-    error.message.includes("mcpToolIndex_org_runtime_tool_uidx") ||
-    error.message.includes(
-      "mcp_tool_index_organization_id_runtime_tool_name"
-    ) ||
-    error.message.includes("runtime_tool_name")
-  );
 }

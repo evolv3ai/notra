@@ -1,22 +1,13 @@
+export type SuggestionType = "schedule_automation" | "event_automation";
+
 export interface OnboardingSuggestionsProps {
   organizationId: string;
-  type: "schedule_automation" | "event_automation";
-  onCreate: (suggestionId: string) => void;
+  onCreate: (suggestionId: string, type: SuggestionType) => void;
 }
 
-export interface SuggestionDetails {
-  description: string | null;
-  evidence: string | null;
-  id: string;
+/** The parts of a stored suggestion the automation editor reads. */
+export interface OnboardingSuggestionDraft {
   title: string;
-  type: OnboardingSuggestionsProps["type"];
-}
-
-export interface SuggestionDetailsSheetProps {
-  dismissing: boolean;
-  onCreate: () => void;
-  onDismiss: () => void;
-  onOpenChange: (open: boolean) => void;
-  open: boolean;
-  suggestion: SuggestionDetails;
+  description: string | null;
+  data: unknown;
 }

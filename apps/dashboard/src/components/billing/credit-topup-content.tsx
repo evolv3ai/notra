@@ -12,14 +12,15 @@ import { POSTHOG_EVENTS } from "@notra/posthog/events";
 import { Input } from "@notra/ui/components/ui/input";
 import { Skeleton } from "@notra/ui/components/ui/skeleton";
 import { cn } from "@notra/ui/lib/utils";
-import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { useOrganizationsContext } from "@/components/providers/organization-provider";
 import { flushTrackEvent, trackEvent } from "@/lib/analytics/posthog-client";
 import { useBillingCustomer } from "@/lib/hooks/use-billing-customer";
+import { getDatabuddyPaymentMetadata } from "@/utils/databuddy";
 import { formatDollars } from "@/utils/format";
 
 interface CreditTopupContentProps {
@@ -91,6 +92,7 @@ export function CreditTopupContent({ onSuccess }: CreditTopupContentProps) {
         featureQuantities: [
           { featureId: FEATURES.AI_CREDITS, quantity: credits },
         ],
+        metadata: getDatabuddyPaymentMetadata(),
         redirectMode: "if_required",
         successUrl,
       });

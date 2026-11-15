@@ -8,7 +8,7 @@ type ProviderOptions = NonNullable<
 
 const DEFAULT_FALLBACK_MODELS = ["anthropic/claude-sonnet-5"];
 
-export function getGatewayFallbackModels(modelId?: string): string[] {
+function getGatewayFallbackModels(modelId?: string): string[] {
   if (!modelId) {
     return [...DEFAULT_FALLBACK_MODELS];
   }
@@ -29,8 +29,6 @@ export function getGatewayFallbackModels(modelId?: string): string[] {
 
   return DEFAULT_FALLBACK_MODELS.filter((model) => model !== modelId);
 }
-
-export const getFallbackModels = getGatewayFallbackModels;
 
 /**
  * Attach route-neutral defaults (automatic caching + model fallback chain).

@@ -105,7 +105,7 @@ export const sendChatMessageRequestSchema = z
     }),
     externalChannelId: publicExternalChannelIdSchema.optional().openapi({
       description:
-        "Link the chat to a Discord or Slack channel so it can be found later with GET /v1/chats/by-external.",
+        "Link the chat to a Discord or Slack channel, or tag it with your own dashboard id, so it can be found later with GET /v1/chats/by-external.",
     }),
   })
   .refine(
@@ -120,7 +120,8 @@ export const sendChatMessageRequestSchema = z
 export const getChatByExternalQuerySchema = z.object({
   source: externalChannelLookupSourceSchema.openapi({
     param: { name: "source", in: "query" },
-    description: "Messaging platform the channel belongs to.",
+    description:
+      "Source the chat was linked with: a messaging platform, or dashboard for your own id.",
     example: "discord",
   }),
   id: z
@@ -129,7 +130,8 @@ export const getChatByExternalQuerySchema = z.object({
     .max(200)
     .openapi({
       param: { name: "id", in: "query" },
-      description: "Channel ID on that platform.",
+      description:
+        "Channel ID on that platform, or the id you tagged the chat with.",
       example: "channel_123",
     }),
 });

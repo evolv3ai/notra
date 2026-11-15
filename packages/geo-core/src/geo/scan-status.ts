@@ -35,6 +35,20 @@ function executionFailure(cause: Cause.Cause<unknown>): GeoScanFailureMetadata {
   return classifyGeoScanExecutionFailure(Cause.squash(cause));
 }
 
+export function parseGeoClaimToken(
+  claimedAt: string
+): Effect.Effect<Date, GeoScanError> {
+  return Effect.suspend(() => {
+    const parsed = new Date(claimedAt);
+    if (Number.isNaN(parsed.getTime())) {
+      return Effect.fail(
+        new GeoScanError({ message: `Invalid scan claim token: ${claimedAt}` })
+      );
+    }
+    return Effect.succeed(parsed);
+  });
+}
+
 /**
  * Atomically claims the project's scan slot, returning `null` when another
  * scan already holds it and the claim token when it does not.
@@ -53,13 +67,11 @@ function executionFailure(cause: Cause.Cause<unknown>): GeoScanFailureMetadata {
  * previous, already-stale run cannot free a claim it no longer owns.
  *
  * The predicate is deliberately narrow — claimable only when nothing ever
- * started or when the stamp went stale. It used to also accept
- * `scan_started_at <= last_scan_at`, which is precisely what let a stale
- * finisher hand a *fresh* claim away: it stamped `last_scan_at = now`, which
- * is newer than the fresh `scan_started_at`, and the next trigger walked
- * straight in. `markGeoScanFinished` now clears `scan_started_at` in the same
- * statement, so a finished run is claimable through the `IS NULL` arm and the
- * comparison arm is no longer needed.
+ * started or when the stamp went stale. Do not add a
+ * `scan_started_at <= last_scan_at` arm: a stale finisher stamping
+ * `last_scan_at = now` would then hand a *fresh* claim to the next trigger.
+ * `markGeoScanFinished` clears `scan_started_at` in the same statement, so a
+ * finished run is claimable through the `IS NULL` arm.
  */
 export const claimGeoScanRun = Effect.fn("geo.claimScanRun")(function* (
   projectId: string,
@@ -67,11 +79,6 @@ export const claimGeoScanRun = Effect.fn("geo.claimScanRun")(function* (
 ) {
   const now = new Date();
   const staleBefore = new Date(now.getTime() - GEO_SCAN_STALE_MS);
-  // The scheduled sweep passes the slot it is about to serve. Folding "no
-  // attempt finished after that slot" into the same statement keeps the
-  // coverage check and the claim atomic: a scan that finishes between the
-  // sweep reading `last_scan_at` and claiming would otherwise free the slot
-  // and let a second paid scan start for the slot it just covered.
   const notCovered = options.unlessFinishedAfter
     ? or(
         isNull(geoSettings.lastScanAt),
@@ -94,11 +101,7 @@ export const claimGeoScanRun = Effect.fn("geo.claimScanRun")(function* (
       )
       .returning({ id: geoSettings.id })
   );
-
-  if (claimed.length === 0) {
-    return null;
-  }
-  return { claimedAt: now };
+  return claimed.length > 0 ? { claimedAt: now } : null;
 });
 
 /**
@@ -143,12 +146,7 @@ export const renewGeoScanRun = Effect.fn("geo.renewScanRun")(function* (
  */
 export const renewGeoScanClaimIfDue = Effect.fn("geo.renewScanClaimIfDue")(
   function* (projectId: string, claimToken: string, renewalToken: string) {
-    const claimedAt = new Date(claimToken);
-    if (Number.isNaN(claimedAt.getTime())) {
-      return yield* Effect.fail(
-        new GeoScanError({ message: `Invalid scan claim token: ${claimToken}` })
-      );
-    }
+    const claimedAt = yield* parseGeoClaimToken(claimToken);
     if (Date.now() - claimedAt.getTime() < GEO_SCAN_CLAIM_RENEW_AFTER_MS) {
       return claimToken;
     }
@@ -301,7 +299,7 @@ function withGeoScanStatus<A, E, R>(
   });
 }
 
-export interface GeoScanRunScope {
+interface GeoScanRunScope {
   organizationId: string;
   projectId: string;
 }
@@ -357,9 +355,6 @@ export const createGeoScanRow = Effect.fn("geo.createScanRow")(function* (
       .onConflictDoNothing({ target: geoScans.id })
   );
 
-  // A supplied id may already exist because the trigger inserted the row
-  // before handing the workflow off. Adopt it only when it belongs to this
-  // exact run scope; an id collision from another project must fail closed.
   const row = yield* geoDb("scan row ownership verification failed", () =>
     db.query.geoScans.findFirst({
       columns: { id: true },
@@ -383,15 +378,6 @@ export const createGeoScanRow = Effect.fn("geo.createScanRow")(function* (
   return id;
 });
 
-/**
- * Ends a pre-created scan row whose run never happened — a hand-off the
- * dashboard definitely refused, or a workflow that skipped the project.
- *
- * Guarded on `status = 'running'`, so it can never overwrite the verdict a run
- * that *did* execute already wrote. That makes it safe as a catch-all
- * finalizer and keeps a phantom "running" scan from lingering for clients that
- * poll the id the trigger handed them.
- */
 /**
  * Fails every `geo_scans` row still `running` past the claim stale window
  * whose project's scan-slot claim has also gone stale. A run in that state
@@ -458,6 +444,15 @@ export const sweepStaleGeoScanRows = Effect.fn("geo.sweepStaleScanRows")(
   }
 );
 
+/**
+ * Ends a pre-created scan row whose run never happened — a hand-off the
+ * dashboard definitely refused, or a workflow that skipped the project.
+ *
+ * Guarded on `status = 'running'`, so it can never overwrite the verdict a run
+ * that *did* execute already wrote. That makes it safe as a catch-all
+ * finalizer and keeps a phantom "running" scan from lingering for clients that
+ * poll the id the trigger handed them.
+ */
 export const failPendingGeoScanRow = Effect.fn("geo.failPendingScanRow")(
   function* (scope: GeoScanRunScope, scanId: string) {
     yield* geoDb("scan row fail stamp failed", () =>
@@ -523,8 +518,6 @@ export const finishGeoScanRow = Effect.fn("geo.finishScanRow")(function* (
         )
       )
   ).pipe(
-    // Only retry this idempotent status write, never the surrounding scan or
-    // billing settlement. The running predicate also handles a lost DB reply.
     Effect.retry(
       Schedule.exponential("100 millis").pipe(Schedule.upTo({ times: 3 }))
     )

@@ -23,8 +23,6 @@ export function useCompetitorSearchState({
   const search = useGeoBrandSearch(organizationId, debouncedQuery);
   const active = query.trim().length >= GEO_BRAND_SEARCH_MIN_QUERY_LENGTH;
   const searching = active && (search.isFetching || query !== debouncedQuery);
-  // Once the provider has failed, keep the manual fallback available while a
-  // user-triggered retry runs so recovery never depends on the provider.
   const retryingFailedQuery = search.isError && query === debouncedQuery;
   const hasCurrentResults =
     query === debouncedQuery && !search.isPlaceholderData;

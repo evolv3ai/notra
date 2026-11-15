@@ -12,37 +12,44 @@ export function geoRunProgress(run: GeoScanRunSummary) {
   return total ? Math.min(100, (run.checks / total) * 100) : null;
 }
 
-export function geoRunMissingAnswers(run: GeoScanRunSummary) {
-  return run.status === "running" || run.plan === null
-    ? 0
-    : Math.max(0, run.plan.totalChecks - run.checks);
-}
-
 export function scanRunDetailView(
   input: ScanRunDetailViewInput
 ): ScanRunDetailView {
   const pendingTotal = input.data?.pendingTotal ?? 0;
   const pending = input.data?.pending ?? [];
   const results = input.data?.results ?? [];
-  const activeView = pendingTotal > 0 ? input.view : "answers";
+  const running = input.run.status === "running";
+  const showsPending = pendingTotal > 0 && !running;
+  const mentionedCount = input.data?.mentionedTotal ?? input.run.mentions;
+  let activeView: ScanRunDetailView["activeView"] = running
+    ? "answers"
+    : input.view;
+  if (activeView === "pending" && !showsPending) {
+    activeView = "answers";
+  }
   const engines = input.run.plan?.engines ?? [];
-  const rowCount = activeView === "pending" ? pending.length : results.length;
+  const live = input.data?.live ?? null;
+  const rowCount =
+    (live?.rows.length ?? 0) ||
+    (activeView === "pending" ? pending.length : results.length);
   return {
-    running: input.run.status === "running",
+    running,
+    live,
     pendingTotal,
     pending,
     results,
     activeView,
     showLanguage: (input.run.plan?.languages.length ?? 0) > 1,
     loading: input.isPending || input.isPlaceholderData,
-    hasFilters: pendingTotal > 0 || engines.length > 1,
+    hasFilters: !running || engines.length > 1,
     engines,
     height: paginatedTableHeightFor(
       input.isPending ? GEO_SCAN_RESULTS_PAGE_SIZE / 2 : rowCount
     ),
     pendingOffset: input.data?.pendingOffset ?? input.pendingOffset,
     total: input.data?.total ?? 0,
-    answerCount: input.data?.total ?? input.run.checks,
+    answerCount: input.data?.answerTotal ?? input.run.checks,
+    mentionedCount,
   };
 }
 

@@ -1,0 +1,14 @@
+---
+title: Logo
+description: Model and integration logos from svgl.app.
+---
+
+<Component path="workflow/examples/workflow-logo" />
+
+<RegistryInstall name="workflow-logo" />
+
+`WorkflowLogo` renders a brand mark by `name`. The marks come from [svgl.app](https://svgl.app), with gradient ids prefixed so several logos can share a page. Single-color marks like OpenAI, Anthropic, GitHub, Grok and Resend use `currentColor` and follow the theme. Browserbase and context.dev aren't on svgl.app yet, so their marks are the official ones from browserbase.com and context.dev.
+
+`WORKFLOW_LOGOS` maps each name to its label and component if you want to build your own pickers. Logos marked `tile`, like Browserbase and context.dev, already come as a filled square, so icon tiles show them edge to edge.
+
+<include>./_used-in.mdx</include>

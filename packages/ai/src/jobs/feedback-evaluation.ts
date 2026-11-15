@@ -7,7 +7,7 @@ import type {
 } from "@notra/ai/types/feedback-classifier";
 import { fallbackFeedbackTitle } from "@notra/ai/utils/feedback-title";
 
-export type FeedbackEvaluation = EvaluationResult<
+type FeedbackEvaluation = EvaluationResult<
   typeof FEEDBACK_EVALUATION_QUESTIONS
 >;
 

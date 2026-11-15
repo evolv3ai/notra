@@ -1,36 +1,36 @@
 "use client";
 
-import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { Button } from "@notra/ui/components/ui/button";
-import { useTranslations } from "next-intl";
-import Link from "next/link";
-import { useParams, useSelectedLayoutSegment } from "next/navigation";
+import { useTranslations } from "use-intl";
 
+import { BackLink } from "@/components/layout/back-link";
 import { PageContainer } from "@/components/layout/container";
+import { ALL_INTEGRATIONS } from "@/lib/integrations/catalog";
+import { useParams, usePathname } from "@/lib/navigation";
 
 export function IntegrationsBackLink() {
-  const t = useTranslations("integrations");
-  const segment = useSelectedLayoutSegment();
+  const t = useTranslations("common");
+  const pathname = usePathname();
   const { slug } = useParams<{ slug: string }>();
+  const root = `/${slug}/integrations`;
+  const [section, detail] = pathname
+    .replace(/\/$/, "")
+    .slice(root.length + 1)
+    .split("/");
 
-  if (!segment) {
+  if (!section) {
     return null;
   }
 
+  const parent = detail
+    ? ALL_INTEGRATIONS.find((integration) => integration.href === section)
+    : undefined;
+
   return (
-    <PageContainer className="pt-4 md:pt-6">
+    <PageContainer className="-mb-4 pt-4 md:-mb-6 md:pt-6">
       <div className="px-4 lg:px-6">
-        <Button
-          nativeButton={false}
-          role="link"
-          render={<Link href={`/${slug}/integrations`} />}
-          size="sm"
-          variant="ghost"
-        >
-          <HugeiconsIcon icon={ArrowLeft01Icon} className="size-4" />
-          {t("backLink")}
-        </Button>
+        <BackLink href={parent ? `${root}/${section}` : root}>
+          {parent?.name ?? t("labels.integrations")}
+        </BackLink>
       </div>
     </PageContainer>
   );

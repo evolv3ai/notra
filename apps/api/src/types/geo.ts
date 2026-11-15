@@ -1,6 +1,6 @@
 import type {
   GeoEntitlementService,
-  GeoFeatureFlagService,
+  GeoCodingAgentAccessService,
   GeoGenerationService,
   GeoWorkflowService,
   AgentReadinessNetwork,
@@ -22,11 +22,17 @@ import type {
   GeoSelectionInvalidError,
 } from "../errors/geo";
 
-type GeoErrorStatus = 400 | 402 | 404 | 409 | 500 | 503;
+type GeoErrorStatus = 400 | 402 | 404 | 409 | 429 | 500 | 503;
 
 export interface GeoFailure {
   readonly status: GeoErrorStatus;
   readonly error: string;
+  /** Set with status 429 when the dashboard's shared org budget is spent. */
+  readonly rateLimit?: {
+    readonly limit: number;
+    readonly remaining: number;
+    readonly reset: number;
+  };
 }
 
 export type GeoOutcome<A> =
@@ -38,7 +44,7 @@ export type GeoApiRuntime =
   | GeoModelService
   | GeoSearchConsoleService
   | GeoEntitlementService
-  | GeoFeatureFlagService
+  | GeoCodingAgentAccessService
   | GeoGenerationService
   | GeoWorkflowService;
 
@@ -49,15 +55,16 @@ type AgentReadinessProgramError =
   | AgentReadinessStartError
   | AgentReadinessTargetMissingError;
 
-/** Domain failures from geo-core plus API-boundary validation errors. */
 export type GeoProgramError =
   | GeoRouterError
   | GeoSelectionInvalidError
   | AgentReadinessProgramError
   | GeoScanNotFoundError;
 
-export interface RemoteGeoEffectOptions<A> {
+export interface RemoteGeoOperation<A> {
+  readonly label: string;
+  readonly path: string;
   readonly responseSchema: ZodType<A>;
-  readonly timeoutMs: number;
   readonly timeoutMessage: string;
+  readonly unavailableMessage: string;
 }

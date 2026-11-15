@@ -1,3 +1,4 @@
+import { logWarn } from "@notra/ai/utils/server-log";
 import { Redis } from "@upstash/redis";
 import { Effect } from "effect";
 
@@ -5,17 +6,9 @@ import { RedisUnavailableError } from "@/lib/onboarding/errors";
 import type { CompanyLogoResult } from "@/types/onboarding";
 
 const CACHE_KEY_PREFIX = "cache:company-logo:v1";
-/** Brand logos effectively never change, so resolved lookups are held for a week. */
 const RESOLVED_TTL_SECONDS = 604_800;
-/** A brand that is unknown today may be known tomorrow. */
 const UNRESOLVED_TTL_SECONDS = 3600;
 
-/**
- * A cache that answers slower than the lookup it protects is worse than no
- * cache, so both round trips are bounded. The read budget is the tighter one:
- * it sits in front of the request, while the write only delays the response of
- * a request that already paid for the live lookup.
- */
 const REDIS_READ_TIMEOUT_MS = 300;
 const REDIS_WRITE_TIMEOUT_MS = 1000;
 
@@ -58,19 +51,13 @@ function isCompanyLogoResult(value: unknown): value is CompanyLogoResult {
   return domainValid && urlValid;
 }
 
-/**
- * Logged where the fall-through happens so a broken or slow cache is visible,
- * instead of silently costing every caller the live lookup.
- */
 function logCacheSkip(operation: "read" | "write", cause: unknown): void {
-  console.warn(`[onboarding] company logo cache ${operation} skipped`, cause);
+  logWarn("[onboarding] company logo cache skipped", {
+    operation,
+    error: cause instanceof Error ? cause.message : String(cause),
+  });
 }
 
-/**
- * A miss and an unreachable Redis are the same answer to the caller, so both
- * typed failures — `RedisUnavailableError` and the timeout — collapse to `null`
- * at this single decision point.
- */
 const readCompanyLogo = Effect.fn("onboarding.companyLogoCache.read")(
   function* (input: CompanyLogoCacheKeyInput) {
     const client = readRedis;

@@ -1,6 +1,5 @@
 import type { SVGProps } from "react";
 
-// Official horse lockup and brand typography: https://hoplite.sh/branding (Funnel Display 400, -2% tracking).
 export function HopliteLogo(props: SVGProps<SVGSVGElement>) {
   return (
     <svg

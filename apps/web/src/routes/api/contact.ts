@@ -1,14 +1,15 @@
+import { getRateLimitHeaders } from "@notra/utils/ratelimit";
 import { createFileRoute } from "@tanstack/react-router";
 import { Effect } from "effect";
 
+import { CONTACT_TURNSTILE_ACTION } from "@/constants/turnstile";
 import { isContactSpam } from "@/lib/contact/classify-spam";
 import {
   enforceContactMessageRateLimit,
   enforceContactVerificationRateLimit,
-  getContactRateLimitHeaders,
 } from "@/lib/contact/ratelimit";
 import { sendContactMessageEmail } from "@/lib/contact/send-message-email";
-import { verifyContactTurnstile } from "@/lib/contact/verify-turnstile";
+import { verifyTurnstile } from "@/lib/turnstile/verify";
 import { contactMessageSchema } from "@/schemas/contact";
 import { jsonError } from "@/utils/api-response";
 
@@ -36,7 +37,7 @@ async function POST(request: Request) {
     Effect.gen(function* () {
       yield* enforceContactVerificationRateLimit(request);
       const verified = yield* Effect.promise(() =>
-        verifyContactTurnstile(token)
+        verifyTurnstile(token, CONTACT_TURNSTILE_ACTION)
       );
       if (!verified) {
         return jsonError("Verification failed. Please try again.", 403);
@@ -53,7 +54,7 @@ async function POST(request: Request) {
 
       return Response.json(
         { success: true },
-        { headers: getContactRateLimitHeaders(rateLimit) }
+        { headers: getRateLimitHeaders(rateLimit) }
       );
     }).pipe(
       Effect.match({
@@ -61,7 +62,7 @@ async function POST(request: Request) {
           if (error._tag === "ContactMessageRateLimitExceeded") {
             return Response.json(
               { error: "Rate limit exceeded" },
-              { headers: getContactRateLimitHeaders(error, true), status: 429 }
+              { headers: getRateLimitHeaders(error, true), status: 429 }
             );
           }
 

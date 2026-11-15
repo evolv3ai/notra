@@ -1,4 +1,3 @@
-// Tight offset so the box tracks the cursor without sitting on the hover line.
 const TOOLTIP_POINTER_GAP = 12;
 const FIXED_TOOLTIP_Y = 8;
 
@@ -17,10 +16,6 @@ function clampTooltipX(
   return clamp(x, 0, Math.max(0, viewWidth - tooltipWidth));
 }
 
-/**
- * Sit beside the hover line. Prefer the side with more room so the box does
- * not flip back and forth near the edge — it only switches at the midpoint.
- */
 function sideOffsetTooltipX(
   pointerX: number,
   tooltipWidth: number,

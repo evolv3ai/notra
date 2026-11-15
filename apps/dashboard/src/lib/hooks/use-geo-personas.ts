@@ -7,10 +7,15 @@ import type {
   GeoPersonaUpdateInput,
   GeoPersonasResponse,
 } from "@notra/geo-core/types/geo-personas";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
+import {
+  useIsMutating,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { useGeoProjectScope } from "@/components/providers/geo-project-provider";
 import { GEO_PERSONA_RESULTS_POLL_MS } from "@/constants/geo-personas";
@@ -28,6 +33,7 @@ import {
   geoPersonaUpdateMutationKey,
   invalidatePersonaList,
 } from "@/utils/geo-persona-queries";
+import { refreshSettingsAfterScanStart } from "@/utils/geo-scan-results";
 
 export function useGeoPersonas(organizationId: string) {
   const tToast = useTranslations("geo.toasts");
@@ -116,7 +122,6 @@ export function useGeoPersonasGenerate(organizationId: string) {
       }),
     onSuccess: (started, request) => {
       queryClient.setQueryData(statusOptions.queryKey, started);
-      // Regenerating one persona shows progress in its own dialog.
       if (request && "personaId" in request) {
         return;
       }
@@ -212,11 +217,29 @@ export function useGeoPersonaRestore(organizationId: string) {
   });
 }
 
+function geoPersonaRunMutationKey(organizationId: string, projectId?: string) {
+  return ["geo-persona-run", organizationId, projectId] as const;
+}
+
+/** True while any persona run of this project is in flight, from any surface. */
+export function useIsGeoPersonaRunPending(organizationId: string) {
+  const { projectId } = useGeoProjectScope();
+  return (
+    useIsMutating({
+      mutationKey: geoPersonaRunMutationKey(organizationId, projectId),
+    }) > 0
+  );
+}
+
 export function useGeoPersonaRun(organizationId: string) {
   const tToast = useTranslations("geo.toasts");
   const { projectId } = useGeoProjectScope();
   const queryClient = useQueryClient();
-  return useMutation({
+  // isPending only disables the run controls after a re-render, so two clicks
+  // in the same frame would both fire. Claim the run synchronously instead.
+  const inFlight = useRef(false);
+  const mutation = useMutation({
+    mutationKey: geoPersonaRunMutationKey(organizationId, projectId),
     mutationFn: (personaId: string) =>
       dashboardOrpc.geo.personaRun.call({
         organizationId,
@@ -233,12 +256,33 @@ export function useGeoPersonaRun(organizationId: string) {
         }),
       ]);
       const engineCount = result.engines.length;
-      toast.success(tToast("personaScanned", { count: engineCount }));
+      if (engineCount > 0) {
+        toast.success(tToast("personaScanned", { count: engineCount }));
+      }
+      if (result.queuedScanId) {
+        toast.success(tToast("consumerAppsQueued"));
+        await refreshSettingsAfterScanStart(
+          queryClient,
+          organizationId,
+          projectId
+        );
+      }
     },
     onError: (error) => {
       toast.error(toErrorMessage(error, tToast("runPersonaScanFailed")));
     },
+    onSettled: () => {
+      inFlight.current = false;
+    },
   });
+  const mutate: typeof mutation.mutate = (personaId, options) => {
+    if (inFlight.current) {
+      return;
+    }
+    inFlight.current = true;
+    mutation.mutate(personaId, options);
+  };
+  return { ...mutation, mutate };
 }
 
 export function useGeoPersonaResults(

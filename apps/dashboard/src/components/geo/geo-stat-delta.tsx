@@ -1,71 +1,17 @@
 "use client";
 
-import {
-  ArrowDown01Icon,
-  ArrowUp01Icon,
-  MinusSignIcon,
-} from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
-import type { GeoStatDeltaTone } from "@notra/geo-core/types/geo";
 import { isGeoStatDeltaNew } from "@notra/geo-core/utils/ai-traffic";
 import { FadeSwap } from "@notra/ui/components/fade-swap";
+import { TrendBadge } from "@notra/ui/components/trend-badge";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@notra/ui/components/ui/tooltip";
-import { useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "use-intl";
 
-import { cn } from "@/lib/utils";
 import type { GeoStatDeltaProps } from "@/types/geo";
 import { formatGeoStatDelta, geoStatDeltaTone } from "@/utils/geo-charts";
-
-const PILL_CLASS =
-  "inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[0.6875rem] leading-none font-medium tabular-nums";
-
-const TONE_CLASS: Record<GeoStatDeltaTone, string> = {
-  up: "bg-geo-up/10 text-geo-up",
-  down: "bg-geo-down/10 text-geo-down",
-  flat: "bg-muted text-muted-foreground",
-};
-
-const PLAIN_TONE_CLASS: Record<GeoStatDeltaTone, string> = {
-  up: "text-geo-up",
-  down: "text-geo-down",
-  flat: "text-muted-foreground",
-};
-
-const ICON_RING_CLASS: Record<GeoStatDeltaTone, string> = {
-  up: "bg-geo-up text-white",
-  down: "bg-geo-down text-white",
-  flat: "bg-muted-foreground/75 text-background",
-};
-
-const TONE_ICON = {
-  up: ArrowUp01Icon,
-  down: ArrowDown01Icon,
-  flat: MinusSignIcon,
-} as const;
-
-const TONE_ARROW: Record<GeoStatDeltaTone, string> = {
-  up: "↑",
-  down: "↓",
-  flat: "−",
-};
-
-function GeoStatDeltaIcon({ tone }: { tone: GeoStatDeltaTone }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "inline-flex size-3.5 shrink-0 items-center justify-center rounded-full",
-        ICON_RING_CLASS[tone]
-      )}
-    >
-      <HugeiconsIcon icon={TONE_ICON[tone]} size={8} strokeWidth={2.5} />
-    </span>
-  );
-}
 
 export function GeoStatDelta({
   delta,
@@ -91,26 +37,16 @@ export function GeoStatDelta({
   const isNew = isGeoStatDeltaNew(delta);
   const displayedValue =
     variant === "plain" ? formatted.replace(/^[+-]/, "") : formatted;
-  const staticContent =
-    variant === "plain" ? (
-      <span
-        className={cn(
-          "inline-flex shrink-0 items-center gap-0.5 text-sm font-medium tabular-nums",
-          PLAIN_TONE_CLASS[tone],
-          className
-        )}
-      >
-        {isNew ? null : <span aria-hidden="true">{TONE_ARROW[tone]}</span>}
-        {displayedValue}
-      </span>
-    ) : (
-      <span className={cn(PILL_CLASS, TONE_CLASS[tone], className)}>
-        {isNew ? null : <GeoStatDeltaIcon tone={tone} />}
-        {formatted}
-      </span>
-    );
-  // The whole pill swaps, background included, so tone changes never blend
-  // green into red mid-transition.
+  const staticContent = (
+    <TrendBadge
+      appearance={variant === "plain" ? "plain" : "badge"}
+      className={className}
+      showIcon={!isNew}
+      tone={tone}
+    >
+      {displayedValue}
+    </TrendBadge>
+  );
   const content = animated ? (
     <FadeSwap swapKey={`${tone}:${formatted}`} value={delta}>
       {staticContent}
@@ -131,7 +67,7 @@ export function GeoStatDelta({
             aria-label={
               label ? `${label} ${formatted} ${hint}` : `${formatted} ${hint}`
             }
-            className="inline-flex cursor-help"
+            className="inline-flex shrink-0 cursor-help"
             type="button"
           />
         }

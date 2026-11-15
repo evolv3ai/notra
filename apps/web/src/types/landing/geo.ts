@@ -1,3 +1,5 @@
+import type { ComponentType, SVGProps } from "react";
+
 export type EngineId =
   | "chatgpt"
   | "claude"
@@ -5,6 +7,15 @@ export type EngineId =
   | "perplexity"
   | "grok"
   | "kimi";
+
+export type LandingEngineId = EngineId | "claude-code" | "glm";
+
+export type LandingEngineIcon = ComponentType<SVGProps<SVGSVGElement>>;
+
+export interface LandingEngineIconProps {
+  engine: LandingEngineId;
+  className?: string;
+}
 
 export interface EngineRateRow {
   id: EngineId;
@@ -48,7 +59,7 @@ export interface CitationRow {
   id: string;
   agoSeconds: number;
   provider: string;
-  engine: string;
+  engine: LandingEngineId;
   path: string;
   purpose: TrafficPurpose;
   markdown?: boolean;
@@ -60,7 +71,7 @@ export interface LiveCitationRow extends CitationRow {
 
 export interface LiveTrafficProvider {
   provider: string;
-  engine: string;
+  engine: LandingEngineId;
   purposes: TrafficPurpose[];
 }
 
@@ -76,7 +87,7 @@ export interface CitationRowsProps {
 export interface TrafficSourceRow {
   id: string;
   source: string;
-  engine: string;
+  engine: LandingEngineId;
   purpose: TrafficPurpose;
   visits: number;
   lastSeen: string;

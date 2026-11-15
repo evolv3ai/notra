@@ -1,14 +1,8 @@
-import {
-  isTinybirdConfigured,
-  queryTopPosts,
-} from "@notra/analytics/tinybird/client";
+import { queryTopPosts } from "@notra/analytics/tinybird/client";
 import { defineTool } from "eve/tools";
 
-import {
-  ANALYTICS_NOT_CONFIGURED_MESSAGE,
-  ANALYTICS_QUERY_FAILED_MESSAGE,
-} from "../constants/analytics";
 import { getTopPostsInputSchema } from "../schemas/analytics-tools";
+import { runSocialAnalyticsQuery } from "../utils/analytics";
 import { requireOrganizationId } from "../utils/organization";
 
 export function createGetTopPostsTool() {
@@ -18,23 +12,10 @@ export function createGetTopPostsTool() {
     inputSchema: getTopPostsInputSchema,
     async execute({ limit }, ctx) {
       const organizationId = requireOrganizationId(ctx);
-
-      if (!isTinybirdConfigured()) {
-        return ANALYTICS_NOT_CONFIGURED_MESSAGE;
-      }
-
-      try {
-        const result = await queryTopPosts({
-          organization_id: organizationId,
-          limit,
-        });
-
-        if (!result) {
-          return ANALYTICS_NOT_CONFIGURED_MESSAGE;
-        }
-
-        return {
-          posts: result.data.map((row) => ({
+      return await runSocialAnalyticsQuery(
+        () => queryTopPosts({ organization_id: organizationId, limit }),
+        (rows) => ({
+          posts: rows.map((row) => ({
             provider: row.provider,
             content: row.content,
             url: row.url,
@@ -45,12 +26,8 @@ export function createGetTopPostsTool() {
             impressions: row.impressions,
             engagement: row.engagement,
           })),
-        };
-      } catch (error) {
-        return `${ANALYTICS_QUERY_FAILED_MESSAGE} ${
-          error instanceof Error ? error.message : String(error)
-        }`;
-      }
+        })
+      );
     },
   });
 }

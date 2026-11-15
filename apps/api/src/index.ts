@@ -2,7 +2,8 @@ import "./tcc";
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
 import { flushLogs } from "@notra/ai/evlog";
 import { registerDemoSocialAnalytics } from "@notra/ai/utils/demo-social";
-import { createDb } from "@notra/db/drizzle";
+import { createDb, db } from "@notra/db/drizzle";
+import { retainDatabaseConnections } from "@notra/db/utils/retain-database-connections";
 import { registerGeoDemoTraffic } from "@notra/geo-core/geo/demo-traffic";
 import { shutdownPostHogServer } from "@notra/posthog/server";
 import { publicStatusResponseSchema } from "@notra/schemas/api/status";
@@ -14,24 +15,32 @@ import {
   LEGACY_API_READ_SCOPE,
   LEGACY_API_WRITE_SCOPE,
 } from "@notra/utils/api-scopes";
+import { ACCOUNT_API_KEY_ORGANIZATION_HEADERS } from "@notra/utils/constants/account-api-key";
 import { DEMO_CONSOLE_HEADER } from "@notra/utils/constants/demo";
 import { isDemoMode } from "@notra/utils/demo-mode";
 import type { Context } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import { trimTrailingSlash } from "hono/trailing-slash";
 
 import { DEMO_API_URL } from "./constants/demo";
+import { API_MAX_BODY_BYTES } from "./constants/request-limits";
 import { apiAnalyticsMiddleware } from "./middleware/analytics";
 import { authMiddleware } from "./middleware/auth";
+import { apiCompressionMiddleware } from "./middleware/compression";
 import { demoRequestLogMiddleware } from "./middleware/demo-request-log";
 import {
   geoContextMiddleware,
   geoProjectContextMiddleware,
 } from "./middleware/geo-context";
 import { geoEntitlementMiddleware } from "./middleware/geo-entitlement";
-import { apiObservabilityMiddleware } from "./middleware/observability";
+import {
+  apiAuthTelemetryMiddleware,
+  apiObservabilityMiddleware,
+} from "./middleware/observability";
 import { subscriptionMiddleware } from "./middleware/subscription";
 import { agentChatsRoutes } from "./routes/agent-chats";
+import { brandColorsRoutes } from "./routes/brand-colors";
 import { brandIdentitiesRoutes } from "./routes/brand-identities";
 import { chatsRoutes } from "./routes/chats";
 import { eventTriggersRoutes } from "./routes/event-triggers";
@@ -50,6 +59,7 @@ import { geoTrafficRoutes } from "./routes/geo-traffic";
 import { geoVisibilityRoutes } from "./routes/geo-visibility";
 import { integrationsRoutes } from "./routes/integrations";
 import { legacyRedirectRoutes } from "./routes/legacy-redirects";
+import { postSchedulesRoutes } from "./routes/post-schedules";
 import { postsRoutes } from "./routes/posts";
 import { schedulesRoutes } from "./routes/schedules";
 import { skillsRoutes } from "./routes/skills";
@@ -57,13 +67,13 @@ import { webhooksRoutes } from "./routes/webhooks";
 import { workspaceRoutes } from "./routes/workspaces";
 import type { ApiEnv } from "./types/env";
 import type { ApiServerControl } from "./types/shutdown";
+import type { PublicStatusResponse } from "./types/status";
 import {
   API_URL,
   AUTH_GUIDE_URL,
   buildAuthorizationServerMetadata,
   buildProtectedResourceMetadata,
   RESOURCE_METADATA_URL,
-  SITE_URL,
 } from "./utils/agent-discovery";
 import { trackApiException } from "./utils/analytics";
 import { assertDedicatedDemoDatabase } from "./utils/demo-database-guard";
@@ -73,6 +83,8 @@ import {
   isPublicFeedbackIngestRequest,
 } from "./utils/feedback";
 import { logError } from "./utils/logging";
+import { rateLimitResponse } from "./utils/openapi-responses";
+import { enforceRatelimit, RATE_LIMITS, ratelimit } from "./utils/ratelimit";
 import { createApiShutdown } from "./utils/shutdown";
 
 const FRAMER_PLUGIN_ID = "8d4wmwtko6960jsu3ojmalvqm";
@@ -93,7 +105,8 @@ const PRODUCTION_SERVER = {
 };
 const DEMO_SERVER = {
   url: DEMO_API_URL,
-  description: "Public demo with sample data. Get a key at demo.usenotra.com",
+  description:
+    "Sandbox with sample data. Get a free sandbox key at demo.usenotra.com, no signup needed",
 };
 
 const publicStatusRoute = createRoute({
@@ -113,6 +126,11 @@ const publicStatusRoute = createRoute({
         },
       },
     },
+    429: rateLimitResponse(
+      RATE_LIMITS.publicStatus.requests,
+      RATE_LIMITS.publicStatus.window,
+      "IP address"
+    ),
   },
 });
 
@@ -126,7 +144,6 @@ function getAllowedOrigin(origin: string | undefined): string | null {
     ...(IS_PRODUCTION ? [] : [LOCAL_DEV_ORIGIN_PATTERN]),
   ];
 
-  // The demo dashboard's API console calls demo-api from the browser.
   if (IS_DEMO && origin === process.env.NOTRA_DEMO_DASHBOARD_ORIGIN) {
     return origin;
   }
@@ -137,6 +154,7 @@ function getAllowedOrigin(origin: string | undefined): string | null {
 }
 
 assertRequiredEnv();
+retainDatabaseConnections(db.$client);
 
 if (IS_DEMO) {
   registerGeoDemoTraffic();
@@ -170,9 +188,12 @@ const securityHeadersMiddleware = async (
     );
     c.header(
       "Access-Control-Allow-Headers",
-      IS_DEMO
-        ? `Content-Type, Authorization, ${DEMO_CONSOLE_HEADER}`
-        : "Content-Type, Authorization"
+      [
+        "Content-Type",
+        "Authorization",
+        ...ACCOUNT_API_KEY_ORGANIZATION_HEADERS,
+        ...(IS_DEMO ? [DEMO_CONSOLE_HEADER] : []),
+      ].join(", ")
     );
   }
 
@@ -184,6 +205,7 @@ const securityHeadersMiddleware = async (
 };
 
 app.use("*", apiObservabilityMiddleware);
+app.use("*", apiCompressionMiddleware);
 app.use("/v1/*", securityHeadersMiddleware);
 app.use("/v2/*", securityHeadersMiddleware);
 
@@ -197,42 +219,51 @@ const databaseMiddleware = async (c: Context, next: () => Promise<void>) => {
 app.use("/v1/*", databaseMiddleware);
 app.use("/v2/*", databaseMiddleware);
 
+const apiBodyLimit = bodyLimit({
+  maxSize: API_MAX_BODY_BYTES,
+  onError: (c) => c.json({ error: "Payload too large" }, 413),
+});
+app.use("/v1/*", apiBodyLimit);
+app.use("/v2/*", apiBodyLimit);
+
 if (IS_DEMO) {
   app.use("/v1/*", demoRequestLogMiddleware);
   app.use("/v2/*", demoRequestLogMiddleware);
 }
 
+app.use(
+  "/v1/status",
+  async (c, next) =>
+    (await enforceRatelimit(c, ratelimit.publicStatus, "ip")) ?? next()
+);
+
 app.openapi(publicStatusRoute, (c) => {
-  return c.json({
-    status: "ok",
-    service: "Notra API",
-    version: "1.0.0",
-    public: true,
-    authentication: {
-      type: "bearer",
-      resource_metadata: RESOURCE_METADATA_URL,
-      guide: AUTH_GUIDE_URL,
+  return c.json<PublicStatusResponse, 200>(
+    {
+      status: "ok",
+      service: "Notra API",
+      version: "1.0.0",
+      public: true,
+      authentication: {
+        type: "bearer",
+        resource_metadata: RESOURCE_METADATA_URL,
+        guide: AUTH_GUIDE_URL,
+      },
     },
-  });
+    200
+  );
 });
 
 const oauthScopeMiddleware = async (c: Context, next: () => Promise<void>) => {
   const pathname = new URL(c.req.url).pathname;
   const requiredScope = getRequiredApiScope(pathname, c.req.method);
   if (!requiredScope && !isUnscopedApiPath(pathname)) {
-    // A route that was not registered must never silently become accessible
-    // to any valid key. Returning 404 keeps unknown endpoints conventional
-    // while making a newly added-but-unregistered operation unreachable.
     return c.json({ error: "Not found" }, 404);
   }
   if (!requiredScope) {
     return await authMiddleware({ legacyPermissions: [] })(c, next);
   }
 
-  // `expandLegacyApiScopes` is the registry's rule: `api.write` implies every
-  // scope, `api.read` only the read scopes. So a read may fall back to either
-  // legacy scope, while a write accepts `api.write` alone — offering
-  // `api.read` on a write would hand read-only keys mutation access.
   const legacyPermissions = isApiMutationMethod(c.req.method)
     ? [LEGACY_API_WRITE_SCOPE]
     : [LEGACY_API_READ_SCOPE, LEGACY_API_WRITE_SCOPE];
@@ -250,8 +281,6 @@ const unlessPublicFeedbackIngest =
       ? next()
       : middleware(c, next);
 
-// Feedback is the only API resource available without a paid plan. Auth and
-// scopes still apply to every request except the public ingest endpoint.
 const unlessFeedbackRequest =
   (middleware: (c: Context, next: () => Promise<void>) => Promise<unknown>) =>
   (c: Context, next: () => Promise<void>) =>
@@ -264,13 +293,12 @@ app.use("/v2/*", apiAnalyticsMiddleware);
 
 app.use("/v1/*", unlessPublicFeedbackIngest(oauthScopeMiddleware));
 app.use("/v2/*", oauthScopeMiddleware);
+app.use("/v1/*", apiAuthTelemetryMiddleware);
+app.use("/v2/*", apiAuthTelemetryMiddleware);
 
 app.use("/v1/*", unlessFeedbackRequest(subscriptionMiddleware()));
 app.use("/v2/*", subscriptionMiddleware());
 
-// GEO is a paid add-on, so every GEO endpoint — reads included — additionally
-// requires the `ai_answers` plan entitlement. `subscriptionMiddleware` above
-// still applies unchanged.
 const requireGeoEntitlement = geoEntitlementMiddleware();
 app.use("/v1/projects/*", requireGeoEntitlement);
 app.use("/v1/geo/ingest/*", requireGeoEntitlement);
@@ -278,22 +306,27 @@ app.use("/v1/projects/*", geoContextMiddleware());
 app.use("/v1/projects/:projectId/*", geoProjectContextMiddleware());
 app.use("/v1/geo/ingest/*", geoContextMiddleware());
 
+// evlog-map-disable-next-line -- liveness probe
 app.get("/", (c) => {
   return c.text("ok");
 });
 
+// evlog-map-disable-next-line -- liveness probe
 app.get("/ping", (c) => {
   return c.text("pong");
 });
 
+// evlog-map-disable-next-line -- static OAuth metadata
 app.get("/.well-known/oauth-protected-resource", (c) => {
   return c.json(buildProtectedResourceMetadata(new URL(c.req.url).origin));
 });
 
+// evlog-map-disable-next-line -- static OAuth metadata
 app.get("/.well-known/oauth-authorization-server", (c) => {
   return c.json(buildAuthorizationServerMetadata());
 });
 
+// evlog-map-disable-next-line -- static API catalog
 app.get("/.well-known/api-catalog", (c) => {
   c.header(
     "Content-Type",
@@ -328,7 +361,9 @@ app.get("/.well-known/api-catalog", (c) => {
 app.route("/v1", legacyRedirectRoutes);
 app.route("/v1", postsRoutes);
 app.route("/v1", webhooksRoutes);
+app.route("/v1", postSchedulesRoutes);
 app.route("/v1", brandIdentitiesRoutes);
+app.route("/v1", brandColorsRoutes);
 app.route("/v1", integrationsRoutes);
 app.route("/v1", schedulesRoutes);
 app.route("/v1", eventTriggersRoutes);
@@ -355,11 +390,20 @@ app.openAPIRegistry.registerComponent("securitySchemes", "BearerAuth", {
   scheme: "bearer",
   bearerFormat: "API Key",
   description:
-    "Send your API key in the Authorization header as Bearer API_KEY.",
+    "Send your API key in the Authorization header as Bearer API_KEY. Account API keys work in every workspace you belong to: send X-Notra-Organization-Id with the workspace id or slug to choose one. Workspace endpoints require it when you belong to more than one workspace; GET /v1/me/workspaces works without it. Organization keys only accept their own workspace there.",
 });
 
-// Routes and schema configuration are fixed after startup.
+app.openAPIRegistry.registerComponent("parameters", "OrganizationSelector", {
+  name: "X-Notra-Organization-Id",
+  in: "header",
+  required: false,
+  description:
+    "Workspace id or slug an account API key acts on. Required on workspace endpoints when the key's user belongs to more than one workspace; GET /v1/me/workspaces works without it. Organization keys reject any other workspace; OAuth tokens ignore it.",
+  schema: { type: "string" },
+});
+
 let openApiJson: string | undefined;
+// evlog-map-disable-next-line -- static OpenAPI document
 app.get("/openapi.json", (c) => {
   openApiJson ??= JSON.stringify(
     app.getOpenAPI31Document({
@@ -368,9 +412,15 @@ app.get("/openapi.json", (c) => {
         title: "Notra API",
         version: "1.0.0",
         description:
-          "OpenAPI schema for Notra content endpoints. Use GET /v1/status for public reachability. Error responses include recovery guidance.",
+          "OpenAPI schema for Notra content endpoints. Use GET /v1/status for public reachability. Error responses include recovery guidance. Breaking changes ship under a new major path; deprecated operations send Deprecation and Sunset headers at least 90 days before removal.",
       },
-      servers: IS_DEMO ? [DEMO_SERVER, PRODUCTION_SERVER] : [PRODUCTION_SERVER],
+      externalDocs: {
+        description: "Notra API versioning and deprecation policy",
+        url: "https://www.usenotra.com/docs/api/versioning",
+      },
+      servers: IS_DEMO
+        ? [DEMO_SERVER, PRODUCTION_SERVER]
+        : [PRODUCTION_SERVER, DEMO_SERVER],
       security: [{ BearerAuth: [] }],
       tags: [...API_OPENAPI_TAGS],
     })

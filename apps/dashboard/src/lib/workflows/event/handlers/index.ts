@@ -14,17 +14,17 @@ import type {
 
 import { buildEventPromptInput } from "../prompt-input";
 
+const generateFnMap: Record<string, typeof generateChangelog> = {
+  changelog: generateChangelog,
+  blog_post: generateBlogPost,
+  twitter_post: generateTwitterPost,
+  linkedin_post: generateLinkedInPost,
+};
+
 export async function generateEventBasedContent(
   ctx: EventGenerationContext
 ): Promise<EventGenerationResult> {
   const { outputType } = ctx;
-
-  const generateFnMap: Record<string, typeof generateChangelog> = {
-    changelog: generateChangelog,
-    blog_post: generateBlogPost,
-    twitter_post: generateTwitterPost,
-    linkedin_post: generateLinkedInPost,
-  };
 
   const generateFn = generateFnMap[outputType];
   if (!generateFn) {
@@ -33,6 +33,15 @@ export async function generateEventBasedContent(
       outputType,
     };
   }
+
+  const repositories = [
+    {
+      integrationId: ctx.repositoryId,
+      owner: ctx.repositoryOwner,
+      repo: ctx.repositoryName,
+      defaultBranch: null,
+    },
+  ];
 
   const agentTaskType = isAgentContentGenerationEnabled()
     ? AGENT_CONTENT_TASK_TYPES[outputType]
@@ -44,14 +53,7 @@ export async function generateEventBasedContent(
       contentType: agentTaskType.contentType,
       contentLabel: agentTaskType.contentLabel,
       brandAgentType: agentTaskType.brandAgentType,
-      repositories: [
-        {
-          integrationId: ctx.repositoryId,
-          owner: ctx.repositoryOwner,
-          repo: ctx.repositoryName,
-          defaultBranch: null,
-        },
-      ],
+      repositories,
       promptInput: buildEventPromptInput(ctx),
       sourceMetadata: ctx.sourceMetadata,
       autoPublish: ctx.autoPublish,
@@ -67,38 +69,19 @@ export async function generateEventBasedContent(
   }
 
   try {
-    const repositories = [
-      {
-        integrationId: ctx.repositoryId,
-        owner: ctx.repositoryOwner,
-        repo: ctx.repositoryName,
-        defaultBranch: null,
-      },
-    ];
-
-    const promptInput = buildEventPromptInput(ctx);
-
-    const agentOptions = {
+    const { postId, title, posts, usage } = await generateFn({
       organizationId: ctx.organizationId,
       collectionId: ctx.collectionId,
       repositories,
       tone: ctx.tone,
-      promptInput,
+      promptInput: buildEventPromptInput(ctx),
       sourceMetadata: ctx.sourceMetadata,
       autoPublish: ctx.autoPublish,
       resolveContext: ctx.resolveContext,
       telemetryMetadata: ctx.telemetryMetadata,
-    };
+    });
 
-    const result = await generateFn(agentOptions);
-
-    return {
-      status: "ok",
-      postId: result.postId,
-      title: result.title,
-      posts: result.posts,
-      usage: result.usage,
-    };
+    return { status: "ok", postId, title, posts, usage };
   } catch (error) {
     if (error instanceof ContentGenerationSkippedError) {
       return {

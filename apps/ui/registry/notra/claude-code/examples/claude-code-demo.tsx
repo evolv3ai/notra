@@ -25,7 +25,6 @@ import {
 import { useClaudeCodeChat } from "../hooks/use-claude-code-chat";
 import type { ClaudeCodeChatTurn, ClaudeCodeMode } from "../types/claude-code";
 
-/** How close to the bottom still counts as following the transcript. */
 const FOLLOW_THRESHOLD_PX = 48;
 
 const nextMode = (current: ClaudeCodeMode) => {
@@ -45,7 +44,6 @@ const ClaudeCodeTurn = ({ turn }: { turn: ClaudeCodeChatTurn }) => {
       {command.detail}
     </ClaudeCodeToolCall>
   ));
-  // Claude Code folds finished shell commands into one "Ran N" line.
   const foldsShell =
     turn.status === "done" &&
     turn.commands.length > 0 &&
@@ -78,10 +76,6 @@ export default function ClaudeCodeDemo() {
   const followRef = useRef(false);
   const activeTurn = chat.busy ? chat.turns.at(-1) : undefined;
 
-  // Follow new output only while the reader sits at the bottom, so
-  // scrolling up to reread a turn is not undone by the next streamed word.
-  // Sending always jumps back down. Scrolling the viewport directly (not
-  // scrollIntoView) keeps the host page still.
   const viewportOf = () =>
     terminalRef.current?.querySelector<HTMLElement>(
       '[data-slot="scroll-area-viewport"]'

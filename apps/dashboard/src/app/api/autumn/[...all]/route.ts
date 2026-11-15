@@ -1,47 +1,60 @@
-import { autumnHandler } from "autumn-js/next";
+import { autumnHandler } from "autumn-js/fetch";
 
 import { getAuthSession } from "@/lib/auth/server";
+import { prepareAutumnRequest } from "@/lib/billing/autumn-request";
 import { resolveBillingOrganizationId } from "@/lib/billing/resolve-billing-organization";
 import { createDevelopmentAutumnHandler } from "@/utils/development-autumn";
 
 type RouteHandler = (request: Request) => Response | Promise<Response>;
 
+async function resolveCustomerId(request: Request) {
+  const session = await getAuthSession();
+  if (!session?.user) {
+    return null;
+  }
+  return resolveBillingOrganizationId(request, session);
+}
+
 const developmentHandler = createDevelopmentAutumnHandler(
   process.env.NODE_ENV,
   process.env.AUTUMN_SECRET_KEY,
-  async (request) => {
+  resolveCustomerId
+);
+
+const autumnRouteHandler = autumnHandler({
+  identify: async (request) => {
     const session = await getAuthSession();
+
     if (!session?.user) {
       return null;
     }
-    return resolveBillingOrganizationId(request, session);
-  }
-);
 
-const handlers: { GET: RouteHandler; POST: RouteHandler } = developmentHandler
-  ? { GET: developmentHandler, POST: developmentHandler }
-  : autumnHandler({
-      identify: async (request) => {
-        const session = await getAuthSession();
+    const customerId = await resolveBillingOrganizationId(request, session);
 
-        if (!session?.user) {
-          return null;
-        }
+    if (!customerId) {
+      return null;
+    }
 
-        const customerId = await resolveBillingOrganizationId(request, session);
-
-        if (!customerId) {
-          return null;
-        }
-
-        return {
-          customerId,
-          customerData: {
-            name: session.user.name,
-            email: session.user.email,
-          },
-        };
+    return {
+      customerId,
+      customerData: {
+        name: session.user.name,
+        email: session.user.email,
       },
-    });
+    };
+  },
+});
 
-export const { GET, POST } = handlers;
+const handler: RouteHandler =
+  developmentHandler ??
+  (async (request) => {
+    const prepared = await prepareAutumnRequest(request, () =>
+      resolveCustomerId(request)
+    );
+    return prepared instanceof Response
+      ? prepared
+      : autumnRouteHandler(prepared);
+  });
+
+export const GET = handler;
+export const POST = handler;

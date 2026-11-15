@@ -5,7 +5,6 @@ import { GEO_PERSONA_BILLING_MULTIPLIER } from "@notra/geo-core/constants/geo-pe
 import { cn } from "@/lib/utils";
 import type { PersonaAnswerCostBadgeProps } from "@/types/geo-personas-ui";
 
-/** Marks persona runs as billing a multiple of a prompt answer. */
 export function PersonaAnswerCostBadge({
   className,
 }: PersonaAnswerCostBadgeProps) {

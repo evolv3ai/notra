@@ -9,7 +9,6 @@ import type {
   ClaudeCodeToolCallStatus,
 } from "../types/claude-code";
 
-/** The order Shift+Tab walks through. */
 export const CLAUDE_CODE_MODE_ORDER: ClaudeCodeMode[] = [
   "manual",
   "accept-edits",
@@ -101,34 +100,22 @@ export const CLAUDE_CODE_TOOL_CALLS: Record<
   success: { className: "text-claude-code-success", srLabel: "Done" },
 };
 
-/** The spinner glyphs, played forward then back. */
 export const CLAUDE_CODE_SPINNER_FRAMES = ["·", "✢", "✳", "✶", "✻", "✽"];
 
 export const CLAUDE_CODE_SPINNER_INTERVAL_MS = 120;
 
 export const CLAUDE_CODE_RESULT_GLYPH = "⎿";
 
-/** Pacing of a played-back turn in the demo chat. */
 export const CLAUDE_CODE_CHAT_TIMING = {
-  /** Spinner time before the first tool call. */
   thinkMs: 1200,
-  /** How long each tool call stays pending. */
   toolMs: 900,
-  /** Delay between streamed words. */
   wordMs: 28,
-  /** Cap on every delay when the user prefers reduced motion. */
   reducedMaxMs: 60,
-  /** How often the elapsed seconds tick. */
   tickMs: 1000,
 } as const;
 
-/** The mascot grid, in cells. */
 export const CLAUDE_CODE_MASCOT_SIZE = { height: 14, width: 22 };
 
-/**
- * The mascot's filled cells as `[x, y, width, height]` rectangles.
- * Eyes are cut out with a mask so the terminal background shows through.
- */
 export const CLAUDE_CODE_MASCOT_BODY: [number, number, number, number][] = [
   [2, 0, 18, 10],
   [0, 4, 22, 3],

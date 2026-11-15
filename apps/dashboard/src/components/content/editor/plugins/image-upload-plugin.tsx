@@ -15,7 +15,6 @@ import {
   type LexicalNode,
   PASTE_COMMAND,
 } from "lexical";
-import { useTranslations } from "next-intl";
 import {
   useCallback,
   useEffect,
@@ -24,6 +23,7 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { CONTENT_IMAGE_MIME_EXTENSIONS } from "@/constants/content-image";
 import { CONTENT_MEDIA } from "@/constants/content-media";
@@ -97,7 +97,6 @@ function isVideoFile(file: File) {
   );
 }
 
-// Include Apple photos in the editor's existing image upload path even when browsers omit their MIME type.
 function isImageFile(file: File) {
   return (
     /\.heic$/i.test(file.name) ||
@@ -188,7 +187,6 @@ async function insertUploadedFiles(
   return key;
 }
 
-// Keep media insertion bound to the editor's own selection and drop target when an agent is also open.
 export function ImageUploadPlugin() {
   const t = useTranslations("content.editor.upload");
   const tCommon = useTranslations("common");
@@ -227,7 +225,6 @@ export function ImageUploadPlugin() {
     });
   }, [editor]);
 
-  // Resolve the blog insertion block from the drop point instead of a stale selection.
   const rememberDropPosition = useCallback(
     (event: DragEvent) => {
       const root = editor.getRootElement();

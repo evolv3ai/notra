@@ -1,5 +1,6 @@
 import type { BlogFaqEntry, BlogJsonLdInput, NotraBlogPost } from "~types/blog";
 
+import { getAuthorHref } from "@/utils/author-href";
 import {
   BLOG_FAQ_HEADING_REGEX,
   BLOG_HEADING_REGEX,
@@ -164,7 +165,19 @@ export function buildBlogArticleJsonLd({
     image: imageUrl,
     datePublished: post.createdAt,
     dateModified: post.updatedAt,
-    author: publisher,
+    author:
+      post.authors.length > 0
+        ? post.authors.map((author) => ({
+            "@type": "Person",
+            name: author.name,
+            url: `${SITE_URL}${getAuthorHref(author.slug)}`,
+            jobTitle: author.role ?? undefined,
+            sameAs:
+              author.socials.length > 0
+                ? author.socials.map((social) => social.url)
+                : undefined,
+          }))
+        : publisher,
     publisher,
     mainEntityOfPage: {
       "@type": "WebPage",

@@ -20,6 +20,7 @@ const remoteGeoFailureSchema = z.object({
   message: z.string().optional(),
   limit: z.number().optional(),
   status: z.string().optional(),
+  reason: z.enum(["last_project", "has_sites"]).optional(),
 });
 
 /** Client-safe domain failure returned by an internal GEO adapter. */

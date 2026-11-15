@@ -1,10 +1,5 @@
 import type { DemoSeedCollection } from "@/types/demo-seed";
 
-/**
- * Studio content for the demo workspace. Offsets are relative to the moment
- * the sandbox is created, so the newest draft is always from "today". A
- * collection is dated by its oldest post.
- */
 export const DEMO_SEED_COLLECTIONS: readonly DemoSeedCollection[] = [
   {
     key: "launch",

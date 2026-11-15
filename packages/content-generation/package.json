@@ -4,9 +4,12 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./constants/errors": "./src/constants/errors.ts",
     "./databuddy": "./src/databuddy.ts",
     "./jobs": "./src/jobs.ts",
-    "./schemas": "./src/schemas.ts"
+    "./schemas": "./src/schemas.ts",
+    "./types/sources": "./src/types/sources.ts",
+    "./utils/sources": "./src/utils/sources.ts"
   },
   "scripts": {
     "check-types": "tsc --noEmit --incremental --tsBuildInfoFile .cache/typecheck.tsbuildinfo"
@@ -14,11 +17,11 @@
   "dependencies": {
     "@notra/ai": "workspace:*",
     "@notra/webhooks": "workspace:*",
-    "@upstash/redis": "^1.38.4",
-    "zod": "^4.6.5"
+    "@upstash/redis": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@notra/typescript-config": "workspace:*",
-    "typescript": "7.0.2"
+    "typescript": "catalog:"
   }
 }

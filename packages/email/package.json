@@ -11,28 +11,35 @@
     "./emails/schedule-content-skipped": "./src/emails/schedule-content-skipped.tsx",
     "./emails/welcome": "./src/emails/welcome.tsx",
     "./emails/workflow-paused": "./src/emails/workflow-paused.tsx",
-    "./emails/daily-summary": "./src/emails/daily-summary.tsx",
+    "./emails/weekly-summary": "./src/emails/weekly-summary.tsx",
+    "./emails/visibility-drop": "./src/emails/visibility-drop.tsx",
+    "./emails/geo-alert": "./src/emails/geo-alert.tsx",
+    "./emails/scheduled-publication-failed": "./src/emails/scheduled-publication-failed.tsx",
+    "./emails/site-suspended": "./src/emails/site-suspended.tsx",
     "./types/ai-credits-depleted": "./src/types/ai-credits-depleted.ts",
-    "./types/daily-summary": "./src/types/daily-summary.ts",
+    "./types/geo-recap": "./src/types/geo-recap.ts",
     "./types/contact": "./src/types/contact.ts",
     "./types/feedback": "./src/types/feedback.ts",
     "./types/oss-application": "./src/types/oss-application.ts",
     "./types/workflow-paused": "./src/types/workflow-paused.ts",
+    "./types/scheduled-publication-failed": "./src/types/scheduled-publication-failed.ts",
+    "./types/site-suspended": "./src/types/site-suspended.ts",
     "./utils/config": "./src/utils/config.ts",
-    "./utils/dev": "./src/utils/dev.ts",
     "./utils/engine-logo": "./src/utils/engine-logo.ts",
     "./utils/feedback": "./src/utils/feedback.ts",
-    "./utils/resend": "./src/utils/resend.ts"
+    "./constants/brew": "./src/constants/brew.ts",
+    "./utils/brew": "./src/utils/brew.ts",
+    "./types/brew": "./src/types/brew.ts"
   },
   "dependencies": {
-    "react": "^19.3.0",
-    "react-email": "6.9.3",
-    "resend": "^6.8.0"
+    "@notra/utils": "workspace:*",
+    "react": "^19.3.1",
+    "react-email": "6.9.5"
   },
   "devDependencies": {
     "@notra/typescript-config": "workspace:*",
-    "@types/node": "22.9.0",
+    "@types/node": "22.9.4",
     "@types/react": "^19.3.0",
-    "typescript": "7.0.2"
+    "typescript": "catalog:"
   }
 }

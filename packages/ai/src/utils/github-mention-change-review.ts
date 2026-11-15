@@ -7,17 +7,11 @@ import type {
 import { findNewActiveContent } from "@notra/ai/utils/github-mention-content-policy";
 import { logGitHubMentionEvent } from "@notra/ai/utils/github-mention-log";
 import { getGitHubMentionPathBlockReason } from "@notra/ai/utils/github-mention-path-policy";
-import { getRepositoryFileContents } from "@notra/ai/utils/github-pr-commit";
+import {
+  getRepositoryFileContents,
+  githubStatus,
+} from "@notra/ai/utils/github-pr-commit";
 import { removeHtmlComments } from "@notra/ai/utils/remove-html-comments";
-
-function isNotFound(error: unknown) {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "status" in error &&
-    error.status === 404
-  );
-}
 
 /**
  * Gate in front of every mention commit. The path allowlist keeps mentions in
@@ -51,9 +45,7 @@ export async function reviewGitHubMentionChange(params: {
         path: file.path,
         ref: params.branch,
       }).catch((error: unknown) => {
-        // Not on the branch yet means a new file, where everything counts as
-        // added. Any other failure stops the write instead of guessing.
-        if (isNotFound(error)) {
+        if (githubStatus(error) === 404) {
           return null;
         }
         throw error;

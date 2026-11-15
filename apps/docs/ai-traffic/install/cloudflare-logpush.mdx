@@ -1,0 +1,138 @@
+---
+title: "Track AI crawlers with Cloudflare Logpush"
+sidebarTitle: "Cloudflare Logpush"
+description: "Push your Cloudflare HTTP request logs to Notra with Logpush and track AI crawlers, AI-cited fetches and AI referrals without changing your code."
+authors:
+  - handle: dominik
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/ai-traffic/install/cloudflare-logpush
+  type: how-to
+  applies_to:
+    - notra
+  language: en
+  status: stable
+---
+
+A Logpush job sends the HTTP request logs of your Cloudflare zone to Notra, which keeps the AI traffic and throws the rest away. You don't install a package or touch your code, and it works for any site Cloudflare proxies, no matter where the site is hosted.
+
+## Requirements
+
+Your site doesn't have to be hosted on Cloudflare. It can run on Vercel, Netlify, your own servers or anywhere else, as long as its traffic passes through Cloudflare's proxy:
+
+- The domain uses Cloudflare, either with Cloudflare nameservers or with a partial (CNAME) setup on the Business and Enterprise plans.
+- The DNS records that serve the site are **Proxied** (the orange cloud). Records set to **DNS only** never reach Cloudflare's edge, so they produce no logs.
+
+Logpush is available on every Cloudflare plan with usage-based pricing. Pushing to an HTTP endpoint counts as an external export, which includes 25 GB a month before Cloudflare bills $0.10 per additional GB. The filter below limits the job to `GET` requests from visitors, which cuts the volume you export.
+
+<Steps>
+  <Step title="Get your token and destination">
+    Open **Traffic** in the GEO sidebar and pick **Cloudflare Logpush** at the top of the install panel. It shows the destination URL with your project's tracking token already in it:
+
+    ```text
+    https://ingest.usenotra.com/api/geo/drains/cloudflare?header_Authorization=Bearer%20<your tracking token>
+    ```
+
+    Logpush turns every `header_` parameter into a request header, so Notra receives the token as `Authorization: Bearer <token>`.
+
+    <Visibility for="agents">
+
+    The setup endpoints return the endpoint under `drainUrls.cloudflare`, and the token endpoint adds `token`:
+
+    ```bash
+    curl -X POST "https://api.usenotra.com/v1/geo/ingest/token?projectId=$PROJECT_ID" \
+      -H "Authorization: Bearer $NOTRA_API_KEY"
+    ```
+
+    </Visibility>
+  </Step>
+  <Step title="Log the request headers (recommended)">
+    Cloudflare's request logs don't include the `Accept`, fetch metadata or client hint headers unless you add them as custom fields. With them Notra can see when an agent asks for Markdown and catch agents that pose as a regular browser, which brings the data to the same quality as the tracker package.
+
+    In the dashboard, open **Analytics & Logs**, then **Logpush**, select **Edit Custom Fields** and add these request headers: `accept`, `accept-language`, `sec-ch-ua`, `sec-fetch-mode`, `traceparent`, `b3` and `x-b3-traceid`. With the API, the same rule looks like this:
+
+    ```bash
+    curl "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets/phases/http_log_custom_fields/entrypoint" \
+      --request PUT \
+      --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+      --json '{
+        "rules": [
+          {
+            "action": "log_custom_field",
+            "expression": "true",
+            "description": "Notra GEO request headers",
+            "action_parameters": {
+              "request_fields": [
+                { "name": "accept" },
+                { "name": "accept-language" },
+                { "name": "sec-ch-ua" },
+                { "name": "sec-fetch-mode" },
+                { "name": "traceparent" },
+                { "name": "b3" },
+                { "name": "x-b3-traceid" }
+              ]
+            }
+          }
+        ]
+      }'
+    ```
+
+    <Warning>
+      This request replaces every rule in the zone's custom fields ruleset. If you already log custom fields, add these headers to your existing rule instead.
+    </Warning>
+
+    You can skip this step. Notra then classifies requests by user agent and referer only, which covers the declared crawlers and assistants and every referral from an AI answer.
+  </Step>
+  <Step title="Create the Logpush job">
+    In the dashboard, go to **Analytics & Logs**, then **Logpush**, and create a job. Choose **HTTP destination** and paste the destination URL, then pick the **HTTP requests** dataset and select these fields:
+
+    ```text
+    ClientCountry, ClientIP, ClientRegionCode, ClientRequestHost, ClientRequestMethod, ClientRequestReferer, ClientRequestScheme, ClientRequestSource, ClientRequestURI, ClientRequestUserAgent, EdgeResponseStatus, EdgeStartTimestamp, RayID, RequestHeaders
+    ```
+
+    Set the timestamp format to RFC 3339 and, if the form offers filters, keep only requests where `ClientRequestMethod` equals `GET` and `ClientRequestSource` equals `eyeball`.
+
+    The install panel also has the full API request, which creates the same job with the filter in place. It needs an API token with the **Logs Write** permission for the zone and reads your tracking token from `NOTRA_GEO_TOKEN`:
+
+    ```bash
+    curl "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/logpush/jobs" \
+      --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+      --json @- <<EOF
+    {
+      "name": "notra-geo",
+      "dataset": "http_requests",
+      "destination_conf": "https://ingest.usenotra.com/api/geo/drains/cloudflare?header_Authorization=Bearer%20$NOTRA_GEO_TOKEN",
+      "output_options": {
+        "field_names": ["ClientCountry", "ClientIP", "ClientRegionCode", "ClientRequestHost", "ClientRequestMethod", "ClientRequestReferer", "ClientRequestScheme", "ClientRequestSource", "ClientRequestURI", "ClientRequestUserAgent", "EdgeResponseStatus", "EdgeStartTimestamp", "RayID", "RequestHeaders"],
+        "timestamp_format": "rfc3339"
+      },
+      "filter": "{\"where\":{\"and\":[{\"key\":\"ClientRequestMethod\",\"operator\":\"eq\",\"value\":\"GET\"},{\"key\":\"ClientRequestSource\",\"operator\":\"eq\",\"value\":\"eyeball\"}]}}",
+      "enabled": true
+    }
+    EOF
+    ```
+
+    When you save the job, Cloudflare uploads a small test file to the destination and Notra accepts it.
+  </Step>
+  <Step title="Verify">
+    Logpush uploads in batches, so the first events show up a minute or two after a crawler visits. The Traffic page switches from the install panel to the dashboard once Notra stores the first AI crawler or referral.
+  </Step>
+</Steps>
+
+## How Notra reads the logs
+
+Notra unpacks each gzipped batch, rebuilds every request from its fields and drops anything that isn't a `GET` request for a page from a visitor, so static assets, `/api` routes and Worker subrequests never count. Every request then goes through the same checks as tracker events: it has to belong to one of the project's tracked domains, and only AI crawlers and AI referrals are stored. Human requests are discarded on arrival.
+
+Like any log-based source, Logpush only observes traffic. It can't tag the links in the Markdown you serve for [journey tagging](/ai-traffic/journeys), although requests that already carry an `ntr` tag still join their journey.
+
+## Next steps
+
+<Columns cols={2}>
+  <Card title="Vercel log drain" icon="triangle" href="/ai-traffic/install/vercel-log-drain">
+    Track sites hosted on Vercel without a code change.
+  </Card>
+  <Card title="No AI traffic yet" icon="wrench" href="/ai-traffic/troubleshooting/no-ai-traffic">
+    What to check when nothing shows up.
+  </Card>
+</Columns>

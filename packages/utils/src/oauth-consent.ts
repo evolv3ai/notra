@@ -5,6 +5,7 @@ import {
   API_GRANULAR_SCOPES,
   getApiScopeId,
 } from "./api-scopes";
+import type { ApiGranularScope } from "./api-scopes";
 import {
   OAUTH_ACCESS_CLAIM,
   OAUTH_PERMISSION_CLAIM_PREFIX,
@@ -14,6 +15,13 @@ import type {
   OAuthConsentGrant,
   OAuthConsentOption,
 } from "./types/oauth-consent";
+
+const ACCESS_LEVEL_SCOPES: ReadonlyMap<unknown, readonly ApiGranularScope[]> =
+  new Map([
+    ["read", API_READ_SCOPES],
+    ["write", API_WRITE_SCOPES],
+    ["full", API_GRANULAR_SCOPES],
+  ]);
 
 export function buildOAuthConsentOptions(): OAuthConsentOption[] {
   return [
@@ -52,28 +60,10 @@ export function readOAuthConsentGrant(
   }
 
   if (accessLevel !== undefined) {
-    switch (accessLevel) {
-      case "read":
-        return {
-          organizationId,
-          organizationSource,
-          scopes: [...API_READ_SCOPES],
-        };
-      case "write":
-        return {
-          organizationId,
-          organizationSource,
-          scopes: [...API_WRITE_SCOPES],
-        };
-      case "full":
-        return {
-          organizationId,
-          organizationSource,
-          scopes: [...API_GRANULAR_SCOPES],
-        };
-      default:
-        return null;
-    }
+    const accessScopes = ACCESS_LEVEL_SCOPES.get(accessLevel);
+    return accessScopes
+      ? { organizationId, organizationSource, scopes: [...accessScopes] }
+      : null;
   }
 
   const scopes: OAuthConsentGrant["scopes"] = [];

@@ -1,0 +1,103 @@
+---
+title: "Quickstart"
+description: "Create a site from a GitHub repository, publish your first post and put it on your domain."
+authors:
+  - handle: jan
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/sites/quickstart
+  type: tutorial
+  applies_to:
+    - notra
+  language: en
+  status: stable
+---
+
+This guide takes you from a GitHub repository to a live blog. You need a repository you can push to, which can be a new one or a folder in an existing monorepo.
+
+Already have a Notra site with a `blog.json`? Skip adding a first post and select the production branch and folder containing that file when you import. You don't need another starter PR. Notra Sites reads its own [repository format](/sites/repository); it doesn't run an existing app's build command or deploy a `dist/` folder.
+
+<Info>
+  Notra Sites is in private beta. If **Sites** is missing from the Studio sidebar, email [hello@usenotra.com](mailto:hello@usenotra.com) or ask on [Discord](https://www.usenotra.com/discord) and we'll turn it on for your workspace.
+</Info>
+
+<Steps>
+  <Step title="Add a first post">
+    If you're starting from scratch, create `blog/hello-world.mdx` in your site folder and push it to the branch you plan to use for production:
+
+    ```mdx blog/hello-world.mdx
+    ---
+    title: "Hello, world"
+    description: "The first post on our new blog."
+    date: 2026-10-08
+    ---
+
+    We're starting a blog. Here's what to expect.
+
+    <Tip>Subscribe to the RSS feed at /blog/feed.xml.</Tip>
+    ```
+
+    Posts go in `blog/` and changelog entries in `changelog/`, and you don't need a `blog.json` yet.
+
+    To see it before you push, run `npx notra@latest dev` in the site folder and open the URL it prints, usually `http://localhost:4321/blog`. See [Local development](/sites/previews#local-development).
+  </Step>
+  <Step title="Import the repository">
+    In Notra, switch the sidebar to **Studio**, open **Sites** and click **New site**. If the Notra GitHub App isn't installed yet, click **Install GitHub App** and give it access to the repository, then click **Import** next to the repository.
+  </Step>
+  <Step title="Configure the site">
+    - **Site name** defaults to the repository name.
+    - **Address** is your free Notra address, `<address>.notra.site`.
+    - **Production branch** is the branch that goes live. Select the branch containing your site files; pushes to it deploy the site.
+    - Turn on **Site is in a subdirectory** if the files live in a folder like `hosted-site`. Set the root directory to that folder, not to `hosted-site/blog` or `hosted-site/blog.json`. Leave the root directory empty for files at the repository root.
+    - Under **Blog** and **Changelog**, set the URL path for each section (`/blog`, `/changelog`), or leave a path empty to turn that section off. Use `/` to publish a section at the address root.
+
+    For example, if `hosted-site/blog.json` and `hosted-site/blog/` are on `main`, select **Production branch** `main` and root directory `hosted-site`. For a blog at the address root, set **Blog** to `/` and leave **Changelog** empty. The source folder and the URL path are separate settings.
+
+    When an existing `blog.json` is discovered, click **Use folder** beside its path. If there is more than one, choose the folder for the site you want to publish. A config on another branch or in another folder isn't the config for this selection.
+
+    Click **Create & deploy**.
+  </Step>
+  <Step title="Watch the first deploy">
+    The build log streams live, and when it says **Your site is live**, click **Visit**. With the Blog path `/blog`, your first post is at `https://<address>.notra.site/blog/hello-world`; with `/`, it's at `https://<address>.notra.site/hello-world`.
+  </Step>
+  <Step title="Add your domain">
+    Open **Domains → Add domain** and enter `blog.acme.com` or `acme.com/blog`. See [Choose a domain](/sites/domains/overview) for both options.
+  </Step>
+</Steps>
+
+## Make it yours
+
+When the selected production branch and root directory have no `blog.json` and no alternative config is discovered, the Configure step offers **Open starter PR**. The source path is shown above the button: `blog.json` at the repository root or, for example, `hosted-site/blog.json` for root directory `hosted-site`. This is optional; you can still **Create & deploy** with the standard layout. Notra reads your Brand Identity and website and opens a pull request with a `blog.json`, a `header.mdx`, a `footer.mdx` and a first post that use your logo, colors and links. Review and merge it into the selected production branch to deploy those files after creating the site.
+
+If your config already exists elsewhere, select its branch and folder instead. A starter in a different folder creates a separate site source; it doesn't connect or replace your existing config.
+
+To set things up by hand, add a `blog.json` at the site root, next to the `blog/` and `changelog/` folders:
+
+```json blog.json
+{
+  "$schema": "https://usenotra.com/schemas/blog.json",
+  "name": "Acme",
+  "colors": { "primary": "#16A34A" },
+  "navbar": { "cta": { "label": "Sign up", "href": "https://acme.com/signup" } }
+}
+```
+
+The `$schema` line gives you autocomplete and inline errors in VS Code, Cursor and other editors.
+
+## Next steps
+
+<Columns cols={2}>
+  <Card title="Repository layout" icon="folder-tree" href="/sites/repository">
+    Where every file goes and how paths become URLs.
+  </Card>
+  <Card title="Components" icon="shapes" href="/sites/components/overview">
+    Callouts, cards, tabs, steps and your own React components.
+  </Card>
+  <Card title="Match your website" icon="palette" href="/sites/match-your-website">
+    Your own header, footer and sections on every page.
+  </Card>
+  <Card title="Previews" icon="eye" href="/sites/previews">
+    A link for every pull request.
+  </Card>
+</Columns>

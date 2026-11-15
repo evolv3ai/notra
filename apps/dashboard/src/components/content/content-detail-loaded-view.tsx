@@ -1,24 +1,22 @@
 "use client";
 
-import { ArrowLeft02Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import type { TextSelection } from "@notra/ai/types/chat";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@notra/ui/components/ui/tooltip";
-import { useTranslations } from "next-intl";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import type { ReactNode } from "react";
+import { type ReactNode, useRef } from "react";
 
 import { ContentDetailMainDocument } from "@/components/content/content-detail-main-document";
-import { ContentDetailSourceMetadata } from "@/components/content/content-detail-source-metadata";
 import { ContentDetailToolbar } from "@/components/content/content-detail-toolbar";
+import { ContentDocumentTabs } from "@/components/content/content-document-tabs";
+import { ContentPlanReadView } from "@/components/content/content-plan-read-view";
+import { ContentCommentComposer } from "@/components/content/inline-comments/content-comment-composer";
+import { ContentCommentsGutter } from "@/components/content/inline-comments/content-comments-gutter";
+import { ContentCommentsLayer } from "@/components/content/inline-comments/content-comments-layer";
+import { ContentCommentsProvider } from "@/components/content/inline-comments/content-comments-provider";
+import { ContentDetachedComments } from "@/components/content/inline-comments/content-detached-comments";
 import { RecommendationsSection } from "@/components/content/recommendations-section";
+import { HeaderActionsPortal } from "@/components/dashboard/header-actions-portal";
 import { WriterExecute } from "@/components/geo/writer/writer-execute";
 import type { ContentDetailDocument } from "@/lib/hooks/use-content-detail-document";
+import { useContentDocumentTab } from "@/lib/hooks/use-content-document-tab";
 import type { ContentApiResponse } from "@/types/hooks/content";
 
 interface ContentDetailLoadedViewProps {
@@ -42,20 +40,20 @@ export function ContentDetailLoadedView({
   selectedExcerpt,
   chatInputSection,
 }: ContentDetailLoadedViewProps) {
-  const t = useTranslations("content.detail");
   const content = data.content;
   const isLongForm = ["blog_post", "changelog"].includes(content.contentType);
-  const collection = data.collection;
-  const searchParams = useSearchParams();
-  const fromCollection =
-    collection && searchParams.get("fromCollection") === collection.id;
-  const backHref = fromCollection
-    ? `/${organizationSlug}/collection/${collection.id}`
-    : `/${organizationSlug}/content`;
-  const backLabel = fromCollection ? t("backToCollection") : t("backToContent");
+  const editorViewport = useRef<HTMLDivElement>(null);
+  const { outline, tab, setTab, visibleOutline } =
+    useContentDocumentTab(document);
 
   return (
-    <>
+    <ContentCommentsProvider
+      key={`${organizationId}:${contentId}`}
+      organizationId={organizationId}
+      contentId={contentId}
+      document={document}
+      enabled={isLongForm}
+    >
       <WriterExecute.Root
         briefId={document.geoWriterDraft?.briefId ?? null}
         hasUnsavedChanges={
@@ -68,31 +66,8 @@ export function ContentDetailLoadedView({
         projectId={document.geoWriterDraft?.projectId}
       >
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="bg-secondary sticky top-0 z-20 flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 lg:px-6">
-            <div
-              aria-hidden="true"
-              className="bg-secondary pointer-events-none absolute inset-x-0 top-full h-4"
-            >
-              <div className="bg-background h-full rounded-t-2xl" />
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Link
-                      aria-label={backLabel}
-                      className="text-muted-foreground hover:text-foreground hover:bg-muted focus-visible:ring-ring inline-flex min-h-8 shrink-0 items-center gap-2 rounded-md px-2 text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
-                      href={backHref}
-                    />
-                  }
-                >
-                  <HugeiconsIcon className="size-4" icon={ArrowLeft02Icon} />
-                  {backLabel}
-                </TooltipTrigger>
-                <TooltipContent>{backLabel}</TooltipContent>
-              </Tooltip>
-            </div>
-            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+          {isLongForm ? (
+            <HeaderActionsPortal>
               <ContentDetailToolbar
                 content={content}
                 contentId={contentId}
@@ -100,42 +75,75 @@ export function ContentDetailLoadedView({
                 organizationId={organizationId}
                 organizationSlug={organizationSlug}
               />
-            </div>
-          </div>
-          <div
-            className="min-h-0 flex-1 scrollbar-thin overflow-y-auto overscroll-contain py-4 md:py-6"
-            data-content-scroll-viewport
-          >
-            <div
-              className={`mx-auto w-full space-y-6 px-4 lg:px-6 ${isLongForm ? "max-w-3xl" : "max-w-5xl"}`}
-            >
-              {document.geoWriterDraft ? <WriterExecute.Banner /> : null}
-              {!isLongForm ? (
-                <ContentDetailSourceMetadata
+            </HeaderActionsPortal>
+          ) : (
+            <div className="bg-secondary sticky top-0 z-20 flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 lg:px-6">
+              <div
+                aria-hidden="true"
+                className="bg-secondary pointer-events-none absolute inset-x-0 top-full h-4"
+              >
+                <div className="bg-background h-full rounded-t-2xl" />
+              </div>
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                <ContentDetailToolbar
+                  content={content}
+                  contentId={contentId}
+                  document={document}
                   organizationId={organizationId}
-                  sourceMetadata={content.sourceMetadata}
+                  organizationSlug={organizationSlug}
                 />
-              ) : null}
-
-              <ContentDetailMainDocument
-                contentId={contentId}
-                data={data}
-                document={document}
-                onSelectionChange={onSelectionChange}
-                organizationId={organizationId}
-                selectedExcerpt={selectedExcerpt}
-              />
-
-              {document.isGeoWriterPlanMode ? null : (
-                <RecommendationsSection value={content.recommendations} />
-              )}
-
-              <div className="h-24" />
+              </div>
             </div>
+          )}
+          <div
+            className="@container/editor relative min-h-0 flex-1 scrollbar-thin overflow-y-auto overscroll-contain py-4 md:py-6"
+            data-content-scroll-viewport
+            ref={editorViewport}
+          >
+            <ContentCommentsGutter>
+              <ContentDocumentTabs
+                columnClassName={isLongForm ? "max-w-3xl" : "max-w-5xl"}
+                enabled={outline !== undefined}
+                onValueChange={setTab}
+                value={tab}
+              />
+              <div
+                className={`relative mx-auto w-full space-y-6 px-4 lg:px-6 ${isLongForm ? "max-w-3xl" : "max-w-5xl"}`}
+                data-comment-column
+              >
+                {document.geoWriterDraft ? <WriterExecute.Banner /> : null}
+
+                <ContentPlanReadView brief={visibleOutline} />
+                <div
+                  className="space-y-6"
+                  hidden={visibleOutline !== undefined}
+                >
+                  {isLongForm ? (
+                    <ContentCommentsLayer container={editorViewport} />
+                  ) : null}
+                  <ContentDetailMainDocument
+                    contentId={contentId}
+                    data={data}
+                    document={document}
+                    onSelectionChange={onSelectionChange}
+                    organizationId={organizationId}
+                    selectedExcerpt={selectedExcerpt}
+                  />
+                  <ContentDetachedComments />
+                </div>
+
+                {document.isGeoWriterPlanMode || isLongForm ? null : (
+                  <RecommendationsSection value={content.recommendations} />
+                )}
+
+                <div className="h-24" />
+              </div>
+            </ContentCommentsGutter>
           </div>
         </div>
       </WriterExecute.Root>
       {chatInputSection}
-    </>
+      {isLongForm ? <ContentCommentComposer /> : null}
+    </ContentCommentsProvider>
   );
 }

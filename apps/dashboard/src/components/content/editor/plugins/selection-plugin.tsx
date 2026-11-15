@@ -54,7 +54,6 @@ export function SelectionPlugin({
         const previousSelection = prevEditorState.read(() => $getSelection());
         editorState.read(() => {
           const selection = $getSelection();
-          // Keep the excerpt when focus moves to the chat composer.
           if (
             selection === null ||
             (selectedExcerptRef.current !== null &&
@@ -75,15 +74,12 @@ export function SelectionPlugin({
             return;
           }
 
-          // Get the full text content to calculate positions
           const root = $getRoot();
           const fullText = root.getTextContent();
 
-          // Get anchor and focus points
           const anchor = selection.anchor;
           const focus = selection.focus;
 
-          // Calculate offsets by traversing nodes in document order
           let anchorOffset = 0;
           let focusOffset = 0;
           let anchorFound = false;
@@ -109,7 +105,6 @@ export function SelectionPlugin({
             }
           }
 
-          // Ensure start is before end
           const startOffset = Math.min(anchorOffset, focusOffset);
           const endOffset = Math.max(anchorOffset, focusOffset);
 

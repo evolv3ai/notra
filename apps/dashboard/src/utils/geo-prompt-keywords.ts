@@ -1,10 +1,7 @@
 import type { GeoSuggestionKeyword } from "@notra/geo-core/types/geo";
+import { escapeRegExp } from "@notra/utils/escape";
 
 import type { PromptKeywordSegment } from "@/types/geo";
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
 
 function isWordCharacter(value: string | undefined): boolean {
   return value !== undefined && /[\p{L}\p{N}]/u.test(value);

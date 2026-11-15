@@ -1,4 +1,4 @@
-import { Badge } from "@notra/ui/components/ui/badge";
+import { StatusBadge } from "@notra/ui/components/status-badge";
 
 import { useLogStatusLabels } from "@/lib/hooks/use-log-status-labels";
 import type { StatusWithCode } from "@/types/webhooks/webhooks";
@@ -16,8 +16,9 @@ const STATUS_VARIANTS: Record<
 export function LogStatusBadge({ status }: { status: StatusWithCode }) {
   const statusLabels = useLogStatusLabels();
   return (
-    <Badge variant={STATUS_VARIANTS[status.label]}>
-      {statusLabels[status.label]}
-    </Badge>
+    <StatusBadge
+      appearance={{ variant: STATUS_VARIANTS[status.label] }}
+      label={statusLabels[status.label]}
+    />
   );
 }

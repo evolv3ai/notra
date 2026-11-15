@@ -9,7 +9,6 @@ import type {
   SkillUpdatedAt,
 } from "../types/skills";
 
-/** Leave unexpected database errors to Hono's central error handler. */
 export function runSkillProgram<A, E extends SkillDomainError>(
   program: Effect.Effect<A, E | SkillDatabaseError>
 ) {

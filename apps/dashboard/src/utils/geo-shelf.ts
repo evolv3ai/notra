@@ -243,7 +243,7 @@ export function toShelfRows(
   });
 }
 
-export function mergeShelfOpportunity(
+function mergeShelfOpportunity(
   existing: GeoShelfOpportunity | null,
   changes: Partial<GeoShelfOpportunityWrite>,
   nowIso: string
@@ -262,7 +262,6 @@ export function mergeShelfOpportunity(
     updatedAt: nowIso,
   };
   const next: GeoShelfOpportunity = { ...base, ...changes, updatedAt: nowIso };
-  // Like the server, a point of contact equal to the assignee is not stored.
   if (next.pocMemberId !== null && next.pocMemberId === next.assigneeMemberId) {
     next.pocMemberId = null;
   }
@@ -335,7 +334,6 @@ export function applyShelfPlacementStatus(
   const isStored = source.placements.some(
     (placement) => placement.competitorId === competitorId
   );
-  // Mirrors the server: a cleared competitor is dropped, not stored.
   if (competitorId !== null && status === "unknown") {
     return isStored
       ? {
@@ -347,7 +345,6 @@ export function applyShelfPlacementStatus(
         }
       : source;
   }
-  // Competitors nobody has checked yet are not stored on the source.
   if (!isStored) {
     if (!brand) {
       return source;
@@ -408,14 +405,11 @@ export function toShelfOpportunityWrite(
   };
 }
 
-/** Canonicalize like the server so the optimistic row matches the created one. */
 function optimisticShelfUrl(raw: string): { url: string; domain: string } {
   if (isAllowedShelfUrl(raw)) {
     const url = canonicalizeShelfUrl(raw);
     return { url, domain: shelfDomainFromUrl(url) };
   }
-  // The server rejects this URL as well: keep the raw value so the failed
-  // insert rolls back with an error toast instead of throwing on submit.
   const trimmed = raw.trim();
   return { url: trimmed, domain: trimmed };
 }
@@ -444,7 +438,6 @@ export function buildOptimisticShelfSource(
       excerpt: null,
       checkedAt: nowIso,
     },
-    // Like the server, only competitors with a known status are stored.
     ...context.competitors.flatMap<GeoShelfPlacement>((competitor) =>
       presentIds.has(competitor.id)
         ? [

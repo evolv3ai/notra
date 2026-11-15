@@ -1,4 +1,7 @@
-import { GEO_VISIBILITY_TABLE_ROWS } from "@notra/geo-core/constants/geo";
+import {
+  GEO_CHANGES_SKELETON_ROWS,
+  GEO_VISIBILITY_TABLE_ROWS,
+} from "@notra/geo-core/constants/geo";
 
 import {
   TABLE_MAX_HEIGHT,
@@ -23,4 +26,8 @@ export function paginatedTableHeightFor(
 
 export const GEO_VISIBILITY_TABLE_HEIGHT = tableHeightFor(
   GEO_VISIBILITY_TABLE_ROWS
+);
+
+export const GEO_CHANGES_TABLE_HEIGHT = tableHeightFor(
+  GEO_CHANGES_SKELETON_ROWS
 );

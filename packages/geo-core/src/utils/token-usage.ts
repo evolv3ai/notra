@@ -88,7 +88,7 @@ function usageCostUsd(usage: AgentTokenUsage): number {
   if (
     typeof usage.totalUsd === "number" &&
     Number.isFinite(usage.totalUsd) &&
-    usage.totalUsd > 0
+    usage.totalUsd >= 0
   ) {
     return usage.totalUsd;
   }
@@ -140,7 +140,7 @@ export function agentTokenUsageFrom(
     : EMPTY_AGENT_TOKEN_USAGE;
 }
 
-export function snapshotRoleUsage(usage: AgentTokenUsage): GeoScanRoleUsage {
+function snapshotRoleUsage(usage: AgentTokenUsage): GeoScanRoleUsage {
   return {
     inputTokens: usage.inputTokens,
     outputTokens: usage.outputTokens,
@@ -162,25 +162,13 @@ export function snapshotUsageByRole(
   };
 }
 
-function geoCheckCostFields(
-  engineUsage: GeoTokenUsageInput | undefined,
-  judgeUsage: GeoTokenUsageInput | undefined,
-  durationMs: number
-): { durationMs: number; costUsd: number; judgeTokens: number } {
-  const engine = agentTokenUsageFrom(engineUsage);
-  const judge = agentTokenUsageFrom(judgeUsage);
-  return {
-    durationMs,
-    costUsd: addAgentTokenUsage(engine, judge).totalUsd ?? 0,
-    judgeTokens: judge.totalTokens,
-  };
-}
-
 export function geoCheckWriteUsage(
   engineUsage: GeoTokenUsageInput | undefined,
   judgeUsage: GeoTokenUsageInput | undefined,
   durationMs: number
 ) {
+  const engine = agentTokenUsageFrom(engineUsage);
+  const judge = agentTokenUsageFrom(judgeUsage);
   return {
     promptTokens: engineUsage?.inputTokens ?? null,
     outputTokens: engineUsage?.outputTokens ?? null,
@@ -188,6 +176,8 @@ export function geoCheckWriteUsage(
       engineUsage?.outputTokenDetails?.reasoningTokens ??
       engineUsage?.reasoningTokens ??
       null,
-    ...geoCheckCostFields(engineUsage, judgeUsage, durationMs),
+    durationMs,
+    costUsd: addAgentTokenUsage(engine, judge).totalUsd ?? 0,
+    judgeTokens: judge.totalTokens,
   };
 }

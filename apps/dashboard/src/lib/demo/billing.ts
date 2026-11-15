@@ -39,10 +39,6 @@ function createDemoPlans() {
   );
 }
 
-/**
- * Splits `total` across `weights` proportionally in whole units, handing the
- * rounding leftovers to the first entries so the parts add up exactly.
- */
 function scaleToTotal(weights: readonly number[], total: number): number[] {
   const weightSum = weights.reduce((sum, weight) => sum + weight, 0);
   if (weightSum <= 0) {
@@ -55,10 +51,6 @@ function scaleToTotal(weights: readonly number[], total: number): number[] {
   return scaled.map((value, index) => value + (index < remainder ? 1 : 0));
 }
 
-/**
- * A believable spend history for the current cycle, newest first. The events
- * add up to the credits the demo balance reports as used.
- */
 function demoCreditEvents(now: number) {
   const spanMs = DEMO_BILLING_PLAN.periodElapsedDays * MS_PER_DAY;
   const patterns = Array.from(
@@ -80,7 +72,6 @@ function demoCreditEvents(now: number) {
   }));
 }
 
-/** Paginates the demo spend history like Autumn's listEvents. */
 function createDemoCreditEvents(body: { offset?: number; limit?: number }) {
   const offset = Math.max(0, Number(body.offset ?? 0));
   const limit = Math.max(1, Number(body.limit ?? 20));
@@ -132,7 +123,6 @@ function demoAllowance(featureId: string) {
     : DEMO_BILLING_ALLOWANCES[featureId];
 }
 
-/** Metered balance for a feature the demo plan caps; null when unlimited. */
 function demoBalance(featureId: string, now: number) {
   const allowance = demoAllowance(featureId);
   if (!allowance) {
@@ -162,11 +152,9 @@ export function createDemoCustomer(now: number) {
   };
 }
 
-/** Credits spent per day, taken from the same events Settings › Credits lists. */
 function demoCreditDailyValues(end: number, days: number) {
   const values = Array.from({ length: days }, () => 0);
   for (const event of demoCreditEvents(Date.now())) {
-    // UTC days are exactly MS_PER_DAY long in JavaScript time.
     const dayStart = event.timestamp - (event.timestamp % MS_PER_DAY);
     const offset = Math.round((end - dayStart) / MS_PER_DAY);
     if (offset >= 0 && offset < days) {
@@ -176,10 +164,6 @@ function demoCreditDailyValues(end: number, days: number) {
   return values;
 }
 
-/**
- * Daily usage whose current-cycle days add up to what the demo balance
- * reports as used. Earlier days follow the same pace (the previous cycle).
- */
 function demoAllowanceDailyValues(
   used: number,
   days: number,
@@ -229,7 +213,6 @@ export function handleDemoAutumnRoute(
   if (route === "listEvents") {
     return Response.json(createDemoCreditEvents(body));
   }
-  // Checkout, portal and plan changes need a real account.
   return Response.json(
     { error: DEMO_DISABLED_MESSAGE, message: DEMO_DISABLED_MESSAGE },
     { status: 403 }

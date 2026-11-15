@@ -3,10 +3,10 @@
 import { Refresh03Icon, SparklesIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Skeleton } from "@notra/ui/components/ui/skeleton";
-import { Loader2Icon } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { Spinner } from "@notra/ui/components/ui/spinner";
 import { useEffect } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { EmptyState } from "@/components/empty-state";
 import { EmptyStateGuidelinesPreview } from "@/components/empty-state-preview";
@@ -21,6 +21,7 @@ import { GuidelinesActionButton } from "./guidelines-action-button";
 import { GuidelinesAssetsSection } from "./guidelines-assets-section";
 import { GuidelinesColorsSection } from "./guidelines-colors-section";
 import { GuidelinesScreenshotsSection } from "./guidelines-screenshots-section";
+import { GuidelinesSourcePdfSection } from "./guidelines-source-pdf-section";
 import { GuidelinesStatusLine } from "./guidelines-status-line";
 import { GuidelinesTokensSection } from "./guidelines-tokens-section";
 import { GuidelinesTypographySection } from "./guidelines-typography-section";
@@ -116,7 +117,7 @@ export function GuidelinesPanel({
       <div className="space-y-6">
         <div className="flex items-center justify-between gap-3">
           <p className="text-muted-foreground flex items-center gap-2 text-sm">
-            <Loader2Icon className="size-4 animate-spin" />
+            <Spinner />
             {t("generatingGuidelines")}
           </p>
         </div>
@@ -131,10 +132,19 @@ export function GuidelinesPanel({
 
   return (
     <div className="space-y-6">
-      <GuidelinesStatusLine
-        generating={isGenerating}
-        lastGeneratedAt={guideline.lastGeneratedAt}
-      />
+      <div className="flex items-center justify-between gap-3">
+        <GuidelinesSourcePdfSection
+          guideline={guideline}
+          organizationId={organizationId}
+          voiceId={voiceId}
+        />
+        <div className="ml-auto">
+          <GuidelinesStatusLine
+            generating={isGenerating}
+            lastGeneratedAt={guideline.lastGeneratedAt}
+          />
+        </div>
+      </div>
 
       {hasData ? (
         <>

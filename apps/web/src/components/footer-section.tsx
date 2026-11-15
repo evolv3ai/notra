@@ -1,5 +1,6 @@
 import { cn } from "@notra/ui/lib/utils";
 import { Link } from "@tanstack/react-router";
+import { ConsentDialogLink } from "c15t/tanstack-start/components/consent-dialog-link";
 
 import { DeferredDithering } from "@/components/deferred-dithering";
 import {
@@ -48,7 +49,7 @@ export default function FooterSection() {
     <footer className="relative isolate overflow-hidden rounded-t-3xl bg-[linear-gradient(in_oklab_180deg,oklab(80.3%_0.045_-0.074/15%)_0%,oklab(71.8%_0.066_-0.109/50%)_100%)] pt-6 shadow-[0_0.0625rem_0.125rem_#28282814,0_0_0_0.0625rem_#ececec] dark:bg-[#141019] dark:bg-none dark:shadow-none">
       <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <DeferredDithering
-          className="absolute top-[8.8125rem] left-[-5.40625rem] h-[66.125rem] w-[calc(100%+10.8125rem)] min-w-[100.8125rem]"
+          className="absolute top-[8.8125rem] left-[-5.40625rem] h-[66.125rem] min-h-[calc(100%-8.8125rem)] w-[calc(100%+10.8125rem)] min-w-[100.8125rem]"
           colorBack={FOOTER_DITHERING.colorBack}
           colorFront={FOOTER_DITHERING.colorFront}
           scale={FOOTER_DITHERING.scale}
@@ -115,6 +116,9 @@ export default function FooterSection() {
                     {link.label}
                   </Link>
                 ))}
+                <ConsentDialogLink className="dark:text-foreground/50 dark:hover:text-foreground font-sans text-[0.8125rem] leading-[1.125rem] font-medium text-[#1e1e1e66] transition-colors hover:text-[#1e1e1e]">
+                  Privacy settings
+                </ConsentDialogLink>
               </div>
               <p className="dark:text-foreground/50 font-sans text-[0.8125rem] leading-[1.125rem] font-medium text-[#1e1e1e66]">
                 {`© ${year} Notra, Inc.`}

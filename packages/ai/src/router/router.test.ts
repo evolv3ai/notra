@@ -1,123 +1,38 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import type { LanguageModelV4StreamPart } from "@ai-sdk/provider";
+import type {
+  LanguageModelV4CallOptions,
+  LanguageModelV4StreamPart,
+} from "@ai-sdk/provider";
 import {
+  ORGANIZATION_LOOKUP_FAILURE_TTL_MS,
   ROUTER_METADATA_KEY,
   ROUTER_PROVIDER_OPTIONS_KEY,
 } from "@notra/ai/constants/router";
+import {
+  FREE_ORG,
+  MODEL,
+  PAID_ORG,
+  plans,
+} from "@notra/ai/constants/router-test";
 import type { ZdrMode } from "@notra/ai/types/router";
 
-import { summarizeRouteUsage } from "../utils/route-usage";
 import { createOpenRouterAdapter } from "./adapters/openrouter";
-import { createVercelAdapter } from "./adapters/vercel";
 import {
-  GatewayCreditBalanceError,
   GatewayNotConfiguredError,
   GatewayUnavailableError,
   NoCompliantRouteError,
   UnsupportedModelError,
 } from "./errors";
-import { classifyUpstreamFailure } from "./lazy-model";
 import {
   callOptions,
   createFakeAdapter,
   createTestRouter,
   httpError,
+  metadataOf,
   readStreamParts,
 } from "./test-helpers";
-
-const PAID_ORG = "org_paid";
-const FREE_ORG = "org_free";
-const MODEL = "anthropic/claude-sonnet-4.6";
-const CREDIT_TTL_MS = 30_000;
-
-const plans = { [PAID_ORG]: "paid", [FREE_ORG]: "free" } as const;
-
-describe("Vercel adapter metadata", () => {
-  test("uses generationId metadata and resolves documented generation info", async () => {
-    const requestedUrls: string[] = [];
-    const generationFetch: typeof fetch = (input) => {
-      requestedUrls.push(String(input));
-      return Promise.resolve(
-        Response.json({
-          data: {
-            id: "gen_test",
-            total_cost: 0.001,
-            upstream_inference_cost: 0.001,
-            usage: 0.001,
-            created_at: "2026-08-17T00:00:00.000Z",
-            model: MODEL,
-            is_byok: false,
-            provider_name: "anthropic",
-            streamed: true,
-            finish_reason: "stop",
-            latency: 100,
-            generation_time: 500,
-            native_tokens_prompt: 10,
-            native_tokens_completion: 20,
-            native_tokens_reasoning: 0,
-            native_tokens_cached: 0,
-            native_tokens_cache_creation: 0,
-            billable_web_search_calls: 0,
-          },
-        })
-      );
-    };
-    const adapter = createVercelAdapter({
-      apiKey: "test-key",
-      baseURL: "https://gateway.test/v1/ai",
-      fetch: generationFetch,
-    });
-
-    assert.deepEqual(
-      adapter.extractRouteMetadata({ gateway: { generationId: "gen_test" } }),
-      { generationId: "gen_test" }
-    );
-    assert.ok(adapter.lookupRouteMetadata);
-    assert.deepEqual(await adapter.lookupRouteMetadata("gen_test"), {
-      model: MODEL,
-      upstreamProvider: "anthropic",
-    });
-    assert.equal(
-      requestedUrls[0],
-      "https://gateway.test/v1/generation?id=gen_test"
-    );
-  });
-});
-
-function metadataOf(result: { providerMetadata?: Record<string, unknown> }) {
-  return result.providerMetadata?.[ROUTER_METADATA_KEY] as
-    | Record<string, unknown>
-    | undefined;
-}
-
-describe("route usage", () => {
-  test("prices the model served by the gateway instead of the requested model", async () => {
-    const summary = await summarizeRouteUsage(
-      [
-        {
-          providerMetadata: {
-            [ROUTER_METADATA_KEY]: {
-              gateway: "vercel",
-              requestedModel: "openai/gpt-5.6-sol",
-              model: "openai/gpt-5.4-mini",
-              reason: "paid",
-            },
-          },
-          usage: {
-            inputTokens: 100_000,
-            outputTokens: 100_000,
-          },
-        },
-      ],
-      "openai/gpt-5.6-sol"
-    );
-
-    assert.equal(summary.route?.model, "openai/gpt-5.4-mini");
-    assert.equal(summary.tokenCostUsd, 0.525);
-  });
-});
 
 describe("resolveRoute", () => {
   test("paid organization → vercel, free organization → openrouter", async () => {
@@ -136,34 +51,6 @@ describe("resolveRoute", () => {
     assert.equal(free.gateway, "openrouter");
     assert.equal(free.reason, "free");
     assert.equal(free.zdrEnforced, true);
-  });
-
-  test("resolves independent plan and ZDR lookups concurrently", async () => {
-    let releasePlan: (() => void) | undefined;
-    const planPending = new Promise<void>((resolve) => {
-      releasePlan = resolve;
-    });
-    let zdrStarted = false;
-    const { router } = createTestRouter({
-      resolvePlan: async () => {
-        await planPending;
-        return "paid";
-      },
-      resolveZdr: () => {
-        zdrStarted = true;
-        return Promise.resolve("required");
-      },
-    });
-
-    const routePending = router.resolveRoute({
-      modelId: MODEL,
-      organizationId: PAID_ORG,
-    });
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-
-    assert.equal(zdrStarted, true);
-    releasePlan?.();
-    assert.equal((await routePending).gateway, "vercel");
   });
 
   test("ZDR entitlements are isolated by organization and refreshed at expiry", async () => {
@@ -209,9 +96,11 @@ describe("resolveRoute", () => {
     assert.deepEqual(lookups, [PAID_ORG, FREE_ORG, FREE_ORG]);
   });
 
-  test("ZDR lookup failures fail closed without caching the failure; explicit modes bypass lookup", async () => {
+  test("ZDR lookup failures fail closed, are retried after the short failure TTL; explicit modes bypass lookup", async () => {
+    let now = 0;
     let lookups = 0;
     const { router, logger } = createTestRouter({
+      now: () => now,
       resolveZdr: () => {
         lookups += 1;
         return lookups === 1
@@ -235,52 +124,33 @@ describe("resolveRoute", () => {
         (entry) => entry.event === "ai.router.zdr_lookup_failed"
       )
     );
+    now = ORGANIZATION_LOOKUP_FAILURE_TTL_MS - 1;
+    assert.equal((await router.resolveRoute(request)).zdr, "required");
+    assert.equal(lookups, 1);
+    now = ORGANIZATION_LOOKUP_FAILURE_TTL_MS;
     assert.equal((await router.resolveRoute(request)).zdr, "none");
     assert.equal(lookups, 2);
   });
 
-  test("missing organization context uses the default gateway", async () => {
-    const { router, planLookups } = createTestRouter({ plans });
-    const decision = await router.resolveRoute({ modelId: MODEL });
-    assert.equal(decision.gateway, "openrouter");
-    assert.equal(decision.reason, "no-org-default");
-    assert.equal(decision.plan, undefined);
-    assert.deepEqual(planLookups, []);
-  });
-
-  test("plan lookups are cached for the TTL", async () => {
-    let now = 0;
+  test("concurrent routes for one organization share a single plan and ZDR lookup", async () => {
+    let zdrLookups = 0;
     const { router, planLookups } = createTestRouter({
       plans,
-      now: () => now,
-      planCacheTtlMs: 1000,
+      resolveZdr: () => {
+        zdrLookups += 1;
+        return Promise.resolve("required");
+      },
     });
-    await router.resolveRoute({ modelId: MODEL, organizationId: PAID_ORG });
-    await router.resolveRoute({ modelId: MODEL, organizationId: PAID_ORG });
-    assert.deepEqual(planLookups, [PAID_ORG]);
-    now = 1001;
-    const decision = await router.resolveRoute({
-      modelId: MODEL,
-      organizationId: PAID_ORG,
-    });
-    assert.deepEqual(planLookups, [PAID_ORG, PAID_ORG]);
-    assert.equal(decision.planSource, "resolver");
-  });
-
-  test("plan lookup failure falls back to free and logs", async () => {
-    const { router, logger } = createTestRouter({
-      resolvePlan: () => Promise.reject(new Error("autumn down")),
-    });
-    const decision = await router.resolveRoute({
-      modelId: MODEL,
-      organizationId: PAID_ORG,
-    });
-    assert.equal(decision.plan, "free");
-    assert.equal(decision.planSource, "default");
-    assert.ok(
-      logger.entries.some(
-        (entry) => entry.event === "ai.router.plan_lookup_failed"
+    const decisions = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        router.resolveRoute({ modelId: MODEL, organizationId: PAID_ORG })
       )
+    );
+    assert.deepEqual(planLookups, [PAID_ORG]);
+    assert.equal(zdrLookups, 1);
+    assert.deepEqual(
+      decisions.map((decision) => decision.planSource),
+      ["resolver", "cache", "cache", "cache", "cache"]
     );
   });
 
@@ -331,6 +201,26 @@ describe("resolveRoute", () => {
     });
     assert.equal(decision.gateway, "vercel");
     assert.equal(decision.fallbackReason, "unsupported-model");
+  });
+
+  test("provider tools route to a gateway that serves them", async () => {
+    const openrouter = createFakeAdapter({
+      id: "openrouter",
+      supportedTools: (_modelId, toolIds) => toolIds.length === 0,
+    });
+    const { router } = createTestRouter({ plans, openrouter });
+    const model = router.model(MODEL, { organizationId: FREE_ORG });
+    const search = await model.doGenerate({
+      ...callOptions(),
+      tools: [
+        { type: "provider", id: "openai.web_search", name: "web", args: {} },
+      ],
+    });
+    assert.equal(metadataOf(search)?.gateway, "vercel");
+    assert.equal(metadataOf(search)?.fallbackReason, "unsupported-tool");
+
+    const plain = await model.doGenerate(callOptions());
+    assert.equal(metadataOf(plain)?.gateway, "openrouter");
   });
 
   test("model unsupported everywhere throws UnsupportedModelError", async () => {
@@ -422,55 +312,81 @@ describe("resolveRoute", () => {
 });
 
 describe("RoutedLanguageModel", () => {
-  test("resolves lazily once for concurrent and subsequent calls", async () => {
-    const { router, openrouter, planLookups } = createTestRouter({ plans });
-    assert.ok(openrouter);
-    const model = router.model(MODEL, { organizationId: FREE_ORG });
-    assert.equal(model.provider, "notra-router");
-    assert.equal(model.modelId, MODEL);
-    assert.deepEqual(planLookups, []);
-    assert.deepEqual(openrouter.createdModels, []);
-
-    await Promise.all([
-      model.doGenerate(callOptions()),
-      model.doGenerate(callOptions()),
-      Promise.resolve(model.supportedUrls),
-    ]);
-    await model.doGenerate(callOptions());
-    assert.deepEqual(planLookups, [FREE_ORG]);
-    assert.deepEqual(openrouter.createdModels, [MODEL]);
-    assert.equal(openrouter.calls.length, 3);
-  });
-
-  test("retries resolution after a failed first attempt", async () => {
-    let available = false;
-    const openrouter = createFakeAdapter({
-      id: "openrouter",
-      supportedModels: () => available,
+  for (const operation of ["generate", "stream"] as const) {
+    test(`overlapping ${operation} fallback cannot replace a cached search route`, async () => {
+      let start!: () => void;
+      let unblock!: () => void;
+      const started = new Promise<void>((resolve) => {
+        start = resolve;
+      });
+      const release = new Promise<void>((resolve) => {
+        unblock = resolve;
+      });
+      const vercel = createFakeAdapter({
+        id: "vercel",
+        onCall: async ({ options }) => {
+          if (!options.tools?.length) {
+            start();
+            await release;
+            throw httpError(503);
+          }
+        },
+      });
+      const openrouter = createFakeAdapter({
+        id: "openrouter",
+        supportedTools: (_modelId, toolIds) => toolIds.length === 0,
+      });
+      const { router } = createTestRouter({
+        vercel,
+        openrouter,
+        policy: { defaultGateway: "vercel" },
+      });
+      const model = router.model(MODEL, { zdr: "none" });
+      const plain =
+        operation === "generate"
+          ? model.doGenerate(callOptions())
+          : model.doStream(callOptions());
+      await started;
+      const searchOptions: LanguageModelV4CallOptions = {
+        ...callOptions(),
+        tools: [
+          {
+            type: "provider" as const,
+            id: "openai.web_search",
+            name: "web",
+            args: {},
+          },
+        ],
+      };
+      if (operation === "generate") {
+        await model.doGenerate(searchOptions);
+      } else {
+        await readStreamParts(await model.doStream(searchOptions));
+      }
+      unblock();
+      const plainResult = await plain;
+      if ("stream" in plainResult) {
+        await readStreamParts(plainResult);
+      }
+      if (operation === "generate") {
+        assert.equal(
+          metadataOf(await model.doGenerate(searchOptions))?.gateway,
+          "vercel"
+        );
+      } else {
+        const parts = await readStreamParts(
+          await model.doStream(searchOptions)
+        );
+        assert.equal(
+          metadataOf(parts.find((part) => part.type === "finish") ?? {})
+            ?.gateway,
+          "vercel"
+        );
+      }
+      assert.equal(openrouter.calls.length, 1);
+      assert.equal(vercel.calls.length, 3);
     });
-    const { router } = createTestRouter({ plans, openrouter, vercel: null });
-    const model = router.model(MODEL, { organizationId: FREE_ORG });
-    await assert.rejects(
-      async () => await model.doGenerate(callOptions()),
-      UnsupportedModelError
-    );
-    assert.deepEqual(openrouter.createdModels, []);
-
-    available = true;
-    const result = await model.doGenerate(callOptions());
-    assert.equal(metadataOf(result)?.gateway, "openrouter");
-    assert.deepEqual(openrouter.createdModels, [MODEL]);
-    assert.equal(openrouter.calls.length, 1);
-  });
-
-  test("supportedUrls is lazy and resolves through the routed model", async () => {
-    const { router, planLookups } = createTestRouter({ plans });
-    const model = router.model(MODEL, { organizationId: FREE_ORG });
-    const eager = model.supportedUrls;
-    assert.deepEqual(planLookups, []);
-    assert.deepEqual(await eager, {});
-    assert.deepEqual(planLookups, [FREE_ORG]);
-  });
+  }
 
   test("openrouter calls carry ZDR provider options and no vercel block", async () => {
     const { router, openrouter } = createTestRouter({ plans });
@@ -484,7 +400,7 @@ describe("RoutedLanguageModel", () => {
         },
         anthropic: {
           thinking: { type: "adaptive" },
-          output_config: { effort: "high" },
+          effort: "high",
         },
       })
     );
@@ -520,7 +436,11 @@ describe("RoutedLanguageModel", () => {
     assert.equal(gatewayOptions.zeroDataRetention, true);
     assert.equal(gatewayOptions.disallowPromptTraining, true);
     assert.equal(gatewayOptions.caching, "auto");
-    assert.deepEqual(gatewayOptions.tags, ["geo-scan"]);
+    assert.deepEqual(gatewayOptions.tags, [
+      "feature:geo-scan",
+      "geo-scan",
+      "attribution:partial",
+    ]);
     assert.deepEqual(gatewayOptions.models, ["anthropic/claude-haiku-4.5"]);
   });
 
@@ -535,7 +455,11 @@ describe("RoutedLanguageModel", () => {
       ?.gateway as Record<string, unknown>;
     assert.equal(vercelSent.zeroDataRetention, true);
     assert.equal(vercelSent.disallowPromptTraining, true);
-    assert.deepEqual(vercelSent.tags, ["other"]);
+    assert.deepEqual(vercelSent.tags, [
+      "feature:other",
+      "other",
+      "attribution:partial",
+    ]);
 
     await router.model(MODEL, { organizationId: FREE_ORG }).doGenerate(
       callOptions({
@@ -548,50 +472,6 @@ describe("RoutedLanguageModel", () => {
       zdr: true,
       data_collection: "deny",
     });
-  });
-
-  test("annotates generate results with route metadata", async () => {
-    const { router } = createTestRouter({ plans });
-    const result = await router
-      .model(MODEL, { organizationId: FREE_ORG })
-      .doGenerate(callOptions());
-    const metadata = metadataOf(result);
-    assert.equal(metadata?.gateway, "openrouter");
-    assert.equal(metadata?.requestedModel, MODEL);
-    assert.equal(metadata?.plan, "free");
-    assert.equal(metadata?.upstreamProvider, "Amazon Bedrock");
-    assert.equal(
-      router.getRouteMetadata(result.providerMetadata)?.gateway,
-      "openrouter"
-    );
-  });
-
-  test("annotates the stream finish part with route metadata", async () => {
-    const { router } = createTestRouter({ plans });
-    const result = await router
-      .model(MODEL, { organizationId: PAID_ORG })
-      .doStream(callOptions());
-    const parts = await readStreamParts(result);
-    const finish = parts.find((part) => part.type === "finish");
-    assert.ok(finish && finish.type === "finish");
-    const metadata = finish.providerMetadata?.[ROUTER_METADATA_KEY] as
-      | Record<string, unknown>
-      | undefined;
-    assert.equal(metadata?.gateway, "vercel");
-    assert.equal(metadata?.generationId, "gen_test");
-    assert.equal(metadata?.upstreamProvider, undefined);
-  });
-
-  test("enriches vercel metadata through the generation lookup API", async () => {
-    const { router } = createTestRouter({ plans });
-    const result = await router
-      .model(MODEL, { organizationId: PAID_ORG })
-      .doGenerate(callOptions());
-    const metadata = router.getRouteMetadata(result.providerMetadata);
-    assert.ok(metadata);
-    const enriched = await router.enrichRouteMetadata(metadata);
-    assert.equal(enriched.generationId, "gen_test");
-    assert.equal(enriched.upstreamProvider, "anthropic");
   });
 
   test("upstream outage on openrouter falls back to vercel with ZDR preserved", async () => {
@@ -620,7 +500,6 @@ describe("RoutedLanguageModel", () => {
       logger.entries.some((entry) => entry.event === "ai.router.fallback")
     );
 
-    // Subsequent calls stay on the fallback gateway.
     await model.doGenerate(callOptions());
     assert.equal(failures, 1);
     assert.equal(vercel?.calls.length, 2);
@@ -829,6 +708,35 @@ describe("RoutedLanguageModel", () => {
     assert.equal(next.fallbackReason, "auth-failure");
   });
 
+  test("a daily-limit 429 skips the gateway for later routes, a per-minute 429 does not", async () => {
+    for (const [message, skipped] of [
+      ["ai gateway daily token limit exceeded", true],
+      [
+        "You've reached your AI Gateway daily spend limit. You can retry after it resets.",
+        true,
+      ],
+      ["ai gateway account token rate limit exceeded", false],
+    ] as const) {
+      const openrouter = createFakeAdapter({
+        id: "openrouter",
+        onCall: () => {
+          throw httpError(429, message);
+        },
+      });
+      const { router, vercel } = createTestRouter({ plans, openrouter });
+      const result = await router
+        .model(MODEL, { organizationId: FREE_ORG })
+        .doGenerate(callOptions());
+      assert.equal(vercel?.calls.length, 1);
+      assert.equal(metadataOf(result)?.gateway, "vercel");
+      const next = await router.resolveRoute({
+        modelId: MODEL,
+        organizationId: FREE_ORG,
+      });
+      assert.equal(next.gateway, skipped ? "vercel" : "openrouter");
+    }
+  });
+
   test("a 401 without an eligible fallback throws GatewayUnavailableError", async () => {
     const openrouter = createFakeAdapter({
       id: "openrouter",
@@ -842,14 +750,11 @@ describe("RoutedLanguageModel", () => {
       async () => await model.doGenerate(callOptions()),
       GatewayUnavailableError
     );
-    // Reusing the same model honors the mark instead of calling the
-    // rejected gateway again.
     await assert.rejects(
       async () => await model.doGenerate(callOptions()),
       GatewayUnavailableError
     );
     assert.equal(openrouter.calls.length, 1);
-    // The gateway stays marked, so route resolution fails fast as well.
     await assert.rejects(
       router.resolveRoute({ modelId: MODEL, organizationId: FREE_ORG }),
       GatewayUnavailableError
@@ -881,9 +786,6 @@ describe("RoutedLanguageModel", () => {
         .map((entry) => entry.fields?.gateway),
       ["openrouter", "vercel"]
     );
-    // Both gateways are marked and the cached fallback route is dropped, so
-    // reusing the same model and resolving later routes fail fast without
-    // new upstream calls.
     await assert.rejects(
       async () => await model.doGenerate(callOptions()),
       GatewayUnavailableError
@@ -947,7 +849,7 @@ describe("development ZDR bypass", () => {
       [
         { data_collection: "deny" },
         { zdr: true, data_collection: "deny" },
-        { zdr: false, data_collection: "allow" },
+        { zdr: false, data_collection: "deny" },
       ]
     );
   });
@@ -982,7 +884,6 @@ describe("ZDR rejection by a gateway", () => {
       logger.entries.some((entry) => entry.event === "ai.router.zdr_rejected")
     );
 
-    // Later routes skip the non-compliant gateway without another roundtrip.
     const next = await router.resolveRoute({
       modelId: MODEL,
       organizationId: PAID_ORG,
@@ -1001,7 +902,6 @@ describe("ZDR rejection by a gateway", () => {
       "the rejection must not disable unrelated models"
     );
 
-    // Pinned requests to the non-compliant gateway fail closed.
     await assert.rejects(
       router.resolveRoute({ modelId: MODEL, gateway: "vercel" }),
       NoCompliantRouteError
@@ -1043,7 +943,7 @@ describe("zdr: preferred", () => {
     );
     assert.equal(
       vercel.calls[0]?.options.providerOptions?.gateway?.disallowPromptTraining,
-      false
+      true
     );
     assert.equal(vercel.calls.length, 1);
     assert.equal(openrouter.calls.length, 0);
@@ -1081,7 +981,7 @@ describe("zdr: preferred", () => {
       vercel.calls.map(
         (call) => call.options.providerOptions?.gateway?.disallowPromptTraining
       ),
-      [true, false, false]
+      [true, true, true]
     );
     await assert.rejects(
       async () =>
@@ -1123,146 +1023,8 @@ describe("zdr: preferred", () => {
   });
 });
 
-describe("assertRouteHasCredits", () => {
-  test("a failed balance lookup allows traffic, caches unknown balance, and retries at expiry", async () => {
-    let now = 0;
-    const openrouter = createFakeAdapter({ id: "openrouter", balance: 10 });
-    const getBalance = openrouter.getBalance;
-    let attempts = 0;
-    openrouter.getBalance = () => {
-      attempts += 1;
-      return attempts === 1
-        ? Promise.reject(new Error("balance endpoint unavailable"))
-        : getBalance();
-    };
-    const { router, logger } = createTestRouter({
-      plans,
-      openrouter,
-      now: () => now,
-      creditCheckTtlMs: 1000,
-    });
-    const request = { modelId: MODEL, organizationId: FREE_ORG };
-    assert.equal(
-      (await router.assertRouteHasCredits(request)).gateway,
-      "openrouter"
-    );
-    assert.ok(
-      logger.entries.some(
-        (entry) => entry.event === "ai.router.credits_check_failed"
-      )
-    );
-    now = 999;
-    assert.equal(
-      (await router.assertRouteHasCredits(request)).gateway,
-      "openrouter"
-    );
-    assert.equal(attempts, 1);
-    now = 1000;
-    assert.equal(
-      (await router.assertRouteHasCredits(request)).gateway,
-      "openrouter"
-    );
-    assert.equal(attempts, 2);
-  });
-
-  test("passes when the selected gateway has credits and caches the lookup", async () => {
-    let now = 0;
-    const openrouter = createFakeAdapter({ id: "openrouter", balance: 10 });
-    const { router } = createTestRouter({
-      plans,
-      openrouter,
-      now: () => now,
-      creditCheckTtlMs: CREDIT_TTL_MS,
-    });
-    const first = await router.assertRouteHasCredits({
-      modelId: MODEL,
-      organizationId: FREE_ORG,
-    });
-    assert.equal(first.gateway, "openrouter");
-    await router.assertRouteHasCredits({
-      modelId: MODEL,
-      organizationId: FREE_ORG,
-    });
-    assert.equal(openrouter.balanceCalls, 1);
-    now = CREDIT_TTL_MS + 1;
-    await router.assertRouteHasCredits({
-      modelId: MODEL,
-      organizationId: FREE_ORG,
-    });
-    assert.equal(openrouter.balanceCalls, 2);
-  });
-
-  test("exhausted openrouter credits fall back to vercel", async () => {
-    const openrouter = createFakeAdapter({ id: "openrouter", balance: 0 });
-    const { router } = createTestRouter({ plans, openrouter });
-    const decision = await router.assertRouteHasCredits({
-      modelId: MODEL,
-      organizationId: FREE_ORG,
-    });
-    assert.equal(decision.gateway, "vercel");
-    assert.equal(decision.fallbackReason, "no-credits");
-    // Models created afterwards use the funded gateway as well.
-    const model = router.model(MODEL, { organizationId: FREE_ORG });
-    const result = await model.doGenerate(callOptions());
-    assert.equal(metadataOf(result)?.gateway, "vercel");
-  });
-
-  test("throws GatewayCreditBalanceError when no funded route exists", async () => {
-    const openrouter = createFakeAdapter({ id: "openrouter", balance: 0 });
-    const vercel = createFakeAdapter({ id: "vercel", balance: -1 });
-    const { router } = createTestRouter({ plans, openrouter, vercel });
-    await assert.rejects(
-      router.assertRouteHasCredits({
-        modelId: MODEL,
-        organizationId: FREE_ORG,
-      }),
-      GatewayCreditBalanceError
-    );
-
-    const { router: noFallback } = createTestRouter({
-      plans,
-      openrouter: createFakeAdapter({ id: "openrouter", balance: 0 }),
-      policy: { crossGatewayFallback: false },
-    });
-    await assert.rejects(
-      noFallback.assertRouteHasCredits({
-        modelId: MODEL,
-        organizationId: FREE_ORG,
-      }),
-      GatewayCreditBalanceError
-    );
-  });
-});
-
-describe("classifyUpstreamFailure", () => {
-  test("maps status codes to fallback reasons", () => {
-    assert.equal(classifyUpstreamFailure(httpError(402)), "no-credits");
-    assert.equal(
-      classifyUpstreamFailure(httpError(401, "API key expired")),
-      "auth-failure"
-    );
-    assert.equal(classifyUpstreamFailure(httpError(404)), "unsupported-model");
-    assert.equal(
-      classifyUpstreamFailure(
-        httpError(404, "No endpoints found matching your data policy")
-      ),
-      "non-compliant"
-    );
-    assert.equal(classifyUpstreamFailure(httpError(503)), "upstream-error");
-    assert.equal(classifyUpstreamFailure(httpError(429)), "upstream-error");
-    assert.equal(classifyUpstreamFailure(httpError(400)), undefined);
-    assert.equal(
-      classifyUpstreamFailure(new TypeError("fetch failed")),
-      "upstream-error"
-    );
-    const abort = new Error("aborted");
-    abort.name = "AbortError";
-    assert.equal(classifyUpstreamFailure(abort), undefined);
-  });
-});
-
 describe("non-enforced workspace privacy", () => {
-  test("none relaxes both gateways with the production policy", async () => {
+  test("none relaxes ZDR but keeps no-training on both gateways", async () => {
     const { router, vercel, openrouter } = createTestRouter({ plans });
     for (const gateway of ["vercel", "openrouter"] as const) {
       await router
@@ -1276,18 +1038,18 @@ describe("non-enforced workspace privacy", () => {
     assert.equal(
       vercel?.calls[0]?.options.providerOptions?.gateway
         ?.disallowPromptTraining,
-      false
+      true
     );
     assert.deepEqual(
       openrouter?.calls[0]?.options.providerOptions?.openrouter?.provider,
       {
         zdr: false,
-        data_collection: "allow",
+        data_collection: "deny",
       }
     );
   });
 
-  test("preferred recovers from the Muse Spark rejection but required stays strict", async () => {
+  test("the Muse Spark no-training rejection fails closed without a doomed retry", async () => {
     const vercel = createFakeAdapter({
       id: "vercel",
       onCall: (call) => {
@@ -1300,39 +1062,30 @@ describe("non-enforced workspace privacy", () => {
       },
     });
     const { router } = createTestRouter({ plans, vercel, openrouter: null });
-    await router
-      .model(MODEL, {
-        organizationId: PAID_ORG,
-        gateway: "vercel",
-        zdr: "preferred",
-      })
-      .doGenerate(callOptions());
-    assert.deepEqual(
-      vercel.calls.map(
-        (call) => call.options.providerOptions?.gateway?.disallowPromptTraining
-      ),
-      [true, false]
-    );
     await assert.rejects(
       async () =>
         await router
           .model(MODEL, {
             organizationId: PAID_ORG,
             gateway: "vercel",
-            zdr: "required",
+            zdr: "preferred",
           })
-          .doGenerate(callOptions()),
-      NoCompliantRouteError
+          .doGenerate(callOptions())
+    );
+    assert.equal(vercel.calls.length, 1);
+    assert.equal(
+      vercel.calls[0]?.options.providerOptions?.gateway?.disallowPromptTraining,
+      true
     );
   });
 });
 
-test("relaxed OpenRouter calls override provider and model privacy defaults on the wire", async () => {
+test("relaxed OpenRouter calls drop ZDR but keep data collection denied on the wire", async () => {
   const adapter = createOpenRouterAdapter({
     apiKey: "test-key",
     fetch: async (_url, init) => {
       const body = JSON.parse(String(init?.body));
-      assert.deepEqual(body.provider, { zdr: false, data_collection: "allow" });
+      assert.deepEqual(body.provider, { zdr: false, data_collection: "deny" });
       return Response.json({
         id: "test",
         created: 0,

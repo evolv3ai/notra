@@ -10,9 +10,8 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { GEO_SCAN_RESULTS_PAGE_SIZE } from "@notra/geo-core/constants/geo-scan-history";
 import type { GeoScanResultSummary } from "@notra/geo-core/types/geo-scan-history";
-import { TablePagination } from "@notra/ui/components/shared/table-pagination";
 import { TruncateWithTooltip } from "@notra/ui/components/shared/truncate-with-tooltip";
-import { Badge } from "@notra/ui/components/ui/badge";
+import { StatusBadge } from "@notra/ui/components/status-badge";
 import {
   Empty,
   EmptyContent,
@@ -30,19 +29,32 @@ import {
 } from "@notra/ui/components/ui/select";
 import { Skeleton } from "@notra/ui/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@notra/ui/components/ui/tabs";
-import { useLocale, useTranslations } from "next-intl";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@notra/ui/components/ui/tooltip";
 import { type ReactNode, useState } from "react";
+import { InstrumentSection } from "ui/card";
+import {
+  DataTableSkeleton,
+  DataTable,
+  type DataTablePagination,
+  type TableColumn,
+} from "ui/table";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { EngineIcon } from "@/components/geo/engine-icon";
 import { ScanActivityStatus } from "@/components/geo/scan-activity-status";
 import { ScanAnswerSheet } from "@/components/geo/scan-answer-sheet";
-import { GeoTableSkeleton } from "@/components/geo/skeleton-parts";
-import { Table, type TableColumn } from "@/components/motion/table";
 import { TABLE_ROW_HEIGHT } from "@/constants/table";
 import { useIsGeoScanning } from "@/lib/hooks/use-geo";
 import { useGeoScanRun } from "@/lib/hooks/use-geo-scan-history";
 import type {
+  GeoScanAnswerTableRow,
+  GeoScanLiveTableRow,
+  GeoScanLiveStatusCellProps,
   GeoScanModelCellProps,
   GeoScanOpenAnswer,
   GeoScanPendingAnswer,
@@ -54,9 +66,9 @@ import type {
   GeoScanRunLoadedProps,
   GeoScanRunEmptyStateInput,
   GeoScanRunFiltersProps,
+  GeoScanRunLiveTableProps,
   GeoScanRunPendingTableProps,
   GeoScanRunView,
-  GeoScanTablePaginationProps,
   GeoScanViewCountProps,
   ScanRunDetailTranslator,
 } from "@/types/geo-scan-activity";
@@ -84,11 +96,13 @@ function ModelCell({ engine }: GeoScanModelCellProps) {
   );
 }
 
-function PromptCell({ prompt, turn }: GeoScanPromptCellProps) {
+function PromptCell({ prompt, turn, repeated }: GeoScanPromptCellProps) {
   const t = useTranslations("geo.scanRunDetail");
   return (
     <span className="flex min-w-0 items-center gap-2">
-      <TruncateWithTooltip className="font-medium">
+      <TruncateWithTooltip
+        className={repeated ? "text-muted-foreground/60" : "font-medium"}
+      >
         {prompt}
       </TruncateWithTooltip>
       {turn === null ? null : (
@@ -100,13 +114,76 @@ function PromptCell({ prompt, turn }: GeoScanPromptCellProps) {
   );
 }
 
-function answerColumns(
+function mentionCell(
+  row: GeoScanResultSummary,
+  tShared: GeoSharedTranslator
+): ReactNode {
+  // Fades in when a live row fills.
+  return (
+    <span className="motion-safe:animate-in motion-safe:fade-in motion-safe:duration-500">
+      <StatusBadge
+        appearance={
+          row.mentioned
+            ? { variant: "success", icon: Tick02Icon }
+            : { variant: "secondary", icon: MinusSignIcon }
+        }
+        label={row.mentioned ? tShared("mentioned") : tShared("notMentioned")}
+      />
+    </span>
+  );
+}
+
+function positionCell(row: GeoScanResultSummary): ReactNode {
+  return (
+    <span className="text-muted-foreground motion-safe:animate-in motion-safe:fade-in tabular-nums motion-safe:duration-500">
+      {row.position === null ? "–" : `#${row.position}`}
+    </span>
+  );
+}
+
+function sourcesCell(row: GeoScanResultSummary, locale: string): ReactNode {
+  return (
+    <span className="text-muted-foreground motion-safe:animate-in motion-safe:fade-in tabular-nums motion-safe:duration-500">
+      {row.sources.toLocaleString(locale)}
+    </span>
+  );
+}
+
+function LiveStatusCell({ status }: GeoScanLiveStatusCellProps) {
+  const t = useTranslations("geo.scanRunDetail");
+  if (status === "running") {
+    return (
+      <span className="text-foreground inline-flex items-center gap-2">
+        <HugeiconsIcon
+          aria-hidden="true"
+          className="text-primary shrink-0 motion-safe:animate-spin"
+          icon={Loading03Icon}
+          size={14}
+        />
+        {t("status.running")}
+      </span>
+    );
+  }
+  return (
+    <span className="text-muted-foreground inline-flex items-center gap-2">
+      <HugeiconsIcon
+        aria-hidden="true"
+        className="shrink-0"
+        icon={status === "queued" ? Clock01Icon : MinusSignIcon}
+        size={14}
+      />
+      {status === "queued" ? t("status.queued") : t("status.missing")}
+    </span>
+  );
+}
+
+function liveColumns(
   showLanguage: boolean,
   t: ScanRunDetailTranslator,
   tShared: GeoSharedTranslator,
   tCommon: CommonTranslator,
   locale: string
-): TableColumn<GeoScanResultSummary>[] {
+): TableColumn<GeoScanLiveTableRow>[] {
   return [
     {
       key: "prompt",
@@ -116,6 +193,74 @@ function answerColumns(
       cell: (row) => (
         <PromptCell
           prompt={row.prompt}
+          repeated={row.repeated}
+          turn={row.turn ?? null}
+        />
+      ),
+    },
+    {
+      key: "engine",
+      header: tCommon("labels.model"),
+      width: "12.5rem",
+      cell: (row) => <ModelCell engine={row.engine} />,
+    },
+    ...(showLanguage
+      ? [
+          {
+            key: "language",
+            header: tCommon("labels.language"),
+            width: "7rem",
+            cell: (row: GeoScanLiveTableRow) => (
+              <span className="text-muted-foreground">{row.language}</span>
+            ),
+          },
+        ]
+      : []),
+    {
+      key: "mentioned",
+      header: t("columns.mention"),
+      width: "11rem",
+      cell: (row) =>
+        row.answer ? (
+          mentionCell(row.answer, tShared)
+        ) : (
+          <LiveStatusCell status={row.status} />
+        ),
+    },
+    {
+      key: "position",
+      align: "right",
+      header: tCommon("labels.position"),
+      width: "6rem",
+      cell: (row) => (row.answer ? positionCell(row.answer) : null),
+    },
+    {
+      key: "sources",
+      align: "right",
+      header: tCommon("labels.sources"),
+      width: "6rem",
+      cell: (row) => (row.answer ? sourcesCell(row.answer, locale) : null),
+    },
+  ];
+}
+
+function answerColumns(
+  showLanguage: boolean,
+  t: ScanRunDetailTranslator,
+  tShared: GeoSharedTranslator,
+  tCommon: CommonTranslator,
+  locale: string
+): TableColumn<GeoScanAnswerTableRow>[] {
+  return [
+    {
+      key: "prompt",
+      header: tShared("prompt"),
+      width: "1fr",
+      minWidth: "14rem",
+      cell: (row) => (
+        <PromptCell
+          prompt={row.prompt}
+          repeated={row.repeated}
           turn={row.sequenceId ? row.turn : null}
         />
       ),
@@ -132,7 +277,7 @@ function answerColumns(
             key: "language",
             header: tCommon("labels.language"),
             width: "7rem",
-            cell: (row: GeoScanResultSummary) => (
+            cell: (row: GeoScanAnswerTableRow) => (
               <span className="text-muted-foreground">{row.language}</span>
             ),
           },
@@ -141,38 +286,22 @@ function answerColumns(
     {
       key: "mentioned",
       header: t("columns.mention"),
-      width: "9.5rem",
-      cell: (row) => (
-        <Badge variant={row.mentioned ? "success" : "secondary"}>
-          <HugeiconsIcon
-            aria-hidden="true"
-            icon={row.mentioned ? Tick02Icon : MinusSignIcon}
-          />
-          {row.mentioned ? tShared("mentioned") : tShared("notMentioned")}
-        </Badge>
-      ),
+      width: "11rem",
+      cell: (row) => mentionCell(row, tShared),
     },
     {
       key: "position",
       align: "right",
       header: tCommon("labels.position"),
       width: "6rem",
-      cell: (row) => (
-        <span className="text-muted-foreground tabular-nums">
-          {row.position === null ? "–" : `#${row.position}`}
-        </span>
-      ),
+      cell: positionCell,
     },
     {
       key: "sources",
       align: "right",
       header: tCommon("labels.sources"),
       width: "6rem",
-      cell: (row) => (
-        <span className="text-muted-foreground tabular-nums">
-          {row.sources.toLocaleString(locale)}
-        </span>
-      ),
+      cell: (row) => sourcesCell(row, locale),
     },
   ];
 }
@@ -250,40 +379,31 @@ function pendingColumns(
   ];
 }
 
-function ScanTablePagination({
-  offset,
-  total,
-  itemLabel,
-  onOffsetChange,
-}: GeoScanTablePaginationProps) {
-  const page = Math.floor(offset / GEO_SCAN_RESULTS_PAGE_SIZE) + 1;
-  const pageCount = Math.max(1, Math.ceil(total / GEO_SCAN_RESULTS_PAGE_SIZE));
-  return (
-    <TablePagination
-      itemLabel={itemLabel}
-      page={page}
-      pageCount={pageCount}
-      pageRowCount={Math.min(GEO_SCAN_RESULTS_PAGE_SIZE, total - offset)}
-      pageSize={GEO_SCAN_RESULTS_PAGE_SIZE}
-      setPage={(next) =>
-        onOffsetChange(
-          (Math.min(Math.max(1, next), pageCount) - 1) *
-            GEO_SCAN_RESULTS_PAGE_SIZE
-        )
-      }
-      totalItems={total}
-    />
-  );
+function scanPagination(
+  offset: number,
+  total: number,
+  itemLabel: string,
+  onOffsetChange: (offset: number) => void
+): DataTablePagination {
+  return {
+    mode: "server",
+    page: Math.floor(offset / GEO_SCAN_RESULTS_PAGE_SIZE) + 1,
+    pageSize: GEO_SCAN_RESULTS_PAGE_SIZE,
+    totalItems: total,
+    itemLabel,
+    onPageChange: (page) =>
+      onOffsetChange((page - 1) * GEO_SCAN_RESULTS_PAGE_SIZE),
+  };
 }
 
 function scanRunEmptyState(
-  { running, isError, hasData, loading, onRetry }: GeoScanRunEmptyStateInput,
+  { isError, hasData, loading, onRetry }: GeoScanRunEmptyStateInput,
   t: ScanRunDetailTranslator,
   tCommon: CommonTranslator
 ): ReactNode {
   if (isError && !hasData) {
     return (
-      <span className="flex flex-col items-center gap-2">
+      <span className="text-muted-foreground flex flex-col items-center gap-2">
         {t("loadError")}
         <Button onClick={onRetry} size="sm" variant="outline">
           {tCommon("actions.tryAgain")}
@@ -294,14 +414,13 @@ function scanRunEmptyState(
   if (!(loading || hasData)) {
     return t("unavailable");
   }
-  return running ? t("waiting") : t("empty");
+  return t("empty");
 }
 
 function ScanRunPendingTable({
   pending,
   showLanguage,
   emptyState,
-  running,
   offset,
   onOffsetChange,
   total,
@@ -312,19 +431,16 @@ function ScanRunPendingTable({
   const tShared = useTranslations("geo.shared");
   const tCommon = useTranslations("common");
   return (
-    <Table
-      className="rounded-2xl"
+    <DataTable
       columns={pendingColumns(showLanguage, t, tShared, tCommon)}
       data={pending}
       emptyState={emptyState}
-      footer={
-        <ScanTablePagination
-          itemLabel={running ? t("itemInProgress") : t("itemMissing")}
-          offset={offset}
-          onOffsetChange={onOffsetChange}
-          total={total}
-        />
-      }
+      pagination={scanPagination(
+        offset,
+        total,
+        t("itemMissing"),
+        onOffsetChange
+      )}
       getRowId={(row) => row.key}
       height={height}
       loading={loading}
@@ -349,21 +465,19 @@ function ScanRunAnswersTable({
   const tCommon = useTranslations("common");
   const locale = useLocale();
   return (
-    <Table
-      className="rounded-2xl"
+    <DataTable
       columns={answerColumns(showLanguage, t, tShared, tCommon, locale)}
-      data={results}
+      data={results.map((row, index) => ({
+        ...row,
+        repeated: results[index - 1]?.prompt === row.prompt,
+      }))}
       emptyState={emptyState}
-      footer={
-        total > 0 ? (
-          <ScanTablePagination
-            itemLabel={t("itemAnswers")}
-            offset={offset}
-            onOffsetChange={onOffsetChange}
-            total={total}
-          />
-        ) : null
-      }
+      pagination={scanPagination(
+        offset,
+        total,
+        t("itemAnswers"),
+        onOffsetChange
+      )}
       getRowId={(row) => row.id}
       height={height}
       loading={loading}
@@ -374,10 +488,56 @@ function ScanRunAnswersTable({
   );
 }
 
+/**
+ * A running scan: every planned answer is a row from the start, in plan
+ * order, and fills in where it stands once its answer is saved.
+ */
+function ScanRunLiveTable({
+  live,
+  showLanguage,
+  emptyState,
+  onOffsetChange,
+  height,
+  loading,
+  onRowClick,
+}: GeoScanRunLiveTableProps) {
+  const t = useTranslations("geo.scanRunDetail");
+  const tShared = useTranslations("geo.shared");
+  const tCommon = useTranslations("common");
+  const locale = useLocale();
+  return (
+    <DataTable
+      columns={liveColumns(showLanguage, t, tShared, tCommon, locale)}
+      data={live.rows.map((row, index) => ({
+        ...row,
+        repeated: live.rows[index - 1]?.promptId === row.promptId,
+      }))}
+      emptyState={emptyState}
+      getRowClassName={(row) => (row.answer ? undefined : "cursor-default")}
+      getRowId={(row) => row.key}
+      height={height}
+      loading={loading}
+      onRowClick={(row) => {
+        if (row.answer) {
+          onRowClick(row.answer);
+        }
+      }}
+      pagination={scanPagination(
+        live.offset,
+        live.total,
+        t("itemAnswers"),
+        onOffsetChange
+      )}
+      rowHeight={TABLE_ROW_HEIGHT}
+    />
+  );
+}
+
 export function ScanRunFilters({
   view,
   onViewChange,
   answerCount,
+  mentionedCount,
   pendingCount,
   running,
   engine,
@@ -387,9 +547,8 @@ export function ScanRunFilters({
   const t = useTranslations("geo.scanRunDetail");
   const tGeoShared = useTranslations("geo.shared");
   const locale = useLocale();
-  const showViews = pendingCount > 0;
+  const showViews = !running;
   const showEngines = engines.length > 1;
-  const pendingLabel = running ? tGeoShared("inProgress") : t("missing");
   if (!(showViews || showEngines)) {
     return null;
   }
@@ -398,7 +557,11 @@ export function ScanRunFilters({
       {showViews ? (
         <Tabs
           onValueChange={(value) => {
-            if (value === "answers" || value === "pending") {
+            if (
+              value === "answers" ||
+              value === "mentioned" ||
+              value === "pending"
+            ) {
               onViewChange(value);
             }
           }}
@@ -409,10 +572,25 @@ export function ScanRunFilters({
               {tGeoShared("answers")}
               <ViewCount count={answerCount} locale={locale} />
             </TabsTrigger>
-            <TabsTrigger value="pending">
-              {pendingLabel}
-              <ViewCount count={pendingCount} locale={locale} />
+            <TabsTrigger value="mentioned">
+              {tGeoShared("mentioned")}
+              <ViewCount count={mentionedCount} locale={locale} />
             </TabsTrigger>
+            {pendingCount > 0 ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <TabsTrigger value="pending">
+                      {t("failed")}
+                      <ViewCount count={pendingCount} locale={locale} />
+                    </TabsTrigger>
+                  }
+                />
+                <TooltipContent className="max-w-60">
+                  {t("failedHint")}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
           </TabsList>
         </Tabs>
       ) : null}
@@ -489,7 +667,6 @@ function ScanRunEmpty({ isError, onRetry }: GeoScanRunEmptyProps) {
   );
 }
 
-/** Answers of the project's newest scan: status line, filters and table. */
 export function ScanRunDetail({ organizationId }: GeoScanRunDetailProps) {
   const tGeoShared = useTranslations("geo.shared");
   const isScanning = useIsGeoScanning(organizationId);
@@ -499,10 +676,10 @@ export function ScanRunDetail({ organizationId }: GeoScanRunDetailProps) {
     undefined,
     state.offset,
     state.engine || undefined,
-    state.pendingOffset
+    state.pendingOffset,
+    state.view === "mentioned"
   );
   const run = query.data?.run;
-  // A newer scan replaced the one on screen: its pages and models differ.
   if (run && run.id !== state.runId) {
     setState({ ...INITIAL_SCAN_RUN_STATE, runId: run.id });
   }
@@ -511,7 +688,7 @@ export function ScanRunDetail({ organizationId }: GeoScanRunDetailProps) {
     return (
       <section aria-hidden="true" className="space-y-3">
         <Skeleton className="h-5 w-64 max-w-full" />
-        <GeoTableSkeleton rows={SCAN_SKELETON_ROWS} />
+        <DataTableSkeleton rows={SCAN_SKELETON_ROWS} />
       </section>
     );
   }
@@ -519,6 +696,7 @@ export function ScanRunDetail({ organizationId }: GeoScanRunDetailProps) {
     return (
       <ScanRunLoaded
         onStateChange={setState}
+        starting={isScanning}
         organizationId={organizationId}
         query={query}
         run={run}
@@ -528,9 +706,8 @@ export function ScanRunDetail({ organizationId }: GeoScanRunDetailProps) {
   }
   if (isScanning && !query.isError) {
     return (
-      <section aria-label={tGeoShared("scans")} className="space-y-3">
-        <ScanActivityStatus run={undefined} />
-        <GeoTableSkeleton rows={SCAN_SKELETON_ROWS} />
+      <section aria-label={tGeoShared("scans")}>
+        <DataTableSkeleton rows={SCAN_SKELETON_ROWS} />
       </section>
     );
   }
@@ -549,12 +726,11 @@ function ScanRunLoaded({
   run,
   query,
   state,
+  starting,
   onStateChange: setState,
 }: GeoScanRunLoadedProps) {
   const t = useTranslations("geo.scanRunDetail");
-  const tGeoShared = useTranslations("geo.shared");
   const tCommon = useTranslations("common");
-  // Pin the open answer to its scan so a newer run can't swap the sheet's scope.
   const [openAnswer, setOpenAnswer] = useState<GeoScanOpenAnswer | null>(null);
   const checkId = openAnswer?.checkId ?? null;
   const model = scanRunDetailView({
@@ -567,7 +743,6 @@ function ScanRunLoaded({
   });
   const emptyState = scanRunEmptyState(
     {
-      running: model.running,
       isError: query.isError,
       hasData: Boolean(query.data),
       loading: model.loading,
@@ -578,8 +753,23 @@ function ScanRunLoaded({
     t,
     tCommon
   );
-  const table =
-    model.activeView === "pending" ? (
+  const openRow = (row: GeoScanResultSummary) =>
+    setOpenAnswer({ checkId: row.id, scanId: run.id, language: row.language });
+  let table: ReactNode;
+  if (model.live) {
+    table = (
+      <ScanRunLiveTable
+        emptyState={emptyState}
+        height={model.height}
+        live={model.live}
+        loading={model.loading}
+        onOffsetChange={(offset) => setState((prev) => ({ ...prev, offset }))}
+        onRowClick={openRow}
+        showLanguage={model.showLanguage}
+      />
+    );
+  } else if (model.activeView === "pending") {
+    table = (
       <ScanRunPendingTable
         emptyState={emptyState}
         height={model.height}
@@ -589,59 +779,59 @@ function ScanRunLoaded({
           setState((prev) => ({ ...prev, pendingOffset }))
         }
         pending={model.pending}
-        running={model.running}
         showLanguage={model.showLanguage}
         total={model.pendingTotal}
       />
-    ) : (
+    );
+  } else {
+    table = (
       <ScanRunAnswersTable
         emptyState={emptyState}
         height={model.height}
         loading={model.loading}
         offset={state.offset}
         onOffsetChange={(offset) => setState((prev) => ({ ...prev, offset }))}
-        onRowClick={(row) =>
-          setOpenAnswer({
-            checkId: row.id,
-            scanId: run.id,
-            language: row.language,
-          })
-        }
+        onRowClick={openRow}
         results={model.results}
         showLanguage={model.showLanguage}
         total={model.total}
       />
     );
+  }
 
   return (
-    <section
-      aria-busy={model.loading}
-      aria-label={tGeoShared("scans")}
-      className="min-w-0 space-y-3"
+    <InstrumentSection
+      action={
+        <>
+          <ScanActivityStatus run={run} starting={starting} />
+          {model.hasFilters ? (
+            <ScanRunFilters
+              answerCount={model.answerCount}
+              engine={state.engine}
+              mentionedCount={model.mentionedCount}
+              engines={model.engines}
+              onEngineChange={(engine) =>
+                setState((prev) => ({
+                  ...prev,
+                  engine,
+                  offset: 0,
+                  pendingOffset: 0,
+                }))
+              }
+              onViewChange={(view) =>
+                setState((prev) => ({ ...prev, view, offset: 0 }))
+              }
+              pendingCount={model.pendingTotal}
+              running={model.running}
+              view={model.activeView}
+            />
+          ) : null}
+        </>
+      }
+      className="min-w-0"
+      eyebrow={t("title")}
     >
-      <div className="flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <ScanActivityStatus run={run} />
-        {model.hasFilters ? (
-          <ScanRunFilters
-            answerCount={model.answerCount}
-            engine={state.engine}
-            engines={model.engines}
-            onEngineChange={(engine) =>
-              setState((prev) => ({
-                ...prev,
-                engine,
-                offset: 0,
-                pendingOffset: 0,
-              }))
-            }
-            onViewChange={(view) => setState((prev) => ({ ...prev, view }))}
-            pendingCount={model.pendingTotal}
-            running={model.running}
-            view={model.activeView}
-          />
-        ) : null}
-      </div>
-      {table}
+      <div aria-busy={model.loading}>{table}</div>
       <ScanAnswerSheet
         checkId={checkId}
         initialLanguage={openAnswer?.language}
@@ -650,6 +840,6 @@ function ScanRunLoaded({
         organizationId={organizationId}
         scanId={openAnswer?.scanId ?? run.id}
       />
-    </section>
+    </InstrumentSection>
   );
 }

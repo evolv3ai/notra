@@ -18,7 +18,7 @@ export interface XVerificationBadgeProps {
   className?: string;
 }
 
-export interface TwitterPostMenuItem {
+interface TwitterPostMenuItem {
   label: string;
   icon?: ReactNode;
   onClick: () => void;

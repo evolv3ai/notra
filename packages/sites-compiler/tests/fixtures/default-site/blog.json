@@ -1,0 +1,19 @@
+{
+  "$schema": "https://usenotra.com/schemas/blog.json",
+  "name": "Notra",
+  "description": "A blog and changelog built with the default Notra Sites template.",
+  "authors": {
+    "team": {
+      "name": "Notra team",
+      "url": "https://usenotra.com"
+    }
+  },
+  "blog": {
+    "title": "The blog",
+    "description": "Ideas, guides and notes from the team."
+  },
+  "changelog": {
+    "title": "Changelog",
+    "description": "New features, improvements and fixes."
+  }
+}

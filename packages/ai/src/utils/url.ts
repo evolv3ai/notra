@@ -14,6 +14,24 @@ export function getConfiguredWorkflowUrl(): string | undefined {
   return normalizeUrl(url);
 }
 
+/**
+ * Server-side dashboard origin: APP_URL, then NEXT_PUBLIC_APP_URL, then the
+ * Vercel deployment URL. Never falls back to NEXT_PUBLIC_SITE_URL (that is the
+ * marketing site).
+ */
+export function getAppUrl(): string | undefined {
+  const url =
+    process.env.APP_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
+
+  if (!url) {
+    return undefined;
+  }
+
+  return normalizeUrl(url);
+}
+
 export function getConfiguredAppUrl(): string | undefined {
   const url =
     process.env.NEXT_PUBLIC_APP_URL ||

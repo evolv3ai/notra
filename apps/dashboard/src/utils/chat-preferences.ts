@@ -9,7 +9,10 @@ import type { StoredChatPreferences } from "@notra/ai/types/chat";
 
 import { localStorageKeys } from "@/constants/storage";
 
-export const CHAT_PREFERENCES_STORAGE_KEY = localStorageKeys.chatPreferences;
+const CHAT_PREFERENCES_STORAGE_KEY = localStorageKeys.chatPreferences;
+
+/** Same-document writes don't fire `storage`, so mounted composers listen for this too. */
+const CHAT_PREFERENCES_CHANGE_EVENT = "notra:chat-preferences-change";
 
 export const DEFAULT_CHAT_PREFERENCES: StoredChatPreferences = {
   model: "auto",
@@ -78,7 +81,33 @@ export function writeStoredChatPreferences(
       CHAT_PREFERENCES_STORAGE_KEY,
       JSON.stringify(preferences)
     );
+    window.dispatchEvent(new Event(CHAT_PREFERENCES_CHANGE_EVENT));
   } catch {
     // Ignore quota exceeded and other storage errors.
+  }
+}
+
+export function subscribeToStoredChatPreferences(
+  onChange: () => void
+): () => void {
+  function handleStorage(event: StorageEvent) {
+    if (event.key === CHAT_PREFERENCES_STORAGE_KEY) {
+      onChange();
+    }
+  }
+
+  window.addEventListener("storage", handleStorage);
+  window.addEventListener(CHAT_PREFERENCES_CHANGE_EVENT, onChange);
+  return () => {
+    window.removeEventListener("storage", handleStorage);
+    window.removeEventListener(CHAT_PREFERENCES_CHANGE_EVENT, onChange);
+  };
+}
+
+export function readRawStoredChatPreferences(): string | null {
+  try {
+    return window.localStorage.getItem(CHAT_PREFERENCES_STORAGE_KEY);
+  } catch {
+    return null;
   }
 }

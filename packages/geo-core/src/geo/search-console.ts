@@ -30,20 +30,18 @@ import type {
   GscSuggestionSyncOutcome,
   GscSyncResult,
 } from "../types/google-search-console";
+import { logGeoFailure } from "../utils/geo-log";
 import { geoDb } from "./effect";
 import { requireGeoProject } from "./projects";
 import {
   buildBrandTerms,
+  mergeQueryRows,
   normalizeSuggestionKey,
   promptMentionsBrand,
   resolveSourceKeywords,
   selectKeywordsForModel,
 } from "./suggestion-keywords";
 
-/**
- * `lastError` is rendered in the dashboard, so only curated copy goes in —
- * raw provider/SDK messages stay in the logs.
- */
 function toStoredSyncError(error: unknown): string {
   if (error instanceof GeoSearchConsoleError) {
     return error.status === 403
@@ -106,18 +104,18 @@ const commitGscSuggestionSync = Effect.fn("geo.searchConsole.commit")(
               throw projectChanged;
             }
 
-            await tx
-              .delete(geoPromptSuggestions)
-              .where(
-                and(
-                  eq(
-                    geoPromptSuggestions.organizationId,
-                    integration.organizationId
-                  ),
-                  eq(geoPromptSuggestions.projectId, projectId),
-                  eq(geoPromptSuggestions.status, "pending")
-                )
-              );
+            await tx.delete(geoPromptSuggestions).where(
+              and(
+                eq(
+                  geoPromptSuggestions.organizationId,
+                  integration.organizationId
+                ),
+                eq(geoPromptSuggestions.projectId, projectId),
+                eq(geoPromptSuggestions.status, "pending"),
+                // Autopilot's suggestions are not part of the GSC set.
+                eq(geoPromptSuggestions.source, "search_console")
+              )
+            );
             if (outcome.suggestions.length === 0) {
               return 0;
             }
@@ -260,7 +258,14 @@ const syncIntegration = Effect.fn("geo.searchConsole.syncIntegration")(
       ),
       Effect.catch((error) =>
         Effect.gen(function* () {
-          console.error("[GSC] Sync failed:", error);
+          logGeoFailure(
+            "geo.gsc.sync_failed",
+            "Search Console sync failed",
+            error,
+            {
+              projectId,
+            }
+          );
           if (
             !(error instanceof GeoSearchConsoleError && error.reauthRequired)
           ) {
@@ -289,11 +294,6 @@ const syncIntegration = Effect.fn("geo.searchConsole.syncIntegration")(
   }
 );
 
-/**
- * Tracked competitors are the only third-party names the model may use in a
- * prompt. Everything else the site ranks for (e.g. "<product> changelog") is
- * navigational and not a gap the company can win.
- */
 function mergeCompetitorNames(
   competitorRows: { name: string }[],
   settingsCompetitors: string[]
@@ -311,7 +311,6 @@ function mergeCompetitorNames(
     seen.add(key);
     names.push(name.trim());
   }
-  // Ranked rows come first, so the cut keeps the most relevant names.
   return names.slice(0, GEO_CONTEXT_COMPETITOR_LIMIT);
 }
 
@@ -325,7 +324,8 @@ const runSync = Effect.fn("geo.searchConsole.generateSuggestions")(function* (
   const google = yield* GeoSearchConsoleService;
 
   const [
-    rows,
+    topRows,
+    questionRows,
     settingsRow,
     brandRow,
     competitorRows,
@@ -334,6 +334,7 @@ const runSync = Effect.fn("geo.searchConsole.generateSuggestions")(function* (
   ] = yield* Effect.all(
     [
       google.topQueries(integration, siteUrl),
+      google.questionQueries(integration, siteUrl),
       geoDb("read suggestion settings", () =>
         db.query.geoSettings.findFirst({
           where: and(
@@ -366,8 +367,6 @@ const runSync = Effect.fn("geo.searchConsole.generateSuggestions")(function* (
           columns: { prompt: true },
         })
       ),
-      // Accepted/dismissed rows occupy the (organizationId, prompt) unique index
-      // even after the tracked prompt is deleted. Pending rows are replaced later.
       geoDb("read prior suggestions", () =>
         db.query.geoPromptSuggestions.findMany({
           where: and(
@@ -382,6 +381,7 @@ const runSync = Effect.fn("geo.searchConsole.generateSuggestions")(function* (
     { concurrency: "unbounded" }
   );
 
+  const rows = mergeQueryRows(topRows, questionRows);
   const brandTerms = buildBrandTerms(settingsRow);
   const keywords = selectKeywordsForModel(rows, brandTerms);
   if (keywords.length === 0) {
@@ -408,6 +408,7 @@ const runSync = Effect.fn("geo.searchConsole.generateSuggestions")(function* (
 
   const models = yield* GeoModelService;
   const generated = yield* models.suggest({
+    organizationId,
     companyName: settingsRow?.companyName ?? null,
     companyDescription: brandRow?.companyDescription ?? null,
     competitors,

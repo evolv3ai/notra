@@ -48,7 +48,7 @@ export function toProviderFilter(value: string): AnalyticsProviderFilter {
   return "all";
 }
 
-export function normalizeHandle(handle: string): string {
+function normalizeHandle(handle: string): string {
   return handle.trim().replace("@", "").toLowerCase();
 }
 

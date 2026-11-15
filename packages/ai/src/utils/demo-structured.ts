@@ -52,8 +52,6 @@ function personas(schema: DemoJsonSchema, text: string, seed: number) {
     bounds.max,
     DEMO_PERSONAS.length
   );
-  // The prompt lists the project's current personas; prefer new archetypes
-  // so regenerating or adding one never duplicates an existing persona.
   const fresh = DEMO_PERSONAS.filter((persona) => !text.includes(persona.name));
   const pool = fresh.length >= count ? fresh : DEMO_PERSONAS;
   return { personas: takeRotating(pool, count, seed) };
@@ -117,7 +115,6 @@ function sentimentSample(text: string): SentimentSampleAnswer[] {
   }
 }
 
-/** Themes grounded in verbatim sentences, as the evidence filter requires. */
 function sentimentThemes(text: string) {
   const sample = sentimentSample(text);
   const quotes = sample.flatMap((answer) =>

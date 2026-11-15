@@ -5,9 +5,7 @@ description: Claude's web search timeline with queries, result cards and status 
 
 <Component path="claude/examples/claude-search" />
 
-```bash
-bunx shadcn@latest add @notra/claude-search
-```
+<RegistryInstall name="claude-search" />
 
 `ClaudeSearch` is a shadcn `Collapsible` step: the Claude spinner and a shimmering verb, like "Triangulating", with a chevron. It is collapsed by default, so only that line shows. Expanded, it shows a bordered `Card` of rows split by `Separator`s: an optional muted `thought`, one row per query and one per status step.
 
@@ -22,6 +20,7 @@ With `sequential` the step opens while it plays: queries appear one by one, then
 | `thought` | | A muted first row, like "Researching hoplite.sh." |
 | `steps` | `[]` | `{ icon: "clock" \| "check" \| "error", label }[]`. |
 | `verb` | `Untangling` | The header label while searching. |
+| `logo` | | An image or icon shown before the header label once done, like a connector's logo next to "Used Notra". |
 | `summary` | generated | The header label once done. Defaults to a summary of the tools used, like "Used Executor, searched the web", or `verb`. |
 | `queryLabel` | `Searched the web` | The muted label before each query. |
 | `resultsLabel` | `Results` | The label above each result list, given the result count. |
@@ -41,6 +40,7 @@ type ClaudeStepItem =
   | {
       type: "tool";
       label: ReactNode; // "Used Executor: Execute"
+      logo?: ReactNode; // shown before the label
       detail?: ReactNode; // one line, truncated
       tool?: string; // counted in the generated summary
       results?: { title: string; domain: string }[]; // opens a Results panel
@@ -51,6 +51,12 @@ type ClaudeStepItem =
 ```
 
 <Component path="claude/examples/claude-tool-calls" />
+
+## Connectors
+
+Pass `logo` to show which connector Claude used. The header reads "Used Notra" with the logo in front, and each tool row can carry its own `logo`.
+
+<Component path="claude/examples/claude-connector" />
 
 Code blocks are a shadcn `ScrollArea` with a horizontal scrollbar. Rows with `results`, `code` or `content` are shadcn `Collapsible`s, closed by default. `claudeStepSummary(items, groups)` in `lib/claude-search.ts` builds the header text.
 

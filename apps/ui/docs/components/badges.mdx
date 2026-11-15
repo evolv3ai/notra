@@ -1,0 +1,42 @@
+---
+title: Status & Trend Badges
+description: Shared dashboard badges for deployment states, content statuses, and metric changes.
+---
+
+These examples render the actual `@notra/ui` components used by the dashboard and its internal design system. Status and trend badges share the same sizes, rounded corners, spacing, and semantic color tokens.
+
+<Component path="badge/examples/badge-showcase" />
+
+## Status
+
+`StatusBadge` uses a rounded medium badge. Pass an appearance with a semantic variant, an optional Hugeicons icon, and `square: true` for a filled result icon.
+
+```tsx
+import { Tick02Icon } from "@hugeicons/core-free-icons";
+import { StatusBadge } from "@notra/ui/components/status-badge";
+
+<StatusBadge
+  appearance={{ variant: "success", icon: Tick02Icon, square: true }}
+  label="Successful"
+/>
+```
+
+Use `secondary` for neutral states, `info` for queued work, `warning` for work in progress, `success` for successful outcomes, and `destructive` for failures. Keep durations outside the badge.
+
+## Trends
+
+`TrendBadge` accepts `tone="up"`, `"down"`, or `"flat"` and uses the same colors as status badges. The caller formats and localizes the value; tone describes whether the change is beneficial, so a better ranking can be green even when its numeric delta is negative.
+
+```tsx
+import { TrendBadge } from "@notra/ui/components/trend-badge";
+
+<TrendBadge tone="up">+12.4%</TrendBadge>
+<TrendBadge tone="down">−3.2%</TrendBadge>
+<TrendBadge tone="flat">0%</TrendBadge>
+<TrendBadge showIcon={false} tone="up">New</TrendBadge>
+<TrendBadge appearance="plain" tone="up">12.4%</TrendBadge>
+```
+
+Positive trends use a diagonal up-right arrow; negative trends use a down-right arrow. Flat trends keep a minus. Use `appearance="plain"` for inline readouts without a badge background.
+
+Badges support `sm`, `default`, and `md` sizes and `rounded` or `pill` shapes. These imports are workspace components, not a standalone shadcn registry installation.

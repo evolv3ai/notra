@@ -1,14 +1,26 @@
 import type { GitHubEventType } from "@notra/schemas/dashboard/github-webhook";
 import type { InputIntegrationType } from "@notra/schemas/dashboard/integrations";
-import type { NextRequest } from "next/server";
 
 export interface WebhookContext {
   provider: InputIntegrationType;
   organizationId: string;
   integrationId: string;
   repositoryId: string;
-  request: NextRequest;
-  rawBody: string;
+  request: Request;
+}
+
+export interface WebhookRouteContext {
+  params: Promise<{
+    provider: string;
+    organizationId: string;
+    integrationId: string;
+    repositoryId: string;
+  }>;
+}
+
+export interface WebhookIntegrationAccess {
+  organizationId: string;
+  enabled: boolean;
 }
 
 export type WebhookHandler = (
@@ -23,7 +35,7 @@ export type StatusWithCode =
   | { label: "failed"; code: number | null }
   | { label: "skipped"; code: number | null };
 
-export type LogDirection = "incoming" | "outgoing";
+type LogDirection = "incoming" | "outgoing";
 
 export type IntegrationType =
   | "github"
@@ -92,17 +104,6 @@ export interface DispatchEventTriggersProps {
   deliveryId?: string;
 }
 
-export type GithubMemoryEventType = Exclude<GitHubEventType, "ping">;
-
-export interface GithubCreateMemoryEntryProps {
-  organizationId: string;
-  eventType: GithubMemoryEventType;
-  repository: string;
-  action: string;
-  data: Record<string, unknown>;
-  customId: string;
-}
-
 export interface WebhookLogInput {
   organizationId: string;
   integrationId: string;
@@ -117,9 +118,3 @@ export interface WebhookLogInput {
 }
 
 export type LogRetentionDays = 7 | 14 | 30;
-
-export interface LinearWebhookPayload {
-  action: string;
-  type: string;
-  data?: Record<string, unknown>;
-}

@@ -1,3 +1,5 @@
+import { NOTRA_AGENT_FEEDBACK_PROMPT } from "@notra/utils/constants/agent-feedback-prompt";
+
 import {
   AGENT_FEEDBACK_API_BASE_URL,
   AGENT_FEEDBACK_API_PATH,
@@ -16,9 +18,10 @@ const TRAILING_SLASHES_REGEX = /\/+$/;
 
 function resolveApiBaseUrl(): string {
   const override = process.env[AGENT_FEEDBACK_API_URL_ENV]?.trim();
-  const base =
-    override && override.length > 0 ? override : AGENT_FEEDBACK_API_BASE_URL;
-  return base.replace(TRAILING_SLASHES_REGEX, "");
+  return (override || AGENT_FEEDBACK_API_BASE_URL).replace(
+    TRAILING_SLASHES_REGEX,
+    ""
+  );
 }
 
 function buildAgentFeedbackUrl(organizationSlug: string): string {
@@ -38,6 +41,8 @@ function buildPromptSnippet(
     "4. Mention the tool in the server instructions so agents know they can use it when a user hits a problem or asks for something we do not support.",
     "",
     `Docs: ${AGENT_FEEDBACK_DOCS_URL}`,
+    "",
+    NOTRA_AGENT_FEEDBACK_PROMPT,
   ].join("\n");
 }
 

@@ -29,5 +29,3 @@ export const standaloneChatRequestSchema = z.object({
   messages: z.array(z.any()),
   context: z.array(standaloneChatContextSchema).optional(),
 });
-
-export type StandaloneChatRequest = z.infer<typeof standaloneChatRequestSchema>;

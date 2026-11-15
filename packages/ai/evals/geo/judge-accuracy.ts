@@ -2,10 +2,6 @@ import { gateway } from "@notra/ai/gateway";
 import { generateText, Output } from "ai";
 import { array, boolean, enum as enumType, number, object, string } from "zod";
 
-// NOTE: the judge lives in apps/dashboard/src/lib/geo/scan.ts, which this package
-// cannot import. The model id, schema and prompt below are copied verbatim from
-// that file plus apps/dashboard/src/constants/geo.ts. If either file changes,
-// this eval drifts and must be re-synced by hand.
 const GEO_JUDGE_MODEL = "openai/gpt-5.4-nano";
 const GEO_JUDGE_MAX_TOKENS = 800;
 const GEO_EXCERPT_MAX_LENGTH = 300;

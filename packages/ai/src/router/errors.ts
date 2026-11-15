@@ -27,7 +27,7 @@ export class GatewayNotConfiguredError extends RouterError {
     super(
       "gateway_not_configured",
       gateway === "any"
-        ? "No AI gateway is configured. Set AI_GATEWAY_API_KEY and/or OPENROUTER_API_KEY."
+        ? "No AI gateway is configured. Set NEON_AI_GATEWAY_API_KEY and NEON_AI_GATEWAY_BASE_URL, AI_GATEWAY_API_KEY and/or OPENROUTER_API_KEY."
         : `AI gateway "${gateway}" is not configured.`,
       gateway === "any" ? undefined : gateway
     );

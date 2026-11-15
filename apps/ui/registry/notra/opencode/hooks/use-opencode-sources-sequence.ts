@@ -15,7 +15,6 @@ interface OpencodeSourcesSequence {
 
 const HIDDEN: OpencodeSourcesSequence = { queries: 0, sources: false };
 
-/** Reveals the search lines one at a time, then the cited sources. */
 export const useOpencodeSourcesSequence = (
   enabled: boolean,
   queryCount: number,

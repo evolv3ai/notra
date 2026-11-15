@@ -1,15 +1,20 @@
+import { existsSync } from "node:fs";
 import { appendFile, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const dir = "apps/web/src/content/blog";
+const publicDir = "apps/web/public";
 const base = "https://www.usenotra.com/blog/";
-const excluded = /^https:\/\/x\.com\//;
+const excluded = /^https:\/\/(x\.com|demo\.usenotra\.com|claude\.ai)\//;
 const linkPattern = /(?:\]\(|href="|src=")([^)"\s]+)/g;
 
 const links = new Map();
 for (const file of await readdir(dir)) {
   const text = await readFile(join(dir, file), "utf8");
   for (const [, href] of text.matchAll(linkPattern)) {
+    if (href.startsWith("/") && existsSync(join(publicDir, href))) {
+      continue;
+    }
     const url = URL.canParse(href, base) ? new URL(href, base).href : href;
     if (!(href.startsWith("#") || excluded.test(url))) {
       links.set(url, [...(links.get(url) ?? []), file]);

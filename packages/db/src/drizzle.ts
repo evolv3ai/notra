@@ -1,18 +1,32 @@
 import { attachDatabasePool } from "@vercel/functions";
 import { upstashCache } from "drizzle-orm/cache/upstash";
-import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import { drizzle } from "drizzle-orm/node-postgres";
 
 // biome-ignore lint/performance/noNamespaceImport: Required for drizzle-kit
 import * as schema from "./schema";
+import type { Database } from "./types/database";
 
 const databaseUrl = process.env.DATABASE_URL;
 const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
 const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-const dbByUrl = new Map<string, NodePgDatabase<typeof schema>>();
+const dbByUrl = new Map<string, Database>();
 
-export function createDb(databaseUrl: string): NodePgDatabase<typeof schema> {
-  const cached = dbByUrl.get(databaseUrl);
+function createQueryCache(url: string, token: string) {
+  const cache = upstashCache({ url, token, global: false });
+  cache.onMutate = async () => {};
+  return cache;
+}
+
+export function createDb(
+  databaseUrl: string,
+  maximumConnections?: number
+): Database {
+  const connectionKey = JSON.stringify([
+    databaseUrl,
+    maximumConnections ?? null,
+  ]);
+  const cached = dbByUrl.get(connectionKey);
   if (cached) {
     return cached;
   }
@@ -21,18 +35,11 @@ export function createDb(databaseUrl: string): NodePgDatabase<typeof schema> {
     connection: {
       connectionString: databaseUrl,
       connectionTimeoutMillis: 10_000,
+      max: maximumConnections,
     },
     cache:
       upstashUrl && upstashToken
-        ? upstashCache({
-            url: upstashUrl,
-            token: upstashToken,
-            // Opt-in only: with `global: true` a cache miss paid 2 Upstash HTTP
-            // round trips (HGET, then a write-back pipeline of HSET + HEXPIRE +
-            // SADD) for a 1 s TTL. Query hashing is local, not a Redis RT.
-            // Expensive, slowly changing queries opt in via `.$withCache(...)`.
-            global: false,
-          })
+        ? createQueryCache(upstashUrl, upstashToken)
         : undefined,
     schema,
   });
@@ -44,18 +51,18 @@ export function createDb(databaseUrl: string): NodePgDatabase<typeof schema> {
   client.$client.on("error", (error) => {
     console.error("[db] Idle client error", error);
   });
-  dbByUrl.set(databaseUrl, client);
+  dbByUrl.set(connectionKey, client);
   return client;
 }
 
-function createMissingDatabaseUrlProxy(): NodePgDatabase<typeof schema> {
-  return new Proxy({} as NodePgDatabase<typeof schema>, {
+function createMissingDatabaseUrlProxy(): Database {
+  return new Proxy({} as Database, {
     get() {
       throw new Error("[ENV]: DATABASE_URL is not defined");
     },
   });
 }
 
-export const db = databaseUrl
+export const db: Database = databaseUrl
   ? createDb(databaseUrl)
   : createMissingDatabaseUrlProxy();

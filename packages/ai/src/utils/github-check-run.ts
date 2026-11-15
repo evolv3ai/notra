@@ -1,4 +1,4 @@
-import { GITHUB_API_VERSION_HEADER } from "@notra/ai/constants/autonomy-poll";
+import { GITHUB_API_VERSION_HEADERS } from "@notra/ai/constants/github";
 import {
   GITHUB_MENTION_CHECK_RUN_NAME,
   GITHUB_MENTION_CHECK_RUN_SUMMARY,
@@ -7,10 +7,6 @@ import type {
   GitHubMentionCheckRunConclusion,
   GitHubMentionOctokit,
 } from "@notra/ai/types/github-mention";
-
-const GITHUB_API_VERSION_HEADERS = {
-  "X-GitHub-Api-Version": GITHUB_API_VERSION_HEADER,
-} as const;
 
 /** In progress without a conclusion; already completed with one. */
 export async function createGitHubMentionCheckRun(params: {
@@ -40,7 +36,7 @@ export async function createGitHubMentionCheckRun(params: {
       headers: GITHUB_API_VERSION_HEADERS,
     }
   );
-  return { id: data.id };
+  return { id: Number(data.id) };
 }
 
 export async function completeGitHubMentionCheckRun(params: {

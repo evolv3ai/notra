@@ -1,0 +1,83 @@
+---
+title: "Track AI crawlers with a Vercel log drain"
+sidebarTitle: "Vercel log drain"
+description: "Send your Vercel request logs to Notra with a log drain and track AI crawlers, AI-cited fetches and AI referrals without changing your code."
+authors:
+  - handle: dominik
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/ai-traffic/install/vercel-log-drain
+  type: how-to
+  applies_to:
+    - notra
+  language: en
+  status: stable
+---
+
+A Vercel log drain sends the request logs of your deployments to Notra, which keeps the AI traffic and throws the rest away. You don't install a package or touch your code, and setup takes about five minutes in the Vercel dashboard.
+
+<Note>
+  Drains are available to Vercel teams on the Pro and Enterprise plans. On Hobby, use the [Next.js tracker](/ai-traffic/install/nextjs) instead.
+</Note>
+
+## Known limitations
+
+A drain sees less of each request than the tracker does, because Vercel's request logs carry the method, URL, user agent, referer, client IP and status code but no other request headers. Without the `Accept` header Notra can't tell when an agent asks for Markdown, and without the fetch metadata and client hint headers it can't catch agents that pose as a regular browser. Requests are still classified by user agent and referer, which covers the declared crawlers and assistants and every referral from an AI answer.
+
+A drain also only observes traffic, so it can't tag the links in the Markdown you serve for [journey tagging](/ai-traffic/journeys). Requests that already carry an `ntr` tag still join their journey, but if you need Markdown detection or tagging, the [tracker package](/ai-traffic/install/nextjs) is the better fit.
+
+<Steps>
+  <Step title="Get your token and endpoint">
+    Open **Traffic** in the GEO sidebar and pick **Vercel log drain** at the top of the install panel. It shows the endpoint URL and a ready-made `Authorization` header that carries your project's tracking token.
+
+    <Visibility for="agents">
+
+    The setup endpoints return the drain endpoint under `drainUrls.vercel`, and the token endpoint adds `token`:
+
+    ```bash
+    curl -X POST "https://api.usenotra.com/v1/geo/ingest/token?projectId=$PROJECT_ID" \
+      -H "Authorization: Bearer $NOTRA_API_KEY"
+    ```
+
+    </Visibility>
+  </Step>
+  <Step title="Add the drain">
+    In Vercel, open **Team Settings**, then **Drains**, click **Add Drain** and choose **Logs**. Select the projects that serve this site, keep the `static`, `lambda` and `edge` sources and pick the `production` environment. Leave sampling at 100% because a sampled drain drops AI requests along with everything else.
+  </Step>
+  <Step title="Configure the endpoint">
+    Choose **Custom Endpoint** and paste the endpoint URL:
+
+    ```text
+    https://ingest.usenotra.com/api/geo/drains/vercel
+    ```
+
+    Pick **JSON** or **NDJSON** as the format and add your token under **Custom Headers**:
+
+    ```text
+    Authorization: Bearer <your tracking token>
+    ```
+
+    You can leave the signature verification secret as it is, since Notra authenticates the drain with the token.
+  </Step>
+  <Step title="Create and verify">
+    Click **Create Drain**. Vercel sends a test request, and Notra answers it with `200`. The Traffic page switches from the install panel to the dashboard once the first AI crawler or referral arrives, which usually takes a few seconds after a crawler visits.
+  </Step>
+</Steps>
+
+## How Notra reads the drain
+
+Notra rebuilds each request from the `proxy` block of a log line and drops anything that isn't a `GET` request for a page, so static assets, `/api` routes and build logs never count. A request that writes several log lines is counted once. Every request then goes through the same checks as tracker events: it has to belong to one of the project's [tracked domains](/ai-traffic/tracker-reference), and only AI crawlers and AI referrals are stored. Human requests are discarded on arrival.
+
+A drain that covers several projects is fine, because requests for hosts outside the project's domains are dropped. Preview deployments on `*.vercel.app` are dropped the same way.
+
+## Next steps
+
+<Columns cols={2}>
+  <Card title="Cloudflare Logpush" icon="cloud" href="/ai-traffic/install/cloudflare-logpush">
+    Track sites that sit behind Cloudflare, wherever they are hosted.
+  </Card>
+  <Card title="No AI traffic yet" icon="wrench" href="/ai-traffic/troubleshooting/no-ai-traffic">
+    What to check when nothing shows up.
+  </Card>
+</Columns>

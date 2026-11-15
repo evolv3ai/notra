@@ -18,7 +18,7 @@ export function TriggerSwitchRow({
   onCheckedChange,
 }: TriggerSwitchRowProps) {
   return (
-    <div className="flex items-center justify-between rounded-lg border p-3">
+    <div className="flex min-h-12 items-center justify-between px-4 py-3">
       <div className="flex items-center gap-1.5">
         <Label className="cursor-pointer text-sm font-medium" htmlFor={id}>
           {label}

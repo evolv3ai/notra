@@ -1,13 +1,8 @@
 "use client";
 
-import type {
-  PostCollectionDetail,
-  PostCollectionListResponse,
-} from "@notra/schemas/dashboard/content";
+import type { PostCollectionListResponse } from "@notra/schemas/dashboard/content";
 import { useQuery } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
-
-import { COLLECTIONS_PAGE_SIZE } from "@/constants/content-collections";
+import { useTranslations } from "use-intl";
 
 import { dashboardOrpc } from "../orpc/query";
 import { useActiveProject } from "./use-active-project";
@@ -18,12 +13,11 @@ const GENERATING_POLL_INTERVAL = 4000;
 export function useCollections(
   organizationId: string,
   page: number,
+  pageSize: number,
   initialProjectId: string | null
 ) {
   const tToast = useTranslations("content.toasts");
   const { projectId, isResolved } = useActiveProject();
-  // The server already resolved the same project the switcher will settle on.
-  // Waiting for the projects collection first made the list a second round trip.
   const scopedProjectId = isResolved
     ? (projectId ?? undefined)
     : (initialProjectId ?? undefined);
@@ -36,7 +30,7 @@ export function useCollections(
         organizationId,
         projectId: scopedProjectId,
         page,
-        pageSize: COLLECTIONS_PAGE_SIZE,
+        pageSize,
       },
     }),
     enabled: !!organizationId && (isResolved || initialProjectId !== undefined),
@@ -53,7 +47,7 @@ export function useCollections(
 
 export function useCollection(organizationId: string, collectionId: string) {
   const tToast = useTranslations("content.toasts");
-  return useQuery<{ collection: PostCollectionDetail }>({
+  return useQuery({
     ...dashboardOrpc.content.collections.get.queryOptions({
       input: { organizationId, collectionId },
     }),

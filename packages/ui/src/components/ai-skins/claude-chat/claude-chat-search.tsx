@@ -16,10 +16,11 @@ import {
 } from "@notra/ui/components/ai-skins/claude-chat/claude-chat-search-timing";
 import { ClaudeChatSpinner } from "@notra/ui/components/ai-skins/claude-chat/claude-chat-spinner";
 import { cn } from "@notra/ui/lib/utils";
-import { isReservedExampleDomain } from "@notra/utils/google-favicon";
-import Image from "next/image";
+import { googleFaviconUrl } from "@notra/utils/google-favicon";
+import { Image } from "@notra/ui/components/framework-provider";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { sleep } from "@notra/utils/sleep";
 
 export interface ClaudeChatSearchResult {
   title: string;
@@ -47,9 +48,6 @@ const FADE_IN_CLASS =
 const FADE_IN_SOFT_CLASS =
   "animate-in fade-in fill-mode-both duration-normal ease-emphasized motion-reduce:animate-none motion-reduce:opacity-100";
 
-function faviconSrc(domain: string) {
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`;
-}
 
 function SiteFavicon({
   domain,
@@ -58,10 +56,10 @@ function SiteFavicon({
   domain: string;
   className?: string;
 }) {
-  // Reserved `.example` domains (demo data) never have a favicon.
-  const [failed, setFailed] = useState(() => isReservedExampleDomain(domain));
+  const [failed, setFailed] = useState(false);
+  const src = googleFaviconUrl(domain, 64);
 
-  if (failed) {
+  if (failed || !src) {
     return (
       <span
         aria-hidden
@@ -76,7 +74,7 @@ function SiteFavicon({
       className={cn("rounded-[3px] bg-[#eceae4]", className)}
       height={64}
       onError={() => setFailed(true)}
-      src={faviconSrc(domain)}
+      src={src}
       unoptimized
       width={64}
     />
@@ -116,11 +114,6 @@ function StepIcon({ icon }: { icon: ClaudeChatSearchStepIcon }) {
   );
 }
 
-function wait(ms: number) {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}
 
 function SearchRow({
   animate,
@@ -184,7 +177,7 @@ export function ClaudeChatSearch({
     let cancelled = false;
 
     async function run() {
-      await wait(CLAUDE_CHAT_SEARCH_VERB_HOLD_MS);
+      await sleep(CLAUDE_CHAT_SEARCH_VERB_HOLD_MS);
       if (cancelled) {
         return;
       }
@@ -194,12 +187,12 @@ export function ClaudeChatSearch({
           return;
         }
         setProgress((current) => ({ ...current, queries: index + 1 }));
-        await wait(CLAUDE_CHAT_SEARCH_QUERY_MS);
+        await sleep(CLAUDE_CHAT_SEARCH_QUERY_MS);
         if (cancelled) {
           return;
         }
         setProgress((current) => ({ ...current, filled: index + 1 }));
-        await wait(CLAUDE_CHAT_SEARCH_RESULTS_MS);
+        await sleep(CLAUDE_CHAT_SEARCH_RESULTS_MS);
       }
 
       for (let index = 0; index < steps.length; index += 1) {
@@ -207,7 +200,7 @@ export function ClaudeChatSearch({
           return;
         }
         setProgress((current) => ({ ...current, steps: index + 1 }));
-        await wait(CLAUDE_CHAT_SEARCH_STEP_MS);
+        await sleep(CLAUDE_CHAT_SEARCH_STEP_MS);
       }
 
       if (!cancelled) {

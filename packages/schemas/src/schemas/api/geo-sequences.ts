@@ -66,13 +66,25 @@ export const deleteSequenceResponseSchema = z
 export const runSequenceResponseSchema = z
   .object({
     checks: z.number().int().openapi({
-      description: "Recorded answers across every engine that responded.",
+      description:
+        "Answers recorded during this request by the API-based engines that responded. Consumer-app answers from the queued scan are not counted.",
     }),
     mentions: z.number().int().openapi({
       description: "How many of those answers mentioned the tracked brand.",
     }),
     engines: z.array(z.string()).openapi({
-      description: "Engines the conversation was played against.",
+      description:
+        "API-based engines that answered the conversation during this request. Empty when only consumer apps run or none of the API engines answered.",
+    }),
+    // Defaults keep a dashboard that predates these fields parseable while
+    // both sides deploy.
+    queuedScanId: z.string().nullable().default(null).openapi({
+      description:
+        "Scan that plays the conversation in the tracked consumer apps (ChatGPT, Perplexity, Gemini, AI Mode, Copilot) in the background, or `null` when none was queued. Poll `GET /v1/projects/{projectId}/geo/scans/{scanId}` until `status` leaves `running`; its answers then land in the project's GEO checks.",
+    }),
+    queuedEngines: z.array(z.string()).default([]).openapi({
+      description:
+        "Consumer-app engines covered by `queuedScanId`. Empty when nothing was queued.",
     }),
     organization: organizationResponseSchema,
   })

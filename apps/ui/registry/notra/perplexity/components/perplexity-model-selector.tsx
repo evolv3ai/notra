@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,8 +14,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-
+} from "../../dropdown-menu/components/dropdown-menu";
 import { PERPLEXITY_MODELS } from "../constants/perplexity";
 import type {
   PerplexityModelBadge,
@@ -106,7 +106,6 @@ export const PerplexityModelSelector = ({
               </>
             );
 
-            // Locked models still highlight on hover like the real menu, they just can't be picked.
             return item.locked ? (
               <DropdownMenuItem
                 aria-disabled="true"

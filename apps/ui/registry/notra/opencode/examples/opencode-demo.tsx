@@ -58,10 +58,8 @@ const ReplyBlock = ({ block }: { block: OpencodeDemoBlock }) => {
   );
 };
 
-/** How close to the bottom still counts as following the transcript. */
 const FOLLOW_THRESHOLD_PX = 48;
 
-/** Consecutive tool lines stack without a gap, thoughts stand alone. */
 const groupActivities = (activities: OpencodeChatActivity[]) =>
   activities.reduce<OpencodeChatActivity[][]>((groups, activity) => {
     const last = groups.at(-1);
@@ -86,16 +84,11 @@ export default function OpencodeDemo() {
       '[data-slot="opencode-scroll-area-viewport"]'
     );
 
-  // Open on the latest turn like a terminal. Scrolling the viewport directly
-  // keeps the host page from jumping.
   useLayoutEffect(() => {
     const viewport = viewportOf();
     viewport?.scrollTo({ top: viewport.scrollHeight });
   }, []);
 
-  // Follow new output only while the reader sits at the bottom, so scrolling
-  // up to reread a turn is not undone by the next reply block. Sending always
-  // jumps back down.
   useEffect(() => {
     const viewport = viewportOf();
     if (!viewport) {

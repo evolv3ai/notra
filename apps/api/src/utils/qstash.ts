@@ -17,7 +17,6 @@ export function buildCronExpression(config: {
   if (config.frequency === "monthly") {
     return `${config.minute} ${config.hour} ${config.dayOfMonth ?? 1} * *`;
   }
-  // "custom" (every N days) fires daily and is gated by the schedule workflow.
   return `${config.minute} ${config.hour} * * *`;
 }
 

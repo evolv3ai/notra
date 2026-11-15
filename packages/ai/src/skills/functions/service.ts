@@ -3,16 +3,14 @@ import { skills } from "@notra/db/schema";
 import { and, asc, count, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
-import { DEFAULT_SKILL_CATALOG_LIMIT, UNSLOP_DESCRIPTION } from "../constants";
-import { ensureUnslopSkill } from "../seed";
+import { DEFAULT_SKILL_CATALOG_LIMIT } from "../constants";
+import { ensureSystemSkillRegistry, loadSystemSkill } from "../registry";
 import type {
   CreateSkillInput,
   ListSkillsOptions,
   SkillContent,
   SkillServiceContext,
 } from "../types";
-import { UNSLOP_CONTENT } from "../unslop-content";
-import { currentSkillContent } from "./current-content";
 import { normalizeSkillSummary } from "./guidance";
 
 const promptableSkillWhere = (organizationId: string) =>
@@ -29,7 +27,7 @@ export async function listSkillCatalog(
   const offset = options.offset ?? 0;
   const where = promptableSkillWhere(ctx.organizationId);
 
-  await ensureUnslopSkill(ctx.organizationId);
+  await ensureSystemSkillRegistry();
 
   const [rows, totalResult] = await Promise.all([
     db
@@ -57,7 +55,7 @@ export async function listSkillSummaries(
   options: Pick<ListSkillsOptions, "limit"> = {}
 ) {
   const limit = options.limit ?? DEFAULT_SKILL_CATALOG_LIMIT;
-  await ensureUnslopSkill(ctx.organizationId);
+  await ensureSystemSkillRegistry();
   const rows = await db
     .select({
       name: skills.name,
@@ -75,6 +73,7 @@ export async function loadSkillByName(
   ctx: SkillServiceContext,
   name: string
 ): Promise<SkillContent | null> {
+  await ensureSystemSkillRegistry();
   const row = await db.query.skills.findFirst({
     where: and(
       eq(skills.organizationId, ctx.organizationId),
@@ -82,16 +81,15 @@ export async function loadSkillByName(
     ),
   });
 
-  if (!row) {
-    return name === "unslop"
-      ? { name, description: UNSLOP_DESCRIPTION, content: UNSLOP_CONTENT }
-      : null;
+  const skill = row ?? (await loadSystemSkill(name));
+  if (!skill) {
+    return null;
   }
 
   return {
-    name: row.name,
-    description: row.description,
-    content: currentSkillContent(row).trim(),
+    name: skill.name,
+    description: skill.description,
+    content: skill.content.trim(),
   };
 }
 

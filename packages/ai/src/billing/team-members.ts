@@ -1,3 +1,5 @@
+import { logWarn } from "@notra/ai/utils/server-log";
+
 import type { TeamMembersLimitStatus } from "../types/billing";
 import { autumn } from "./autumn";
 import { FEATURES } from "./features";
@@ -9,7 +11,7 @@ export async function checkTeamMembersLimit(
     return "allowed";
   }
 
-  let data: Awaited<ReturnType<typeof autumn.check>> | null = null;
+  let data: Awaited<ReturnType<typeof autumn.check>>;
   try {
     data = await autumn.check({
       customerId: organizationId,
@@ -17,17 +19,13 @@ export async function checkTeamMembersLimit(
       requiredBalance: 1,
     });
   } catch (error) {
-    console.warn("[Autumn] Failed to check team member limits", {
+    logWarn("[Autumn] Failed to check team member limits", {
       organizationId,
-      error,
+      error: error instanceof Error ? error.message : String(error),
     });
 
     return "check-unavailable";
   }
 
-  if (data?.allowed === false) {
-    return "limit-reached";
-  }
-
-  return "allowed";
+  return data.allowed === false ? "limit-reached" : "allowed";
 }

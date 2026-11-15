@@ -23,14 +23,14 @@ export interface SyncableSocialAccount {
   verified: boolean;
 }
 
-export interface TwitterPublicMetrics {
+interface TwitterPublicMetrics {
   followers_count?: number;
   following_count?: number;
   tweet_count?: number;
   listed_count?: number;
 }
 
-export interface TwitterTweetPublicMetrics {
+interface TwitterTweetPublicMetrics {
   retweet_count?: number;
   reply_count?: number;
   like_count?: number;
@@ -167,17 +167,6 @@ export interface FollowerGrowthResponse {
   points: FollowerGrowthPoint[];
 }
 
-export interface FollowerChartRow {
-  day: string;
-  [accountKey: string]: string | number;
-}
-
-export interface AnalyticsStatCard {
-  label: string;
-  value: number | null;
-  hint?: string;
-}
-
 export interface AnalyticsRangeOptions {
   days?: number;
   timezone?: string;
@@ -202,7 +191,7 @@ export type AnalyticsRangePreset =
   | "all"
   | "custom";
 
-export interface AnalyticsRangePresetLabel {
+interface AnalyticsRangePresetLabel {
   label: string;
   compact: string;
   hint: string;
@@ -383,10 +372,6 @@ export interface LeaderboardCardProps {
   organizationId: string;
   organizationSlug: string;
   variant?: "module" | "page";
-}
-
-export interface AnalyticsPageClientProps {
-  organizationSlug: string;
 }
 
 export type AnalyticsProviderFilter = "all" | "twitter" | "linkedin";

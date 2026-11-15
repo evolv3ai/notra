@@ -30,12 +30,16 @@ export interface CreateContentButtonGroupProps {
   disabled?: boolean;
   onCreateContent: () => void;
   onCreatePost: () => void;
+  onCreateArticle?: () => void;
   onPrefetchCreateContent?: () => void;
   onPrefetchCreatePost?: () => void;
+  onPrefetchCreateArticle?: () => void;
 }
 
 export interface CreateContentActionsProps {
   organizationId: string;
   organizationSlug: string;
   entry: "home" | "content_list";
+  articleAvailable?: boolean;
+  initialProjectId?: string | null;
 }

@@ -33,7 +33,11 @@ import {
   GEO_OPENAPI_TAG,
 } from "../constants/geo-openapi";
 import { runGeoEffect } from "../runtime/geo";
-import { attachGeoOrganization, geoErrorResponse } from "../utils/geo";
+import {
+  attachGeoOrganization,
+  geoErrorResponse,
+  geoOutcomeResponse,
+} from "../utils/geo";
 import {
   normalizeLanguageShareResponse,
   normalizeOverviewResponse,
@@ -43,21 +47,10 @@ import {
 import { createOpenApiApp } from "../utils/openapi-app";
 
 /**
- * Visibility reads.
- *
  * Every operation here is a GET, so only `visibility.read` is ever required —
  * the registry defines the write scope for symmetry but no route grants it.
- *
- * Each handler re-checks that the project belongs to the caller's organization
- * before running the program. That is not redundant with `resolveGeoScope`:
- * when that program cannot match the id it silently falls back to the
- * organization's oldest project, which would answer for the wrong project
- * instead of 404ing.
  */
 export const geoVisibilityRoutes = createOpenApiApp();
-
-const GEO_TAG = GEO_OPENAPI_TAG;
-const commonErrors = GEO_COMMON_ERROR_RESPONSES;
 
 const WINDOW_NOTE =
   "Pass `days` for a rolling window, or `from`/`to` for an explicit one.";
@@ -65,7 +58,7 @@ const WINDOW_NOTE =
 const overviewRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/visibility/overview",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "getGeoVisibilityOverview",
   summary: "Get mention rates per engine",
   description: `Checks, mentions and average position for every answer engine the project tracks. ${WINDOW_NOTE}`,
@@ -77,14 +70,14 @@ const overviewRoute = createRoute({
         "application/json": { schema: visibilityOverviewResponseSchema },
       },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const timeseriesRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/visibility/timeseries",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "getGeoVisibilityTimeseries",
   summary: "Get daily mention counts per engine",
   description: `One point per day and engine. ${WINDOW_NOTE}`,
@@ -96,14 +89,14 @@ const timeseriesRoute = createRoute({
         "application/json": { schema: visibilityTimeseriesResponseSchema },
       },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const promptResultsRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/visibility/prompt-results",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "getGeoVisibilityPromptResults",
   summary: "Get the latest answer per prompt and engine",
   description: `The stored answer text, mention position, sentiment and grounding sources for each tracked prompt. ${WINDOW_NOTE}`,
@@ -115,14 +108,14 @@ const promptResultsRoute = createRoute({
         "application/json": { schema: visibilityPromptResultsResponseSchema },
       },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const promptResultSummariesRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/visibility/prompt-results/summaries",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "listGeoPromptResultSummaries",
   summary: "List compact prompt result summaries",
   description:
@@ -140,14 +133,14 @@ const promptResultSummariesRoute = createRoute({
         },
       },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const promptResultDetailRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/visibility/prompt-results/{checkId}",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "getGeoPromptResultDetail",
   summary: "Get one full prompt result",
   description:
@@ -162,14 +155,14 @@ const promptResultDetailRoute = createRoute({
         },
       },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const competitorShareRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/visibility/competitor-share",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "getGeoVisibilityCompetitorShare",
   summary: "Get share of voice across tracked brands",
   description: `Mention counts per brand with a per-brand trend, plus the daily timeseries behind it. ${WINDOW_NOTE}`,
@@ -181,14 +174,14 @@ const competitorShareRoute = createRoute({
         "application/json": { schema: visibilityCompetitorShareResponseSchema },
       },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const languageShareRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/visibility/language-share",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "getGeoVisibilityLanguageShare",
   summary: "Get mention rates per tracked language",
   description: `Checks, mentions and average position broken down by language. ${WINDOW_NOTE}`,
@@ -200,14 +193,14 @@ const languageShareRoute = createRoute({
         "application/json": { schema: visibilityLanguageShareResponseSchema },
       },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const competitorDetailRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/visibility/competitors/{brand}",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "getGeoVisibilityCompetitorDetail",
   summary: "Get one competitor's mention history",
   description:
@@ -225,7 +218,7 @@ const competitorDetailRoute = createRoute({
         },
       },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
@@ -239,17 +232,7 @@ geoVisibilityRoutes.openapi(overviewRoute, async (c) => {
       geoWindow(c.req.valid("query"))
     )
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json(
-    attachGeoOrganization(
-      base.organization,
-      normalizeOverviewResponse(outcome.value)
-    ),
-    200
-  );
+  return geoOutcomeResponse(c, outcome, 200, normalizeOverviewResponse);
 });
 
 geoVisibilityRoutes.openapi(timeseriesRoute, async (c) => {
@@ -262,17 +245,7 @@ geoVisibilityRoutes.openapi(timeseriesRoute, async (c) => {
       geoWindow(c.req.valid("query"))
     )
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json(
-    attachGeoOrganization(
-      base.organization,
-      normalizeTimeseriesResponse(outcome.value)
-    ),
-    200
-  );
+  return geoOutcomeResponse(c, outcome, 200, normalizeTimeseriesResponse);
 });
 
 geoVisibilityRoutes.openapi(promptResultsRoute, async (c) => {
@@ -285,17 +258,7 @@ geoVisibilityRoutes.openapi(promptResultsRoute, async (c) => {
       geoWindow(c.req.valid("query"))
     )
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json(
-    attachGeoOrganization(
-      base.organization,
-      normalizePromptResultsResponse(outcome.value)
-    ),
-    200
-  );
+  return geoOutcomeResponse(c, outcome, 200, normalizePromptResultsResponse);
 });
 
 geoVisibilityRoutes.openapi(promptResultSummariesRoute, async (c) => {
@@ -316,20 +279,18 @@ geoVisibilityRoutes.openapi(promptResultSummariesRoute, async (c) => {
       }
     )
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json(
-    attachGeoOrganization(base.organization, {
-      configured: outcome.value.configured,
-      results: outcome.value.results.map((result) => ({
+  return geoOutcomeResponse(
+    c,
+    outcome,
+    200,
+    ({ configured, results, nextCursor }) => ({
+      configured,
+      results: results.map((result) => ({
         ...result,
         ownedSourceCited: result.ownedSourceCited ?? false,
       })),
-      nextCursor: outcome.value.nextCursor ?? null,
-    }),
-    200
+      nextCursor: nextCursor ?? null,
+    })
   );
 });
 
@@ -372,11 +333,7 @@ geoVisibilityRoutes.openapi(competitorShareRoute, async (c) => {
       geoWindow(c.req.valid("query"))
     )
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json(attachGeoOrganization(base.organization, outcome.value), 200);
+  return geoOutcomeResponse(c, outcome, 200);
 });
 
 geoVisibilityRoutes.openapi(languageShareRoute, async (c) => {
@@ -389,17 +346,7 @@ geoVisibilityRoutes.openapi(languageShareRoute, async (c) => {
       geoWindow(c.req.valid("query"))
     )
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json(
-    attachGeoOrganization(
-      base.organization,
-      normalizeLanguageShareResponse(outcome.value)
-    ),
-    200
-  );
+  return geoOutcomeResponse(c, outcome, 200, normalizeLanguageShareResponse);
 });
 
 geoVisibilityRoutes.openapi(competitorDetailRoute, async (c) => {
@@ -413,9 +360,5 @@ geoVisibilityRoutes.openapi(competitorDetailRoute, async (c) => {
       geoWindow(c.req.valid("query"))
     )
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json(attachGeoOrganization(base.organization, outcome.value), 200);
+  return geoOutcomeResponse(c, outcome, 200);
 });

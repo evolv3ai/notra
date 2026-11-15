@@ -1,0 +1,40 @@
+---
+title: "Tag Notra in a GitHub PR and watch it draft your content"
+description: "Tag Notra in the pull request for a changelog or blog post and it revises the draft right in the thread, as a one-click suggestion or a commit, until it's ready to publish."
+date: "2026-10-19T00:00:00.000Z"
+updatedAt: "2026-10-19T00:00:00.000Z"
+author: "jan"
+image: "/blog/tag-notra-on-github-og.png"
+---
+
+When Notra publishes a changelog or blog post to your repo, it opens a pull request with the Markdown. That pull request is where your team already reviews things, so that's where you can now edit the post. Tag Notra in a comment, say what you want changed, and the new draft shows up in the thread. You don't need to open the dashboard.
+
+## How tagging Notra works
+
+1. Open the pull request Notra created for the post.
+2. Leave a comment that mentions `@notra` or `@usenotra` and say what you want, like "shorten the intro", "add a section about the new API" or "lead with the security fix".
+3. Notra reads the post, the PR description and the earlier comments, and reacts with 👀 while it works. When it's done, the 👀 turns into 👍 and its reply appears in the thread.
+
+You can comment on the whole pull request or on specific lines in a review. Inside a review thread Notra has already replied to, a plain "shorter please" is enough, because Notra reads what came before.
+
+## Suggestions first, commits when you say so
+
+Feedback about wording, like "the intro feels heavy" or "give me a punchier opening", comes back as a GitHub suggestion on those lines. Nothing on the branch changes until you click **Commit suggestion**. If you don't like it, reply and Notra suggests another version.
+
+Notra commits straight to the branch when you tell it to ("apply it", "go ahead"), for plain fixes like a typo or a wrong version number, and for changes that span several files. Every edit keeps the brand voice the post was written in, and whatever lands on the branch also updates the post in Notra.
+
+If you'd rather keep your branch untouched, say "open a separate PR" and Notra puts its changes in a draft pull request on top of yours.
+
+## Good to know
+
+- Ask a question instead of requesting a change, and Notra answers in the thread without committing anything.
+- Notra only edits content: Markdown, MDX, text and the data files next to them. It won't touch code or config, and it never commits to your default branch.
+- Only members of your Notra organization who have linked their GitHub account can trigger it. Mentions on regular issues are ignored.
+- Each mention uses your plan's pull request credits first, then your AI credits.
+- If you installed the GitHub App before this shipped, accept its updated permissions on GitHub so Notra can reply and commit.
+
+The [GitHub integration docs](https://www.usenotra.com/docs/integrations/github#mention-notra-on-pull-requests) cover every detail.
+
+## Try it on your next post
+
+If your GitHub repo is already connected, this works today. Publish a post, open the pull request Notra creates, and tag it with what you'd change.

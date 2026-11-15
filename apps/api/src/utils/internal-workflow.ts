@@ -57,17 +57,6 @@ export function getInternalWorkflowUrl(env: InternalWorkflowEnv, path: string) {
  */
 export const SYNCHRONOUS_INTERNAL_CALL_TIMEOUT_MS = 240_000;
 
-/**
- * POSTs to an internal dashboard route and decodes its successful JSON body.
- *
- * Same authentication as `startDashboardWorkflow` (shared secret first, Vercel
- * OIDC as the fallback); this is the general form for internal routes that
- * answer with something other than `{ runId }`.
- *
- * `timeoutMs` is opt-in only for immediate hand-off routes. A route that runs
- * paid work inline must pass `SYNCHRONOUS_INTERNAL_CALL_TIMEOUT_MS` through
- * `runRemoteGeoEffect`, which makes the timeout mandatory for that boundary.
- */
 export async function callDashboardInternal<A>(
   url: string,
   payload: unknown,

@@ -142,8 +142,6 @@ const DESIGN_SYSTEM_GEO_SEARCH_RESULTS: GeoPromptResultSummary[] =
     lastCheckedAt: "2026-08-19T12:00:00.000Z",
   }));
 
-// Without search the model only remembers the brand on the prompts it ranks
-// first, which gives the memory tab its own, weaker ranking.
 const DESIGN_SYSTEM_GEO_MEMORY_RESULTS: GeoPromptResultSummary[] =
   DESIGN_SYSTEM_GEO_SEARCH_RESULTS.map((result) => ({
     ...result,

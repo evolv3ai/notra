@@ -1,4 +1,4 @@
-import "server-only";
+import "@tanstack/react-start/server-only";
 import { crawlSitemap } from "@notra/ai/utils/context-dev";
 
 import {
@@ -14,8 +14,6 @@ import {
   normalizeSitemapUrl,
 } from "./sitemap-url";
 
-// Scoped to the brand identity: the id is the primary key, so a URL-only id
-// let another workspace adding the same sitemap take over this row.
 function encodeSitemapId(brandSettingsId: string, url: string) {
   const encodedUrl = Buffer.from(url, "utf8").toString("base64url");
   return `${CONTEXT_DEV_SITEMAP_ID_PREFIX}:${brandSettingsId}:${encodedUrl}`;

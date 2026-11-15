@@ -10,13 +10,13 @@ import {
   DialogContent,
   DialogTitle,
 } from "@notra/ui/components/ui/dialog";
+import { Spinner } from "@notra/ui/components/ui/spinner";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2Icon } from "lucide-react";
-import { useLocale, useTranslations } from "next-intl";
-import Image from "next/image";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useLocale, useTranslations } from "use-intl";
 
+import Image from "@/components/framework/image";
 import {
   isImageMimeType,
   isPdfMimeType,
@@ -54,7 +54,7 @@ function TextPreview({ url }: { url: string }) {
   if (content === undefined) {
     return (
       <div className="text-muted-foreground flex h-full items-center justify-center">
-        <Loader2Icon className="size-4 animate-spin" />
+        <Spinner />
       </div>
     );
   }
@@ -186,10 +186,10 @@ export function AttachmentPreviewDialog({
             </div>
           ) : null}
           {isPdf ? (
+            // oxlint-disable-next-line react/iframe-missing-sandbox -- Chrome refuses to render PDFs in sandboxed frames; the file is served as application/pdf from the storage origin, so only the PDF viewer loads.
             <iframe
               className="h-full w-full"
               referrerPolicy="no-referrer"
-              sandbox="allow-scripts"
               src={attachment.url}
               title={attachment.filename}
             />

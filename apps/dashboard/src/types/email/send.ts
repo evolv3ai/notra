@@ -1,19 +1,16 @@
-import type { DailySummaryEmailItem } from "@notra/email/types/daily-summary";
 import type { FeedbackSentiment } from "@notra/email/types/feedback";
+import type {
+  GeoAlertEmailProps,
+  VisibilityDropEmailProps,
+  WeeklySummaryEmailProps,
+} from "@notra/email/types/geo-recap";
+import type { ScheduledPublicationFailedEmailProps } from "@notra/email/types/scheduled-publication-failed";
+import type { SiteSuspendedEmailProps } from "@notra/email/types/site-suspended";
 import type { WorkflowPausedReason } from "@notra/email/types/workflow-paused";
-import type { Resend } from "resend";
 
-export interface EmailResult {
-  data: { id: string } | null;
-  error: { name: string; message: string } | null;
+interface DigestEmailProps {
+  digestBatchKey: string;
 }
-
-export interface EmailRetryFailure {
-  result: EmailResult;
-  retryable: boolean;
-}
-
-export type EmailPayload = Parameters<Resend["emails"]["send"]>[0];
 
 export interface SendFeedbackEmailProps {
   to: string;
@@ -27,7 +24,7 @@ export interface SendFeedbackEmailProps {
   userAgent?: string;
 }
 
-export interface SendScheduledContentFailedEmailProps {
+export interface SendScheduledContentFailedEmailProps extends DigestEmailProps {
   recipientEmail: string;
   organizationName: string;
   organizationSlug: string;
@@ -36,7 +33,13 @@ export interface SendScheduledContentFailedEmailProps {
   subject?: string;
 }
 
-export interface SendScheduledContentSkippedEmailProps {
+export interface SendScheduledPublicationFailedEmailProps extends ScheduledPublicationFailedEmailProps {
+  recipientEmail: string;
+  /** One email per failure: row id plus failure time. */
+  failureKey: string;
+}
+
+export interface SendScheduledContentSkippedEmailProps extends DigestEmailProps {
   recipientEmail: string;
   organizationName: string;
   organizationSlug: string;
@@ -45,7 +48,7 @@ export interface SendScheduledContentSkippedEmailProps {
   subject?: string;
 }
 
-export interface SendAiCreditsDepletedEmailProps {
+export interface SendAiCreditsDepletedEmailProps extends DigestEmailProps {
   recipientEmail: string;
   organizationName: string;
   organizationSlug: string;
@@ -60,7 +63,7 @@ export interface SendWorkflowPausedEmailProps {
   organizationSlug: string;
   automationName: string;
   reason: WorkflowPausedReason;
-  pauseEventId?: string;
+  pauseEventId: string;
   subject?: string;
 }
 
@@ -69,7 +72,7 @@ export interface ScheduledCreatedContentItem {
   contentLink: string;
 }
 
-export interface SendScheduledContentCreatedEmailProps {
+export interface SendScheduledContentCreatedEmailProps extends DigestEmailProps {
   recipientEmail: string;
   organizationName: string;
   organizationSlug: string;
@@ -78,21 +81,33 @@ export interface SendScheduledContentCreatedEmailProps {
   contentType: string;
   contentOverviewLink: string;
   subject?: string;
+  automationEmail?: boolean;
 }
 
-export interface SendDailySummaryEmailProps {
+export interface SendWeeklySummaryEmailProps extends WeeklySummaryEmailProps {
   recipientEmail: string;
-  organizationName: string;
-  organizationSlug: string;
-  dateLabel: string;
-  headline: string;
-  mentionRateLabel: string;
-  mentionRateDeltaLabel: string;
-  scansCompleted: number;
-  gained: number;
-  lost: number;
-  items: DailySummaryEmailItem[];
-  remainingCount: number;
-  dashboardLink: string;
+  /** Monday the recap was sent for; keys the Brew idempotency. */
+  weekKey: string;
+}
+
+export interface SendVisibilityDropEmailProps extends VisibilityDropEmailProps {
+  recipientEmail: string;
   dateKey: string;
+}
+
+export interface SendGeoAlertEmailProps extends GeoAlertEmailProps {
+  recipientEmail: string;
+  /** Dedupes the send, e.g. automation and scan. */
+  alertKey: string;
+}
+
+export interface SendWelcomeEmailProps {
+  userEmail: string;
+  slackInvited: boolean;
+}
+
+export interface SendSiteSuspendedEmailProps extends SiteSuspendedEmailProps {
+  recipientEmail: string;
+  /** Dedupes the send per suspension: the audit row id for a site, the workspace id and suspension time for a workspace. */
+  abuseActionKey: string;
 }

@@ -7,18 +7,20 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@notra/ui/components/ui/sheet";
-import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useTranslations } from "use-intl";
 
 import type { CompetitorSheetProps } from "@/types/geo";
 
 const COMPETITOR_SHEET_CONTENT_CLASS =
   "gap-0 overflow-y-auto p-6 data-[side=right]:w-full sm:rounded-xl sm:border data-[side=right]:sm:inset-y-2 data-[side=right]:sm:right-2 data-[side=right]:sm:h-auto data-[side=right]:sm:max-w-3xl [&>*]:min-w-0";
 
-export function CompetitorModal({ title, children }: CompetitorSheetProps) {
+export function CompetitorModal({
+  title,
+  onClose,
+  children,
+}: CompetitorSheetProps) {
   const t = useTranslations("geo.competitorModal");
-  const router = useRouter();
   const [open, setOpen] = useState(true);
 
   return (
@@ -26,7 +28,7 @@ export function CompetitorModal({ title, children }: CompetitorSheetProps) {
       onOpenChange={setOpen}
       onOpenChangeComplete={(nextOpen) => {
         if (!nextOpen) {
-          router.back();
+          onClose();
         }
       }}
       open={open}

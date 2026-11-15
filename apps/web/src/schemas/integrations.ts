@@ -1,4 +1,3 @@
-// biome-ignore lint/performance/noNamespaceImport: Zod recommended way of importing
 import * as z from "zod";
 
 function toSafeHttpUrl(value: string | null | undefined): string | null {
@@ -82,8 +81,4 @@ export const integrationListResponseSchema = z.object({
 
 export const integrationDetailResponseSchema = z.object({
   integration: integrationSchema,
-});
-
-export const integrationsSearchSchema = z.object({
-  integration: z.string().optional().catch(undefined),
 });

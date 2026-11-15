@@ -1,6 +1,6 @@
 import { redis } from "@notra/ai/utils/redis";
 import { db } from "@notra/db/drizzle";
-import { connectedSocialAccounts } from "@notra/db/schema";
+import { connectedSocialAccounts, members } from "@notra/db/schema";
 import {
   type SocialConnectOAuthState,
   type SocialConnectPlatform,
@@ -239,6 +239,26 @@ export const completeSocialConnect = Effect.fn("completeSocialConnect")(
       );
     }
 
+    // The state only proves membership when the connect started; the user may
+    // have been removed from the organization since.
+    const membership = yield* Effect.tryPromise({
+      try: () =>
+        db.query.members.findFirst({
+          where: and(
+            eq(members.organizationId, oauthState.organizationId),
+            eq(members.userId, oauthState.userId)
+          ),
+          columns: { id: true },
+        }),
+      catch: (cause) =>
+        new SocialConnectCallbackError({ code: "callback_failed", cause }),
+    });
+    if (!membership) {
+      return yield* Effect.fail(
+        new SocialConnectCallbackError({ code: "invalid_callback" })
+      );
+    }
+
     const client = getSocialConnectClient(clientPlatform);
 
     const remainingAccounts = yield* Effect.tryPromise({
@@ -374,6 +394,13 @@ export const upsertConnectedAccount = Effect.fn("upsertConnectedAccount")(
     verified: boolean;
     verifiedType: string | null;
   }) {
+    const profile = {
+      username: input.username,
+      displayName: input.displayName,
+      profileImageUrl: input.profileImageUrl,
+      verified: input.verified,
+      verifiedType: input.verifiedType,
+    };
     yield* Effect.tryPromise({
       try: () =>
         db.transaction(async (tx) => {
@@ -392,13 +419,7 @@ export const upsertConnectedAccount = Effect.fn("upsertConnectedAccount")(
           if (existing) {
             await tx
               .update(connectedSocialAccounts)
-              .set({
-                username: input.username,
-                displayName: input.displayName,
-                profileImageUrl: input.profileImageUrl,
-                verified: input.verified,
-                verifiedType: input.verifiedType,
-              })
+              .set(profile)
               .where(eq(connectedSocialAccounts.id, existing.id));
             return;
           }
@@ -415,14 +436,7 @@ export const upsertConnectedAccount = Effect.fn("upsertConnectedAccount")(
           if (reconnected) {
             await tx
               .update(connectedSocialAccounts)
-              .set({
-                providerAccountId: input.providerAccountId,
-                username: input.username,
-                displayName: input.displayName,
-                profileImageUrl: input.profileImageUrl,
-                verified: input.verified,
-                verifiedType: input.verifiedType,
-              })
+              .set({ providerAccountId: input.providerAccountId, ...profile })
               .where(eq(connectedSocialAccounts.id, reconnected.id));
             return;
           }
@@ -434,11 +448,7 @@ export const upsertConnectedAccount = Effect.fn("upsertConnectedAccount")(
               organizationId: input.organizationId,
               provider: input.platform,
               providerAccountId: input.providerAccountId,
-              username: input.username,
-              displayName: input.displayName,
-              profileImageUrl: input.profileImageUrl,
-              verified: input.verified,
-              verifiedType: input.verifiedType,
+              ...profile,
             })
             .onConflictDoNothing();
         }),

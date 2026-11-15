@@ -2,6 +2,7 @@
 
 import { AutumnOrgProvider } from "@/components/providers/autumn-org-provider";
 import { DatabaseProvider } from "@/components/providers/database-provider";
+import { DatabuddyIdentity } from "@/components/providers/databuddy-identity";
 
 export function OnboardingRuntimeProviders({
   children,
@@ -10,7 +11,10 @@ export function OnboardingRuntimeProviders({
 }) {
   return (
     <DatabaseProvider>
-      <AutumnOrgProvider>{children}</AutumnOrgProvider>
+      <AutumnOrgProvider>
+        <DatabuddyIdentity />
+        {children}
+      </AutumnOrgProvider>
     </DatabaseProvider>
   );
 }

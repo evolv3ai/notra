@@ -9,7 +9,11 @@ import type { OnDemandJobEventInput } from "@/types/workflows/on-demand-generati
 export async function setTrackedJobStatus(
   jobId: string | undefined,
   status: "running" | "completed" | "failed" | "skipped",
-  updates?: { postId?: string | null; error?: string | null }
+  updates?: {
+    postId?: string | null;
+    error?: string | null;
+    errorCode?: string | null;
+  }
 ) {
   if (!(jobId && redis)) {
     return;
@@ -17,6 +21,9 @@ export async function setTrackedJobStatus(
   await setContentGenerationJobStatus(redis, jobId, status, {
     ...(updates?.postId !== undefined ? { postId: updates.postId } : {}),
     ...(updates?.error !== undefined ? { error: updates.error } : {}),
+    ...(updates?.errorCode !== undefined
+      ? { errorCode: updates.errorCode }
+      : {}),
   });
 }
 

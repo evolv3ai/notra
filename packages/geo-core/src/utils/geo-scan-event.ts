@@ -12,7 +12,7 @@ import { describeGeoCause, describeGeoError } from "./geo-log";
 import { withGeoTiming } from "./geo-timing";
 import { EMPTY_AGENT_TOKEN_USAGE, snapshotUsageByRole } from "./token-usage";
 
-export interface GeoScanEventInput<A> {
+interface GeoScanEventInput<A> {
   scanId: string;
   runId: string;
   step: GeoScanEventStep;

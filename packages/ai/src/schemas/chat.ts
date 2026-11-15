@@ -42,7 +42,11 @@ export const externalChannelSourceSchema = z.enum([
   "agent",
 ]);
 
-export const externalChannelLookupSourceSchema = z.enum(["discord", "slack"]);
+export const externalChannelLookupSourceSchema = z.enum([
+  "discord",
+  "slack",
+  "dashboard",
+]);
 
 export const externalChannelIdSchema = z
   .object({
@@ -142,13 +146,6 @@ export const standaloneChatRequestSchema = z.object({
   surface: chatSurfaceSchema.default("chat"),
 });
 
-export const dashboardAgentChatRequestSchema = z.object({
-  chatId: chatIdSchema,
-  projectId: z.string().min(1).optional(),
-  messages: z.array(uiMessageSchema).min(1).max(UI_MESSAGES_MAX),
-  timezone: z.string().min(1).max(100).optional(),
-});
-
 export const updateChatSessionSchema = z
   .object({
     title: z.string().trim().min(1).max(CHAT_TITLE_MAX_LENGTH).optional(),
@@ -225,10 +222,6 @@ export const chatSessionSummarySchema = z.object({
   createdAt: z.string().min(1),
   pinnedAt: z.string().min(1).nullable(),
   externalChannelId: externalChannelIdSchema.nullable().optional(),
-});
-
-export const chatSessionResponseSchema = z.object({
-  session: chatSessionSummarySchema.optional(),
 });
 
 export const chatSessionsListResponseSchema = z.object({

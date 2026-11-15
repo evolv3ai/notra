@@ -7,7 +7,10 @@ import { decodeIntegrationEncryptionKey } from "@notra/db/utils/integration-encr
 export function createGitHubContentExportMarker(snapshot: GitHubContentExport) {
   const signature = createHmac(
     "sha256",
-    decodeIntegrationEncryptionKey(process.env.INTEGRATION_ENCRYPTION_KEY)
+    decodeIntegrationEncryptionKey(
+      process.env.GITHUB_CONTENT_EXPORT_SIGNING_KEY ??
+        process.env.INTEGRATION_ENCRYPTION_KEY
+    )
   )
     .update(
       JSON.stringify([

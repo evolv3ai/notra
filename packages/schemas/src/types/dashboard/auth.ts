@@ -63,12 +63,12 @@ export interface TotpFactorSummary {
   createdAt: string;
 }
 
-export interface AuthFlowSuccess {
+interface AuthFlowSuccess {
   status: "success";
   redirectTo: string;
 }
 
-export interface AuthFlowEnrolled {
+interface AuthFlowEnrolled {
   status: "enrolled";
   redirectTo: string;
   backupCodes: string[];
@@ -93,7 +93,7 @@ export interface AuthFlowMfaEnrollmentRequired extends TotpEnrollment {
   email: string;
 }
 
-export interface AuthFlowError {
+interface AuthFlowError {
   status: "error";
   message: string;
 }
@@ -111,7 +111,7 @@ export type PendingAuthStep =
   | AuthFlowMfaRequired
   | AuthFlowMfaEnrollmentRequired;
 
-export interface AuthFlowRecovered {
+interface AuthFlowRecovered {
   status: "recovered";
   email: string;
 }

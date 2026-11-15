@@ -1,0 +1,143 @@
+---
+title: "Blog and changelog layouts"
+sidebarTitle: "Layouts"
+description: "Choose how the blog index, posts and the changelog look."
+authors:
+  - handle: jan
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/sites/customize/layouts
+  type: how-to
+  applies_to:
+    - notra
+  language: en
+  status: stable
+---
+
+The `blog` and `changelog` objects in `blog.json` set how the blog index, its post cards, every post and the changelog look, and each table lists the default for every setting.
+
+## Blog
+
+```json blog.json
+"blog": {
+  "title": "Acme Blog",
+  "description": "Product notes, engineering and launches.",
+  "layout": "grid",
+  "hero": { "style": "wash", "eyebrow": "The Acme journal" },
+  "featured": "latest",
+  "categories": false,
+  "search": false,
+  "card": { "image": "auto", "excerpt": true, "author": true, "date": true, "readingTime": false, "style": "auto" },
+  "post": { "toc": true, "authorCard": true, "readingTime": true, "pagination": true, "width": "wide", "header": "stacked", "cover": true },
+  "authorPage": "inline"
+}
+```
+
+### The index page
+
+| Setting | Values | Default |
+| --- | --- | --- |
+| `title` | The heading, up to 120 characters | `"Blog"` |
+| `description` | The line under it, up to 400 characters | The site's `description` |
+| `layout` | `grid`: cards in columns. `list`: date and title rows. `magazine`: one large card, then a grid. `cards`: two columns of bordered, tinted cards | `grid` |
+| `hero.style` | `wash`: a tinted panel. `plain`: title only. `image`: `hero.image` behind the title. `none`: no hero | `plain` |
+| `hero.eyebrow` | A short line above the title, up to 60 characters | none |
+| `hero.image` | Background for the `image` style, like `/images/hero.jpg` | none |
+| `featured` | `"latest"`, `"none"` or up to 6 post paths like `["2026/launch"]`, pinned on top | `"none"` |
+| `categories` | `true`, `false` or up to 12 tag names. See [Category bar](#category-bar) | `false` |
+| `search` | Show a search field for post titles, summaries and tags | `false` |
+
+With `featured` set to `"none"`, Notra pins posts that have `featured: true` in their [frontmatter](/sites/posts#blog-posts), up to the 6 newest. `"latest"` and a list of paths ignore that field. `magazine` features the latest post when nothing else is featured, and Notra skips a featured path that doesn't match a post and shows a warning in the build log.
+
+### Category bar
+
+`categories` adds a row of filters above the posts, with **All** first, a rounded background on the selected category and an RSS button on the right. A click on a category shows only the posts with that [tag](/sites/posts#tags), without reloading the page, and adds `?category=<tag>` to the address so the filtered view can be shared.
+
+| Value | Tabs |
+| --- | --- |
+| `false` | No category bar |
+| `true` | Every tag, the most used first |
+| A list like `["Product", "Engineering"]` | These tags in this order, up to 12. The tab shows the name as you wrote it |
+
+Notra matches names the same way as tag pages, so `"Product"` also picks up posts tagged `product`. A name no post uses is skipped, with a warning in the build log. In `grid` and `magazine`, featured posts stay above the bar, and a category also lists its featured posts.
+
+Set `"blog": { "search": true }` to add an optional search field beside RSS. Search matches post titles, summaries (the description or generated excerpt) and tags, ignoring case. It combines with the selected category and stores the query as `?q=<query>`. Search also works without categories. While searching, featured posts appear only among matching results. Both options default to `false`.
+
+A `cards` card shows the title, up to three lines of excerpt, and the first author's avatar and name with the date at the bottom. It has no cover image, so `card.image` doesn't apply.
+
+### Cards
+
+`card` turns parts of each post card on or off.
+
+| Setting | Shows | Default |
+| --- | --- | --- |
+| `card.image` | The post's `image` as a cover (not in `list`). `"auto"` shows covers when at least one post on the page has one, with a placeholder for posts without one. `true` always leaves room for a cover and shows a placeholder for posts without one | `"auto"` |
+| `card.excerpt` | The `description`, or the start of the first paragraph | `true` |
+| `card.author` | The first author | `true` |
+| `card.date` | The date | `true` |
+| `card.readingTime` | "5 min read" | `false` |
+| `card.style` | How cards in `grid` and `magazine` look. `"auto"` draws the first row of a `grid` as filled tiles when there's no category bar, search or featured post. `"tile"` draws every card as a filled tile, also next to the category bar. `"plain"` draws no tiles | `"auto"` |
+
+A tile has the date and first tag on top, then the title, excerpt and authors, on the `--card` color. When cards show cover images, a tile keeps its cover instead of the color. On phones, tiles show as rows like the other cards. Style them with the `post-card-tile` class:
+
+```css style.css
+.post-card-tile { border-radius: 1rem; }
+```
+
+### Posts
+
+| Setting | Shows | Default |
+| --- | --- | --- |
+| `post.toc` | "On this page" next to the post on wide screens when it has at least two `##` or `###` headings, only in the `wide` layout or with the compact header | `true` |
+| `post.authorCard` | The authors with avatar and title, beside the post (`wide`), under the title (`narrow`) or in the sidebar (compact header) | `true` |
+| `post.readingTime` | The reading time next to the date | `true` |
+| `post.pagination` | The previous and next post at the end | `true` |
+| `post.width` | `wide`: a sidebar with the table of contents. `narrow`: one reading column | `wide` |
+| `post.header` | `stacked`: date, title, description and authors stacked above the post. `compact`: see below | `stacked` |
+| `post.cover` | The post's `image` above the text. With `false`, the image is still used for share images | `true` |
+
+To hide the "Updated" date, set `"metadata": { "timestamp": false }`. Dates read "Oct 12, 2026" by default, and `"metadata": { "dateFormat": "long" }` writes "October 12, 2026" everywhere.
+
+### Compact post header
+
+`"header": "compact"` gives each post a shorter header:
+
+- A "Back to blog" link, then one row with "Published Oct 12, 2026 · 5 min read" and the [page actions](/sites/customize/navigation#page-actions) on the right, labeled **Copy article**.
+- The title and a divider, without the description.
+- The authors move into the sidebar as a "Written by" card above the table of contents.
+- "On this page" shows from a single heading, on wide screens only, and there's no "On this page" menu on phones.
+
+The compact header always has a sidebar, so it ignores `post.width`.
+
+### Author pages
+
+`authorPage` sets the layout of the [author pages](/sites/posts#authors) at `/blog/author/<id>`.
+
+| Value | Layout |
+| --- | --- |
+| `inline` | Back link, then avatar and name side by side, the bio, profile links and the author's posts |
+| `stacked` | A large avatar on top, then the name, title, bio and the profile links as icon buttons. Below a divider, "3 posts" and the posts, as `cards` cards when `layout` is `cards` |
+
+## Changelog
+
+```json blog.json
+"changelog": {
+  "title": "Changelog",
+  "description": "Everything we shipped.",
+  "layout": "timeline",
+  "hero": { "style": "plain" }
+}
+```
+
+| Setting | Values | Default |
+| --- | --- | --- |
+| `title` | The heading | `"Changelog"` |
+| `description` | The line under it | The site's `description` |
+| `layout` | `timeline`: entries stacked with date, a large title, the description as subtitle and the cover image. `cards`: one card per entry. `compact`: title, date, version and summary only | `timeline` |
+| `hero` | Works like the blog's | `plain` |
+| `minimap` | `true` shows one line per entry on the left of the `timeline` changelog on wide screens; hover a line to preview the entry, click to jump to it. `false` hides it | `true` |
+
+## Your own hero
+
+To replace the top of the blog or changelog index with your own markup, add `slots/blog-hero.mdx` or `slots/changelog-hero.mdx`. See [Slots](/sites/match-your-website#slots).

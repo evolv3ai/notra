@@ -1,0 +1,81 @@
+---
+title: "Limits and build errors"
+sidebarTitle: "Limits and errors"
+description: "Learn how large your files and builds can get and what the most common build errors mean."
+authors:
+  - handle: jan
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/sites/reference/limits
+  type: reference
+  applies_to:
+    - notra
+  language: en
+  status: stable
+---
+
+These are the size and build limits for every site, followed by the build errors and warnings you're most likely to see.
+
+## Limits
+
+| Limit | Value |
+| --- | --- |
+| Build time | 10 minutes |
+| Files in the site folder | 10,000 |
+| Size of the site folder | 200 MB |
+| Size of one file | 25 MB |
+| Files in the built site | 20,000 |
+| Size of the built site | 500 MB |
+| Builds at the same time | 2 per site |
+| Deployments per workspace | 300 per 24 hours |
+| Rollback history | The last 10 successful production builds |
+| Redirect rules | 500 |
+| Allowed origins | 32 |
+| Inline scripts per site | 100 |
+
+Builds run without network access, so a component can't fetch data while the site builds and has to fetch it in the browser with `useEffect` instead.
+
+Failed, skipped and preview builds don't count toward the rollback history. The live build, active previews, in-progress builds and builds within the 24-hour cleanup grace period are protected from deletion. That protection doesn't make a build outside the ten-build window eligible for rollback. See [Roll back to an earlier deployment](/sites/publishing#roll-back-to-an-earlier-deployment).
+
+## Reading a failed build
+
+A failed build lists every problem with its file, line and code in three places: the **Diagnostics** of the deployment in Notra, the build log and annotations on the GitHub check. Warnings never stop a build. An unknown prop or frontmatter field that repeats across files is listed once, with the other places it occurs.
+
+## Common errors
+
+| Code | Message | Fix |
+| --- | --- | --- |
+| `config_json` | `blog.json is not valid JSON` | Look for a trailing comma or a missing quote at the reported line |
+| `config_invalid` | `blog.layout: Invalid option: ...` | The setting has a value that isn't allowed, so check the [blog.json reference](/sites/reference/blog-json) |
+| `frontmatter_missing` | | The post must start with a `---` frontmatter block |
+| `frontmatter_invalid` | `blog/x.mdx is missing "date" in its frontmatter` or `Frontmatter date: ...` | A required field is missing or has the wrong type. Add the line the message suggests, like `date: 2026-11-01`. See [Posts](/sites/posts) |
+| `slug_invalid` | | File and folder names in `blog/` and `changelog/` may only use lowercase letters, digits and dashes |
+| `slug_duplicate` | | Two files end up at the same URL, like `launch.mdx` and `launch/index.mdx` |
+| `mdx_syntax` | `MDX syntax error: ...` | Usually an unclosed tag, an HTML comment or a stray `<` or `{`. See [MDX differs from Markdown](/sites/components/overview#mdx-differs-from-markdown) |
+| `expression_undefined` | `"product" is not defined` | MDX reads `{product}` as JavaScript. To show the braces as text, escape them as `\{product\}`; for a site variable, write `{{ product }}` and add it to `variables` |
+| `unknown_component` | `Unknown component <X>` | Check the spelling (names are case-sensitive), or import the component from a snippet |
+| `import` | `Cannot import "x": ...` | Imports must start with `/` or `./` and point to a file in your site, and Notra doesn't support npm packages |
+| `component_import` | `Import components by name` | Use `import { Counter } from "/snippets/counter.jsx"` rather than a default import |
+| `static_component` | `Use client:static without a value ...` | Use bare `client:static` on a custom JSX or inline component, without another `client:*` directive. See [Static components](/sites/custom-components#static-components) |
+| `default_export` | `Default exports are not supported` | Use `export const Counter = ...` |
+| `snippet_import` | `Snippets cannot import "x"` | A `.jsx` snippet can only import from `"react"`, so import every snippet in the MDX file |
+| `forbidden_syntax` | `require() is not supported` and similar | Node.js APIs, `eval` and dynamic `import()` aren't available. See [Rules](/sites/custom-components#rules) |
+| `blocked_element` | `<script> is not allowed in content` | Move the script to `script.js`. See [Custom scripts](/sites/custom-scripts#custom-scripts) |
+| `slot_unknown` | `Unknown slot "x"` | Rename the file to one of the [slot names](/sites/match-your-website#slots) |
+| `import_cycle` | `Import cycle: a → b → a` | MDX files import each other in a loop |
+| `file_too_large` | `File is larger than 25 MB` | Compress the file or host it elsewhere |
+
+The most common warnings are:
+
+| Code | Meaning |
+| --- | --- |
+| `config_unknown_key` | A top-level setting in `blog.json` is unknown, and Notra ignores it |
+| `variable_unknown` | A `{{ name }}` isn't defined in `variables`, and Notra shows it as written |
+| `unknown_prop` | A built-in component got a prop it doesn't have, like `icon` on `<Card>`, and Notra ignores it |
+| `frontmatter_unknown_key` | A frontmatter field isn't supported, like Mintlify's `sidebarTitle`, and Notra ignores it |
+| `icon_unknown` | An icon in `blog.json` isn't one of the [bundled icons](/sites/reference/blog-json#icons), and Notra skips it |
+| `navbar_primary_button` | `navbar.primary` has `type: "button"`, and Notra reads it as `navbar.cta` |
+| `featured_unknown` | A path in `blog.featured` doesn't match a post |
+| `no_entries` | There are no posts or changelog entries yet |
+| `unsafe_filename` | A file name has characters that aren't allowed, and Notra skipped the file |

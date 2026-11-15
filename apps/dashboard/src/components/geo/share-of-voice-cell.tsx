@@ -4,7 +4,6 @@ import { GeoBar } from "@notra/ui/components/geo/geo-bar";
 
 import { formatUsageShare } from "@/utils/geo-charts";
 
-/** Share-of-voice bar scaled against the table's leader, with the percent. */
 export function ShareOfVoiceCell({
   share,
   max,

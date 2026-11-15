@@ -14,6 +14,7 @@ import {
   githubIntegrations,
   posts,
 } from "@notra/db/schema";
+import { advisoryXactLock } from "@notra/db/utils/advisory-xact-lock";
 import { and, desc, eq, gt, ne, or, sql } from "drizzle-orm";
 import { customAlphabet } from "nanoid";
 
@@ -31,9 +32,7 @@ async function lockPullRequest(
   repository: string,
   pullRequestNumber: number
 ) {
-  await tx.execute(
-    sql`select pg_advisory_xact_lock(hashtextextended(${pullRequestLockKey(repository, pullRequestNumber)}, 0))`
-  );
+  await advisoryXactLock(tx, pullRequestLockKey(repository, pullRequestNumber));
 }
 
 function toPublication(
@@ -45,8 +44,8 @@ function toPublication(
     repo: string;
     path: string;
     branch: string;
-    pullRequestNumber: number;
-    pullRequestUrl: string;
+    pullRequestNumber: number | null;
+    pullRequestUrl: string | null;
     headSha: string | null;
     status: ContentPublication["status"];
   },
@@ -56,13 +55,29 @@ function toPublication(
     markdown: string | null;
   } | null
 ): ContentPublication {
+  if (row.pullRequestNumber === null || row.pullRequestUrl === null) {
+    throw new Error("An open content publication must have a pull request");
+  }
   return {
     ...row,
+    pullRequestNumber: row.pullRequestNumber,
+    pullRequestUrl: row.pullRequestUrl,
     contentType:
       (post?.contentType as ContentPublication["contentType"]) ?? null,
     title: post?.title ?? null,
     markdown: post?.markdown ?? null,
   };
+}
+
+function findPublicationPost(postId: string, organizationId: string) {
+  return db.query.posts.findFirst({
+    where: and(eq(posts.id, postId), eq(posts.organizationId, organizationId)),
+    columns: {
+      contentType: true,
+      title: true,
+      markdown: true,
+    },
+  });
 }
 
 export async function recordContentPublication(
@@ -77,9 +92,7 @@ export async function recordContentPublication(
       `${params.owner}/${params.repo}`,
       params.pullRequestNumber
     );
-    // Publication creation and content synchronization lock the post first.
-    // This serializes ownership changes with revision-guarded post updates.
-    await tx
+    const [post] = await tx
       .select({ id: posts.id })
       .from(posts)
       .where(
@@ -89,6 +102,9 @@ export async function recordContentPublication(
         )
       )
       .for("update");
+    if (!post) {
+      return null;
+    }
 
     const newer = await tx.query.contentPublications.findFirst({
       where: and(
@@ -97,7 +113,8 @@ export async function recordContentPublication(
         gt(contentPublications.createdAt, new Date(publishedAt)),
         or(
           ne(contentPublications.repositoryId, params.repositoryId),
-          ne(contentPublications.pullRequestNumber, params.pullRequestNumber)
+          // Direct publications have no PR number, and NULL <> n is never true.
+          sql`${contentPublications.pullRequestNumber} is distinct from ${params.pullRequestNumber}`
         )
       ),
       columns: { id: true },
@@ -112,8 +129,6 @@ export async function recordContentPublication(
         eq(contentPublications.pullRequestNumber, params.pullRequestNumber)
       ),
     });
-    // Check the target before retiring the post's current mapping. A stale
-    // terminal retry and a PR already owned by another post are both no-ops.
     if (
       existingTarget &&
       (existingTarget.organizationId !== params.organizationId ||
@@ -124,9 +139,6 @@ export async function recordContentPublication(
     }
 
     if (status === "open") {
-      // A post keeps one open publication. Republishing after its pull request
-      // closed, or into another repository, supersedes the older row instead of
-      // violating contentPublications_open_post_uidx.
       await tx
         .update(contentPublications)
         .set({ status: "closed", updatedAt: new Date() })
@@ -168,8 +180,6 @@ export async function recordContentPublication(
           contentPublications.repositoryId,
           contentPublications.pullRequestNumber,
         ],
-        // A delayed writer must not steal a PR mapping from another post or
-        // resurrect a terminal publication.
         setWhere: and(
           eq(contentPublications.postId, params.postId),
           eq(contentPublications.status, "open")
@@ -180,8 +190,6 @@ export async function recordContentPublication(
           path: params.path,
           branch: params.branch,
           pullRequestUrl: params.pullRequestUrl,
-          // Advance a republish only from its recorded baseline. Replays must
-          // not overwrite a newer publish or a concurrent content sync.
           headSha: sql`case
             when ${contentPublications.headSha} is not distinct from ${params.previousHeadSha ?? null}
               and ${contentPublications.createdAt} <= ${publishedAt}::timestamp
@@ -231,9 +239,6 @@ export async function reconcileContentPublication(
     return recorded;
   }
 
-  // Overlapping publishes can commit on top of a head recorded after their
-  // initial read. Advance only along GitHub's graph, and only from the head
-  // we validated. A race retries through the caller or the durable workflow.
   const [advanced] = await db
     .update(contentPublications)
     .set({ headSha: publication.headSha, updatedAt: new Date() })
@@ -272,8 +277,6 @@ export async function syncContentPublication(
   if (snapshot.headSha === repair.commitSha) {
     return { status: "synchronized", markdown: repair.markdown };
   }
-  // Null is an explicit initial baseline. Otherwise only move forwards along
-  // the PR's commit graph; manual and unrelated intermediary commits are safe.
   if (
     snapshot.headSha !== null &&
     !(await isAncestor(snapshot.headSha, repair.commitSha))
@@ -309,8 +312,6 @@ export async function syncContentPublication(
     if (!publication) {
       return { status: "superseded" } as const;
     }
-    // Idempotent repair: do not overwrite post content after this revision was
-    // already recorded by a successful newer execution.
     if (publication.headSha === repair.commitSha) {
       return { status: "synchronized", markdown: repair.markdown } as const;
     }
@@ -411,17 +412,10 @@ export async function findOpenContentPublicationByPullRequest(params: {
   if (!publication) {
     return null;
   }
-  const post = await db.query.posts.findFirst({
-    where: and(
-      eq(posts.id, publication.postId),
-      eq(posts.organizationId, publication.organizationId)
-    ),
-    columns: {
-      contentType: true,
-      title: true,
-      markdown: true,
-    },
-  });
+  const post = await findPublicationPost(
+    publication.postId,
+    publication.organizationId
+  );
   return {
     ...toPublication(publication, post),
     organizationId: publication.organizationId,
@@ -447,17 +441,10 @@ export async function findContentPublicationForPullRequest(params: {
   if (!publication) {
     return null;
   }
-  const post = await db.query.posts.findFirst({
-    where: and(
-      eq(posts.id, publication.postId),
-      eq(posts.organizationId, params.organizationId)
-    ),
-    columns: {
-      contentType: true,
-      title: true,
-      markdown: true,
-    },
-  });
+  const post = await findPublicationPost(
+    publication.postId,
+    params.organizationId
+  );
   return toPublication(publication, post);
 }
 
@@ -475,16 +462,9 @@ export async function findOpenContentPublicationForPost(params: {
   if (!publication) {
     return null;
   }
-  const post = await db.query.posts.findFirst({
-    where: and(
-      eq(posts.id, publication.postId),
-      eq(posts.organizationId, params.organizationId)
-    ),
-    columns: {
-      contentType: true,
-      title: true,
-      markdown: true,
-    },
-  });
+  const post = await findPublicationPost(
+    publication.postId,
+    params.organizationId
+  );
   return toPublication(publication, post);
 }

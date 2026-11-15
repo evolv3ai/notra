@@ -94,8 +94,6 @@ export async function checkMissedGeoScans(): Promise<void> {
     return;
   }
 
-  // Rotate the starting point: when Slack stays unavailable, an old failing
-  // batch must not prevent newer missed scans from being attempted next tick.
   const first =
     (Math.floor(startedAt / GEO_SCAN_ALERTS.sweepIntervalMs) *
       GEO_SCAN_ALERTS.concurrency) %

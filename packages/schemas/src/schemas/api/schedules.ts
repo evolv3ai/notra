@@ -6,10 +6,12 @@ import {
 } from "@notra/ai/constants/schedule-interval";
 import { parseUtcDate } from "@notra/ai/utils/schedule-interval";
 import { SUPPORTED_CONTENT_GENERATION_TYPES } from "@notra/content-generation/schemas";
+import { AUTOMATION_RUN_STATUSES } from "@notra/db/constants/automation-runs";
 import { lookbackWindowEnum } from "@notra/db/schema";
 
 import { splitCommaSeparatedValues } from "../../utils/query-params";
 import {
+  automationNotifySchema,
   cronAnchorDateSchema,
   cronFrequencySchema,
   cronIntervalDaysSchema,
@@ -148,6 +150,11 @@ export const scheduleOutputConfigSchema = z
         example:
           "Write a tutorial-style post that walks through one feature shipped in this window, with code samples.",
       }),
+    notify: automationNotifySchema.optional().openapi({
+      description:
+        "Where to announce new content after a successful run: Slack posts to the organization's notification channel, email goes to the workspace owners.",
+      example: { slack: true, email: false },
+    }),
   })
   .optional();
 
@@ -223,4 +230,47 @@ export const deleteScheduleResponseSchema = z.object({
 
 export const scheduleTargetsRepositoryIdsSchema = z.object({
   repositoryIds: z.array(z.string()),
+});
+
+export const runScheduleResponseSchema = z.object({
+  runId: z.string().openapi({
+    description:
+      "ID of the run, as listed by `GET /v1/schedules/{scheduleId}/runs`.",
+  }),
+  organization: organizationResponseSchema,
+});
+
+export const listScheduleRunsQuerySchema = z.object({
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(50)
+    .default(10)
+    .openapi({ param: { name: "limit", in: "query" } }),
+});
+
+const scheduleRunSchema = z.object({
+  id: z.string(),
+  status: z.enum(AUTOMATION_RUN_STATUSES).openapi({
+    description:
+      "`running` until the run reports back. A run that never reports back is shown as `failed` after six hours.",
+  }),
+  title: z.string().nullable().openapi({
+    description: "Title of what the run produced, null while running.",
+  }),
+  postId: z.string().nullable().openapi({
+    description: "The draft post the run created, if any.",
+  }),
+  errorMessage: z.string().nullable(),
+  manual: z.boolean().openapi({
+    description: "Started on demand rather than by the schedule.",
+  }),
+  startedAt: z.string(),
+  finishedAt: z.string().nullable(),
+});
+
+export const listScheduleRunsResponseSchema = z.object({
+  runs: z.array(scheduleRunSchema),
+  organization: organizationResponseSchema,
 });

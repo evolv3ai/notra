@@ -4,7 +4,6 @@ import {
   InternalDashboardTimeoutError,
 } from "@notra/schemas/api/internal-dashboard";
 import { internalWorkflowErrorResponseSchema } from "@notra/schemas/api/internal-workflow";
-import { getVercelOidcToken } from "@vercel/oidc";
 import { Config, Context, Effect, Layer, Redacted } from "effect";
 
 import type {
@@ -17,7 +16,7 @@ export class InternalDashboardService extends Context.Service<
   InternalDashboardOperations
 >()("api/InternalDashboard") {}
 
-export function internalDashboardLayer(deps: InternalDashboardDependencies) {
+function internalDashboardLayer(deps: InternalDashboardDependencies) {
   return Layer.succeed(
     InternalDashboardService,
     InternalDashboardService.of({
@@ -114,15 +113,9 @@ export const internalDashboardLive = internalDashboardLayer({
     if (secret.trim()) {
       return secret.trim();
     }
-    // Preserve unauthenticated fallback: the dashboard remains the authority
-    // and returns its existing HTTP refusal when OIDC is unavailable.
-    return yield* Effect.tryPromise({
-      try: () => getVercelOidcToken(),
-      catch: () =>
-        new InternalDashboardAdapterError({
-          kind: "authentication",
-          message: "Internal dashboard credentials unavailable",
-        }),
-    }).pipe(Effect.catch(() => Effect.succeed(null)));
+    return yield* Effect.tryPromise(async () => {
+      const { getVercelOidcToken } = await import("@vercel/oidc");
+      return getVercelOidcToken();
+    }).pipe(Effect.orElseSucceed(() => null));
   }),
 });

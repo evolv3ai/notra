@@ -15,6 +15,7 @@ export const buildGeoScanCheckContext = Effect.fn("geo.buildScanCheckContext")(
       capturedAt: new Date(),
       companyName: context.companyName,
       aliases: context.aliases,
+      companyDescription: context.companyDescription,
       websiteUrl: context.websiteUrl,
       domains: context.domains,
     };

@@ -5,16 +5,22 @@ import {
 import { checkContentBilling } from "@notra/ai/billing/content-billing";
 import { FEATURES } from "@notra/ai/billing/features";
 import {
+  GeoEngineCredentialsRequired,
   GeoEntitlementService,
-  GeoFeatureFlagService,
   GeoGenerationService,
   GeoWorkflowService,
 } from "@notra/geo-core/deps";
 import {
   agentReadinessNetworkLayer,
   geoModelLayer,
+  geoCodingAgentAccessLayer,
 } from "@notra/geo-core/geo/host-layers";
 import { geoSearchConsoleLive } from "@notra/geo-core/geo/search-console-live";
+import {
+  GeoBillingError,
+  GeoGenerationTrackingError,
+  GeoWorkflowStartError,
+} from "@notra/geo-core/schemas/host-service-errors";
 import type { GeoZdrEntitlement } from "@notra/geo-core/types/geo";
 import { Redis } from "@upstash/redis";
 import { Effect, Layer } from "effect";
@@ -33,36 +39,31 @@ import { internalDashboardLive } from "../internal-dashboard";
 
 const redis = Redis.fromEnv();
 
+function startWorkflowRun(spanName: string, path: string) {
+  return Effect.fn(spanName)(function* (payload: unknown) {
+    const runId = yield* startDashboardWorkflowEffect(
+      getInternalWorkflowUrl(process.env, path),
+      payload
+    ).pipe(
+      Effect.provide(internalDashboardLive),
+      Effect.mapError((cause) => new GeoWorkflowStartError({ cause }))
+    );
+    return { runId };
+  });
+}
+
 const workflowLayer = Layer.succeed(GeoWorkflowService, {
-  startGeoScanRun: Effect.fn("GeoApiWorkflow.startGeoScanRun")(
-    function* (payload) {
-      const runId = yield* startDashboardWorkflowEffect(
-        getInternalWorkflowUrl(process.env, GEO_SCAN_INTERNAL_WORKFLOW_PATH),
-        payload
-      ).pipe(Effect.provide(internalDashboardLive));
-      return { runId };
-    }
+  startGeoScanRun: startWorkflowRun(
+    "GeoApiWorkflow.startGeoScanRun",
+    GEO_SCAN_INTERNAL_WORKFLOW_PATH
   ),
-  startGeoWriterRun: Effect.fn("GeoApiWorkflow.startGeoWriterRun")(
-    function* (payload) {
-      const runId = yield* startDashboardWorkflowEffect(
-        getInternalWorkflowUrl(process.env, GEO_WRITER_INTERNAL_WORKFLOW_PATH),
-        payload
-      ).pipe(Effect.provide(internalDashboardLive));
-      return { runId };
-    }
+  startGeoWriterRun: startWorkflowRun(
+    "GeoApiWorkflow.startGeoWriterRun",
+    GEO_WRITER_INTERNAL_WORKFLOW_PATH
   ),
-  startAgentReadinessRun: Effect.fn("GeoApiWorkflow.startAgentReadinessRun")(
-    function* (payload) {
-      const runId = yield* startDashboardWorkflowEffect(
-        getInternalWorkflowUrl(
-          process.env,
-          AGENT_READINESS_INTERNAL_WORKFLOW_PATH
-        ),
-        payload
-      ).pipe(Effect.provide(internalDashboardLive));
-      return { runId };
-    }
+  startAgentReadinessRun: startWorkflowRun(
+    "GeoApiWorkflow.startAgentReadinessRun",
+    AGENT_READINESS_INTERNAL_WORKFLOW_PATH
   ),
 });
 
@@ -100,21 +101,9 @@ const entitlementLayer = Layer.succeed(GeoEntitlementService, {
             outputType: null,
             quotaFeatureId: FEATURES.AI_ANSWERS,
           }),
-        catch: (cause) => cause,
+        catch: (cause) => new GeoBillingError({ cause }),
       })
   ),
-});
-
-const featureFlagLayer = Layer.succeed(GeoFeatureFlagService, {
-  // The API has no feature-flag client. Hidden engines are preserved when
-  // settings are saved, so reporting direct engines as disabled cannot remove
-  // access.
-  isCursorEngineEnabledForOrganization: Effect.fn(
-    "GeoApiFeatureFlags.isCursorEnabled"
-  )(() => Effect.succeed(false)),
-  isOpenCodeEngineEnabledForOrganization: Effect.fn(
-    "GeoApiFeatureFlags.isOpenCodeEnabled"
-  )(() => Effect.succeed(false)),
 });
 
 const generationLayer = Layer.succeed(GeoGenerationService, {
@@ -122,7 +111,7 @@ const generationLayer = Layer.succeed(GeoGenerationService, {
     (organizationId, generation) =>
       Effect.tryPromise({
         try: () => addActiveGeneration(redis, organizationId, generation),
-        catch: (cause) => cause,
+        catch: (cause) => new GeoGenerationTrackingError({ cause }),
       })
   ),
   generateRunId: Effect.fn("GeoApiGeneration.generateRunId")((triggerId) =>
@@ -130,18 +119,18 @@ const generationLayer = Layer.succeed(GeoGenerationService, {
   ),
 });
 
-/**
- * Capabilities the public API can truthfully provide to GEO programs.
- *
- * Content billing is deliberately absent. Programs that require it run in the
- * dashboard and are reached through its authenticated internal endpoints.
- */
+const engineCredentialsLayer = Layer.succeed(
+  GeoEngineCredentialsRequired,
+  false
+);
+
 export const geoCoreApiLayer = Layer.mergeAll(
+  engineCredentialsLayer,
   agentReadinessNetworkLayer,
   geoModelLayer,
   geoSearchConsoleLive,
   workflowLayer,
   entitlementLayer,
-  featureFlagLayer,
+  geoCodingAgentAccessLayer,
   generationLayer
 );

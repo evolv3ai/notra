@@ -1,20 +1,20 @@
 import { expect, mock, test } from "bun:test";
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-// This is deliberately an in-memory Drizzle transaction/row-lock simulation,
-// not a PostgreSQL integration test. Keep it isolated from .env databases.
+import { spawnAsync } from "@notra/ai/utils/spawn-async";
+
 if (process.env.NOTRA_CONTENT_PUBLICATION_TEST_WORKER !== "1") {
-  test("content publication synchronization regressions (in-memory adapter)", () => {
-    const result = spawnSync(
+  test("content publication synchronization regressions (in-memory adapter)", async () => {
+    const result = await spawnAsync(
       process.execPath,
       ["test", fileURLToPath(import.meta.url)],
       {
         env: { ...process.env, NOTRA_CONTENT_PUBLICATION_TEST_WORKER: "1" },
+        timeoutMs: 15_000,
       }
     );
-    expect(result.status, result.stderr?.toString()).toBe(0);
-  });
+    expect(result.status, result.stderr).toBe(0);
+  }, 20_000);
 } else {
   type Publication = {
     id: string;

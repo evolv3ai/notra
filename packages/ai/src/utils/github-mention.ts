@@ -11,13 +11,8 @@ const MENTION_HANDLE_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i;
 const FENCED_CODE_PATTERN = /(?:```|~~~)[\s\S]*?(?:```|~~~|$)/g;
 const INLINE_CODE_PATTERN = /`[^`\n]*`/g;
 const QUOTED_LINE_PATTERN = /^[ \t]*>.*$/gm;
-// A mention must not be glued to a preceding word, so `jan@notra.dev` or
-// `path/@notra` do not count.
-// `@org/team` is a team mention, so a handle followed by a slash is skipped too.
 const MENTION_PATTERN =
   /(?<![\p{L}\p{N}\p{M}_.@/-])@([a-z0-9][a-z0-9-]*)(?:\[bot\])?(?![\p{L}\p{N}\p{M}_/-])/giu;
-// People rarely type the exact App slug. @usenotra and any handle from the
-// Notra family count: @notra, @notra-ai, @notrabot, @notra-dev-acme, ...
 const NOTRA_FAMILY_HANDLE_PATTERN = /^notra(?:-[a-z0-9-]*|ai|bot|app)?$/;
 
 export function parseGitHubMentionAgentReply(reply: string) {
@@ -71,7 +66,7 @@ export function commentMentionsNotra(
   );
 }
 
-export function isNotraMentionHandle(handle: string) {
+function isNotraMentionHandle(handle: string) {
   const normalized = normalizeHandle(handle);
   return (
     normalized === "usenotra" || NOTRA_FAMILY_HANDLE_PATTERN.test(normalized)
@@ -102,11 +97,6 @@ const COMMITTED_REPLY_NOTE = "(This reply came with a commit of the change.)";
 const COMMITTED_REPLY_FOOTER_PATTERN =
   /<sub>[\s\S]*?github\.com\/[^/\s]+\/[^/\s]+\/commit\/[a-f\d]+[\s\S]*?<\/sub>/i;
 
-/**
- * The diff and the commit footer say that a reply came with a commit. Both are
- * dropped, so a short note keeps that fact: prose such as "Should I rename the
- * title too?" otherwise reads as if the request were still open.
- */
 function stripReplyDecoration(body: string) {
   const committed = COMMITTED_REPLY_FOOTER_PATTERN.test(body);
   let text = committed ? body.replace(REPLY_DIFF_PATTERN, "") : body;
@@ -117,10 +107,6 @@ function stripReplyDecoration(body: string) {
   return committed && text ? `${text}\n\n${COMMITTED_REPLY_NOTE}` : text;
 }
 
-/**
- * Review bots wrap prompts for coding agents and long analysis in <details>,
- * and hide metadata in HTML comments. Only the finding itself is context.
- */
 function stripBotDecoration(body: string) {
   let text = removeHtmlComments(body);
   for (const pattern of REPLY_DECORATION_PATTERNS) {
@@ -151,10 +137,6 @@ export function buildGitHubMentionThread(params: {
     comment.threadRootId === params.current.threadRootId;
   const thread: Array<{ author: string; body: string }> = [];
   let mentionThreadRoot: { author: string; body: string } | null = null;
-  // A review mention needs its own thread and the threads Notra started: its
-  // inline replies to conversation comments live there, and without them those
-  // requests look unanswered. An issue mention needs every thread Notra replied
-  // in, but not each unrelated review discussion on a busy pull request.
   const reviewRootIds =
     params.current.kind === "review" && params.current.threadRootId != null
       ? new Set([
@@ -190,8 +172,6 @@ export function buildGitHubMentionThread(params: {
     }
     const isNotra = isNotraComment(comment);
     const isReviewBot = !isNotra && isBotInMentionThread(comment);
-    // Other bots are noise, and people without a role on the repository are
-    // not part of the conversation the commenter is steering.
     if (
       !(isNotra || isReviewBot) &&
       (comment.authorIsBot || !comment.authorIsTrusted)
@@ -231,8 +211,6 @@ export function buildGitHubMentionThread(params: {
     thread.push(entry);
   }
   const recent = thread.slice(-GITHUB_MENTION_THREAD_CONTEXT.commentLimit);
-  // The comment a review thread started with is what every reply is about, so
-  // a long thread must not push it out.
   if (mentionThreadRoot && !recent.includes(mentionThreadRoot)) {
     return [mentionThreadRoot, ...recent.slice(1)];
   }

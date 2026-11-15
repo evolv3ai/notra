@@ -100,7 +100,6 @@ export const ColorPicker = ({
     onChangeRef.current = onChange;
   }, [onChange]);
 
-  // Update color when controlled value changes
   useEffect(() => {
     if (value) {
       const color = Color(value);
@@ -119,7 +118,6 @@ export const ColorPicker = ({
     }
   }, [value]);
 
-  // Notify the parent directly from user-driven updates
   const commit = useCallback((partial: Partial<ColorState>) => {
     const next = { ...stateRef.current, ...partial };
     stateRef.current = next;
@@ -401,8 +399,7 @@ export const ColorPickerEyeDropper = ({
 
   const handleEyeDropper = async () => {
     try {
-      // @ts-expect-error - EyeDropper API is experimental
-      const eyeDropper = new EyeDropper();
+      const eyeDropper = new window.EyeDropper();
       const result = await eyeDropper.open();
       const color = Color(result.sRGBHex);
       const [h = 0, s = 0, l = 0] = color.hsl().array();

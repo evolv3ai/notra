@@ -5,7 +5,7 @@ import type {
 import type { ClaudeCodeTodo } from "@notra/ui/components/ai-skins/claude-code/claude-code-todo-list";
 import type { ClaudeCodeToolCallStatus } from "@notra/ui/components/ai-skins/claude-code/claude-code-tool-call";
 
-export interface ClaudeStoryHeader {
+interface ClaudeStoryHeader {
   version: string;
   model: string;
   org: string;
@@ -23,13 +23,13 @@ export interface ClaudeStoryToolCall {
   detail?: string;
 }
 
-export interface ClaudeStoryTurnSummary {
+interface ClaudeStoryTurnSummary {
   verb: string;
   duration: string;
   doneAt: string;
 }
 
-export interface ClaudeStorySpinner {
+interface ClaudeStorySpinner {
   verb: string;
   elapsed: string;
   tokens: number;

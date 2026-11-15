@@ -90,9 +90,21 @@ function dashboardServiceAuth(): AuthFn<Request> {
   };
 }
 
+function isLocalDevelopmentServer(): boolean {
+  return (
+    process.env.EVE_DEV === "1" ||
+    (Boolean(process.env.VERCEL) && process.env.VERCEL_ENV === "development")
+  );
+}
+
+// eve 0.27's localDev() trusts the request URL's hostname, so only enable it
+// under `eve dev` / `vercel dev`, matching newer eve releases.
 function localDevOrganizationAuth(): AuthFn<Request> {
   const authenticate = localDev();
   return async (request) => {
+    if (!isLocalDevelopmentServer()) {
+      return null;
+    }
     const sessionAuth = await authenticate(request);
     return sessionAuth ? withOrganizationAttribute(sessionAuth, request) : null;
   };

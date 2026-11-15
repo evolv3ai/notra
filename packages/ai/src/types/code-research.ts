@@ -42,7 +42,6 @@ export interface CodeResearchWorkspaceState {
   repository: CodeResearchRepository;
   target: CodeResearchTarget;
   headSha: string;
-  // Unix seconds when Upstash deletes the box.
   expiresAt: number;
 }
 
@@ -50,14 +49,6 @@ export interface CodeResearchWorkspace {
   box: CodeResearchBoxHandle;
   state: CodeResearchWorkspaceState;
   reused: boolean;
-}
-
-export interface CodeResearchFileListing {
-  path: string;
-  totalFiles: number;
-  truncated: boolean;
-  files: string[];
-  directories: { path: string; files: number }[];
 }
 
 export interface CodeResearchSearchMatch {

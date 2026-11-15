@@ -1,11 +1,19 @@
+import { GITHUB_API_VERSION_HEADERS } from "@notra/ai/constants/github";
+import { getTokenForIntegrationId } from "@notra/ai/integrations/github";
+import { createOctokit } from "@notra/ai/utils/octokit";
 import {
   githubIntegrations,
   linearIntegrations,
   repositoryOutputs,
 } from "@notra/db/schema";
+import { isPgUniqueViolation } from "@notra/db/utils/pg-errors";
 import { and, asc, eq } from "drizzle-orm";
 import { Effect } from "effect";
 
+import {
+  GITHUB_ACTIVITY_DEFAULT_LOOKBACK_MS,
+  GITHUB_ACTIVITY_PER_PAGE,
+} from "../constants/github-activity";
 import {
   GitHubAccessError,
   IntegrationCreateError,
@@ -13,6 +21,7 @@ import {
   IntegrationDatabaseError,
   IntegrationDuplicateError,
   IntegrationNotFoundError,
+  IntegrationUnavailableError,
 } from "../errors/integrations";
 import type { DbClient } from "../types/db";
 import type {
@@ -21,6 +30,8 @@ import type {
   CreateGitHubIntegrationProgramSuccess,
   DeleteIntegrationProgramInput,
   DeleteIntegrationProgramSuccess,
+  GetGitHubActivityProgramInput,
+  GetGitHubActivityProgramSuccess,
   ListIntegrationsProgramInput,
   ListIntegrationsProgramSuccess,
 } from "../types/integrations";
@@ -32,12 +43,11 @@ import {
   generateGitHubWebhookSecret,
   validateGitHubRepositoryAccess,
 } from "../utils/github-integrations";
-import { serializeDisabledTriggers } from "../utils/integrations";
-import { isConstraintViolation, isPgUniqueViolation } from "../utils/pg-errors";
 import {
   deleteQstashSchedulesForTriggers,
-  disableTriggersAndDeleteIntegration,
+  disableTriggersAndDelete,
   getTriggersForIntegration,
+  serializeDisabledTriggers,
 } from "../utils/triggers";
 
 type DbTransaction = Parameters<Parameters<DbClient["transaction"]>[0]>[0];
@@ -52,13 +62,7 @@ const write = <A>(operation: () => Promise<A>) =>
   Effect.tryPromise({
     try: operation,
     catch: (cause) => {
-      if (
-        isPgUniqueViolation(cause) ||
-        isConstraintViolation(
-          cause,
-          "githubIntegrations_organization_owner_repo_uidx"
-        )
-      ) {
+      if (isPgUniqueViolation(cause)) {
         return new IntegrationDuplicateError();
       }
 
@@ -237,7 +241,7 @@ const deleteIntegrationWithTriggerCleanup = Effect.fnUntraced(function* (
   );
 
   yield* database(() =>
-    disableTriggersAndDeleteIntegration(
+    disableTriggersAndDelete(
       input.db,
       input.organizationId,
       affectedTriggers,
@@ -318,3 +322,189 @@ export const deleteIntegration = Effect.fn("integrations.delete")(function* ({
         )
   );
 });
+
+const githubRead = <A>(operation: () => Promise<A>) =>
+  Effect.tryPromise({
+    try: operation,
+    catch: (cause) => {
+      const status =
+        typeof cause === "object" && cause !== null && "status" in cause
+          ? cause.status
+          : undefined;
+      const headers =
+        typeof cause === "object" && cause !== null && "response" in cause
+          ? (cause.response as { headers?: Record<string, string> } | undefined)
+              ?.headers
+          : undefined;
+      const message = cause instanceof Error ? cause.message : "";
+      const rateLimited =
+        status === 429 ||
+        (status === 403 &&
+          (headers?.["x-ratelimit-remaining"] === "0" ||
+            headers?.["retry-after"] !== undefined ||
+            /rate limit/i.test(message)));
+      if (
+        status === 401 ||
+        status === 404 ||
+        (status === 403 && !rateLimited)
+      ) {
+        return new GitHubAccessError({
+          message:
+            "Notra can no longer read this repository. Reconnect the integration in the dashboard.",
+        });
+      }
+      return new IntegrationUnavailableError({ cause });
+    },
+  });
+
+const splitCommitMessage = (message: string) => {
+  const [title = "", ...rest] = message.split("\n");
+  return { title, body: rest.join("\n").trim() || null };
+};
+
+export const getGitHubActivity = Effect.fn("integrations.githubActivity")(
+  function* ({
+    db,
+    organizationId,
+    integrationId,
+    query,
+  }: GetGitHubActivityProgramInput) {
+    const integration = yield* database(() =>
+      db.query.githubIntegrations.findFirst({
+        where: and(
+          eq(githubIntegrations.id, integrationId),
+          eq(githubIntegrations.organizationId, organizationId),
+          eq(githubIntegrations.enabled, true),
+          eq(githubIntegrations.repositoryEnabled, true)
+        ),
+        columns: {
+          id: true,
+          displayName: true,
+          owner: true,
+          repo: true,
+          defaultBranch: true,
+        },
+      })
+    );
+    const owner = integration?.owner?.trim();
+    const repo = integration?.repo?.trim();
+    if (!(integration && owner && repo)) {
+      return yield* new IntegrationNotFoundError();
+    }
+
+    const until = query.until ?? new Date().toISOString();
+    const since =
+      query.since ??
+      new Date(
+        Date.parse(until) - GITHUB_ACTIVITY_DEFAULT_LOOKBACK_MS
+      ).toISOString();
+    const sinceMs = Date.parse(since);
+    const untilMs = Date.parse(until);
+    const inWindow = (date: string | null | undefined) => {
+      const ms = date ? Date.parse(date) : Number.NaN;
+      return ms >= sinceMs && ms <= untilMs;
+    };
+
+    const token = yield* githubRead(() =>
+      getTokenForIntegrationId(integration.id, { organizationId })
+    );
+    const octokit = createOctokit(token ?? undefined);
+    const page = query.page;
+    const common = {
+      owner,
+      repo,
+      page,
+      per_page: GITHUB_ACTIVITY_PER_PAGE,
+      headers: GITHUB_API_VERSION_HEADERS,
+    };
+    const branch =
+      integration.defaultBranch ??
+      (yield* githubRead(() =>
+        octokit.request("GET /repos/{owner}/{repo}", {
+          owner,
+          repo,
+          headers: GITHUB_API_VERSION_HEADERS,
+        })
+      )).data.default_branch;
+    const hasNext = (link: string | undefined) =>
+      link?.includes('rel="next"') ?? false;
+
+    let items: GetGitHubActivityProgramSuccess["items"];
+    let more: boolean;
+
+    if (query.type === "commits") {
+      const response = yield* githubRead(() =>
+        octokit.request("GET /repos/{owner}/{repo}/commits", {
+          ...common,
+          since,
+          until,
+          sha: branch,
+        })
+      );
+      items = response.data.map((commit) => ({
+        ref: commit.sha,
+        ...splitCommitMessage(commit.commit.message),
+        author: commit.author?.login ?? commit.commit.author?.name ?? null,
+        url: commit.html_url,
+        occurredAt:
+          commit.commit.committer?.date ?? commit.commit.author?.date ?? until,
+      }));
+      more = hasNext(response.headers.link);
+    } else if (query.type === "releases") {
+      const response = yield* githubRead(() =>
+        octokit.request("GET /repos/{owner}/{repo}/releases", common)
+      );
+      items = response.data
+        .filter((release) => inWindow(release.published_at))
+        .map((release) => ({
+          ref: release.tag_name,
+          title: release.name || release.tag_name,
+          body: release.body ?? null,
+          author: release.author?.login ?? null,
+          url: release.html_url,
+          occurredAt: release.published_at ?? release.created_at,
+        }));
+      more = hasNext(response.headers.link);
+    } else {
+      const response = yield* githubRead(() =>
+        octokit.request("GET /repos/{owner}/{repo}/pulls", {
+          ...common,
+          state: "closed",
+          sort: "updated",
+          direction: "desc",
+          base: branch,
+        })
+      );
+      items = response.data
+        .filter((pull) => inWindow(pull.merged_at))
+        .map((pull) => ({
+          ref: String(pull.number),
+          title: pull.title,
+          body: pull.body ?? null,
+          author: pull.user?.login ?? null,
+          url: pull.html_url,
+          occurredAt: pull.merged_at ?? pull.updated_at,
+        }));
+      const oldest = response.data.at(-1)?.updated_at;
+      more =
+        hasNext(response.headers.link) &&
+        oldest !== undefined &&
+        Date.parse(oldest) >= sinceMs;
+    }
+
+    return {
+      integration: {
+        id: integration.id,
+        displayName: integration.displayName,
+        owner,
+        repo,
+        defaultBranch: integration.defaultBranch,
+      },
+      type: query.type,
+      since,
+      until,
+      items,
+      pagination: { page, nextPage: more ? page + 1 : null },
+    } satisfies GetGitHubActivityProgramSuccess;
+  }
+);

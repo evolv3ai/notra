@@ -10,13 +10,20 @@ export const SITE_TAGLINE = "Get recommended by AI engines.";
 export const SITE_TITLE = `Notra. ${SITE_TAGLINE}`;
 
 export const SITE_DESCRIPTION =
-  "Notra is a modern GEO tool that asks ChatGPT, Claude and Gemini the questions your buyers ask. See if you show up, who shows up instead and how to fix it.";
+  "Notra is a GEO tool that asks ChatGPT, Claude and Gemini the questions your buyers ask. It shows whether you appear, who appears instead and how to fix it.";
 
 export const DEFAULT_SOCIAL_IMAGE = {
   url: "/og-image.png",
   width: 1200,
   height: 630,
   alt: "Notra social preview image",
+} as const;
+
+const DEFAULT_SOCIAL_VIDEO = {
+  url: "/video/notra-og-v2.mp4",
+  width: 1200,
+  height: 630,
+  type: "video/mp4",
 } as const;
 
 const SOCIAL_IMAGE_WIDTH = 1200;
@@ -107,6 +114,24 @@ export const PAGE_SOCIAL_IMAGES = {
     height: SOCIAL_IMAGE_HEIGHT,
     alt: "Notra Slack integration social preview image",
   },
+  github: {
+    url: "/og/github-integration.png",
+    width: SOCIAL_IMAGE_WIDTH,
+    height: SOCIAL_IMAGE_HEIGHT,
+    alt: "Notra GitHub integration social preview image",
+  },
+  linear: {
+    url: "/og/linear-integration.png",
+    width: SOCIAL_IMAGE_WIDTH,
+    height: SOCIAL_IMAGE_HEIGHT,
+    alt: "Notra Linear integration social preview image",
+  },
+  granola: {
+    url: "/og/granola-integration.png",
+    width: SOCIAL_IMAGE_WIDTH,
+    height: SOCIAL_IMAGE_HEIGHT,
+    alt: "Notra Granola integration social preview image",
+  },
 } as const;
 
 export const TWITTER_HANDLE = "@usenotra";
@@ -145,6 +170,7 @@ export const ROOT_METADATA: Metadata = {
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
     images: [DEFAULT_SOCIAL_IMAGE],
+    videos: [DEFAULT_SOCIAL_VIDEO],
   },
   twitter: {
     card: "summary_large_image",

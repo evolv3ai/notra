@@ -1,3 +1,4 @@
+import { ensureSystemSkillRegistry } from "@notra/ai/skills/registry";
 import { db } from "@notra/db/drizzle";
 import { skills } from "@notra/db/schema";
 import { and, eq } from "drizzle-orm";
@@ -13,6 +14,7 @@ export function createUpdateSkillTool() {
     inputSchema: updateSkillInputSchema,
     async execute({ name, content, description }, ctx) {
       const organizationId = requireOrganizationId(ctx);
+      await ensureSystemSkillRegistry();
       const updated = await db
         .update(skills)
         .set({

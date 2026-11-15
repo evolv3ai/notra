@@ -3,7 +3,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { db } from "@notra/db/drizzle";
 import { mcpOAuthCredentials, mcpServerIntegrations } from "@notra/db/schema";
 import { assertPublicHttpUrlResolution } from "@notra/utils/url";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { customAlphabet } from "nanoid";
 
 import type {
@@ -24,7 +24,13 @@ import { McpStoreListingUnavailableError } from "./mcp-store-errors";
 import { refreshMcpToolIndexForIntegration } from "./mcp-tool-index";
 
 const nanoid = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 16);
-type McpPreviewTool = Awaited<ReturnType<Client["listTools"]>>["tools"][number];
+
+const integrationRelations = {
+  createdByUser: {
+    columns: { id: true, name: true, email: true, image: true },
+  },
+  oauthCredential: { columns: { status: true } },
+} as const;
 
 function getMcpAuthType(authType: string): McpAuthType {
   if (authType === "headers" || authType === "oauth") {
@@ -188,6 +194,91 @@ export function createMcpStoreListing(
   return createMcpServerIntegration(params, "store_listing");
 }
 
+export function getMcpStoreListing(scope: McpServerIntegrationScope) {
+  return getMcpServerIntegration({ ...scope, resourceType: "store_listing" });
+}
+
+export async function getMcpStoreListingById(integrationId: string) {
+  return (
+    (await db.query.mcpServerIntegrations.findFirst({
+      where: and(
+        eq(mcpServerIntegrations.id, integrationId),
+        eq(mcpServerIntegrations.resourceType, "store_listing")
+      ),
+      with: integrationRelations,
+    })) ?? null
+  );
+}
+
+export function getMcpStoreListingsByOrganization(organizationId: string) {
+  return getMcpServerIntegrationsByOrganization(
+    organizationId,
+    "store_listing"
+  );
+}
+
+export function updateMcpStoreListing(
+  scope: McpServerIntegrationScope,
+  updates: UpdateMcpServerIntegrationParams
+) {
+  return updateMcpServerIntegration(scope, "store_listing", updates);
+}
+
+export function deleteMcpStoreListing(scope: McpServerIntegrationScope) {
+  return deleteMcpServerIntegration(scope, "store_listing");
+}
+
+export async function listMcpServerToolsPreview(input: {
+  url: string;
+  headers?: McpHeaderMap;
+}) {
+  const timeoutMs = 8000;
+  const client = new Client({ name: "notra-console", version: "0.0.1" });
+  const deadline = AbortSignal.timeout(timeoutMs);
+  try {
+    await assertPublicHttpUrlResolution(input.url);
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL(input.url), {
+        fetch: publicMcpRuntimeFetch,
+        requestInit: { headers: input.headers ?? {}, redirect: "error" },
+      }),
+      { signal: deadline, timeout: timeoutMs }
+    );
+    let page = await client.listTools(
+      {},
+      {
+        signal: deadline,
+        timeout: timeoutMs,
+      }
+    );
+    const tools = [...page.tools];
+    let pages = 1;
+    while (page.nextCursor) {
+      if (pages++ >= 10 || tools.length >= 500) {
+        throw new Error("MCP tool preview exceeded its page or tool limit");
+      }
+      page = await client.listTools(
+        { cursor: page.nextCursor },
+        {
+          signal: deadline,
+          timeout: timeoutMs,
+        }
+      );
+      tools.push(...page.tools);
+    }
+    if (tools.length > 500) {
+      throw new Error("MCP tool preview exceeded its tool limit");
+    }
+    return tools.map((tool) => ({
+      name: tool.name,
+      title: tool.title ?? null,
+      description: tool.description ?? null,
+    }));
+  } finally {
+    await client.close().catch(() => undefined);
+  }
+}
+
 async function getMcpServerIntegration(scope: McpTypedServerIntegrationScope) {
   const integration = await db.query.mcpServerIntegrations.findFirst({
     where: and(
@@ -195,21 +286,7 @@ async function getMcpServerIntegration(scope: McpTypedServerIntegrationScope) {
       eq(mcpServerIntegrations.organizationId, scope.organizationId),
       eq(mcpServerIntegrations.resourceType, scope.resourceType)
     ),
-    with: {
-      createdByUser: {
-        columns: {
-          id: true,
-          name: true,
-          email: true,
-          image: true,
-        },
-      },
-      oauthCredential: {
-        columns: {
-          status: true,
-        },
-      },
-    },
+    with: integrationRelations,
   });
 
   return integration ?? null;
@@ -217,35 +294,6 @@ async function getMcpServerIntegration(scope: McpTypedServerIntegrationScope) {
 
 export function getMcpConnectionIntegration(scope: McpServerIntegrationScope) {
   return getMcpServerIntegration({ ...scope, resourceType: "connection" });
-}
-
-export function getMcpStoreListing(scope: McpServerIntegrationScope) {
-  return getMcpServerIntegration({ ...scope, resourceType: "store_listing" });
-}
-
-export async function getMcpStoreListingById(integrationId: string) {
-  const listing = await db.query.mcpServerIntegrations.findFirst({
-    where: and(
-      eq(mcpServerIntegrations.id, integrationId),
-      eq(mcpServerIntegrations.resourceType, "store_listing")
-    ),
-    with: {
-      createdByUser: {
-        columns: {
-          id: true,
-          name: true,
-          email: true,
-          image: true,
-        },
-      },
-      oauthCredential: {
-        columns: {
-          status: true,
-        },
-      },
-    },
-  });
-  return listing ?? null;
 }
 
 async function getMcpServerIntegrationsByOrganization(
@@ -257,21 +305,7 @@ async function getMcpServerIntegrationsByOrganization(
       eq(mcpServerIntegrations.organizationId, organizationId),
       eq(mcpServerIntegrations.resourceType, resourceType)
     ),
-    with: {
-      createdByUser: {
-        columns: {
-          id: true,
-          name: true,
-          email: true,
-          image: true,
-        },
-      },
-      oauthCredential: {
-        columns: {
-          status: true,
-        },
-      },
-    },
+    with: integrationRelations,
     orderBy: (table, { desc }) => [desc(table.createdAt)],
   });
 }
@@ -280,28 +314,6 @@ export function getMcpConnectionIntegrationsByOrganization(
   organizationId: string
 ) {
   return getMcpServerIntegrationsByOrganization(organizationId, "connection");
-}
-
-export function getMcpStoreListingsByOrganization(organizationId: string) {
-  return getMcpServerIntegrationsByOrganization(
-    organizationId,
-    "store_listing"
-  );
-}
-
-export async function hasEnabledMcpServerIntegrations(organizationId: string) {
-  const integration = await db.query.mcpServerIntegrations.findFirst({
-    columns: {
-      id: true,
-    },
-    where: and(
-      eq(mcpServerIntegrations.organizationId, organizationId),
-      eq(mcpServerIntegrations.enabled, true),
-      eq(mcpServerIntegrations.resourceType, "connection")
-    ),
-  });
-
-  return Boolean(integration);
 }
 
 async function updateMcpServerIntegration(
@@ -317,6 +329,15 @@ async function updateMcpServerIntegration(
     const [row] = await tx
       .update(mcpServerIntegrations)
       .set({
+        ...(resourceType === "store_listing" &&
+        Object.keys(updates).some((key) => key !== "enabled")
+          ? {
+              storeStatus: sql`case when ${mcpServerIntegrations.storeStatus} in ('live', 'pending_review') then 'pending_review' else ${mcpServerIntegrations.storeStatus} end`,
+              submittedAt: sql`case when ${mcpServerIntegrations.storeStatus} in ('live', 'pending_review') then greatest(date_trunc('milliseconds', clock_timestamp()), ${mcpServerIntegrations.submittedAt} + interval '1 millisecond') else ${mcpServerIntegrations.submittedAt} end`,
+              reviewedAt: null,
+              reviewNote: null,
+            }
+          : {}),
         ...(updates.name !== undefined ? { name: updates.name } : {}),
         ...(updates.url !== undefined ? { url: updates.url } : {}),
         ...(updates.description !== undefined
@@ -378,17 +399,7 @@ async function updateMcpServerIntegration(
         eq(mcpServerIntegrations.organizationId, scope.organizationId),
         eq(mcpServerIntegrations.resourceType, resourceType)
       ),
-      with: {
-        createdByUser: {
-          columns: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-          },
-        },
-        oauthCredential: { columns: { status: true } },
-      },
+      with: integrationRelations,
     });
   });
 
@@ -407,13 +418,6 @@ export function updateMcpConnectionIntegration(
   updates: UpdateMcpServerIntegrationParams
 ) {
   return updateMcpServerIntegration(scope, "connection", updates);
-}
-
-export function updateMcpStoreListing(
-  scope: McpServerIntegrationScope,
-  updates: UpdateMcpServerIntegrationParams
-) {
-  return updateMcpServerIntegration(scope, "store_listing", updates);
 }
 
 async function deleteMcpServerIntegration(
@@ -437,51 +441,6 @@ export function deleteMcpConnectionIntegration(
   scope: McpServerIntegrationScope
 ) {
   return deleteMcpServerIntegration(scope, "connection");
-}
-
-export function deleteMcpStoreListing(scope: McpServerIntegrationScope) {
-  return deleteMcpServerIntegration(scope, "store_listing");
-}
-
-export async function listMcpServerToolsPreview(input: {
-  url: string;
-  headers?: McpHeaderMap;
-}) {
-  const timeoutMs = 8000;
-  const client = new Client({ name: "notra-console", version: "0.0.1" });
-
-  try {
-    await assertPublicHttpUrlResolution(input.url);
-    const transport = new StreamableHTTPClientTransport(new URL(input.url), {
-      fetch: publicMcpRuntimeFetch,
-      requestInit: {
-        headers: input.headers ?? {},
-        redirect: "error",
-      },
-    });
-    await client.connect(transport, {
-      signal: AbortSignal.timeout(timeoutMs),
-      timeout: timeoutMs,
-    });
-    const tools: McpPreviewTool[] = [];
-    let cursor: string | undefined;
-    do {
-      const result = await client.listTools(cursor ? { cursor } : {}, {
-        signal: AbortSignal.timeout(timeoutMs),
-        timeout: timeoutMs,
-      });
-      tools.push(...result.tools);
-      cursor = result.nextCursor;
-    } while (cursor);
-
-    return tools.map((tool) => ({
-      name: tool.name,
-      title: tool.title ?? null,
-      description: tool.description ?? null,
-    }));
-  } finally {
-    await client.close().catch(() => undefined);
-  }
 }
 
 export async function testMcpServerConnection(input: {

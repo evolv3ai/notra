@@ -17,7 +17,7 @@ const clientId = process.env.NEXT_PUBLIC_DATABUDDY_DASHBOARD_WEBSITE_ID ?? "";
 
 let cachedManager: ServerFlagsManager | null = null;
 
-function getFlagsManager(): ServerFlagsManager | null {
+export function getFlagsManager(): ServerFlagsManager | null {
   if (clientId.length === 0) {
     return null;
   }
@@ -25,10 +25,8 @@ function getFlagsManager(): ServerFlagsManager | null {
   if (!cachedManager) {
     cachedManager = createServerFlagsManager({
       clientId,
-      autoFetch: false,
       cacheTtl: GEO_FLAG_CACHE_TTL_MS,
       staleTime: GEO_FLAG_STALE_TIME_MS,
-      skipStorage: true,
     });
   }
 
@@ -41,7 +39,6 @@ export function resolveGeoFlagState(
 ): Effect.Effect<GeoFlagState> {
   return Effect.gen(function* () {
     const manager = getFlagsManager();
-    // The demo shows what a new workspace sees: flagged features stay off.
     if (!manager || isDemoMode()) {
       return "disabled";
     }

@@ -1,4 +1,4 @@
-import type { GeoRouterError } from "./errors";
+import type { GeoProjectDeleteBlockedError, GeoRouterError } from "./errors";
 
 /**
  * A GEO domain failure, reduced to what a status mapper actually reads.
@@ -17,6 +17,7 @@ export interface GeoFailureWire {
   readonly message?: string;
   readonly limit?: number;
   readonly status?: string;
+  readonly reason?: GeoProjectDeleteBlockedError["reason"];
 }
 
 function readString(source: object, key: string): string | undefined {
@@ -35,5 +36,7 @@ export function toGeoFailureWire(error: GeoRouterError): GeoFailureWire {
     message: readString(error, "message"),
     limit: readNumber(error, "limit"),
     status: readString(error, "status"),
+    reason:
+      error._tag === "GeoProjectDeleteBlockedError" ? error.reason : undefined,
   };
 }

@@ -1,3 +1,4 @@
+import { GITHUB_API_VERSION_HEADERS } from "@notra/ai/constants/github";
 import { getGitHubToolRepositoryContextByIntegrationId } from "@notra/ai/integrations/github";
 import { createOctokit } from "@notra/ai/utils/octokit";
 import { defineTool } from "eve/tools";
@@ -33,9 +34,7 @@ export function createGetPullRequestsTool() {
           owner: resolved.owner,
           repo: resolved.repo,
           pull_number,
-          headers: {
-            "X-GitHub-Api-Version": "2022-11-28",
-          },
+          headers: GITHUB_API_VERSION_HEADERS,
         })
       );
       return {

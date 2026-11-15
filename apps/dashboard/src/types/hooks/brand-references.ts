@@ -11,10 +11,6 @@ export interface BrandReference {
   sourceContentHash: string | null;
   sourceSnapshotKey: string | null;
   sourceUrl: string | null;
-  supermemoryDocumentId: string | null;
-  supermemoryMemoryId: string | null;
-  supermemorySyncedAt: string | null;
-  supermemoryLastSyncError: string | null;
   applicableTo: ApplicablePlatform[];
   createdAt: string;
   updatedAt: string;
@@ -28,13 +24,6 @@ export interface TweetMetadata {
   likes?: number;
   retweets?: number;
   replies?: number;
-  createdAt?: string;
-}
-
-export interface BlogMetadata {
-  authorName?: string;
-  title?: string;
-  url?: string;
   createdAt?: string;
 }
 

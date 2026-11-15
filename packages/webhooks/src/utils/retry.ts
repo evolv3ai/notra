@@ -1,3 +1,5 @@
+import { parseRetryAfterMs } from "@notra/utils/retry-after";
+
 import { MAX_ATTEMPTS, RETRY_DELAYS_SECONDS } from "../constants/delivery";
 import type { DeliveryOutcome } from "../types/webhooks";
 
@@ -30,13 +32,8 @@ export function retryDelaySeconds(
 }
 
 export function parseRetryAfter(value: string | null, now: number) {
-  if (value === null) {
-    return null;
-  }
-  const seconds = /^\d+$/.test(value)
-    ? Number(value)
-    : (Date.parse(value) - now) / 1000;
-  return Number.isFinite(seconds)
-    ? Math.max(0, Math.min(86400, Math.ceil(seconds)))
-    : null;
+  const delayMs = parseRetryAfterMs(value, now);
+  return delayMs === undefined
+    ? null
+    : Math.max(0, Math.min(86400, Math.ceil(delayMs / 1000)));
 }

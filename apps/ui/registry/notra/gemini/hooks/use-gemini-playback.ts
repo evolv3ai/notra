@@ -159,7 +159,6 @@ export const useGeminiPlayback = (
       };
 
       await playExchange().finally(() => {
-        // A stopped run must not release the lock of a newer send.
         if (runRef.current === run) {
           sendingRef.current = false;
         }

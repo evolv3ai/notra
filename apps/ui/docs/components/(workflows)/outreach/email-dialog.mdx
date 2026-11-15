@@ -1,0 +1,20 @@
+---
+title: Email Dialog
+description: A modal that drafts and previews a pitch to a listicle owner.
+---
+
+<Component path="outreach/examples/outreach-email-dialog" />
+
+<RegistryInstall name="outreach-email-dialog" />
+
+`OutreachEmailDialog` is a shadcn `Dialog` for asking a site owner to add you to their list. The subject and body take `{{variables}}`, which the Preview tab fills in for the prospect. Rewrite asks the model for the next draft in `drafts`, and Send pitch calls `onSend` with the filled-in email.
+
+| Prop | Default | Description |
+| --- | --- | --- |
+| `prospect` | | The listicle and its contact. |
+| `drafts` | | Subject and body templates that Rewrite cycles through. |
+| `variables` | | Insertable values. `first_name` and `listicle_title` come from the prospect. |
+| `model` | `gpt-5` | The model shown on Rewrite. |
+| `onSend` | | Gets the prospect and the filled-in draft. |
+
+<include>./_used-in.mdx</include>

@@ -124,8 +124,6 @@ export default function ClaudeDemo() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasMountedRef = useRef(false);
 
-  // Follow new messages inside the fixed-height card. Scrolling the viewport
-  // directly (not scrollIntoView) keeps the host page from jumping.
   useEffect(() => {
     if (!hasMountedRef.current) {
       hasMountedRef.current = true;

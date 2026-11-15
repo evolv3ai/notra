@@ -1,45 +1,30 @@
 "use client";
 
-import { Files01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import type { GeoJourneyPageStats } from "@notra/geo-core/types/geo";
-import { trafficVisitDelta } from "@notra/geo-core/utils/ai-traffic";
 import { TruncateWithTooltip } from "@notra/ui/components/shared/truncate-with-tooltip";
-import { useTranslations } from "next-intl";
-import { useMemo } from "react";
+import { InstrumentSection } from "ui/card";
+import { DataTable, type TableColumn } from "ui/table";
+import { useLocale, useTranslations } from "use-intl";
 
-import { JourneyCountCell } from "@/components/geo/journey-count-cell";
-import { JourneyStatCard } from "@/components/geo/journey-stat-card";
-import { Table, type TableColumn } from "@/components/motion/table";
+import { GeoCountCell } from "@/components/geo/geo-count-cell";
 import { TABLE_ROW_HEIGHT } from "@/constants/table";
-import type { JourneyPageKindStat, JourneyPathsCardProps } from "@/types/geo";
-import {
-  journeyPageKindCounts,
-  journeyPageKindStats,
-} from "@/utils/geo-journey";
+import type { JourneyPathsCardProps } from "@/types/geo";
+import { geoCountColumnWidth } from "@/utils/geo-count-column-width";
 import { tableHeightFor } from "@/utils/table";
 
 const pathRowId = (row: GeoJourneyPageStats) => row.path;
 
 export function JourneyPathsCard({
   pages,
-  failed,
   totalPages,
-  previousTotalPages,
   previewRows,
   onOpenPath,
   loading = false,
 }: JourneyPathsCardProps) {
   const t = useTranslations("geo.journeyPathsCard");
+  const locale = useLocale();
   const tGeoShared = useTranslations("geo.shared");
   const tCommon = useTranslations("common");
-  const kindLabels: Record<JourneyPageKindStat["kind"], string> = {
-    docs: tGeoShared("docs"),
-    blog: tCommon("labels.posts"),
-    other: tCommon("labels.other"),
-  };
-  const kindCounts = useMemo(() => journeyPageKindCounts(pages), [pages]);
-  const sampled = totalPages > pages.length;
   const columns: TableColumn<GeoJourneyPageStats>[] = [
     {
       key: "path",
@@ -55,44 +40,37 @@ export function JourneyPathsCard({
     {
       key: "journeys",
       header: tCommon("labels.journeys"),
-      width: "9.5rem",
+      width: geoCountColumnWidth(
+        pages.map((row) => ({
+          value: row.journeys,
+          previousValue: row.previousJourneys,
+        })),
+        locale,
+        tCommon("labels.new")
+      ),
       align: "right",
       sortable: true,
       cell: (row) => (
-        <JourneyCountCell
-          journeys={row.journeys}
+        <GeoCountCell
+          value={row.journeys}
           label={row.path}
-          previousJourneys={row.previousJourneys}
+          previousValue={row.previousJourneys}
         />
       ),
     },
   ];
 
   return (
-    <JourneyStatCard
-      caption={
-        sampled
-          ? t("captionSampled", { count: totalPages, shown: pages.length })
-          : t("caption", { count: totalPages })
-      }
-      delta={trafficVisitDelta(totalPages, previousTotalPages)}
-      emptyMessage={failed ? t("loadFailed") : t("empty")}
-      emptyDescription={failed ? undefined : t("emptyDescription")}
-      emptyMedia={
-        failed ? undefined : (
-          <HugeiconsIcon icon={Files01Icon} className="size-5" />
-        )
-      }
-      emptySeed="geo-journey-paths"
+    <InstrumentSection
+      className="h-full"
       eyebrow={tGeoShared("fetchedPages")}
-      stats={journeyPageKindStats(kindCounts, totalPages).map((stat) => ({
-        label: kindLabels[stat.kind],
-        value: tGeoShared("countPluralOnePageOther", { count: stat.pages }),
-      }))}
-      total={totalPages}
+      readout={
+        totalPages > pages.length
+          ? t("topShown", { count: totalPages, shown: pages.length })
+          : tGeoShared("countPluralOnePageOther", { count: totalPages })
+      }
     >
-      <Table
-        className="rounded-2xl"
+      <DataTable
         columns={columns}
         data={pages}
         defaultSort={{ key: "journeys", direction: "desc" }}
@@ -102,6 +80,6 @@ export function JourneyPathsCard({
         onRowClick={onOpenPath}
         rowHeight={TABLE_ROW_HEIGHT}
       />
-    </JourneyStatCard>
+    </InstrumentSection>
   );
 }

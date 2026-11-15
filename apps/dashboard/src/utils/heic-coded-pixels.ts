@@ -1,11 +1,9 @@
 import { MAX_CONTENT_IMAGE_PIXELS } from "@/constants/content-image";
 
-// Reject malformed HEIF metadata and oversized coded properties before libheif parses the image.
 export function validateHeicCodedPixels(bytes: Uint8Array) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let count = 0;
 
-  // Visit only structured metadata containers, never compressed media payloads.
   function visit(start: number, end: number, depth: number) {
     if (depth > 3) {
       throw new Error("Invalid HEIC metadata");

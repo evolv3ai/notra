@@ -1,7 +1,7 @@
 import { POSTHOG_EVENTS, type PostHogEventName } from "@notra/posthog/events";
 import type { PostHogProperties } from "@notra/posthog/types/posthog";
 import type { AuthFlowResult } from "@notra/schemas/types/dashboard/auth";
-import { saveSession } from "@workos-inc/authkit-nextjs";
+import { sanitizeReturnTo } from "@notra/utils/auth-redirect";
 import type { AuthenticationResponse } from "@workos-inc/node";
 import { Effect } from "effect";
 
@@ -15,8 +15,8 @@ import {
 } from "@/lib/auth/action-messages";
 import { UserSyncError, WorkOSAuthError } from "@/lib/auth/errors";
 import { resolveMfaFlow } from "@/lib/auth/mfa";
-import { sanitizeReturnTo } from "@/lib/auth/return-to";
 import { syncAuthenticatedUser } from "@/lib/auth/sync";
+import { saveAuthSession } from "@/lib/auth/workos";
 import { readWorkOSError } from "@/lib/auth/workos-error";
 
 const VERIFICATION_REQUIRED_CODE = "email_verification_required";
@@ -39,12 +39,6 @@ export function getWorkOSClientId() {
   return clientId;
 }
 
-export const tryWorkOSAuth = <T>(run: () => Promise<T>) =>
-  Effect.tryPromise({
-    try: run,
-    catch: (error) => new WorkOSAuthError({ error }),
-  });
-
 export const completeAuthentication = Effect.fn("auth.completeSession")(
   function* (
     response: AuthenticationResponse,
@@ -53,16 +47,12 @@ export const completeAuthentication = Effect.fn("auth.completeSession")(
   ) {
     yield* Effect.tryPromise({
       try: () =>
-        saveSession(
-          {
-            accessToken: response.accessToken,
-            refreshToken: response.refreshToken,
-            user: response.user,
-            impersonator: response.impersonator,
-            authenticationMethod: response.authenticationMethod,
-          },
-          process.env.APP_URL ?? "http://localhost:3000"
-        ),
+        saveAuthSession({
+          accessToken: response.accessToken,
+          refreshToken: response.refreshToken,
+          user: response.user,
+          impersonator: response.impersonator,
+        }),
       catch: (cause) =>
         new UserSyncError({ message: "Failed to persist session", cause }),
     });

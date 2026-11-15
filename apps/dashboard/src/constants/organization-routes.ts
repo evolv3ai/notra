@@ -10,5 +10,6 @@ export const NON_ORGANIZATION_ROUTE_SEGMENTS: ReadonlySet<string> = new Set([
   "login",
   "onboarding",
   "rpc",
+  "share",
   "signup",
 ]);

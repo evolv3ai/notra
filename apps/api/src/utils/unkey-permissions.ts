@@ -1,4 +1,3 @@
-/** Combine fallback scopes without repeating verification (and quota consumption). */
 export function unkeyPermissions(
   permission?: string,
   legacyPermissions: readonly string[] = []

@@ -1,33 +1,19 @@
 import * as echarts from "echarts/core";
 import type { ChartConfig } from "@/types/charts";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Theme keys + config — replicated from the repo's <ChartStyle> so the ECharts
-// charts stay self-contained (no recharts ui imports). Shared by every ECharts
-// chart and the tooltip/legend/brush ui modules.
-// ─────────────────────────────────────────────────────────────────────────────
 
-// Theme selectors mirror the repo's <ChartStyle>: light is the bare root, dark is `.dark`.
 export const THEMES = { light: "", dark: ".dark" } as const;
 export type ThemeKey = keyof typeof THEMES;
 export const THEME_KEYS = Object.keys(THEMES) as ThemeKey[];
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Color plumbing — replicated from the repo's <ChartStyle> so the charts stay
-// self-contained (no @/registry/ui/recharts imports).
-// ─────────────────────────────────────────────────────────────────────────────
 
-// Max slots a key needs = longest color array across themes (min 1). Both themes
-// always emit the same number of `--color-{key}-{n}` vars.
 export function getColorsCount(item: ChartConfig[string]): number {
   if (!item.colors) return 1;
   const counts = THEME_KEYS.map((theme) => item.colors?.[theme]?.length ?? 0);
   return Math.max(...counts, 1);
 }
 
-// Distribute colors evenly across slots; extra slots go to the LAST color(s).
-// 2 colors / 4 slots → [c0, c0, c1, c1]; 3 colors / 4 slots → [c0, c1, c2, c2].
 export function distributeColors(colors: string[], maxCount: number): string[] {
   const available = colors.length;
   if (available >= maxCount) return colors.slice(0, maxCount);
@@ -46,8 +32,6 @@ export function distributeColors(colors: string[], maxCount: number): string[] {
   return result;
 }
 
-// Emits the same CSS <ChartStyle> would: `--color-{key}-{n}` scoped to
-// `[data-chart={id}]` (light) and `.dark [data-chart={id}]` (dark).
 export function buildChartCss(id: string, config: ChartConfig): string {
   const colorConfig = Object.entries(config).filter(([, item]) => item.colors);
   if (!colorConfig.length) return "";
@@ -71,8 +55,6 @@ export function buildChartCss(id: string, config: ChartConfig): string {
     .join("\n");
 }
 
-// A single reusable 1×1 canvas normalizes ANY CSS color (hex, named, oklch, …)
-// to a concrete rgba string by painting it and reading the pixel back.
 let normalizerCtx: CanvasRenderingContext2D | null = null;
 export function normalizeColor(value: string): string {
   const raw = value.trim();
@@ -88,15 +70,12 @@ export function normalizeColor(value: string): string {
 
   normalizerCtx.clearRect(0, 0, 1, 1);
   normalizerCtx.fillStyle = "#000";
-  normalizerCtx.fillStyle = raw; // invalid values leave the sentinel in place
+  normalizerCtx.fillStyle = raw;
   normalizerCtx.fillRect(0, 0, 1, 1);
   const [r, g, b, a] = normalizerCtx.getImageData(0, 0, 1, 1).data;
   return `rgba(${r}, ${g}, ${b}, ${((a ?? 255) / 255).toFixed(3)})`;
 }
 
-// Scales the alpha of a normalized `rgba(r, g, b, a)` string. Multiplying (not
-// replacing) keeps translucent theme tokens honest: a border that is 10%-white
-// at `withAlpha(border, 0.5)` lands at 5%, matching Tailwind's `border/50`.
 export function withAlpha(color: string, alpha: number): string {
   const match = color.match(/rgba?\(([^)]+)\)/);
   if (!match) return color;
@@ -115,9 +94,6 @@ export type ResolvedColors = {
   };
 };
 
-// Reads the injected CSS vars + theme tokens from the live DOM. Series slots come
-// from `getComputedStyle` on the container; tokens are read off a throwaway probe
-// carrying the matching Tailwind class (robust to the var naming a theme uses).
 export function resolveColors(
   container: HTMLElement,
   config: ChartConfig,
@@ -155,9 +131,6 @@ export function resolveColors(
   return { series, tokens };
 }
 
-// Horizontal multi-stop color for a series — a solid string when there is only
-// one color, else an evenly-distributed left→right LinearGradient. Reused for the
-// stroke, symbol fills, and as the base tint for the area fill.
 export function seriesPaint(
   slots: string[]
 ): string | echarts.graphic.LinearGradient {
@@ -169,8 +142,6 @@ export function seriesPaint(
   return new echarts.graphic.LinearGradient(0, 0, 1, 0, stops);
 }
 
-// Solid var / gradient of vars for a series indicator — mirrors getIndicatorColorStyle.
-// Used by BOTH the tooltip rows and the legend indicators.
 export function indicatorBackground(key: string, colorsCount: number): string {
   if (colorsCount <= 1) return `var(--color-${key}-0)`;
   const stops = Array.from({ length: colorsCount }, (_, i) => {
@@ -180,7 +151,6 @@ export function indicatorBackground(key: string, colorsCount: number): string {
   return `linear-gradient(to right, ${stops})`;
 }
 
-/** Same fill as `indicatorBackground`, from resolved color strings instead of CSS vars. */
 export function resolvedIndicatorBackground(slots: readonly string[]): string {
   if (slots.length <= 1) {
     return slots[0] ?? "rgba(120, 120, 120, 1)";
@@ -192,9 +162,6 @@ export function resolvedIndicatorBackground(slots: readonly string[]): string {
   return `linear-gradient(to right, ${stops.join(", ")})`;
 }
 
-// Composites a translucent color over an opaque base into a FLAT color. The
-// tick dots need this: a translucent stroke double-paints where its round caps
-// overlap the line body, which reads as two stacked colors.
 export function flattenColor(color: string, base: string): string {
   const parse = (value: string) =>
     value

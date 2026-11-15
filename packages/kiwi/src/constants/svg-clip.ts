@@ -3,9 +3,10 @@ import type { RGBA } from "../types/scene";
 import type { Affine, MaskPaint } from "../types/svg-clip";
 
 export const URL_REF_RE = /url\(\s*["']?#([^"')\s]+)["']?\s*\)/i;
-export const CSS_LENGTH_RE = /^(-?\d*\.?\d+(?:[eE][+-]?\d+)?)(px)?$/;
-export const OPACITY_RE = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?%?$/i;
-export const SVG_TRANSFORM_FN_RE = /([a-zA-Z]+)\s*\(([^)]*)\)/g;
+export const CSS_LENGTH_RE =
+  /^(-?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?)(px)?$/;
+export const OPACITY_RE = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?%?$/i;
+export const SVG_TRANSFORM_FN_RE = /(?<![a-zA-Z])([a-zA-Z]+)\s*\(([^()]*)\)/g;
 export const SVG_TRANSFORM_NUM_RE = /-?\d*\.?\d+(?:[eE][+-]?\d+)?/g;
 
 export const IDENTITY_AFFINE: Affine = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };

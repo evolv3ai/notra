@@ -1,13 +1,15 @@
 "use client";
 
+import { Invoice01Icon } from "@hugeicons/core-free-icons";
 import { Badge } from "@notra/ui/components/ui/badge";
-import { useFormatter, useTranslations } from "next-intl";
+import { DataTable, type TableColumn } from "ui/table";
+import { useFormatter, useTranslations } from "use-intl";
 
-import { Table, type TableColumn } from "@/components/motion/table";
+import { SettingsTableEmpty } from "@/components/settings/settings-table-empty";
+import { SETTINGS_TABLE_EMPTY_HEIGHT } from "@/constants/settings";
 import { TABLE_MAX_HEIGHT, TABLE_ROW_HEIGHT } from "@/constants/table";
 import type { BillingInvoice, InvoicesTableProps } from "@/types/billing/plan";
 import { getInvoiceDescription } from "@/utils/billing-plans";
-import { tableHeightFor } from "@/utils/table";
 
 export function InvoicesTable({ invoices, plans }: InvoicesTableProps) {
   const t = useTranslations("billing.invoices");
@@ -68,16 +70,24 @@ export function InvoicesTable({ invoices, plans }: InvoicesTableProps) {
   ];
 
   return (
-    <Table
+    <DataTable
       columns={columns}
       data={invoices}
       defaultSort={{ key: "createdAt", direction: "desc" }}
-      emptyState={t("empty")}
+      emptyState={
+        <SettingsTableEmpty
+          description={t("emptyDescription")}
+          icon={Invoice01Icon}
+          title={t("empty")}
+        />
+      }
       getRowId={(invoice, index) =>
         invoice.hostedInvoiceUrl ??
         `${invoice.createdAt}-${invoice.total}-${index}`
       }
-      height={invoices.length > 0 ? TABLE_MAX_HEIGHT : tableHeightFor(0)}
+      height={
+        invoices.length > 0 ? TABLE_MAX_HEIGHT : SETTINGS_TABLE_EMPTY_HEIGHT
+      }
       isRowClickable={(invoice) => Boolean(invoice.hostedInvoiceUrl)}
       onRowClick={(invoice) => {
         if (invoice.hostedInvoiceUrl) {

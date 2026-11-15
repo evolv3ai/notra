@@ -1,9 +1,15 @@
 "use client";
 
-import { Loading03Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
+import {
+  Loading03Icon,
+  PlusSignIcon,
+  UserGroupIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { GEO_PERSONA_MAX_COUNT } from "@notra/geo-core/constants/geo-personas";
 import { Shimmer } from "@notra/ui/components/ai-elements/shimmer";
 import Counter from "@notra/ui/components/shared/counter";
+import { PageHeading } from "@notra/ui/components/shared/page-heading";
 import {
   Empty,
   EmptyContent,
@@ -12,19 +18,21 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@notra/ui/components/ui/empty";
+import { Skeleton } from "@notra/ui/components/ui/skeleton";
 import { useReducedMotion } from "motion/react";
-import { useTranslations } from "next-intl";
-import Link from "next/link";
+import type { ReactNode } from "react";
+import { DataTableSkeleton } from "ui/table";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { EmptyState } from "@/components/empty-state";
 import { EmptyStateTablePreview } from "@/components/empty-state-preview";
+import Link from "@/components/framework/link";
 import { PersonaActivityCard } from "@/components/geo/persona-activity-card";
+import { PersonaActivityCardSkeleton } from "@/components/geo/persona-activity-skeleton";
 import { PersonaAddDialog } from "@/components/geo/persona-add-dialog";
 import { PersonasTable } from "@/components/geo/personas-table";
-import { GeoTableSkeleton } from "@/components/geo/skeleton-parts";
 import { PageContainer } from "@/components/layout/container";
-import { PageHeader } from "@/components/layout/page-header";
 import { useGeoProjectScope } from "@/components/providers/geo-project-provider";
 import { useOrganizationsContext } from "@/components/providers/organization-provider";
 import {
@@ -35,6 +43,7 @@ import { GEO_PERSONA_SKELETON_ROW_COUNT } from "@/constants/geo-personas";
 import { useGeoSettings } from "@/lib/hooks/use-geo";
 import { useGeoPersonas } from "@/lib/hooks/use-geo-personas";
 import { usePersonaAddFlow } from "@/lib/hooks/use-persona-add-flow";
+import { cn } from "@/lib/utils";
 import type { GeoPageClientProps } from "@/types/geo";
 import type {
   GeneratePersonasButtonProps,
@@ -91,14 +100,14 @@ function GeneratePersonasButton({
       </span>
       <Button
         aria-label={progress ? progressLabel : label}
-        className="h-9 gap-2 px-3"
+        className="gap-1.5"
         disabled={isGenerating}
         onClick={onClick}
+        size="sm"
       >
         <HugeiconsIcon
-          className={isGenerating ? "motion-safe:animate-spin" : undefined}
-          icon={isGenerating ? Loading03Icon : UserGroupIcon}
-          size={16}
+          className={cn("size-4", isGenerating && "motion-safe:animate-spin")}
+          icon={isGenerating ? Loading03Icon : PlusSignIcon}
         />
         {progress ? (
           <span className="inline-flex items-center gap-1.5 leading-none">
@@ -166,7 +175,7 @@ function GeoPersonasPageContent({ organizationSlug }: GeoPageClientProps) {
     return (
       <PageContainer className="flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
         <div className="w-full space-y-6 px-4 lg:px-6">
-          <PageHeader
+          <PageHeading
             description={t("description")}
             title={tCommon("labels.personas")}
           />
@@ -199,28 +208,34 @@ function GeoPersonasPageContent({ organizationSlug }: GeoPageClientProps) {
 
   const isLoadingPersonas = isPersonasPending && !hasStoredPersonas;
   const showEmptyState = !(isLoadingPersonas || hasStoredPersonas);
-  // The empty state carries the primary action until personas exist.
-  const headerAction =
-    showEmptyState || isLoadingPersonas ? null : (
+  let headerAction: ReactNode = null;
+  if (isLoadingPersonas) {
+    headerAction = <Skeleton className="h-7 w-32 rounded-md" />;
+  } else if (!showEmptyState) {
+    headerAction = (
       <GeneratePersonasButton
         hasPersonas={hasPersonas}
         onClick={onGenerateClick}
         progress={progress}
       />
     );
+  }
 
   return (
     <PageContainer className="flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
       <div className="w-full space-y-6 px-4 lg:px-6">
-        <PageHeader
+        <PageHeading
           description={t("description")}
           title={tCommon("labels.personas")}
         >
           {headerAction}
-        </PageHeader>
+        </PageHeading>
 
         {isLoadingPersonas ? (
-          <GeoTableSkeleton rows={GEO_PERSONA_SKELETON_ROW_COUNT} />
+          <>
+            <PersonaActivityCardSkeleton count={GEO_PERSONA_MAX_COUNT} />
+            <DataTableSkeleton rows={GEO_PERSONA_SKELETON_ROW_COUNT} />
+          </>
         ) : null}
 
         {hasPersonas ? (

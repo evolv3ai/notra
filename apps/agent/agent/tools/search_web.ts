@@ -1,3 +1,8 @@
 import { createSearchWebTool } from "@notra/tools/assistant/search-web";
 
-export default createSearchWebTool();
+import { withToolActivityLabel } from "../lib/utils/tool-activity";
+
+export default withToolActivityLabel(
+  createSearchWebTool(),
+  "Searching the web"
+);

@@ -20,7 +20,7 @@ export interface SlackDashboardRelay {
   auth: VerifiedSessionAuth;
 }
 
-export interface DraftCompletionState {
+interface DraftCompletionState {
   count: number;
   turnId: string;
 }
@@ -40,7 +40,10 @@ export interface PostToXOutcome {
 }
 
 export interface NotraSlackStateExtras {
+  notraChartFailureTurnId?: string;
+  notraChartFailureIsPermission?: boolean;
   notraDraftCompletion?: DraftCompletionState;
+  notraContentPullRequestTurnIds?: string[];
   notraPostToXTurnId?: string;
   notraPostToXOutcome?: PostToXOutcome;
   notraReferenceCompletionTurnId?: string;

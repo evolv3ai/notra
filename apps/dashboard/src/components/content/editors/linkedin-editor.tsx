@@ -7,12 +7,13 @@ import {
   TabsTrigger,
 } from "@notra/ui/components/ui/tabs";
 import { TitleCard } from "@notra/ui/components/ui/title-card";
-import { useTranslations } from "next-intl";
 import { parseAsStringLiteral, useQueryState } from "nuqs";
 import { useEffect, useRef } from "react";
+import { useTranslations } from "use-intl";
 
 import { LinkedInPost } from "@/components/linkedin-post";
 import { useSelectedSocialAccount } from "@/lib/hooks/use-selected-social-account";
+import { resolveOrganizationLogo } from "@/utils/avatar";
 import { linkedInAuthorFromAccount } from "@/utils/linkedin";
 
 import type { ContentEditorProps } from "./types";
@@ -51,7 +52,7 @@ export function LinkedInEditor({
     ? linkedInAuthorFromAccount(selectedAccount)
     : {
         name: organization?.name ?? tCommon("labels.yourName"),
-        avatar: organization?.logo ?? undefined,
+        avatar: resolveOrganizationLogo(organization?.logo),
       };
 
   useEffect(() => {
@@ -95,6 +96,9 @@ export function LinkedInEditor({
               }
             }}
             onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) {
+                return;
+              }
               if (e.key === "Enter") {
                 e.preventDefault();
                 titleInputRef.current?.blur();

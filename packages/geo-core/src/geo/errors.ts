@@ -7,13 +7,25 @@ export class GeoScanError extends Data.TaggedError("GeoScanError")<{
   readonly message: string;
   readonly timedOut?: boolean;
   readonly cause?: unknown;
+  readonly usage?: LanguageModelUsage;
 }> {}
 
-export class GeoNoSuccessfulChecksError extends Data.TaggedError(
-  "GeoNoSuccessfulChecksError"
+/** A manual conversation replay in which no engine produced an answer. */
+export class GeoConversationNoAnswersError extends Data.TaggedError(
+  "GeoConversationNoAnswersError"
 )<{
   readonly message: string;
-  readonly attemptedChecks: number;
+}> {}
+
+export class GeoOlostepError extends Data.TaggedError("GeoOlostepError")<{
+  readonly message: string;
+  readonly cause?: unknown;
+}> {}
+
+export class GeoCodingAgentAccessError extends Data.TaggedError(
+  "GeoCodingAgentAccessError"
+)<{
+  readonly cause: unknown;
 }> {}
 
 export class GeoEmptyAnswerError extends Data.TaggedError(
@@ -130,14 +142,14 @@ export class GeoProjectCreateFailedError extends Data.TaggedError(
 
 /**
  * A project exists and belongs to the organization, but deleting it is not
- * allowed — currently only when it is the organization's last project, which
- * every GEO scope resolution depends on.
+ * allowed when it has hosted Sites or is the organization's last project,
+ * which every GEO scope resolution depends on.
  */
 export class GeoProjectDeleteBlockedError extends Data.TaggedError(
   "GeoProjectDeleteBlockedError"
 )<{
   readonly projectId: string;
-  readonly reason: "last_project";
+  readonly reason: "last_project" | "has_sites";
 }> {}
 
 export class GeoBrandIdentityNotFoundError extends Data.TaggedError(

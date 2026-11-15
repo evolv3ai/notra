@@ -1,6 +1,5 @@
-import { useLocale, useTranslations } from "next-intl";
-
-import { formatRelative } from "@/utils/format-relative";
+import { formatRelative } from "@notra/utils/format-relative";
+import { useLocale, useTranslations } from "use-intl";
 
 export function useFormatRelative() {
   const locale = useLocale();

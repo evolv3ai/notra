@@ -27,7 +27,6 @@ interface RouterExpected {
 
 type Row = [string, RouterExpected["complexity"], boolean, boolean, boolean?];
 
-// [message, complexity, requiresTools, reasoningHeavy, hasIntegrationContext]
 const ROWS: Row[] = [
   [
     "Write a changelog for everything we shipped this week",
@@ -146,7 +145,7 @@ export const chatRouterSuite: EvalSuite<
   cases: CASES,
   productionModel: EVALUATION_MODEL_ID,
   defaultContenders: [
-    "typesafe-ai/jev",
+    "typesafe-ai/jev-1.14.0",
     "openai/gpt-oss-120b",
     "openai/gpt-6-luna",
   ],

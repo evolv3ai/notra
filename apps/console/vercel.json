@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "git": {
+    "deploymentEnabled": false
+  },
+  "installCommand": "cd ../.. && bunx bun@1.4.4 install --frozen-lockfile --filter 'console...' --filter turbo",
+  "buildCommand": "bun run build"
+}

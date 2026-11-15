@@ -1,0 +1,22 @@
+import { db } from "@notra/db/drizzle";
+import { githubIntegrations } from "@notra/db/schema";
+import { inArray } from "drizzle-orm";
+
+export async function getGitHubWebhookIntegrations(
+  integrationId: string,
+  repositoryId: string
+) {
+  return await db
+    .select({
+      id: githubIntegrations.id,
+      organizationId: githubIntegrations.organizationId,
+      enabled: githubIntegrations.enabled,
+      encryptedWebhookSecret: githubIntegrations.encryptedWebhookSecret,
+    })
+    .from(githubIntegrations)
+    .where(
+      inArray(githubIntegrations.id, [
+        ...new Set([integrationId, repositoryId]),
+      ])
+    );
+}

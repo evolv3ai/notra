@@ -1,4 +1,8 @@
 const WWW_PREFIX_REGEX = /^www\./;
+const TRAILING_DOTS_REGEX = /\.+$/;
+const IPV4_HOST_REGEX = /^\d{1,3}(?:\.\d{1,3}){3}$/;
+const LOCAL_HOST_SUFFIX_REGEX =
+  /(?:^|\.)(?:localhost|localdomain|local|internal|test|invalid|onion|home\.arpa)$/;
 const TWITTER_HANDLE_REGEX = /^[A-Za-z0-9_]{1,15}$/;
 const TWITTER_HOSTS = new Set(["twitter.com", "x.com"]);
 const TWITTER_RESERVED_SEGMENTS = new Set([
@@ -22,14 +26,34 @@ export function getReferenceDomain(
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       return null;
     }
-    return parsed.hostname.replace(WWW_PREFIX_REGEX, "");
+    // `example.com.` is the same host as `example.com`.
+    const hostname = parsed.hostname.replace(TRAILING_DOTS_REGEX, "");
+    return isPublicHost(hostname)
+      ? hostname.replace(WWW_PREFIX_REGEX, "")
+      : null;
   } catch {
     return null;
   }
 }
 
-export function getFaviconUrl(domain: string): string {
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`;
+/**
+ * Loopback, LAN names and raw IPs. Agents and search sandboxes see these, but
+ * no reader can open them, so they never count as a cited source.
+ */
+function isPublicHost(hostname: string): boolean {
+  return (
+    hostname.includes(".") &&
+    !hostname.startsWith("[") &&
+    !IPV4_HOST_REGEX.test(hostname) &&
+    !LOCAL_HOST_SUFFIX_REGEX.test(hostname)
+  );
+}
+
+/** The sources `getReferenceDomain` accepts. */
+export function withPublicUrls<T extends { url: string }>(
+  sources: readonly T[]
+): T[] {
+  return sources.filter((source) => getReferenceDomain(source.url) !== null);
 }
 
 export function getTwitterHandleFromUrl(

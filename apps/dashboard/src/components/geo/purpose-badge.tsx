@@ -1,13 +1,14 @@
 "use client";
 
 import { HugeiconsIcon } from "@hugeicons/react";
+import { StatusBadge } from "@notra/ui/components/status-badge";
 import { Badge } from "@notra/ui/components/ui/badge";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@notra/ui/components/ui/tooltip";
-import { useTranslations } from "next-intl";
+import { useTranslations } from "use-intl";
 
 import { AI_TRAFFIC_PURPOSE_LABEL_KEYS } from "@/constants/ai-traffic-purposes";
 import { AI_TRAFFIC_PURPOSE_ICONS } from "@/constants/geo-purpose-icons";
@@ -28,21 +29,14 @@ export function PurposeBadge({
     : category;
   const description = purpose ? t(`description.${purpose}`) : category;
 
-  const badge = (
-    <Badge
-      aria-label={compact ? label : undefined}
-      className={compact ? "px-1.5" : "gap-1 font-normal"}
-      variant="secondary"
-    >
+  const badge = compact ? (
+    <Badge aria-label={label} shape="rounded" size="md" variant="secondary">
       {icon ? (
-        <HugeiconsIcon
-          className="size-3 shrink-0"
-          icon={icon}
-          strokeWidth={2}
-        />
+        <HugeiconsIcon aria-hidden="true" icon={icon} strokeWidth={1.5} />
       ) : null}
-      {compact ? null : label}
     </Badge>
+  ) : (
+    <StatusBadge appearance={{ variant: "secondary", icon }} label={label} />
   );
 
   if (!tooltip) {

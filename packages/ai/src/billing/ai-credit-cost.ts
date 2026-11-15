@@ -1,10 +1,11 @@
 import type { AgentTokenUsage } from "../types/agents";
 import type { AiCreditCostResult } from "../types/billing";
 import type { GatewayId } from "../types/router";
-import { calculateTokenCostCents, MARKUP_PERCENT } from "./token-pricing";
-
-const MINIMUM_COST_CENTS = 1;
-const MARKUP_MULTIPLIER = 1 + MARKUP_PERCENT / 100;
+import {
+  calculateTokenCostCents,
+  MARKUP_MULTIPLIER,
+  MINIMUM_COST_CENTS,
+} from "./token-pricing";
 
 export function calculateAiCreditCostCents(
   usage: AgentTokenUsage,

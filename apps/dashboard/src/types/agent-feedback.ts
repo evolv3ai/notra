@@ -5,9 +5,6 @@ import type {
   AgentFeedbackStatus,
 } from "@notra/db/types/agent-feedback";
 import type { ReactNode } from "react";
-
-import type { AuthenticatedUser } from "@/types/auth/organization";
-
 export type AgentFeedbackClientBrand =
   | "claude"
   | "cursor"
@@ -38,7 +35,12 @@ export type AgentFeedbackItem = Omit<
   resolvedAt: string | null;
 };
 
-export type AgentFeedbackStatusFilter = AgentFeedbackStatus | "all";
+/** "open" covers everything not yet resolved or archived. */
+export type AgentFeedbackStatusFilter =
+  | "open"
+  | "resolved"
+  | "archived"
+  | "all";
 
 export interface AgentFeedbackListResponse {
   items: AgentFeedbackItem[];
@@ -74,7 +76,14 @@ export interface AgentFeedbackSetupResponse {
 export interface AgentFeedbackSetupPanelProps {
   setup: AgentFeedbackSetupResponse | undefined;
   className?: string;
-  showPromptAction?: boolean;
+}
+
+export interface AgentFeedbackSetupStepProps {
+  step: number;
+  title: string;
+  description?: string;
+  last?: boolean;
+  children: ReactNode;
 }
 
 export interface AgentFeedbackEmptyProps {
@@ -88,7 +97,7 @@ export interface AgentFeedbackSetupSource {
 
 export interface AgentFeedbackListInput {
   organizationId: string;
-  status?: AgentFeedbackStatus;
+  statuses?: AgentFeedbackStatus[];
   kind?: AgentFeedbackKind;
   cursor?: string;
   limit?: number;
@@ -107,6 +116,9 @@ export interface AgentFeedbackTableProps {
     status: AgentFeedbackStatus
   ) => void;
   onDelete: (item: AgentFeedbackItem) => void;
+  /** Loads the next page when the reader scrolls near the end. */
+  onLoadMore?: () => void;
+  loadingMore?: boolean;
 }
 
 export interface AgentFeedbackDetailDialogProps {
@@ -117,10 +129,6 @@ export interface AgentFeedbackDetailDialogProps {
   onDelete: () => void;
   /** Blocks further status changes until the pending one settles. */
   isUpdating: boolean;
-}
-
-export interface AgentFeedbackSetupCardProps {
-  organizationId: string;
 }
 
 export interface AgentFeedbackStatusBadgeProps {
@@ -155,11 +163,6 @@ export interface AgentFeedbackPageClientProps {
   organizationSlug: string;
 }
 
-export interface AgentFeedbackHandlerOptions<TInput> {
-  context: { headers: Headers; user?: AuthenticatedUser };
-  input: TInput;
-}
-
 export interface AgentFeedbackUpdateStatusInput {
   organizationId: string;
   feedbackId: string;
@@ -183,5 +186,47 @@ export interface AgentFeedbackDetailRow {
 }
 
 export interface AgentFeedbackSetupDialogProps {
+  organizationId: string;
+  triggerVariant?: "default" | "outline";
+}
+
+export interface AgentFeedbackCardProps {
+  item: AgentFeedbackItem;
+  href: string;
+}
+
+export interface AgentFeedbackInboxProps {
+  organizationId: string;
+  /** Rendered above the list; receives whether the inbox is empty. */
+  heading: (isEmpty: boolean) => ReactNode;
+  /** Replaces the default setup empty state. */
+  emptyState?: ReactNode;
+  /** Rendered below the table once there is feedback. */
+  footer?: ReactNode;
+}
+
+export interface AgentFeedbackSetupNudgeProps {
+  organizationId: string;
+  /** Drops the table preview, for pages with other sections. */
+  compact?: boolean;
+}
+
+export interface AgentFeedbackDailyCount {
+  day: string;
+  count: number;
+}
+
+export interface AgentFeedbackActivityRange {
+  /** First day, YYYY-MM-DD. */
+  from: string;
+  /** Last day, YYYY-MM-DD. */
+  to: string;
+}
+
+export interface AgentFeedbackActivityData {
+  points: { day: string; value: number }[];
+}
+
+export interface AgentFeedbackActivityCardProps {
   organizationId: string;
 }

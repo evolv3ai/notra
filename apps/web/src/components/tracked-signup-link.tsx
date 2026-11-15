@@ -1,12 +1,13 @@
-import { track } from "@databuddy/sdk/react";
-import { Link } from "@tanstack/react-router";
 import type { ComponentProps, MouseEvent } from "react";
 
 import { AUTH_SIGNUP_URL } from "@/constants/auth";
-import { DATABUDDY_SIGNUP_STARTED_EVENT } from "@/utils/databuddy";
-import { trackedSignupHref } from "@/utils/signup";
+import {
+  signupDestination,
+  trackedSignupHref,
+  trackSignupStarted,
+} from "@/utils/signup";
 
-type TrackedSignupLinkProps = Omit<ComponentProps<typeof Link>, "href"> & {
+type TrackedSignupLinkProps = Omit<ComponentProps<"a">, "href"> & {
   children?: React.ReactNode;
   href?: string;
   source: string;
@@ -16,6 +17,7 @@ export function TrackedSignupLink({
   children,
   href = AUTH_SIGNUP_URL,
   onClick,
+  onMouseDown,
   source,
   ...props
 }: TrackedSignupLinkProps) {
@@ -28,15 +30,22 @@ export function TrackedSignupLink({
       return;
     }
 
-    track(DATABUDDY_SIGNUP_STARTED_EVENT, {
-      destination: trackedHref,
-      source,
-    });
+    event.currentTarget.href = trackSignupStarted(source, href);
+  }
+
+  function handleMouseDown(event: MouseEvent<HTMLAnchorElement>) {
+    onMouseDown?.(event);
+    event.currentTarget.href = signupDestination(source, href);
   }
 
   return (
-    <Link to={trackedHref} onClick={handleClick} {...props}>
+    <a
+      href={trackedHref}
+      onClick={handleClick}
+      onMouseDown={handleMouseDown}
+      {...props}
+    >
       {children}
-    </Link>
+    </a>
   );
 }

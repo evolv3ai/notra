@@ -17,10 +17,10 @@ import { Skeleton } from "@notra/ui/components/ui/skeleton";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useTranslations } from "next-intl";
 import type React from "react";
 import { isValidElement, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { REPOSITORY_ALREADY_CONNECTED_CODE } from "@/constants/github";
@@ -354,6 +354,7 @@ export function AddRepositoryDialog({
               {([canSubmit]) => (
                 <Button
                   disabled={!canSubmit || mutation.isPending || loadingRepos}
+                  data-dialog-confirm
                   onClick={(e) => {
                     e.preventDefault();
                     form.handleSubmit();

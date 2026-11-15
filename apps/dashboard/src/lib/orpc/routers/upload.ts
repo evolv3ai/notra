@@ -1,4 +1,8 @@
-import { PutObjectCommand } from "@aws-sdk/client-s3";
+import {
+  PutObjectCommand,
+  type PutObjectCommandInput,
+} from "@aws-sdk/client-s3";
+import { fetchPublicUrl } from "@notra/ai/utils/public-fetch";
 import { db } from "@notra/db/drizzle";
 import { members } from "@notra/db/schema";
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
@@ -12,7 +16,6 @@ import {
 } from "@notra/schemas/dashboard/upload";
 import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import { getTranslations } from "next-intl/server";
 
 import {
   COMPANY_LOGO_FETCH_TIMEOUT_MS,
@@ -20,6 +23,7 @@ import {
 } from "@/constants/company-logo";
 import { trackServerEvent } from "@/lib/analytics/posthog-server";
 import { getChatAttachmentSizeBucket } from "@/lib/analytics/studio-events";
+import { getTranslations } from "@/lib/i18n/server";
 import { authorizedProcedure } from "@/lib/orpc/base";
 import { getFileExtension } from "@/lib/upload/mime";
 import { getR2Config } from "@/lib/upload/r2";
@@ -30,6 +34,7 @@ import {
   recordChatAttachment,
 } from "@/lib/upload/server";
 import { validateUpload } from "@/lib/upload/validate";
+import { recordAuthorizedOrganization } from "@/utils/rpc-telemetry";
 
 import {
   assertNotDemo,
@@ -40,6 +45,44 @@ import {
 
 const TRAILING_SLASH_REGEX = /\/$/;
 
+async function requireActiveOrganizationMember(context: {
+  headers: Headers;
+  session: { activeOrganizationId?: string | null } | null;
+  user: { id: string };
+}): Promise<string> {
+  const orgId = context.session?.activeOrganizationId;
+
+  if (!orgId) {
+    throw unauthorized(
+      (await getTranslations("common.labels"))("noActiveOrganization")
+    );
+  }
+
+  const membership = await db.query.members.findFirst({
+    where: and(
+      eq(members.userId, context.user.id),
+      eq(members.organizationId, orgId)
+    ),
+    columns: { id: true },
+  });
+
+  if (!membership) {
+    const tErrors = await getTranslations("errors.upload");
+    throw forbidden(tErrors("noOrganizationAccess"));
+  }
+  recordAuthorizedOrganization(context.headers, orgId, context.user.id);
+  return orgId;
+}
+
+async function putPublicR2Object(
+  object: Omit<PutObjectCommandInput, "Bucket"> & { Key: string }
+) {
+  const { client, bucketName, publicUrl } = getR2Config();
+  await client.send(new PutObjectCommand({ Bucket: bucketName, ...object }));
+  const baseUrl = publicUrl.replace(TRAILING_SLASH_REGEX, "");
+  return { key: object.Key, publicUrl: `${baseUrl}/${object.Key}` };
+}
+
 export const uploadRouter = {
   createPresignedUpload: authorizedProcedure
     .input(uploadSchema)
@@ -49,12 +92,14 @@ export const uploadRouter = {
         fileSize: input.fileSize,
         fileType: input.fileType,
         headers: context.headers,
+        sha256: input.type === "chat" ? input.sha256 : undefined,
         type: input.type,
       });
     }),
   deleteChatUpload: authorizedProcedure
     .input(deleteChatUploadSchema)
     .handler(async ({ context, input }) => {
+      assertNotDemo();
       return deleteChatUpload({
         headers: context.headers,
         key: input.key,
@@ -63,11 +108,13 @@ export const uploadRouter = {
   recordChatAttachment: authorizedProcedure
     .input(recordChatAttachmentSchema)
     .handler(async ({ context, input }) => {
+      assertNotDemo();
       const result = await recordChatAttachment({
         headers: context.headers,
         key: input.key,
         filename: input.filename,
         mediaType: input.mediaType,
+        sha256: input.sha256,
         size: input.size,
       });
 
@@ -88,26 +135,7 @@ export const uploadRouter = {
     .input(uploadLogoFromUrlSchema)
     .handler(async ({ context, input }) => {
       assertNotDemo();
-      const orgId = context.session?.activeOrganizationId;
-
-      if (!orgId) {
-        throw unauthorized(
-          (await getTranslations("common.labels"))("noActiveOrganization")
-        );
-      }
-
-      const membership = await db.query.members.findFirst({
-        where: and(
-          eq(members.userId, context.user.id),
-          eq(members.organizationId, orgId)
-        ),
-        columns: { id: true },
-      });
-
-      if (!membership) {
-        const tErrors = await getTranslations("errors.upload");
-        throw forbidden(tErrors("noOrganizationAccess"));
-      }
+      const orgId = await requireActiveOrganizationMember(context);
 
       const sourceUrl = new URL(input.sourceUrl);
       const isAllowedSource =
@@ -119,17 +147,13 @@ export const uploadRouter = {
         throw badRequest(tErrors("logoSourceNotAllowed"));
       }
 
-      let response: Response;
-      try {
-        response = await fetch(sourceUrl, {
-          signal: AbortSignal.timeout(COMPANY_LOGO_FETCH_TIMEOUT_MS),
-        });
-      } catch {
-        const tErrors = await getTranslations("errors.upload");
-        throw badRequest(tErrors("logoFetchFailed"));
-      }
+      // No redirects and public addresses only: the host allowlist above
+      // would not hold for a redirect target.
+      const response = await fetchPublicUrl(sourceUrl, undefined, {
+        timeoutMs: COMPANY_LOGO_FETCH_TIMEOUT_MS,
+      }).catch(() => null);
 
-      if (!response.ok) {
+      if (!response?.ok) {
         const tErrors = await getTranslations("errors.upload");
         throw badRequest(tErrors("logoFetchFailed"));
       }
@@ -146,48 +170,17 @@ export const uploadRouter = {
 
       const id = nanoid();
       const key = `organization/${orgId}/logo/${id}.${getFileExtension(fileType)}`;
-      const { client: r2Client, bucketName, publicUrl } = getR2Config();
-
-      await r2Client.send(
-        new PutObjectCommand({
-          Bucket: bucketName,
-          Key: key,
-          Body: body,
-          ContentType: fileType,
-        })
-      );
-
-      const baseUrl = publicUrl.replace(TRAILING_SLASH_REGEX, "");
-
-      return {
-        key,
-        publicUrl: `${baseUrl}/${key}`,
-      };
+      return await putPublicR2Object({
+        Key: key,
+        Body: body,
+        ContentType: fileType,
+      });
     }),
   uploadSvg: authorizedProcedure
     .input(uploadSvgSchema)
     .handler(async ({ context, input }) => {
       assertNotDemo();
-      const orgId = context.session?.activeOrganizationId;
-
-      if (!orgId) {
-        throw unauthorized(
-          (await getTranslations("common.labels"))("noActiveOrganization")
-        );
-      }
-
-      const membership = await db.query.members.findFirst({
-        where: and(
-          eq(members.userId, context.user.id),
-          eq(members.organizationId, orgId)
-        ),
-        columns: { id: true },
-      });
-
-      if (!membership) {
-        const tErrors = await getTranslations("errors.upload");
-        throw forbidden(tErrors("noOrganizationAccess"));
-      }
+      const orgId = await requireActiveOrganizationMember(context);
 
       let sanitized: string;
       try {
@@ -205,26 +198,13 @@ export const uploadRouter = {
         input.type === "brand_asset"
           ? `organization/${orgId}/brand-assets/${id}.svg`
           : `organization/${orgId}/content/${id}.svg`;
-
-      const { client: r2Client, bucketName, publicUrl } = getR2Config();
-
-      await r2Client.send(
-        new PutObjectCommand({
-          Bucket: bucketName,
-          Key: key,
-          Body: sanitized,
-          ContentType: SVG_MIME_TYPE,
-          ContentDisposition:
-            input.type === "brand_asset" ? "inline" : "attachment",
-          CacheControl: "no-store",
-        })
-      );
-
-      const baseUrl = publicUrl.replace(TRAILING_SLASH_REGEX, "");
-
-      return {
-        key,
-        publicUrl: `${baseUrl}/${key}`,
-      };
+      return await putPublicR2Object({
+        Key: key,
+        Body: sanitized,
+        ContentType: SVG_MIME_TYPE,
+        ContentDisposition:
+          input.type === "brand_asset" ? "inline" : "attachment",
+        CacheControl: "no-store",
+      });
     }),
 };

@@ -1,11 +1,11 @@
 import type { AnySuite } from "../types/eval";
+import { autopilotPlannerSuite } from "./autopilot-planner";
 import { chatRouterSuite } from "./chat-router";
 import { collectionTitleSuite } from "./collection-title";
 import { contentAgentSuite, contentDraftSuite } from "./content-agent";
 import { contentUnslopSuite } from "./content-unslop";
 import { feedbackClassifierSuite } from "./feedback-classifier";
 
-/** Ordered like the content pipeline: write → edit → name, then classifiers. */
 export const SUITES: readonly AnySuite[] = [
   contentDraftSuite,
   contentUnslopSuite,
@@ -13,6 +13,7 @@ export const SUITES: readonly AnySuite[] = [
   collectionTitleSuite,
   chatRouterSuite,
   feedbackClassifierSuite,
+  autopilotPlannerSuite,
 ];
 
 export function getSuite(id: string): AnySuite | undefined {

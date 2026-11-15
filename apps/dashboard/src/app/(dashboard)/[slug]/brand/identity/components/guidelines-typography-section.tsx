@@ -2,15 +2,15 @@
 
 import { Edit02Icon, TextFontIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import type { GuidelinesTypographySectionProps } from "@/types/brand-identity";
 import type { BrandGuidelineFont } from "@/types/hooks/brand-guidelines";
 import {
+  brandFontHref,
   cssFontFamily,
-  googleFontHref,
   joinMeta,
 } from "@/utils/brand-guideline-display";
 
@@ -36,7 +36,7 @@ export function GuidelinesTypographySection({
     const links = families.map((family) => {
       const link = document.createElement("link");
       link.rel = "stylesheet";
-      link.href = googleFontHref(family);
+      link.href = brandFontHref(family);
       const markUnavailable = () => {
         if (link.isConnected) {
           setUnavailableFonts((previous) => new Set(previous).add(family));

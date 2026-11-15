@@ -1,13 +1,10 @@
 "use client";
 
 import { cn } from "@notra/ui/lib/utils";
-import { isReservedExampleDomain } from "@notra/utils/google-favicon";
-import Image from "next/image";
+import { googleFaviconUrl } from "@notra/utils/google-favicon";
+import { Image } from "@notra/ui/components/framework-provider";
 import { useState } from "react";
 
-export function perplexityFaviconSrc(domain: string) {
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`;
-}
 
 export function PerplexityFavicon({
   domain,
@@ -16,10 +13,10 @@ export function PerplexityFavicon({
   domain: string;
   className?: string;
 }) {
-  // Reserved `.example` domains (demo data) never have a favicon.
-  const [failed, setFailed] = useState(() => isReservedExampleDomain(domain));
+  const [failed, setFailed] = useState(false);
+  const src = googleFaviconUrl(domain, 64);
 
-  if (failed) {
+  if (failed || !src) {
     return (
       <span
         aria-hidden
@@ -34,7 +31,7 @@ export function PerplexityFavicon({
       className={cn("rounded-full bg-[#e8e8e8] dark:bg-white/12", className)}
       height={64}
       onError={() => setFailed(true)}
-      src={perplexityFaviconSrc(domain)}
+      src={src}
       unoptimized
       width={64}
     />

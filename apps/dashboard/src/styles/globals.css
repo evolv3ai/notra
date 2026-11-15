@@ -1,43 +1,91 @@
 @import "@notra/ui/globals.css";
+@import "ui/styles/chatgpt.css";
+@import "ui/styles/claude.css";
 
 @source "../../../../packages/ui/src/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";
+@source "../../../ui/registry/notra/{card,chatgpt,claude,dropdown-menu,shimmer,table}/components";
+@source "../../../ui/registry/notra/workflow/{components,constants,lib}";
 
-/* Status, GEO, and sidebar tokens come from @notra/ui via globals.css. */
+@property --ec-tooltip-scale-x {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+
+@property --ec-tooltip-scale-y {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
 
 @theme inline {
   --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
+  --animate-shimmer: shimmer var(--shimmer-duration, 1.7s) linear infinite;
+
+  @keyframes shimmer {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: 0% 0;
+    }
+  }
 }
 
-/*
- * `text-geo-*` and `bg-geo-*\/10` used to be hand-written here. The
- * `--color-geo-*` theme entries in @notra/ui/status.css generate both, so the
- * manual copies were removed.
- */
+:root {
+  --font-inter: "Inter Variable", "Inter Fallback", Arial, sans-serif;
+  --font-geist-mono: "Geist Mono Variable", "Geist Mono Fallback", monospace;
+}
+
+@font-face {
+  font-family: "Inter Fallback";
+  src: local("Arial");
+  ascent-override: 90.44%;
+  descent-override: 22.52%;
+  line-gap-override: 0%;
+  size-adjust: 107.12%;
+}
+
+@font-face {
+  font-family: "Geist Mono Fallback";
+  src: local("Arial");
+  ascent-override: 74.67%;
+  descent-override: 21.92%;
+  line-gap-override: 0%;
+  size-adjust: 134.59%;
+}
 
 @layer base {
   html,
   body {
     scrollbar-gutter: stable;
-    /* The dashboard is a fixed-height app shell; overlays and portals must
-       never make the document itself scroll sideways under the fixed sidebar. */
     overflow-x: clip;
   }
 
-  /* No macOS rubber-band on the fixed app shell. Scoped to shell routes so
-     scrollable pages (onboarding, auth) keep it, and gated to fine pointers
-     so touch devices keep pull-to-refresh. */
   @media (pointer: fine) {
-    html:has([data-dashboard-shell]),
-    html:has([data-dashboard-shell]) body {
+    html[data-dashboard-root],
+    html[data-dashboard-root] body {
       overscroll-behavior: none;
     }
   }
 }
 
 @layer components {
-  /* Lexical highlight uses <mark>; UA + color-scheme:dark paint neon yellow. */
+  .ec-tooltip-surface {
+    transform-origin: top left;
+    transform: scale(var(--ec-tooltip-scale-x), var(--ec-tooltip-scale-y));
+  }
+
+  .ec-tooltip-content {
+    transform-origin: top left;
+    transform: scale(
+      calc(1 / var(--ec-tooltip-scale-x)),
+      calc(1 / var(--ec-tooltip-scale-y))
+    );
+  }
+
   .lexical-editor mark {
     color: inherit;
     background-color: color-mix(
@@ -58,12 +106,6 @@
     );
   }
 
-  /*
-   * Container variants. Widths are continuous functions of the container
-   * (cqw) instead of stepped breakpoints: a stepped max-width snaps when the
-   * sidebar or right panel animates the container across a breakpoint, and the
-   * centered content then drifts until the animation ends.
-   */
   .page-container,
   .page-container-relaxed,
   .page-container-compact {
@@ -76,12 +118,10 @@
     max-width: 96rem;
   }
 
-  /* Relaxed variant - balanced for readability */
   .page-container-relaxed {
     max-width: min(calc(40rem + 41.667cqw), 80rem);
   }
 
-  /* Compact variant - focused for forms/settings */
   .page-container-compact {
     max-width: min(calc(24rem + 50cqw), 72rem);
   }
@@ -176,6 +216,59 @@
   animation: thinking-letter 1.35s ease-in-out infinite;
 }
 
+@keyframes agent-loader-dot {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.82);
+  }
+  12% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+  40% {
+    opacity: 0.3;
+    transform: scale(0.82);
+  }
+}
+
+@keyframes agent-loader-core {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(0.86);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.agent-loader-dot,
+.agent-loader-core {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.agent-loader-dot {
+  animation: agent-loader-dot 1.2s ease-in-out infinite;
+  animation-delay: calc(
+    var(--agent-loader-phase, 0ms) + var(--agent-loader-offset, 0ms) - 1.2s
+  );
+}
+
+.agent-loader-core {
+  animation: agent-loader-core 1.2s ease-in-out infinite;
+  animation-delay: var(--agent-loader-phase, 0ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-loader-dot,
+  .agent-loader-core {
+    animation: none;
+  }
+}
+
 @keyframes chat-input-slide-down {
   from {
     transform: translateY(calc(-50dvh + 50% + 1.5rem));
@@ -211,7 +304,6 @@
   }
 }
 
-/* Pierre diffs inherit these into Shadow DOM. */
 .chat-document-diff {
   --diffs-font-family: var(--font-mono);
   --diffs-header-font-family: var(--font-sans);
@@ -233,39 +325,6 @@
   --diffs-token-dark-bg: transparent;
 }
 
-@keyframes geo-live-in {
-  from {
-    opacity: 0;
-    transform: translateX(-4px);
-  }
-}
-
-@keyframes geo-live-ping {
-  from {
-    opacity: 1;
-    transform: scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: scale(2.6);
-  }
-}
-
-.geo-live-in {
-  animation: geo-live-in var(--transition-duration-slow) var(--ease-emphasized)
-    both;
-}
-
-.geo-live-ping {
-  animation: geo-live-ping 1s var(--ease-emphasized) both;
-}
-
-/*
- * A request that just arrived in the live log: the row opens to its height so
- * the rows below glide down instead of jumping, its content fades in out of a
- * blur, and a light tint marks it for a moment before fading back.
- * `backwards`, not `both`: a filled end state would override row hover.
- */
 @keyframes geo-log-row-open {
   from {
     height: 0;
@@ -289,7 +348,6 @@
   }
 }
 
-/* Symmetric curve: an emphasized ease finishes the push-down in ~60 ms. */
 .geo-log-row-arrive {
   animation:
     geo-log-row-open 520ms var(--ease-emphasized-in-out) backwards,
@@ -297,7 +355,6 @@
   animation-delay: var(--geo-log-arrive-delay, 0ms);
 }
 
-/* Cells open in step with the row; the text unblurs once there is room. */
 .geo-log-row-arrive > td > div {
   animation:
     geo-log-row-open 520ms var(--ease-emphasized-in-out) backwards,
@@ -308,7 +365,6 @@
     calc(var(--geo-log-arrive-delay, 0ms) + 160ms);
 }
 
-/* A burst of requests opens top to bottom instead of all at once. */
 .geo-log-arrive-1 {
   --geo-log-arrive-delay: 70ms;
 }
@@ -331,13 +387,55 @@
 
 @media (prefers-reduced-motion: reduce) {
   .geo-log-row-arrive,
-  .geo-log-row-arrive > td > div,
-  .geo-live-in,
-  .geo-live-ping {
+  .geo-log-row-arrive > td > div {
     animation: none;
   }
+}
 
-  .geo-live-ping {
+::highlight(chat-annotation) {
+  background-color: color-mix(in oklch, var(--warning) 22%, transparent);
+}
+
+::highlight(chat-annotation-draft) {
+  background-color: color-mix(in oklch, var(--primary) 22%, transparent);
+}
+
+::highlight(content-comment) {
+  background-color: color-mix(in oklch, var(--warning) 18%, transparent);
+  text-decoration: underline 2px
+    color-mix(in oklch, var(--warning) 70%, transparent);
+  text-underline-offset: 4px;
+}
+
+::highlight(content-comment-active) {
+  background-color: color-mix(in oklch, var(--warning) 34%, transparent);
+  text-decoration: underline 2px var(--warning);
+  text-underline-offset: 4px;
+}
+
+::highlight(content-comment-draft) {
+  background-color: color-mix(in oklch, var(--primary) 22%, transparent);
+}
+
+@keyframes annotation-flash {
+  0%,
+  35% {
+    opacity: 1;
+  }
+  100% {
     opacity: 0;
+  }
+}
+
+tr:has(> [data-own-mention]) > * {
+  background-color: color-mix(in oklab, var(--geo-up) 10%, transparent);
+}
+
+@keyframes pumpkin-rain {
+  from {
+    transform: translateY(0) rotate(0deg);
+  }
+  to {
+    transform: translateY(34rem) rotate(200deg);
   }
 }

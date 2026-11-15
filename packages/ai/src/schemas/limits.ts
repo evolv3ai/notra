@@ -19,11 +19,6 @@ export const postTitleSchema = z
   .min(1)
   .max(POST_TITLE_MAX_LENGTH);
 
-export const postMarkdownSchema = z
-  .string()
-  .min(1)
-  .max(POST_MARKDOWN_MAX_LENGTH);
-
 export const brandNameSchema = z
   .string()
   .trim()

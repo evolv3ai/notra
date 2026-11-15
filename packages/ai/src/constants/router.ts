@@ -1,14 +1,30 @@
 import type { GatewayId, RouterPolicyConfig } from "@notra/ai/types/router";
 
-export const GATEWAY_IDS: readonly GatewayId[] = ["vercel", "openrouter"];
-
 export const ROUTER_PROVIDER_OPTIONS_KEY = "notraRouter";
 export const ROUTER_METADATA_KEY = "notraRouter";
 export const ROUTED_MODEL_PROVIDER = "notra-router";
 
 export const DEFAULT_PLAN_CACHE_TTL_MS = 60_000;
+/** Plan/ZDR lookup failures are retried after this instead of the full TTL. */
+export const ORGANIZATION_LOOKUP_FAILURE_TTL_MS = 5000;
+export const ORGANIZATION_LOOKUP_CACHE_CAPACITY = 10_000;
 export const DEFAULT_CREDIT_CHECK_TTL_MS = 30_000;
 export const DEFAULT_UNAVAILABLE_TTL_MS = 5 * 60_000;
+export const ROUTE_USAGE_LOOKUP_CONCURRENCY = 4;
+
+export const GATEWAY_FALLBACK_ORDER: readonly GatewayId[] = [
+  "neon",
+  "openrouter",
+  "vercel",
+];
+
+/** Prefixes Neon/Databricks put on served ids, e.g. `global.xai.grok-4.7`. */
+export const NEON_SERVED_MODEL_PREFIX_PATTERN =
+  /^(?:databricks-|global\.[a-z]+\.)/;
+
+/** Snapshot suffixes on served ids, e.g. `gpt-5.4-nano-2026-03-17`, `gpt-oss-120b-080525`. */
+export const NEON_SERVED_MODEL_SUFFIX_PATTERN =
+  /-(?:\d{4}-\d{2}-\d{2}|\d{6,8})$/;
 
 export const DEFAULT_OPENROUTER_ACCOUNT_BASE_URL =
   "https://openrouter.ai/api/v1";
@@ -19,52 +35,6 @@ export const OPENROUTER_PRIVACY_PROVIDER_ROUTING = {
 } as const;
 
 export const VERCEL_NAMESPACE_PREFIX = "vercel/";
-
-export const OPENROUTER_MODEL_ALIASES: Readonly<Record<string, string>> = {
-  "google/gemini-3-flash": "google/gemini-3-flash-preview",
-  "meta/llama-4-maverick": "meta-llama/llama-4-maverick",
-  "meta/llama-4-scout": "meta-llama/llama-4-scout",
-  "meta/llama-3.3-70b": "meta-llama/llama-3.3-70b-instruct",
-  "meta/llama-3.1-70b": "meta-llama/llama-3.1-70b-instruct",
-  "meta/llama-3.1-8b": "meta-llama/llama-3.1-8b-instruct",
-  "mistral/mistral-medium-3.5": "mistralai/mistral-medium-3-5",
-  "mistral/mistral-large-3": "mistralai/mistral-large-2512",
-  "spacexai/grok-4.7": "x-ai/grok-4.7",
-  "spacexai/grok-4.6": "x-ai/grok-4.6",
-  "spacexai/grok-4.5": "x-ai/grok-4.5",
-  "spacexai/grok-build-0.1": "x-ai/grok-build-0.1",
-  "spacexai/grok-4.3": "x-ai/grok-4.3",
-  "spacexai/grok-4.20-multi-agent": "x-ai/grok-4.20-multi-agent",
-  "zai/glm-5.3-flash": "z-ai/glm-5.3-flash",
-  "zai/glm-5.3": "z-ai/glm-5.3",
-  "zai/glm-5.2": "z-ai/glm-5.2",
-  "zai/glm-5.1": "z-ai/glm-5.1",
-  "zai/glm-5v-turbo": "z-ai/glm-5v-turbo",
-  "zai/glm-5-turbo": "z-ai/glm-5-turbo",
-  "zai/glm-5": "z-ai/glm-5",
-  "zai/glm-4.7-flash": "z-ai/glm-4.7-flash",
-};
-
-const RETIRED_MODELS = ["mistral/magistral-medium"];
-
-export const OPENROUTER_UNSUPPORTED_MODELS: ReadonlySet<string> = new Set([
-  "moonshotai/kimi-k2.7-code-highspeed",
-  "zai/glm-5.3-promo-50",
-  "zai/glm-4.7-flashx",
-  "spacexai/grok-4.20-non-reasoning",
-  "spacexai/grok-4.20-reasoning",
-  "spacexai/grok-4.1-fast-non-reasoning",
-  "spacexai/grok-4.1-fast-reasoning",
-  "deepseek/deepseek-v3.2-thinking",
-  "deepseek/deepseek-v3.1",
-  "mistral/mistral-medium",
-  "mistral/mistral-small",
-  ...RETIRED_MODELS,
-]);
-
-export const VERCEL_UNSUPPORTED_MODELS: ReadonlySet<string> = new Set(
-  RETIRED_MODELS
-);
 
 export const VERCEL_OPTIONS_KEY = "gateway";
 export const OPENROUTER_OPTIONS_KEY = "openrouter";
@@ -115,12 +85,20 @@ export const RETRYABLE_STATUS_CODES: ReadonlySet<number> = new Set([
 ]);
 
 export const ROUTER_POLICY = {
-  defaultGateway: "openrouter",
-  paidGateway: "vercel",
-  freeGateway: "openrouter",
+  defaultGateway: "neon",
+  paidGateway: "neon",
+  freeGateway: "neon",
   allowNonZdr: process.env.NODE_ENV === "development",
   crossGatewayFallback: true,
 } satisfies RouterPolicyConfig;
+
+/**
+ * Neon answers 429 `REQUEST_LIMIT_EXCEEDED` once the account's daily spend
+ * cap is hit ("ai gateway daily token limit exceeded"); it lasts until the
+ * day resets, unlike the per-minute token limit.
+ */
+export const DAILY_LIMIT_ERROR_PATTERN =
+  /\bdaily\b[^.]*(?:limit exceeded|(?:spend|token) limit)/i;
 
 export const NO_TRAINING_PROVIDER_ERROR_PATTERN =
   /No providers that disallow prompt training available for model:/i;

@@ -4,10 +4,11 @@ import {
   Edit02Icon,
   Github01Icon,
   Key01Icon,
-  MoreHorizontalIcon,
   PauseIcon,
   PlayIcon,
-  ViewOffSlashIcon,
+  RefreshIcon,
+  Settings01Icon,
+  Wrench01Icon,
   WebhookIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -18,7 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@notra/ui/components/ui/dropdown-menu";
-import { useTranslations } from "next-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import type { GitHubRepositoryMenuProps } from "@/types/integrations/github";
@@ -32,10 +33,12 @@ export function GitHubRepositoryMenu({
   onManageRepositories,
   isMigrating,
   onMigrate,
-  onToggleWebhooks,
-  webhooksOpen,
+  webhook,
 }: GitHubRepositoryMenuProps) {
   const t = useTranslations("integrations.github.repositoryMenu");
+  const tIntegrationsShared = useTranslations("integrations.shared");
+  const showWebhookMaintenance =
+    !integration.managedByGitHubApp && webhook?.hasWebhook === true;
 
   return (
     <DropdownMenu>
@@ -45,11 +48,11 @@ export function GitHubRepositoryMenu({
             aria-label={t("ariaLabel", { name: integration.displayName })}
             disabled={isPending}
             size="icon-sm"
-            variant="ghost"
+            variant="outline"
           />
         }
       >
-        <HugeiconsIcon icon={MoreHorizontalIcon} className="size-4" />
+        <HugeiconsIcon icon={Settings01Icon} className="size-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-56">
         {integration.managedByGitHubApp ? (
@@ -71,13 +74,13 @@ export function GitHubRepositoryMenu({
               <HugeiconsIcon className="size-4" icon={Github01Icon} />
               {isMigrating ? t("switching") : t("switchToApp")}
             </DropdownMenuItem>
-            {integration.repositories.length > 0 ? (
-              <DropdownMenuItem onClick={onToggleWebhooks}>
-                <HugeiconsIcon
-                  className="size-4"
-                  icon={webhooksOpen ? ViewOffSlashIcon : WebhookIcon}
-                />
-                {webhooksOpen ? t("hideWebhooks") : t("webhookSettings")}
+            {webhook ? (
+              <DropdownMenuItem
+                disabled={webhook.busy}
+                onClick={() => webhook.open("setup")}
+              >
+                <HugeiconsIcon className="size-4" icon={WebhookIcon} />
+                {t("webhookSetup")}
               </DropdownMenuItem>
             ) : null}
           </>
@@ -90,6 +93,25 @@ export function GitHubRepositoryMenu({
           {isEnabled ? t("pause") : t("enable")}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
+        {showWebhookMaintenance && webhook ? (
+          <>
+            <DropdownMenuItem
+              disabled={webhook.busy || !isEnabled}
+              onClick={() => webhook.open("repair")}
+            >
+              <HugeiconsIcon className="size-4" icon={Wrench01Icon} />
+              {t("repairWebhook")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={webhook.busy}
+              onClick={() => webhook.open("rotate")}
+            >
+              <HugeiconsIcon className="size-4" icon={RefreshIcon} />
+              {tIntegrationsShared("regenerateSecret")}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
         <DropdownMenuItem
           onClick={() => onDialog("delete")}
           variant="destructive"

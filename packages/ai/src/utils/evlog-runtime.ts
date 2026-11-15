@@ -18,8 +18,6 @@ function createDatasetDrain(dataset: string | undefined) {
 
 export function getEvlogRuntime(): EvlogRuntimeState {
   const host = globalThis as EvlogGlobal;
-  // Next bundles instrumentation and route modules separately. Share both the
-  // buffers and scheduler so after() always flushes the emitting bundle's logs.
   host.__notraEvlogRuntime ??= {
     aiDrain: createDatasetDrain(
       process.env.AXIOM_AI_DATASET || DEFAULT_AXIOM_AI_DATASET

@@ -1,15 +1,15 @@
-import { EngineIcon } from "@notra/ui/components/geo/engine-icon";
 import { PurposeBadge } from "@notra/ui/components/geo/purpose-badge";
 import { ScrollArea, ScrollBar } from "@notra/ui/components/ui/scroll-area";
+import { cn } from "@notra/ui/lib/utils";
+
+import { LandingEngineIcon } from "@/components/landing/landing-engine-icon";
 import {
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
-} from "@notra/ui/components/ui/table";
-import { cn } from "@notra/ui/lib/utils";
-
+} from "@/components/marketing-table";
 import {
   DUAL_TONE_TABLE_BODY,
   DUAL_TONE_TABLE_CLASS,
@@ -71,7 +71,10 @@ function CitationCells({
       </TableCell>
       <TableCell className="min-w-0 py-3.5">
         <span className="flex items-center gap-2.5 text-[0.9375rem] font-medium whitespace-nowrap">
-          <EngineIcon className="size-4.5 shrink-0" engine={row.engine} />
+          <LandingEngineIcon
+            className="size-4.5 shrink-0"
+            engine={row.engine}
+          />
           <span className="truncate">{row.provider}</span>
         </span>
         <span className="mt-1 flex flex-col items-start gap-2 pl-7 lg:hidden">

@@ -4,9 +4,3 @@ export interface MembershipUpsertInput {
   readonly role: string;
   readonly createdAt: Date;
 }
-
-export interface MembershipUpsertStrategies {
-  readonly atomic: (input: MembershipUpsertInput) => Promise<void>;
-  readonly readThenWrite: (input: MembershipUpsertInput) => Promise<void>;
-  readonly onFallback?: () => void;
-}

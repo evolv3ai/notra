@@ -1,0 +1,59 @@
+---
+title: "Versioning and deprecation"
+description: "How the Notra API versions its endpoints and how much warning you get before anything changes or goes away."
+authors:
+  - handle: dominik
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/api/versioning
+  type: reference
+  applies_to:
+    - notra-api
+  language: en
+  difficulty: beginner
+  time_estimate: 3m
+  status: stable
+  aliases:
+    - API versioning
+    - deprecation policy
+    - sunset policy
+    - breaking changes
+  prev: ./rate-limits.mdx
+---
+
+The Notra API is versioned in the URL path. Stable operations live under `/v1` and the agent session endpoints live under `/v2`. Integrations built against a major version keep working for as long as that version is supported.
+
+## What can change within a version
+
+Within a major version we only make additive changes, such as new endpoints, new optional request fields, new response fields and new enum values. Write clients that ignore fields they don't recognize so these changes never break you.
+
+Anything that would break an existing client ships under a new major path, for example `/v2`, while the old path keeps working. That covers removing or renaming a field, changing a type or tightening validation.
+
+## How deprecations are announced
+
+When we plan to retire an endpoint or a major version, we announce it in the [changelog](https://www.usenotra.com/changelog/notra) and on this page. Responses from the deprecated operation then carry these headers:
+
+| Header | Meaning |
+| --- | --- |
+| `Deprecation` | The operation is deprecated, as defined in [RFC 9745](https://www.rfc-editor.org/rfc/rfc9745) |
+| `Sunset` | The date after which the operation may stop responding, as defined in [RFC 8594](https://www.rfc-editor.org/rfc/rfc8594) |
+| `Link` with `rel="deprecation"` | Points to this policy or to the migration guide |
+
+A deprecated operation keeps working for at least 90 days after the `Deprecation` header first appears, and the `Sunset` date is never earlier than that.
+
+## Current deprecations
+
+None. No `/v1` or `/v2` operation is scheduled for removal.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Getting started" icon="code" href="/api/getting-started">
+    Explore the endpoint groups
+  </Card>
+
+  <Card title="Rate limits" icon="gauge" href="/api/rate-limits">
+    Limits and the headers that report them
+  </Card>
+</CardGroup>

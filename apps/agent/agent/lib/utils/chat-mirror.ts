@@ -35,10 +35,9 @@ import { getSelectedAssistantModelId } from "./model";
 
 const SNAKE_SEGMENT_REGEX = /_([a-z0-9])/gu;
 
-// eve streams deltas only, so each in-flight message keeps its own buffer.
 const deltaBuffers = new Map<string, { publishedAt: number; text: string }>();
 
-export function mirrorStep<T>(
+function mirrorStep<T>(
   operation: string,
   run: () => Promise<T>
 ): Effect.Effect<T, ChatMirrorError> {
@@ -48,7 +47,7 @@ export function mirrorStep<T>(
   });
 }
 
-function runMirrorEffect(
+export function runMirrorEffect(
   operation: Effect.Effect<unknown, unknown>
 ): Promise<void> {
   return Effect.runPromise(
@@ -70,12 +69,26 @@ function getMirrorTarget(ctx: SessionContext): MirrorTarget | null {
   return { organizationId, chatId, sessionId: ctx.session.id };
 }
 
-export async function resolveMirrorChatId(ctx: HookContext) {
+export function resolveMirrorChatId(ctx: HookContext) {
   const kind = ctx.channel.kind;
   if (!(kind && MIRRORED_CHANNEL_KINDS.has(kind))) {
     return null;
   }
   return getSessionAttribute(ctx, "chatId");
+}
+
+function publishMirrorMessage(
+  organizationId: string,
+  chatId: string,
+  message: MirrorUiMessage
+): Effect.Effect<void> {
+  return mirrorStep("publish-mirror-message", () =>
+    publishChatMirrorMessage(organizationId, chatId, message)
+  ).pipe(
+    Effect.catch((error) =>
+      Effect.logWarning("[agent] mirror publish failed", error)
+    )
+  );
 }
 
 export function appendAndPublishMirrorMessage(
@@ -87,21 +100,14 @@ export function appendAndPublishMirrorMessage(
     const appended = yield* mirrorStep("append-mirror-message", () =>
       appendChatMessageIfMissing(organizationId, chatId, message)
     );
-    if (!appended) {
-      return false;
+    if (appended) {
+      yield* publishMirrorMessage(organizationId, chatId, message);
     }
-    yield* mirrorStep("publish-mirror-message", () =>
-      publishChatMirrorMessage(organizationId, chatId, message)
-    ).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning("[agent] mirror publish failed", error)
-      )
-    );
-    return true;
+    return appended;
   });
 }
 
-export function upsertAndPublishMirrorMessage(
+function upsertAndPublishMirrorMessage(
   organizationId: string,
   chatId: string,
   message: MirrorUiMessage
@@ -110,17 +116,10 @@ export function upsertAndPublishMirrorMessage(
     const updated = yield* mirrorStep("upsert-mirror-message", () =>
       upsertChatMessageById(organizationId, chatId, message)
     );
-    if (!updated) {
-      return false;
+    if (updated) {
+      yield* publishMirrorMessage(organizationId, chatId, message);
     }
-    yield* mirrorStep("publish-mirror-message", () =>
-      publishChatMirrorMessage(organizationId, chatId, message)
-    ).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning("[agent] mirror publish failed", error)
-      )
-    );
-    return true;
+    return updated;
   });
 }
 

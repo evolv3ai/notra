@@ -33,9 +33,9 @@ export function FeedbackMdUpsell() {
             {FEEDBACK_MD_UPSELL_SUBCOPY}
           </p>
         </div>
-        <div className="relative grid w-full grid-cols-2 items-center gap-4 sm:flex sm:w-auto sm:gap-7">
+        <div className="relative flex w-full min-w-0 flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:items-center sm:justify-center sm:gap-7">
           <CtaButton
-            className="w-full min-w-0 px-3 text-lg sm:w-auto sm:px-6"
+            className="w-full max-w-full text-lg sm:w-auto"
             nativeButton={false}
             render={
               <TrackedSignupLink source={FEEDBACK_MD_UPSELL_SIGNUP_SOURCE} />
@@ -45,7 +45,7 @@ export function FeedbackMdUpsell() {
             {FEEDBACK_MD_UPSELL_PRIMARY_LABEL}
           </CtaButton>
           <CtaButton
-            className="w-full min-w-0 px-3 text-lg sm:w-auto sm:px-6"
+            className="w-full max-w-full text-lg sm:w-auto"
             nativeButton={false}
             render={
               <a href={FEEDBACK_MD_DOCS_URL}>

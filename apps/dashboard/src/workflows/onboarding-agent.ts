@@ -18,7 +18,6 @@ import type { OnboardingAgentWorkflowResult } from "@/types/workflows/onboarding
 import {
   getOnboardingAgentStateStep,
   releaseOnboardingAgentReservationStep,
-  sendOnboardingSlackInviteStep,
   startOnboardingAgentSessionStep,
 } from "./steps/onboarding-agent-steps";
 import {
@@ -39,16 +38,11 @@ export async function onboardingAgentWorkflow(
     );
     return { status: "invalid_payload" };
   }
-  const { organizationId, domain, email, organizationName, reservedAt } =
-    parseResult.data;
+  const { organizationId, domain, reservedAt } = parseResult.data;
   const workflowStartedAt = Date.now();
 
   try {
     await trackOnboardingAgentStarted({ organizationId });
-
-    if (email && organizationName) {
-      await sendOnboardingSlackInviteStep({ email, organizationName });
-    }
 
     await startOnboardingAgentSessionStep({
       domain,

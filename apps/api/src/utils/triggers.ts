@@ -1,18 +1,15 @@
-import type { createDb } from "@notra/db/drizzle";
-import { contentTriggers } from "@notra/db/schema";
+import { contentTriggers, githubIntegrations } from "@notra/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { Effect } from "effect";
 
 import { deleteQstashWithRetry, qstashLayer } from "../lib/qstash";
+import type { DbClient } from "../types/db";
 import { logError } from "./logging";
 import { runServiceEffect } from "./run-service-effect";
 
-type DbClient = ReturnType<typeof createDb>;
-type DbTransaction = Parameters<Parameters<DbClient["transaction"]>[0]>[0];
+type DisabledTrigger = { id: string; name: string; sourceType: string };
 
-export type IntegrationTrigger = Awaited<
-  ReturnType<typeof getTriggersForIntegration>
->[number];
+type DbTransaction = Parameters<Parameters<DbClient["transaction"]>[0]>[0];
 
 export async function getTriggersForBrandIdentity(
   db: DbClient,
@@ -44,8 +41,6 @@ export async function getTriggersForIntegration(
   organizationId: string,
   integrationId: string
 ) {
-  // Triggers currently persist both GitHub integration IDs and Linear selections
-  // inside targets.repositoryIds. Linear values are stored with a `linear:` prefix.
   const allTriggers = await db.query.contentTriggers.findMany({
     where: eq(contentTriggers.organizationId, organizationId),
     columns: {
@@ -75,11 +70,11 @@ export async function getTriggersForIntegration(
   });
 }
 
-export async function disableTriggersAndDeleteIntegration(
+export async function disableTriggersAndDelete(
   db: DbClient,
   organizationId: string,
-  affectedTriggers: IntegrationTrigger[],
-  deleteIntegration: (tx: DbTransaction) => Promise<unknown>
+  affectedTriggers: readonly { id: string }[],
+  deleteOwner: (tx: DbTransaction) => Promise<unknown>
 ) {
   await db.transaction(async (tx) => {
     if (affectedTriggers.length > 0) {
@@ -101,17 +96,16 @@ export async function disableTriggersAndDeleteIntegration(
         );
     }
 
-    await deleteIntegration(tx);
+    await deleteOwner(tx);
   });
 }
 
 export async function deleteQstashScheduleWithRetry(
   runtimeEnv: { QSTASH_TOKEN?: string; WORKFLOW_BASE_URL?: string },
-  scheduleId: string,
-  attempts = 3
+  scheduleId: string
 ) {
   return runServiceEffect(
-    deleteQstashWithRetry(scheduleId, attempts).pipe(
+    deleteQstashWithRetry(scheduleId).pipe(
       Effect.provide(qstashLayer(runtimeEnv))
     )
   );
@@ -135,4 +129,73 @@ export async function deleteQstashSchedulesForTriggers(
       );
     }
   }
+}
+
+export function serializeDisabledTriggers(
+  affectedTriggers: readonly DisabledTrigger[]
+) {
+  return {
+    disabledSchedules: affectedTriggers
+      .filter((trigger) => trigger.sourceType === "cron")
+      .map((trigger) => ({ id: trigger.id, name: trigger.name })),
+    disabledEvents: affectedTriggers
+      .filter((trigger) => trigger.sourceType !== "cron")
+      .map((trigger) => ({ id: trigger.id, name: trigger.name })),
+  };
+}
+
+export async function ensureTriggerTargetsExist(
+  db: DbClient,
+  organizationId: string,
+  repositoryIds: string[],
+  message: string
+) {
+  if (repositoryIds.length === 0) {
+    return null;
+  }
+
+  const integrations = await db.query.githubIntegrations.findMany({
+    where: and(
+      eq(githubIntegrations.organizationId, organizationId),
+      inArray(githubIntegrations.id, repositoryIds)
+    ),
+    columns: { id: true },
+  });
+
+  const existingIds = new Set(
+    integrations.map((integration) => integration.id)
+  );
+  const hasMissingTarget = repositoryIds.some((id) => !existingIds.has(id));
+
+  return hasMissingTarget ? { error: message } : null;
+}
+
+export async function getRepositoryLabels(
+  db: DbClient,
+  repositoryIds: string[]
+): Promise<Record<string, string>> {
+  if (repositoryIds.length === 0) {
+    return {};
+  }
+
+  const repositories = await db
+    .select({
+      id: githubIntegrations.id,
+      owner: githubIntegrations.owner,
+      repo: githubIntegrations.repo,
+      defaultBranch: githubIntegrations.defaultBranch,
+    })
+    .from(githubIntegrations)
+    .where(inArray(githubIntegrations.id, repositoryIds));
+
+  return Object.fromEntries(
+    repositories
+      .filter((repository) => repository.owner && repository.repo)
+      .map((repository) => [
+        repository.id,
+        repository.defaultBranch?.trim()
+          ? `${repository.owner}/${repository.repo} · ${repository.defaultBranch.trim()}`
+          : `${repository.owner}/${repository.repo}`,
+      ])
+  );
 }

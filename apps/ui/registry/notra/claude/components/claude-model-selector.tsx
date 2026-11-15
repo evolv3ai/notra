@@ -3,6 +3,7 @@
 import { cn } from "cn";
 
 import { Button } from "@/components/ui/button";
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,8 +14,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-
+} from "../../dropdown-menu/components/dropdown-menu";
 import {
   CLAUDE_MENU_ITEM_CLASS,
   CLAUDE_MENU_SURFACE_CLASS,

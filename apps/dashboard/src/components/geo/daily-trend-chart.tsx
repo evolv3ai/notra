@@ -1,18 +1,19 @@
 "use client";
 
 import { formatDayLabel, todayIsoDate } from "@notra/geo-core/utils/day-label";
-import { useLocale } from "next-intl";
 import { useMemo } from "react";
+import { useLocale } from "use-intl";
 
 import { EChartsBarChart } from "@/components/evilcharts/charts/echarts-bar-chart";
 import { CHART_PRIMARY_COLOR } from "@/constants/charts";
+import { TRAFFIC_HERO_CHART_OPTIONS } from "@/constants/geo-traffic-hero";
 import type { ChartConfig } from "@/types/charts";
 import type { DailyTrendChartProps } from "@/types/geo";
 import { seriesColors } from "@/utils/chart-colors";
+import { formatChartInteger } from "@/utils/geo-charts";
 
 const DAILY_TREND_SERIES_KEY = "value";
 
-/** Per-day bars with labelled axes, for the source and page drawers. */
 export function DailyTrendChart({ points, label }: DailyTrendChartProps) {
   const locale = useLocale();
   const config = useMemo<ChartConfig>(
@@ -32,25 +33,29 @@ export function DailyTrendChart({ points, label }: DailyTrendChartProps) {
       })),
     [locale, points]
   );
-  // Today is still filling up, so its bar is drawn as a buffer.
   const incompleteTail = points.at(-1)?.day === todayIsoDate();
 
   return (
     <EChartsBarChart
       animation={false}
+      barRadius={4}
+      chartOptions={TRAFFIC_HERO_CHART_OPTIONS}
       className="h-44 w-full"
       config={config}
       data={rows}
       xDataKey="day"
     >
       <EChartsBarChart.Grid />
-      <EChartsBarChart.XAxis dataKey="day" />
-      <EChartsBarChart.YAxis />
+      <EChartsBarChart.XAxis dataKey="day" hideDots />
+      <EChartsBarChart.YAxis hideDots />
       <EChartsBarChart.Bar
         bufferBar={incompleteTail}
         dataKey={DAILY_TREND_SERIES_KEY}
       />
-      <EChartsBarChart.Tooltip />
+      <EChartsBarChart.Tooltip
+        roundness="xl"
+        valueFormatter={(value) => formatChartInteger(Number(value), locale)}
+      />
     </EChartsBarChart>
   );
 }

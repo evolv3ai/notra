@@ -7,6 +7,7 @@ export default defineMeta({
     "message",
     "thinking",
     "reasoning",
+    "app-call",
     "search",
     "activity",
     "source-chip",

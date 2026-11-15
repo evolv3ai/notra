@@ -1,5 +1,7 @@
 "use client";
 
+import { MoreHorizontalIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import type {
   AffectedTriggersData,
   DeleteResourceResponse,
@@ -20,15 +22,15 @@ import {
   DropdownMenuTrigger,
 } from "@notra/ui/components/ui/dropdown-menu";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLocale, useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 import type { MouseEvent } from "react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { DeleteIntegrationDialog } from "@/components/delete-integration-dialog";
 import { LegacyEditTokenDialog as EditTokenDialog } from "@/components/integrations/legacy/edit-token-dialog";
+import { useRouter } from "@/lib/navigation";
 import { dashboardOrpc } from "@/lib/orpc/query";
 import type { IntegrationCardProps } from "@/types/integrations";
 
@@ -184,22 +186,16 @@ export function IntegrationCard({
               <DropdownMenu>
                 <DropdownMenuTrigger
                   render={
-                    <Button disabled={isLoading} size="icon-sm" variant="ghost">
-                      <svg
-                        aria-label={tIntegrationsShared("moreOptions")}
-                        fill="none"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        viewBox="0 0 24 24"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <title>{tIntegrationsShared("moreOptions")}</title>
-                        <circle cx="12" cy="12" r="1" />
-                        <circle cx="12" cy="5" r="1" />
-                        <circle cx="12" cy="19" r="1" />
-                      </svg>
+                    <Button
+                      aria-label={tIntegrationsShared("moreOptions")}
+                      disabled={isLoading}
+                      size="icon-sm"
+                      variant="ghost"
+                    >
+                      <HugeiconsIcon
+                        className="size-4"
+                        icon={MoreHorizontalIcon}
+                      />
                     </Button>
                   }
                 />

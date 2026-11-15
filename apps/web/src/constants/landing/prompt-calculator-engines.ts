@@ -5,7 +5,6 @@ import { Grok } from "@notra/ui/components/ui/svgs/grok";
 import { GrokDark } from "@notra/ui/components/ui/svgs/grokDark";
 import { Kimi } from "@notra/ui/components/ui/svgs/kimi";
 import { Meta } from "@notra/ui/components/ui/svgs/meta";
-import { Mistral } from "@notra/ui/components/ui/svgs/mistral";
 import { Openai } from "@notra/ui/components/ui/svgs/openai";
 import { OpenaiDark } from "@notra/ui/components/ui/svgs/openaiDark";
 import { Perplexity } from "@notra/ui/components/ui/svgs/perplexity";
@@ -13,15 +12,6 @@ import { Zai } from "@notra/ui/components/ui/svgs/zai";
 
 import type { PromptCalculatorEngine } from "@/types/landing/prompt-calculator";
 
-/**
- * Engines every plan can scan, and their current models. Mirrors
- * `GEO_MODEL_CATALOG_SEED` in `packages/geo-core/src/constants/geo-model-catalog.ts`
- * the way the dashboard's engine picker shows it: newest release first, with
- * `grok-4.6` excluded. Older models the product still accepts are left off so
- * the list stays short. `defaultModel` is the catalog's `default: true` model,
- * or the newest where there is none. The coding agents (Cursor, Claude Code,
- * Codex, OpenCode) are flag-gated per organization, so they stay off here.
- */
 export const PROMPT_CALCULATOR_ENGINES: PromptCalculatorEngine[] = [
   {
     id: "chatgpt",
@@ -107,14 +97,6 @@ export const PROMPT_CALCULATOR_ENGINES: PromptCalculatorEngine[] = [
     ],
   },
   {
-    id: "mistral",
-    name: "Mistral",
-    featured: false,
-    icon: Mistral,
-    defaultModel: "mistral/mistral-medium-3.5",
-    models: [{ id: "mistral/mistral-medium-3.5", label: "Mistral Medium 3.5" }],
-  },
-  {
     id: "meta",
     name: "Meta AI",
     featured: false,
@@ -139,7 +121,6 @@ export const PROMPT_CALCULATOR_ENGINES: PromptCalculatorEngine[] = [
   },
 ];
 
-/** Every model id the `models` query param accepts, in display order. */
 export const PROMPT_CALCULATOR_MODEL_IDS: string[] =
   PROMPT_CALCULATOR_ENGINES.flatMap((engine) =>
     engine.models.map((model) => model.id)

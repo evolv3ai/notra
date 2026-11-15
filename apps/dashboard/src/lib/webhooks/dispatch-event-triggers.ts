@@ -14,38 +14,35 @@ class EventTriggerDispatchError extends Data.TaggedError(
   "EventTriggerDispatchError"
 )<{ triggerId: string; cause: unknown }> {}
 
-function isPreReleaseEvent(processedEvent: GithubProcessedEvent) {
-  return (
-    processedEvent.type === "release" && processedEvent.data.prerelease === true
-  );
-}
-
 function shouldDispatchTrigger(
   trigger: MatchingEventTrigger,
   processedEvent: GithubProcessedEvent
 ) {
   const parsed = triggerSourceConfigSchema.safeParse(trigger.sourceConfig);
-  const eventTypes = parsed.success ? (parsed.data.eventTypes ?? []) : [];
-  const includePreReleases = parsed.success
-    ? (parsed.data.includePreReleases ?? true)
-    : true;
+  if (!parsed.success) {
+    return false;
+  }
+  const config = parsed.data;
 
-  if (!eventTypes.some((eventType) => eventType === processedEvent.type)) {
+  if (
+    !(config.eventTypes ?? []).some(
+      (eventType) => eventType === processedEvent.type
+    )
+  ) {
     return false;
   }
 
-  if (isPreReleaseEvent(processedEvent) && !includePreReleases) {
+  const isPreRelease =
+    processedEvent.type === "release" &&
+    processedEvent.data.prerelease === true;
+  if (isPreRelease && !(config.includePreReleases ?? true)) {
     return false;
   }
 
-  const ignoreCommitPatterns = parsed.success
-    ? parsed.data.ignoreCommitPatterns
-    : undefined;
-  if (isPushEventIgnoredByPatterns(processedEvent, ignoreCommitPatterns)) {
-    return false;
-  }
-
-  return true;
+  return !isPushEventIgnoredByPatterns(
+    processedEvent,
+    config.ignoreCommitPatterns
+  );
 }
 
 const dispatchEventTrigger = Effect.fn("dispatchEventTrigger")(function* ({

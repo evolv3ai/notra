@@ -22,6 +22,7 @@ import {
   CHART_PRIMARY_COLOR,
   RIVAL_SWATCHES,
 } from "@/constants/charts";
+import { GEO_COMPETITOR_DETAIL_QUERY_KEY } from "@/constants/geo-competitors";
 import type { ChartColorPair } from "@/types/charts";
 import type { EngineFamilyBrandRow, EngineFamilyBrandScope } from "@/types/geo";
 import type { GeoCompetitorRowEntry } from "@/types/geo-competitors";
@@ -57,7 +58,7 @@ export function isOwnBrandName(
   return key.length > 0 && ownBrandKeys(companyName, aliases).has(key);
 }
 
-export function competitorSliceColor(index: number): ChartColorPair {
+function competitorSliceColor(index: number): ChartColorPair {
   const hex =
     RIVAL_SWATCHES[index % RIVAL_SWATCHES.length] ?? FALLBACK_SLICE_COLOR;
   return { light: hex, dark: hex };
@@ -240,73 +241,6 @@ function ownBrandKeys(
   return keys;
 }
 
-function isRivalSharePoint(
-  point: GeoCompetitorSharePoint,
-  ownKeys: ReadonlySet<string>
-): boolean {
-  const key = competitorKey(point.brand);
-  return key.length > 0 && !ownKeys.has(key);
-}
-
-export function topRivalSharePoint(
-  points: readonly GeoCompetitorSharePoint[],
-  companyName: string,
-  aliases: readonly string[] = []
-): GeoCompetitorSharePoint | null {
-  const ownKeys = ownBrandKeys(companyName, aliases);
-  let leader: GeoCompetitorSharePoint | null = null;
-  for (const point of points) {
-    if (!isRivalSharePoint(point, ownKeys)) {
-      continue;
-    }
-    if (!leader || point.mentions > leader.mentions) {
-      leader = point;
-    }
-  }
-  return leader;
-}
-
-export function rivalMentionShare(
-  rival: GeoCompetitorSharePoint,
-  points: readonly GeoCompetitorSharePoint[],
-  companyName: string,
-  aliases: readonly string[] = []
-): number {
-  const ownKeys = ownBrandKeys(companyName, aliases);
-  let total = 0;
-  for (const point of points) {
-    if (isRivalSharePoint(point, ownKeys)) {
-      total += point.mentions;
-    }
-  }
-  if (total <= 0) {
-    return 0;
-  }
-  return rival.mentions / total;
-}
-
-/** Keep mention-check names that match a tracked competitor or synonym. */
-export function matchTrackedCompetitorNames(
-  mentioned: readonly string[],
-  competitors: readonly {
-    name: string;
-    synonyms?: readonly string[];
-  }[]
-): string[] {
-  const aliases = competitorCanonicalMap(competitors);
-  const matched: string[] = [];
-  const seen = new Set<string>();
-  for (const name of mentioned) {
-    const canonical = aliases.get(competitorKey(name));
-    if (!canonical || seen.has(canonical)) {
-      continue;
-    }
-    seen.add(canonical);
-    matched.push(canonical);
-  }
-  return matched;
-}
-
 export function mergeCompetitorSharePoints(
   points: readonly GeoCompetitorSharePoint[],
   competitors: readonly GeoCompetitor[] | undefined
@@ -390,7 +324,7 @@ export function geoCompetitorDetailPath(
   organizationSlug: string,
   brand: string
 ): string {
-  return `/${organizationSlug}/geo/competitors/${encodeURIComponent(brand)}`;
+  return `/${organizationSlug}/geo/competitors?${GEO_COMPETITOR_DETAIL_QUERY_KEY}=${encodeURIComponent(brand)}`;
 }
 
 function normalizeDomainAlias(value: string): string {
@@ -471,7 +405,6 @@ const COMPETITOR_MATCH_EXACT = 0;
 const COMPETITOR_MATCH_PREFIX = 1;
 const COMPETITOR_MATCH_PARTIAL = 2;
 
-/** Lower is better; null when the competitor does not match at all. */
 function competitorMatchRank(
   competitor: GeoCompetitor,
   query: string

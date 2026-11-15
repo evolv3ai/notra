@@ -1,3 +1,6 @@
+import { cn } from "@notra/ui/lib/utils";
+
+import { AnnouncementBanner } from "@/components/landing/announcement-banner";
 import { AnswerExampleSection } from "@/components/landing/answer-example-section";
 import { CtaBanner } from "@/components/landing/cta-banner";
 import { FaqSection } from "@/components/landing/faq-section";
@@ -17,6 +20,18 @@ import {
 import { serializeJsonLd } from "@/utils/jsonld";
 import { SITE_DESCRIPTION, SITE_TITLE } from "@/utils/metadata";
 import { SITE_URL } from "@/utils/urls";
+
+const DEFERRED_SECTION_CLASS = {
+  features:
+    "[content-visibility:auto] [contain-intrinsic-size:auto_137rem] lg:[contain-intrinsic-size:auto_96rem]",
+  answers:
+    "[content-visibility:auto] [contain-intrinsic-size:auto_88rem] lg:[contain-intrinsic-size:auto_62rem]",
+  testimonials: "[content-visibility:auto] [contain-intrinsic-size:auto_50rem]",
+  pricing:
+    "[content-visibility:auto] [contain-intrinsic-size:auto_107rem] lg:[contain-intrinsic-size:auto_85rem]",
+  faq: "[content-visibility:auto] [contain-intrinsic-size:auto_57rem] lg:[contain-intrinsic-size:auto_71rem]",
+  cta: "[content-visibility:auto] [contain-intrinsic-size:auto_34rem] lg:[contain-intrinsic-size:auto_27rem]",
+};
 
 const softwareJsonLd = {
   "@context": "https://schema.org",
@@ -105,29 +120,24 @@ function LandingPageJsonLd() {
   return (
     <>
       <script
-        // biome-ignore lint/security/noDangerouslySetInnerHtml: SSR'd JSON-LD payload, escaped via serializeJsonLd
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(softwareJsonLd) }}
         type="application/ld+json"
       />
       <script
-        // biome-ignore lint/security/noDangerouslySetInnerHtml: SSR'd JSON-LD payload, escaped via serializeJsonLd
         dangerouslySetInnerHTML={{
           __html: serializeJsonLd(organizationJsonLd),
         }}
         type="application/ld+json"
       />
       <script
-        // biome-ignore lint/security/noDangerouslySetInnerHtml: SSR'd JSON-LD payload, escaped via serializeJsonLd
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(serviceJsonLd) }}
         type="application/ld+json"
       />
       <script
-        // biome-ignore lint/security/noDangerouslySetInnerHtml: SSR'd JSON-LD payload, escaped via serializeJsonLd
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(faqJsonLd) }}
         type="application/ld+json"
       />
       <script
-        // biome-ignore lint/security/noDangerouslySetInnerHtml: SSR'd JSON-LD payload, escaped via serializeJsonLd
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(speakableJsonLd) }}
         type="application/ld+json"
       />
@@ -139,30 +149,40 @@ export function LandingPage() {
   return (
     <div className="dark:bg-background flex w-full flex-col items-stretch justify-start overflow-x-clip bg-white">
       <LandingPageJsonLd />
+      <AnnouncementBanner />
       <main className="landing-tables flex w-full flex-col items-stretch justify-start">
         <HeroSection />
         <p className="sr-only" id="agent-readable-summary">
           {SITE_DESCRIPTION}
         </p>
         <LogoMarquee />
-        <section id="features">
+        <section className={DEFERRED_SECTION_CLASS.features} id="features">
           <FeaturesSection />
         </section>
-        <section id="answers">
+        <section className={DEFERRED_SECTION_CLASS.answers} id="answers">
           <AnswerExampleSection />
         </section>
         <TestimonialsGate>
-          <section id="testimonials">
+          <section
+            className={DEFERRED_SECTION_CLASS.testimonials}
+            id="testimonials"
+          >
             <TestimonialsSection />
           </section>
         </TestimonialsGate>
-        <div>
+        <div className={DEFERRED_SECTION_CLASS.pricing}>
           <LandingPricingSection />
         </div>
-        <section id="faq">
+        <section className={DEFERRED_SECTION_CLASS.faq} id="faq">
           <FaqSection />
         </section>
-        <section className="px-6 pt-27.5 pb-27.5 lg:px-20" id="cta">
+        <section
+          className={cn(
+            "px-6 pt-16 pb-16 sm:pt-27.5 sm:pb-27.5 lg:px-20",
+            DEFERRED_SECTION_CLASS.cta
+          )}
+          id="cta"
+        >
           <CtaBanner />
         </section>
       </main>

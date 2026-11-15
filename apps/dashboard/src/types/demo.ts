@@ -12,6 +12,10 @@ export interface DemoOrganizationInput {
   timeZone: string;
   now: Date;
   personalization: DemoPersonalization | null;
+  reservation?: {
+    anonymousId: string;
+    ipHash: string | null;
+  };
 }
 
 export interface CreateDemoSandboxInput {
@@ -41,6 +45,11 @@ export interface DemoTimestampColumns {
 
 export interface DemoSandboxCreateResponse {
   slug: string;
+}
+
+export interface DemoStartProps {
+  returnTo: string | null;
+  turnstileSiteKey: string | null;
 }
 
 // A type alias (not an interface) so it satisfies drizzle's row constraint.

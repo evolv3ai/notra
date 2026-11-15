@@ -54,11 +54,6 @@ export function LogoStack({
   const hidden = items.slice(limit);
 
   return (
-    /*
-     * Labelled stacks must be block-level: an inline-flex shrink-wraps its
-     * content, so a long brand name would push out of the cell instead of
-     * truncating. Bare logo stacks stay inline so they can sit in a sentence.
-     */
     <span
       className={
         showLabel
@@ -70,7 +65,6 @@ export function LogoStack({
       {visible.map((item) => (
         <Tooltip key={item.key}>
           <TooltipTrigger
-            // With a visible label the text is already the accessible name.
             aria-label={showLabel ? undefined : item.label}
             render={
               <span

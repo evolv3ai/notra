@@ -1,4 +1,4 @@
-import "server-only";
+import "@tanstack/react-start/server-only";
 import { db } from "@notra/db/drizzle";
 import { brandSitemapPages, brandSitemaps } from "@notra/db/schema";
 import { and, count, desc, eq, ne, sql } from "drizzle-orm";
@@ -179,8 +179,6 @@ export async function saveStoredSitemap(input: {
   pages: SitemapPage[];
 }) {
   await db.transaction(async (tx) => {
-    // Re-adding a URL replaces this identity's earlier row, including rows
-    // saved before ids were scoped to the identity.
     await tx
       .delete(brandSitemaps)
       .where(

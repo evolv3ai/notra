@@ -43,7 +43,6 @@ function isInternalDashboardAdapterError(
   );
 }
 
-/** True when the dashboard explicitly rejected the workflow before acceptance. */
 export function isConfirmedWorkflowTriggerRejection(error: unknown) {
   if (isInternalDashboardError(error)) {
     return error.status >= 400 && error.status < 500;

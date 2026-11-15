@@ -38,8 +38,6 @@ export function sentimentAnalysisLookupKeys(
   to: string,
   rolling: { from: boolean; to: boolean }
 ): [string, ...string[]] {
-  // A pinned `from` stays put when `to` rolls. A derived `from` only moves with `to`.
-  // ponytail: 8 days matches the Redis TTL. Drop the date walk once those keys have expired.
   const shiftFrom = rolling.from && rolling.to;
   return [
     sentimentAnalysisKey(organizationId, projectId),
@@ -83,8 +81,6 @@ export function validateSentimentThemes(
         const check = checks.get(reference.checkId);
         const quote = reference.quote.trim();
         const compactQuote = compactSentimentQuote(quote);
-        // Grounding is a filter: one paraphrased or unknown cite must not
-        // fail a paid run that still has other verbatim evidence.
         if (
           !(
             check &&
@@ -94,11 +90,6 @@ export function validateSentimentThemes(
         ) {
           return [];
         }
-        // Check-level sentiment labels are too coarse for mixed answers. A
-        // verbatim clause can validly differ from the answer's overall label.
-        // Identical checkId+quote pairs are redundant, not invalid — collapse
-        // them (same dedup key the theme-level merge uses below) while still
-        // allowing multiple distinct quotes from one check per claim.
         const key = `${check.id}::${compactQuote}`;
         if (seen.has(key)) {
           return [];

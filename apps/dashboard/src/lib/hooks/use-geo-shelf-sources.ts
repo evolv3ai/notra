@@ -7,9 +7,9 @@ import {
   useInfiniteQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
 import { useRef, useSyncExternalStore } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { useGeoProjectScope } from "@/components/providers/geo-project-provider";
 import {
@@ -89,7 +89,6 @@ export function useGeoShelfSources(
   const pendingKey = geoCollectionId("shelf", { organizationId, projectId });
   const inFlightBySourceId = useRef(new Map<string, number>());
   const queueBySourceId = useRef(new Map<string, Promise<void>>());
-  // An optimistic add keeps its temporary id until the next refetch.
   const serverIdByDraftId = useRef(new Map<string, string>());
   const pendingSourceIds = useSyncExternalStore(
     subscribeToPendingRows,
@@ -116,7 +115,6 @@ export function useGeoShelfSources(
   const query = useInfiniteQuery({
     ...options,
     enabled: input.enabled && organizationId.length > 0,
-    // Keep the current rows on screen while a filter or sort change loads.
     placeholderData: keepPreviousData,
     meta: { errorMessage: tToast("loadShelfSpaceFailed") },
   });
@@ -152,10 +150,6 @@ export function useGeoShelfSources(
     }
   };
 
-  /**
-   * Saves of one row run one after another, so the server applies them in the
-   * order they were made and a slower, older response never lands last.
-   */
   const persist = (
     sourceId: string,
     request: (serverId: string) => Promise<GeoShelfMutationResponse>,
@@ -172,7 +166,6 @@ export function useGeoShelfSources(
           if (source.id !== sourceId) {
             serverIdByDraftId.current.set(sourceId, source.id);
           }
-          // A newer edit of the same row is still queued: keep it on screen.
           if (inFlight.get(sourceId) === 1) {
             patchSource(sourceId, () => source);
           }
@@ -190,7 +183,6 @@ export function useGeoShelfSources(
     queues.set(sourceId, run);
   };
 
-  // Member and competitor names count for search, same as on the server.
   const matchesActiveFilters = (source: GeoShelfSource) =>
     matchesGeoShelfSourceFilters(
       source,
@@ -281,7 +273,6 @@ export function useGeoShelfSources(
   };
 
   const loadMore = () => {
-    // A refetch replaces the pages, so asking for the next one would race it.
     if (query.hasNextPage && !query.isFetching) {
       void query.fetchNextPage({ cancelRefetch: false });
     }

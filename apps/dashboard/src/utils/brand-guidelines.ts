@@ -308,6 +308,11 @@ export function serializeGuidelinesResponse(
       contextDevMeta: guideline.contextDevMeta,
       lastGeneratedAt: serializeGuidelineDate(guideline.lastGeneratedAt),
       lastGenerationError: guideline.lastGenerationError,
+      sourcePdfFilename: guideline.sourcePdfFilename,
+      sourcePdfUploadedAt: serializeGuidelineDate(
+        guideline.sourcePdfUploadedAt
+      ),
+      sourcePdfUrl: guideline.sourcePdfUrl,
       createdAt: guideline.createdAt.toISOString(),
       updatedAt: guideline.updatedAt.toISOString(),
     },

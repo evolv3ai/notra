@@ -3,13 +3,11 @@
 import type { GeoTab } from "@notra/geo-core/types/geo";
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
 import { useHotkey } from "@tanstack/react-hotkeys";
-import { useReducedMotion } from "motion/react";
-import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { useOrganizationsContext } from "@/components/providers/organization-provider";
-import { GEO_MODULES_REVEAL_MS } from "@/constants/geo-overview";
 import { trackEvent } from "@/lib/analytics/posthog-client";
 import {
   useGeoCompetitorShare,
@@ -27,41 +25,18 @@ import {
 import { useGeoCompetitorsDb, useGeoPromptsDb } from "@/lib/hooks/use-geo-db";
 import { useGeoRange } from "@/lib/hooks/use-geo-range";
 import { useGeoTab } from "@/lib/hooks/use-geo-tab";
+import { useRouter } from "@/lib/navigation";
 import type { GeoOverviewPageModel } from "@/types/geo";
 import { resolveOrganizationId } from "@/utils/geo-overview-organization";
 import {
   countEnabledGeoPrompts,
   geoJourneysTabLoading,
+  geoOverviewLoading,
   geoOverviewQueriesEnabled,
   geoOverviewTabEnabled,
   toGeoOverviewReadyPage,
 } from "@/utils/geo-overview-page";
 import { scanModelSelectionToSubmit } from "@/utils/geo-scan-models";
-
-function useGeoModulesReveal(ready: boolean): boolean {
-  const reduceMotion = useReducedMotion();
-  const [modulesVisible, setModulesVisible] = useState(false);
-
-  useEffect(() => {
-    if (!ready) {
-      return;
-    }
-    if (reduceMotion) {
-      return;
-    }
-    const timer = setTimeout(
-      () => setModulesVisible(true),
-      GEO_MODULES_REVEAL_MS
-    );
-    return () => clearTimeout(timer);
-  }, [ready, reduceMotion]);
-
-  if (!ready) {
-    return false;
-  }
-
-  return Boolean(reduceMotion) || modulesVisible;
-}
 
 function useGeoOverviewViewed(input: {
   ready: boolean;
@@ -104,6 +79,7 @@ export function useGeoOverviewPage(
   organizationSlug: string
 ): GeoOverviewPageModel {
   const tToast = useTranslations("geo.toasts");
+  const router = useRouter();
   const tScanButton = useTranslations("geo.promptScanButton");
   const { getOrganization, activeOrganization } = useOrganizationsContext();
   const organizationId = resolveOrganizationId(
@@ -132,12 +108,12 @@ export function useGeoOverviewPage(
     activeTab,
     "journeys"
   );
-  const { data: overview } = useGeoOverview(
+  const { data: overview, isPending: isOverviewPending } = useGeoOverview(
     organizationId,
     geoRange.query,
     queriesEnabled
   );
-  const { data: timeseries } = useGeoTimeseries(
+  const { data: timeseries, isPending: isTimeseriesPending } = useGeoTimeseries(
     organizationId,
     geoRange.query,
     queriesEnabled
@@ -146,25 +122,23 @@ export function useGeoOverviewPage(
     organizationId,
     { enabled: queriesEnabled }
   );
-  const { data: promptResults } = useGeoPromptResults(
+  const { data: promptResults, isPending: isPromptResultsPending } =
+    useGeoPromptResults(organizationId, geoRange.query, visibilityEnabled);
+  const { data: competitorShare, isPending: isCompetitorSharePending } =
+    useGeoCompetitorShare(
+      organizationId,
+      geoRange.query,
+      false,
+      visibilityEnabled
+    );
+  const { competitors, isLoading: isCompetitorsLoading } = useGeoCompetitorsDb(
     organizationId,
-    geoRange.query,
-    visibilityEnabled
+    {
+      enabled: queriesEnabled,
+    }
   );
-  const { data: competitorShare } = useGeoCompetitorShare(
-    organizationId,
-    geoRange.query,
-    false,
-    visibilityEnabled
-  );
-  const { competitors } = useGeoCompetitorsDb(organizationId, {
-    enabled: queriesEnabled,
-  });
-  const { data: languageShare } = useGeoLanguageShare(
-    organizationId,
-    geoRange.query,
-    visibilityEnabled
-  );
+  const { data: languageShare, isPending: isLanguageSharePending } =
+    useGeoLanguageShare(organizationId, geoRange.query, visibilityEnabled);
   const {
     data: trafficJourneys,
     isPending: isJourneysPending,
@@ -182,10 +156,21 @@ export function useGeoOverviewPage(
   const { data: catalog } = useGeoModelCatalog(organizationId);
   const [scanMenuOpen, setScanMenuOpen] = useState(false);
   const settings = settingsData?.settings ?? null;
-  const ready = !isSettingsPending;
-  const revealActive = useGeoModulesReveal(ready);
+  const loading = geoOverviewLoading({
+    settingsPending: isSettingsPending,
+    queriesEnabled,
+    overviewPending: isOverviewPending,
+    timeseriesPending: isTimeseriesPending,
+    visibilityEnabled,
+    visibilityPending: [
+      isPromptResultsPending,
+      isCompetitorSharePending,
+      isLanguageSharePending,
+      isCompetitorsLoading,
+    ],
+  });
+  const ready = !loading;
 
-  // Mirrors the menu's own disabled state, which renders no popover.
   const canOpenScanMenu =
     Boolean(settings?.enabled) && (settings?.engines.length ?? 0) > 0;
   useHotkey("R", () => setScanMenuOpen(true), {
@@ -201,7 +186,7 @@ export function useGeoOverviewPage(
     activeTab,
   });
 
-  if (isSettingsPending) {
+  if (loading) {
     return { status: "loading" };
   }
 
@@ -236,7 +221,6 @@ export function useGeoOverviewPage(
       isJourneyStatsPlaceholder,
     }),
     isScanning,
-    revealActive,
     scanMenu: {
       engines: settings.engines,
       catalog: catalog?.models,
@@ -257,7 +241,12 @@ export function useGeoOverviewPage(
             await startScan.mutateAsync({
               engines: scanModelSelectionToSubmit(settings.engines, engines),
             });
-            toast.success(tToast("scanStarted"));
+            toast.success(tToast("scanStarted"), {
+              action: {
+                label: tToast("viewScan"),
+                onClick: () => router.push(`/${organizationSlug}/geo/prompts`),
+              },
+            });
           } catch {
             // The mutation reports the error itself.
           }

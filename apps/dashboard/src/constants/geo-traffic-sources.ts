@@ -6,23 +6,13 @@ export const TRAFFIC_SOURCE_BANDS = [
   "ai_referral",
 ] as const satisfies readonly GeoTrafficSourceBand[];
 
-export const TRAFFIC_SOURCE_STACK_Z_INDEX: Record<
-  GeoTrafficSourceBand,
-  number
-> = {
-  crawler: 30,
-  cited: 20,
-  ai_referral: 10,
-};
-
-export const TRAFFIC_SOURCE_STACK_OVERLAP_PX = 20;
 export const TRAFFIC_SOURCE_COLLAPSED_BORDER_PX = 2;
 
-/** Floors so band titles ("Crawlers") and source names cannot crush to "Cri". */
 export const TRAFFIC_SOURCE_COLUMN_MIN_WIDTH = {
   source: "16rem",
-  category: "9.5rem",
-  categoryMobile: "8rem",
+  botSource: "11rem",
+  category: "11rem",
+  categoryMobile: "11rem",
   visits: "10.5rem",
   visitsMobile: "7.5rem",
   paths: "6rem",

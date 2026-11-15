@@ -1,14 +1,14 @@
+import { logError } from "@notra/ai/utils/server-log";
 import { toGeoFailureWire } from "@notra/geo-core/geo/failure-wire";
 import { runGeoSequenceNow } from "@notra/geo-core/geo/scan";
 import { geoSequenceRunInputSchema } from "@notra/geo-core/schemas/geo";
 import { Effect } from "effect";
 
-import { scheduleGeoShelfCitationSync } from "@/lib/geo-shelf/service";
+import { scheduleGeoShelfCitationSync } from "@/lib/geo-shelf/request-service";
 import { geoCoreDashboardLayer } from "@/lib/geo/configure";
 import { verifyInternalWorkflowRequest } from "@/lib/workflows/internal-auth";
 import { ratelimit } from "@/utils/ratelimit";
 
-/** Status the API turns back into a mapped GEO error. */
 const GEO_FAILURE_STATUS = 422;
 
 /**
@@ -19,10 +19,11 @@ const GEO_FAILURE_STATUS = 422;
  * process — so the work has to happen here, exactly as it does for the
  * dashboard's own `geo.sequenceRun` procedure.
  *
- * There is no GEO sequence workflow to hand off to, so this runs the sequence
- * to completion and only then answers, with the run's real result. It used to
- * answer `{ runId }` with a freshly minted id that identified nothing, which
- * told a caller neither what happened nor what to poll.
+ * API engines run to completion here and the answer carries their real
+ * result. Consumer apps are handed to a scoped GEO scan instead, whose id
+ * comes back as `queuedScanId` for the caller to poll. It used to answer
+ * `{ runId }` with a freshly minted id that identified nothing, which told a
+ * caller neither what happened nor what to poll.
  *
  * TODO(Phase 6 — durable workflow): move this onto a real GEO sequence
  * workflow so the API can hand off and return a run id a client can follow,
@@ -53,11 +54,13 @@ export async function POST(request: Request) {
     );
   }
 
-  const { success } = await ratelimit.geoSequenceRun.limit(
-    parsed.data.organizationId
-  );
+  const { success, limit, remaining, reset } =
+    await ratelimit.geoSequenceRun.limit(parsed.data.organizationId);
   if (!success) {
-    return new Response("Too many requests", { status: 429 });
+    return Response.json(
+      { error: "Too many requests", limit, remaining, reset },
+      { status: 429 }
+    );
   }
 
   const outcome = await Effect.runPromise(
@@ -69,7 +72,7 @@ export async function POST(request: Request) {
   );
 
   if (outcome._tag === "Failure") {
-    console.error("[GEO] Internal sequence run failed:", outcome.failure);
+    logError("[GEO] Internal sequence run failed", outcome.failure);
     return Response.json(
       { failure: toGeoFailureWire(outcome.failure) },
       { status: GEO_FAILURE_STATUS }

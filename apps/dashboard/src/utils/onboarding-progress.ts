@@ -7,7 +7,6 @@ import type {
 import {
   geoOnboardingCompetitorsPath,
   geoOnboardingPath,
-  geoOnboardingPricingPath,
   geoOnboardingWorkspacePath,
 } from "@/utils/geo-paths";
 
@@ -23,10 +22,7 @@ function isStepReachable(
   if (step === 2) {
     return hasBrand;
   }
-  if (step === 3) {
-    return stage === "competitors" || stage === "complete";
-  }
-  return stage === "complete";
+  return stage === "competitors" || stage === "complete";
 }
 
 export function onboardingProgressHrefs({
@@ -41,7 +37,6 @@ export function onboardingProgressHrefs({
     geoOnboardingWorkspacePath(projectId, replay),
     geoOnboardingPath(projectId, replay),
     geoOnboardingCompetitorsPath(projectId, replay),
-    geoOnboardingPricingPath(projectId, replay),
   ];
 
   return paths.map((path, index) => {

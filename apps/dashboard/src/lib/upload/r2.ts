@@ -7,10 +7,6 @@ interface R2StorageEnv {
   endpoint: string;
 }
 
-interface R2Env extends R2StorageEnv {
-  publicUrl: string;
-}
-
 let cachedR2Client: S3Client | undefined;
 let cachedR2StorageEnv: R2StorageEnv | undefined;
 
@@ -62,13 +58,10 @@ function getR2Env() {
     throw new Error("Missing R2 environment variables");
   }
 
-  return {
-    ...storage,
-    publicUrl,
-  } satisfies R2Env;
+  return { ...storage, publicUrl };
 }
 
-export function getR2Client() {
+function getR2Client() {
   if (cachedR2Client) {
     return cachedR2Client;
   }
@@ -98,10 +91,6 @@ export function getR2Config() {
   };
 }
 
-export function getR2BucketName() {
-  return getR2StorageEnv().bucketName;
-}
-
 export function isR2StorageConfigured() {
   return readR2StorageEnv() !== null;
 }
@@ -116,8 +105,4 @@ export function getR2StorageConfig() {
 export function getOptionalR2PublicUrl() {
   const publicUrl = process.env.CLOUDFLARE_PUBLIC_URL;
   return publicUrl ? publicUrl.replace(TRAILING_SLASHES_RE, "") : null;
-}
-
-export function getR2PublicUrl() {
-  return getR2Env().publicUrl;
 }

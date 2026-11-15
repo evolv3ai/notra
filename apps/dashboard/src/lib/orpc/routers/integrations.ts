@@ -1,4 +1,5 @@
 import { invalidateStandaloneChatIntegrations } from "@notra/ai/chat/integrations-cache";
+import { GITHUB_API_VERSION_HEADERS } from "@notra/ai/constants/github";
 import { MCP_OAUTH_CALLBACK_PATH } from "@notra/ai/constants/mcp-auth";
 import {
   addRepository,
@@ -16,6 +17,7 @@ import {
   getTokenForIntegrationId,
   getWebhookConfigForRepository,
   listAvailableRepositories,
+  repairWebhookForRepository,
   setRepositoryOutputConfig,
   toggleOutput,
   updateGitHubIntegration,
@@ -70,16 +72,26 @@ import {
   GitHubInstallationMissingError,
   GitHubMultiRepositoryUnsupportedError,
   GitHubRepositoryAlreadyConnectedError,
+  GitHubWebhookRepairPreconditionError,
 } from "@notra/ai/schemas/github-operations";
 import type { GitHubConnectionMethod } from "@notra/ai/types/github-connection";
 import {
   createOctokit,
   GITHUB_INTERACTIVE_READ_TIMEOUT_MS,
 } from "@notra/ai/utils/octokit";
+import { logError } from "@notra/ai/utils/server-log";
+import { getAppUrl } from "@notra/ai/utils/url";
 import { db } from "@notra/db/drizzle";
-import { contentTriggers, repositoryOutputs } from "@notra/db/schema";
+import {
+  posts,
+  githubIntegrations,
+  contentTriggers,
+  repositoryOutputs,
+} from "@notra/db/schema";
+import { isPgUniqueViolation } from "@notra/db/utils/pg-errors";
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
 import { organizationIdInputSchema } from "@notra/schemas/dashboard/auth/organization";
+import { postGitHubPublishSchema } from "@notra/schemas/dashboard/content";
 import {
   createGranolaIntegrationRequestSchema,
   updateGranolaIntegrationBodySchema,
@@ -115,21 +127,20 @@ import {
 import { updateLinearIntegrationBodySchema } from "@notra/schemas/dashboard/linear";
 import {
   slackChannelListResponseSchema,
+  slackCreateChannelBodySchema,
   slackListChannelsOptionsSchema,
   updateSlackIntegrationBodySchema,
 } from "@notra/schemas/dashboard/slack-integration";
+import { mapWithConcurrency } from "@notra/sites-server/utils/concurrency";
 import { isDemoMode } from "@notra/utils/demo-mode";
 import { PublicUrlValidationError } from "@notra/utils/url";
+import { ORPCError } from "@orpc/server";
 import { and, eq } from "drizzle-orm";
 import { Effect } from "effect";
-import { getTranslations } from "next-intl/server";
 // biome-ignore lint/performance/noNamespaceImport: Zod recommended way of importing
 import * as z from "zod";
 
-import {
-  GITHUB_API_VERSION_HEADERS,
-  REPOSITORY_ALREADY_CONNECTED_CODE,
-} from "@/constants/github";
+import { REPOSITORY_ALREADY_CONNECTED_CODE } from "@/constants/github";
 import {
   INTEGRATION_AUTH_KINDS,
   INTEGRATION_PROVIDERS,
@@ -139,15 +150,20 @@ import {
 import { trackServerEvent } from "@/lib/analytics/posthog-server";
 import { assertOrganizationAccess } from "@/lib/auth/organization";
 import { assertActiveSubscription } from "@/lib/billing/subscription";
-import { isUniqueConstraintError } from "@/lib/db/errors";
+import { getTranslations } from "@/lib/i18n/server";
 import { toMcpIntegrationAuthKind } from "@/lib/integrations/auth-kind";
 import { clearGitHubPublishFailures } from "@/lib/integrations/github/github-publish-failure-state";
+import {
+  findSiteGitHubPublishTarget,
+  listSiteGitHubPublishTargets,
+} from "@/lib/integrations/github/site-publish-target";
 import {
   clearCachedSlackChannels,
   getCachedSlackChannels,
   setCachedSlackChannels,
 } from "@/lib/integrations/slack/channel-cache";
-import { baseProcedure } from "@/lib/orpc/base";
+import { createSlackChannel } from "@/lib/integrations/slack/create-channel";
+import { baseProcedure, withOrganizationAccess } from "@/lib/orpc/base";
 import { getIntegrationsByOrganization } from "@/lib/services/integrations";
 import type {
   GitHubIntegration,
@@ -159,6 +175,7 @@ import { hasGitHubStatus } from "@/utils/github-publish-failure";
 import { ratelimit } from "@/utils/ratelimit";
 
 import {
+  assertNotDemo,
   badRequest,
   conflict,
   forbidden,
@@ -175,49 +192,24 @@ async function assertMcpConnectionRateLimit(organizationId: string) {
   }
 }
 
-function serializeRepositoryOutput(output: {
+interface SerializableRepositoryOutput {
   id: string;
   outputType: string;
   enabled: boolean;
-}): RepositoryOutput {
-  return {
-    id: output.id,
-    outputType: output.outputType,
-    enabled: output.enabled,
-  };
 }
 
-function serializeRepository(repository: {
+interface SerializableRepository {
   id: string;
   owner: string;
   repo: string;
   defaultBranch: string | null;
   enabled: boolean;
   encryptedWebhookSecret?: string | null;
-  outputs?: Array<{
-    id: string;
-    outputType: string;
-    enabled: boolean;
-  }>;
-}): GitHubRepository {
-  return {
-    id: repository.id,
-    owner: repository.owner,
-    repo: repository.repo,
-    defaultBranch: repository.defaultBranch,
-    enabled: repository.enabled,
-    ...(repository.encryptedWebhookSecret !== undefined
-      ? { hasWebhook: Boolean(repository.encryptedWebhookSecret) }
-      : {}),
-    ...(repository.outputs
-      ? {
-          outputs: repository.outputs.map(serializeRepositoryOutput),
-        }
-      : {}),
-  };
+  hasWebhook?: boolean;
+  outputs?: SerializableRepositoryOutput[];
 }
 
-function serializeIntegration(integration: {
+interface SerializableIntegration {
   id: string;
   displayName: string;
   enabled: boolean;
@@ -230,20 +222,47 @@ function serializeIntegration(integration: {
     email: string;
     image: string | null;
   } | null;
-  repositories: Array<{
-    id: string;
-    owner: string;
-    repo: string;
-    defaultBranch: string | null;
-    enabled: boolean;
-    encryptedWebhookSecret?: string | null;
-    outputs?: Array<{
-      id: string;
-      outputType: string;
-      enabled: boolean;
-    }>;
-  }>;
-}): GitHubIntegration {
+  repositories: SerializableRepository[];
+}
+
+function serializeRepositoryOutput(
+  output: SerializableRepositoryOutput
+): RepositoryOutput {
+  return {
+    id: output.id,
+    outputType: output.outputType,
+    enabled: output.enabled,
+  };
+}
+
+function serializeRepository(
+  repository: SerializableRepository
+): GitHubRepository {
+  let hasWebhook: boolean | undefined;
+  if (repository.encryptedWebhookSecret !== undefined) {
+    hasWebhook = Boolean(repository.encryptedWebhookSecret);
+  } else if (typeof repository.hasWebhook === "boolean") {
+    hasWebhook = repository.hasWebhook;
+  }
+
+  return {
+    id: repository.id,
+    owner: repository.owner,
+    repo: repository.repo,
+    defaultBranch: repository.defaultBranch,
+    enabled: repository.enabled,
+    ...(hasWebhook === undefined ? {} : { hasWebhook }),
+    ...(repository.outputs
+      ? {
+          outputs: repository.outputs.map(serializeRepositoryOutput),
+        }
+      : {}),
+  };
+}
+
+function serializeIntegration(
+  integration: SerializableIntegration
+): GitHubIntegration {
   return {
     id: integration.id,
     displayName: integration.displayName,
@@ -259,28 +278,12 @@ function serializeIntegration(integration: {
   };
 }
 
-function serializeListedIntegration(integration: {
-  type: string;
-  id: string;
-  displayName: string;
-  connectionMethod?: GitHubConnectionMethod;
-  enabled: boolean;
-  managedByGitHubApp?: boolean;
-  createdAt: Date;
-  repositories: Array<{
-    id: string;
-    owner: string;
-    repo: string;
-    defaultBranch: string | null;
-    enabled: boolean;
-    encryptedWebhookSecret?: string | null;
-    outputs?: Array<{
-      id: string;
-      outputType: string;
-      enabled: boolean;
-    }>;
-  }>;
-}): GitHubIntegration & {
+function serializeListedIntegration(
+  integration: SerializableIntegration & {
+    type: string;
+    connectionMethod?: GitHubConnectionMethod;
+  }
+): GitHubIntegration & {
   type: IntegrationType;
   connectionMethod?: GitHubConnectionMethod;
 } {
@@ -291,6 +294,14 @@ function serializeListedIntegration(integration: {
       ? { connectionMethod: integration.connectionMethod }
       : {}),
   };
+}
+
+function serializeCreatedByUser(
+  user: { id: string; name: string; email: string; image: string | null } | null
+) {
+  return user
+    ? { id: user.id, name: user.name, email: user.email, image: user.image }
+    : undefined;
 }
 
 async function requireIntegrationInOrganization(
@@ -365,6 +376,9 @@ async function getAffectedSchedulesForIntegration(
 }
 
 async function toKnownIntegrationError(error: unknown): Promise<Error> {
+  if (error instanceof ORPCError) {
+    return error;
+  }
   if (error instanceof GitHubRepositoryAlreadyConnectedError) {
     const tCommon = await getTranslations("common");
     return conflict(tCommon("labels.repositoryAlreadyConnected"), {
@@ -395,15 +409,182 @@ async function toKnownIntegrationError(error: unknown): Promise<Error> {
   return internalServerError("Internal server error", error);
 }
 
+async function getInteractiveRepositoryToken(input: {
+  organizationId: string;
+  repositoryId: string;
+}) {
+  try {
+    return await getTokenForIntegrationId(input.repositoryId, {
+      organizationId: input.organizationId,
+      requestTimeoutMs: GITHUB_INTERACTIVE_READ_TIMEOUT_MS,
+    });
+  } catch (error) {
+    if (
+      hasGitHubStatus(error, 401) ||
+      hasGitHubStatus(error, 404) ||
+      error instanceof GitHubInstallationMissingError
+    ) {
+      const tErrors = await getTranslations("errors.integrations");
+      throw forbidden(tErrors("githubAuthFailed"));
+    }
+    throw internalServerError("Failed to authenticate with GitHub", error);
+  }
+}
+
+async function readContentDirectoryConfig(
+  repositoryId: string,
+  contentType: "blog_post" | "changelog",
+  contentId?: string
+) {
+  const output = await db.query.repositoryOutputs.findFirst({
+    where: and(
+      eq(repositoryOutputs.repositoryId, repositoryId),
+      eq(repositoryOutputs.outputType, contentType)
+    ),
+    columns: { config: true, reviewProcess: true },
+  });
+  const config = repositoryContentDirectoryConfigSchema.safeParse(
+    output?.config
+  );
+
+  const repository = await db.query.githubIntegrations.findFirst({
+    where: eq(githubIntegrations.id, repositoryId),
+    columns: {
+      id: true,
+      organizationId: true,
+      owner: true,
+      repo: true,
+      githubRepositoryId: true,
+    },
+  });
+  const post =
+    contentId && repository
+      ? await db.query.posts.findFirst({
+          where: and(
+            eq(posts.id, contentId),
+            eq(posts.organizationId, repository.organizationId)
+          ),
+          with: { collection: { columns: { projectId: true } } },
+          columns: { id: true, githubPublish: true },
+        })
+      : null;
+  const stored = postGitHubPublishSchema.safeParse(post?.githubPublish).data;
+  const connectedSites =
+    repository?.owner && repository.repo
+      ? await listSiteGitHubPublishTargets({
+          organizationId: repository.organizationId,
+          projectId:
+            stored?.repositoryId === repositoryId
+              ? undefined
+              : post?.collection.projectId,
+          contentType,
+          repository: {
+            ...repository,
+            owner: repository.owner,
+            repo: repository.repo,
+          },
+        })
+      : [];
+  let savedSiteId =
+    stored?.repositoryId === repositoryId ? stored.siteId : undefined;
+  if (
+    stored?.repositoryId === repositoryId &&
+    repository?.owner &&
+    repository.repo
+  ) {
+    let baseBranch = stored.baseBranch;
+    if (stored.pullRequestNumber) {
+      const token = await getInteractiveRepositoryToken({
+        organizationId: repository.organizationId,
+        repositoryId,
+      });
+      const pr = await createOctokit(token ?? undefined)
+        .request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
+          owner: repository.owner,
+          repo: repository.repo,
+          pull_number: stored.pullRequestNumber,
+        })
+        .catch(() => null);
+      baseBranch = pr?.data.base.ref ?? baseBranch;
+    }
+    const target = await findSiteGitHubPublishTarget({
+      organizationId: repository.organizationId,
+      contentType,
+      existingPublication: { ...stored, baseBranch },
+      repository: {
+        ...repository,
+        owner: repository.owner,
+        repo: repository.repo,
+      },
+    }).catch(() => null);
+    savedSiteId = target?.siteId;
+  }
+  if (stored?.repositoryId !== repositoryId) {
+    savedSiteId ??= config.success
+      ? (config.data.siteId ?? undefined)
+      : undefined;
+  }
+  return {
+    sites: connectedSites,
+    reviewProcess: output?.reviewProcess ?? "pull_request",
+    siteId: connectedSites.some((site) => site.id === savedSiteId)
+      ? savedSiteId
+      : null,
+    directory: config.success ? (config.data.directory ?? null) : null,
+    contentPath: config.success ? (config.data.contentPath ?? null) : null,
+    imagePath: config.success ? (config.data.imagePath ?? null) : null,
+  };
+}
+
+async function requireMcpServer(input: {
+  organizationId: string;
+  serverId: string;
+}) {
+  const existing = await getMcpConnectionIntegration({
+    integrationId: input.serverId,
+    organizationId: input.organizationId,
+  });
+  if (!existing || existing.organizationId !== input.organizationId) {
+    throw notFound("MCP server not found");
+  }
+  return existing;
+}
+
+async function requireLinearIntegration(input: {
+  organizationId: string;
+  integrationId: string;
+}) {
+  const integration = await getLinearIntegrationById(input.integrationId);
+  if (!integration || integration.organizationId !== input.organizationId) {
+    throw notFound("Linear integration not found");
+  }
+  return integration;
+}
+
+async function requireGranolaIntegration(input: {
+  organizationId: string;
+  integrationId: string;
+}) {
+  const integration = await getGranolaIntegrationById(input.integrationId);
+  if (!integration || integration.organizationId !== input.organizationId) {
+    throw notFound("Granola integration not found");
+  }
+  return integration;
+}
+
+function getMcpOAuthRedirectUrl() {
+  const baseUrl = getAppUrl();
+  if (!baseUrl) {
+    throw internalServerError("MCP OAuth is not configured");
+  }
+  return `${baseUrl}${MCP_OAUTH_CALLBACK_PATH}`;
+}
+
 export const integrationsRouter = {
   list: baseProcedure
     .input(organizationIdInputSchema)
-    .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-      });
-
+    .use(withOrganizationAccess)
+    .handler(async ({ input }) => {
       const result = await getIntegrationsByOrganization(input.organizationId);
 
       return {
@@ -413,11 +594,9 @@ export const integrationsRouter = {
     }),
   create: baseProcedure
     .input(createGitHubIntegrationRequestSchema)
+    .use(withOrganizationAccess)
     .handler(async ({ context, input }) => {
-      const auth = await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-      });
+      const { auth } = context;
       await assertActiveSubscription(input.organizationId);
 
       try {
@@ -457,12 +636,8 @@ export const integrationsRouter = {
     }),
   get: baseProcedure
     .input(integrationInputSchema)
-    .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-      });
-
+    .use(withOrganizationAccess)
+    .handler(async ({ input }) => {
       const integration = await requireIntegrationInOrganization(
         input.organizationId,
         input.integrationId
@@ -472,11 +647,9 @@ export const integrationsRouter = {
     }),
   update: baseProcedure
     .input(integrationInputSchema.and(updateIntegrationBodySchema))
+    .use(withOrganizationAccess)
     .handler(async ({ context, input }) => {
-      const auth = await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-      });
+      const { auth } = context;
       await assertActiveSubscription(input.organizationId);
 
       const integration = await requireIntegrationInOrganization(
@@ -498,6 +671,19 @@ export const integrationsRouter = {
       const isRenaming = ownerChanged || repoChanged;
       const effectiveOwner = input.owner ?? repository?.owner ?? "";
       const effectiveRepo = input.repo ?? repository?.repo ?? "";
+
+      if (normalizedBranch !== undefined) {
+        if (integration.repositories.length !== 1) {
+          throw badRequest(
+            (await getTranslations("errors.integrations"))(
+              "branchSingleRepoOnly"
+            )
+          );
+        }
+        if (!repository) {
+          throw notFound("Repository not found");
+        }
+      }
 
       try {
         if (isRenaming) {
@@ -532,16 +718,7 @@ export const integrationsRouter = {
           await updateGitHubIntegrationToken(input.integrationId, input.token);
         }
 
-        if (normalizedBranch !== undefined) {
-          if (integration.repositories.length !== 1) {
-            const tErrors = await getTranslations("errors.integrations");
-            throw badRequest(tErrors("branchSingleRepoOnly"));
-          }
-
-          if (!repository) {
-            throw notFound("Repository not found");
-          }
-
+        if (normalizedBranch !== undefined && repository) {
           if (normalizedBranch) {
             await validateRepositoryBranchExists({
               owner: effectiveOwner,
@@ -595,12 +772,9 @@ export const integrationsRouter = {
     }),
   delete: baseProcedure
     .input(integrationInputSchema)
+    .use(withOrganizationAccess)
     .handler(async ({ context, input }) => {
-      const auth = await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-      });
-
+      const { auth } = context;
       await requireIntegrationInOrganization(
         input.organizationId,
         input.integrationId
@@ -611,14 +785,13 @@ export const integrationsRouter = {
         input.integrationId
       );
 
-      for (const schedule of affectedSchedules) {
+      await mapWithConcurrency(affectedSchedules, 4, async (schedule) => {
         if (schedule.qstashScheduleId) {
           await deleteQstashSchedule(schedule.qstashScheduleId).catch(
             (error) => {
-              console.error(
-                `Failed to delete qstash schedule ${schedule.qstashScheduleId}:`,
-                error
-              );
+              logError("Failed to delete qstash schedule", error, {
+                scheduleId: schedule.qstashScheduleId,
+              });
             }
           );
         }
@@ -631,7 +804,7 @@ export const integrationsRouter = {
             updatedAt: new Date(),
           })
           .where(eq(contentTriggers.id, schedule.id));
-      }
+      });
 
       await deleteGitHubIntegration(input.integrationId);
 
@@ -659,12 +832,8 @@ export const integrationsRouter = {
     }),
   affectedSchedules: baseProcedure
     .input(integrationInputSchema)
-    .handler(async ({ context, input }) => {
-      await assertOrganizationAccess({
-        headers: context.headers,
-        organizationId: input.organizationId,
-      });
-
+    .use(withOrganizationAccess)
+    .handler(async ({ input }) => {
       const integration = await requireIntegrationInOrganization(
         input.organizationId,
         input.integrationId
@@ -686,12 +855,9 @@ export const integrationsRouter = {
   repositories: {
     listAvailable: baseProcedure
       .input(integrationInputSchema)
+      .use(withOrganizationAccess)
       .handler(async ({ context, input }) => {
-        const auth = await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
+        const { auth } = context;
         await requireIntegrationInOrganization(
           input.organizationId,
           input.integrationId
@@ -708,11 +874,9 @@ export const integrationsRouter = {
       }),
     add: baseProcedure
       .input(integrationInputSchema.and(addRepositoryRequestSchema))
+      .use(withOrganizationAccess)
       .handler(async ({ context, input }) => {
-        const auth = await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
+        const { auth } = context;
         await assertActiveSubscription(input.organizationId);
 
         await requireIntegrationInOrganization(
@@ -738,12 +902,8 @@ export const integrationsRouter = {
       }),
     get: baseProcedure
       .input(repositoryInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         const repository = await requireRepositoryInOrganization(
           input.organizationId,
           input.repositoryId
@@ -753,11 +913,8 @@ export const integrationsRouter = {
       }),
     update: baseProcedure
       .input(repositoryInputSchema.and(updateRepositoryBodySchema))
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         await assertActiveSubscription(input.organizationId);
 
         const repository = await requireRepositoryInOrganization(
@@ -779,16 +936,12 @@ export const integrationsRouter = {
             });
           }
 
-          const updated = await updateRepository(input.repositoryId, {
+          await updateRepository(input.repositoryId, {
             ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
             ...(normalizedDefaultBranch !== undefined
               ? { defaultBranch: normalizedDefaultBranch }
               : {}),
           });
-
-          if (!updated) {
-            throw notFound("Repository not found");
-          }
 
           const refreshed = await requireRepositoryInOrganization(
             input.organizationId,
@@ -805,36 +958,13 @@ export const integrationsRouter = {
     branches: {
       list: baseProcedure
         .input(repositoryInputSchema)
-        .handler(async ({ context, input }) => {
-          await assertOrganizationAccess({
-            headers: context.headers,
-            organizationId: input.organizationId,
-          });
-
+        .use(withOrganizationAccess)
+        .handler(async ({ input }) => {
           const repository = await requireRepositoryInOrganization(
             input.organizationId,
             input.repositoryId
           );
-          let token: string | null;
-          try {
-            token = await getTokenForIntegrationId(input.repositoryId, {
-              organizationId: input.organizationId,
-              requestTimeoutMs: GITHUB_INTERACTIVE_READ_TIMEOUT_MS,
-            });
-          } catch (error) {
-            if (
-              hasGitHubStatus(error, 401) ||
-              hasGitHubStatus(error, 404) ||
-              error instanceof GitHubInstallationMissingError
-            ) {
-              const tErrors = await getTranslations("errors.integrations");
-              throw forbidden(tErrors("githubAuthFailed"));
-            }
-            throw internalServerError(
-              "Failed to authenticate with GitHub",
-              error
-            );
-          }
+          const token = await getInteractiveRepositoryToken(input);
 
           try {
             const octokit = createOctokit(token ?? undefined, {
@@ -875,11 +1005,8 @@ export const integrationsRouter = {
         }),
       create: baseProcedure
         .input(repositoryInputSchema.and(createRepositoryBranchBodySchema))
-        .handler(async ({ context, input }) => {
-          await assertOrganizationAccess({
-            headers: context.headers,
-            organizationId: input.organizationId,
-          });
+        .use(withOrganizationAccess)
+        .handler(async ({ input }) => {
           await assertActiveSubscription(input.organizationId);
 
           const repository = await requireRepositoryInOrganization(
@@ -892,26 +1019,7 @@ export const integrationsRouter = {
             throw badRequest(tErrors("publishingBranchRequired"));
           }
 
-          let token: string | null;
-          try {
-            token = await getTokenForIntegrationId(input.repositoryId, {
-              organizationId: input.organizationId,
-              requestTimeoutMs: GITHUB_INTERACTIVE_READ_TIMEOUT_MS,
-            });
-          } catch (error) {
-            if (
-              hasGitHubStatus(error, 401) ||
-              hasGitHubStatus(error, 404) ||
-              error instanceof GitHubInstallationMissingError
-            ) {
-              const tErrors = await getTranslations("errors.integrations");
-              throw forbidden(tErrors("githubAuthFailed"));
-            }
-            throw internalServerError(
-              "Failed to authenticate with GitHub",
-              error
-            );
-          }
+          const token = await getInteractiveRepositoryToken(input);
 
           try {
             const octokit = createOctokit(token ?? undefined);
@@ -978,45 +1086,25 @@ export const integrationsRouter = {
     contentDirectory: {
       get: baseProcedure
         .input(repositoryInputSchema.and(repositoryContentDirectoryInputSchema))
-        .handler(async ({ context, input }) => {
-          await assertOrganizationAccess({
-            headers: context.headers,
-            organizationId: input.organizationId,
-          });
-
+        .use(withOrganizationAccess)
+        .handler(async ({ input }) => {
           await requireRepositoryInOrganization(
             input.organizationId,
             input.repositoryId
           );
 
-          const output = await db.query.repositoryOutputs.findFirst({
-            where: and(
-              eq(repositoryOutputs.repositoryId, input.repositoryId),
-              eq(repositoryOutputs.outputType, input.contentType)
-            ),
-            columns: { config: true },
-          });
-          const config = repositoryContentDirectoryConfigSchema.safeParse(
-            output?.config
+          return await readContentDirectoryConfig(
+            input.repositoryId,
+            input.contentType,
+            input.contentId
           );
-
-          return {
-            directory: config.success ? (config.data.directory ?? null) : null,
-            contentPath: config.success
-              ? (config.data.contentPath ?? null)
-              : null,
-            imagePath: config.success ? (config.data.imagePath ?? null) : null,
-          };
         }),
       update: baseProcedure
         .input(
           repositoryInputSchema.and(updateRepositoryContentDirectoryBodySchema)
         )
-        .handler(async ({ context, input }) => {
-          await assertOrganizationAccess({
-            headers: context.headers,
-            organizationId: input.organizationId,
-          });
+        .use(withOrganizationAccess)
+        .handler(async ({ input }) => {
           await assertActiveSubscription(input.organizationId);
 
           await requireRepositoryInOrganization(
@@ -1024,9 +1112,35 @@ export const integrationsRouter = {
             input.repositoryId
           );
 
+          if (input.siteId) {
+            const repository = await db.query.githubIntegrations.findFirst({
+              where: eq(githubIntegrations.id, input.repositoryId),
+            });
+            const candidates =
+              repository?.owner && repository.repo
+                ? await listSiteGitHubPublishTargets({
+                    organizationId: input.organizationId,
+                    contentType: input.contentType,
+                    repository: {
+                      ...repository,
+                      owner: repository.owner,
+                      repo: repository.repo,
+                    },
+                  })
+                : [];
+            if (!candidates.some((site) => site.id === input.siteId)) {
+              throw badRequest(
+                (await getTranslations("errors.content"))(
+                  "publishingSiteUnavailable"
+                )
+              );
+            }
+          }
           await setRepositoryOutputConfig({
             repositoryId: input.repositoryId,
             outputType: input.contentType,
+            reviewProcess: input.reviewProcess,
+            siteId: input.siteId,
             ...(input.directory !== undefined
               ? { directory: input.directory }
               : {}),
@@ -1038,35 +1152,18 @@ export const integrationsRouter = {
               : {}),
           });
 
-          const output = await db.query.repositoryOutputs.findFirst({
-            where: and(
-              eq(repositoryOutputs.repositoryId, input.repositoryId),
-              eq(repositoryOutputs.outputType, input.contentType)
-            ),
-            columns: { config: true },
-          });
-          const config = repositoryContentDirectoryConfigSchema.safeParse(
-            output?.config
+          return await readContentDirectoryConfig(
+            input.repositoryId,
+            input.contentType,
+            input.contentId
           );
-
-          return {
-            directory: config.success ? (config.data.directory ?? null) : null,
-            contentPath: config.success
-              ? (config.data.contentPath ?? null)
-              : null,
-            imagePath: config.success ? (config.data.imagePath ?? null) : null,
-          };
         }),
     },
     directories: {
       list: baseProcedure
         .input(repositoryInputSchema.and(listRepositoryDirectoriesInputSchema))
-        .handler(async ({ context, input }) => {
-          await assertOrganizationAccess({
-            headers: context.headers,
-            organizationId: input.organizationId,
-          });
-
+        .use(withOrganizationAccess)
+        .handler(async ({ input }) => {
           const repository = await requireRepositoryInOrganization(
             input.organizationId,
             input.repositoryId
@@ -1075,29 +1172,8 @@ export const integrationsRouter = {
             const tErrors = await getTranslations("errors.integrations");
             throw forbidden(tErrors("repositoryDisabled"));
           }
-          let token: string | null;
-          try {
-            token = await getTokenForIntegrationId(input.repositoryId, {
-              organizationId: input.organizationId,
-              requestTimeoutMs: GITHUB_INTERACTIVE_READ_TIMEOUT_MS,
-            });
-          } catch (error) {
-            if (
-              hasGitHubStatus(error, 401) ||
-              hasGitHubStatus(error, 404) ||
-              error instanceof GitHubInstallationMissingError
-            ) {
-              const tErrors = await getTranslations("errors.integrations");
-              throw forbidden(tErrors("githubAuthFailed"));
-            }
-            throw internalServerError(
-              "Failed to authenticate with GitHub",
-              error
-            );
-          }
+          const token = await getInteractiveRepositoryToken(input);
 
-          // The demo repository has no credentials; its reads come from
-          // fixtures.
           if (!(token || isDemoMode())) {
             const tErrors = await getTranslations("errors.integrations");
             throw forbidden(tErrors("githubAuthFailed"));
@@ -1153,18 +1229,20 @@ export const integrationsRouter = {
               const tErrors = await getTranslations("errors.integrations");
               throw forbidden(tErrors("githubAccessDenied"));
             }
-            throw error;
+            if (error instanceof ORPCError) {
+              throw error;
+            }
+            throw internalServerError(
+              "Failed to load repository directories",
+              error
+            );
           }
         }),
     },
     delete: baseProcedure
       .input(repositoryInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         await requireRepositoryInOrganization(
           input.organizationId,
           input.repositoryId
@@ -1177,11 +1255,8 @@ export const integrationsRouter = {
       }),
     configureOutput: baseProcedure
       .input(repositoryInputSchema.and(configureOutputBodySchema))
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         await assertActiveSubscription(input.organizationId);
 
         await requireRepositoryInOrganization(
@@ -1197,14 +1272,41 @@ export const integrationsRouter = {
         });
       }),
     webhook: {
-      get: baseProcedure
+      repair: baseProcedure
         .input(repositoryInputSchema)
         .handler(async ({ context, input }) => {
+          assertNotDemo();
           const auth = await assertOrganizationAccess({
             headers: context.headers,
             organizationId: input.organizationId,
           });
-
+          await assertActiveSubscription(input.organizationId);
+          await requireRepositoryInOrganization(
+            input.organizationId,
+            input.repositoryId
+          );
+          try {
+            return await repairWebhookForRepository(
+              input.repositoryId,
+              auth.user.id
+            );
+          } catch (error) {
+            if (error instanceof GitHubWebhookRepairPreconditionError) {
+              throw badRequest(error.message);
+            }
+            if (hasGitHubStatus(error, 401) || hasGitHubStatus(error, 403)) {
+              throw forbidden(
+                "GitHub webhook access denied. Check your token permissions."
+              );
+            }
+            throw internalServerError("Webhook repair failed. Please retry.");
+          }
+        }),
+      get: baseProcedure
+        .input(repositoryInputSchema)
+        .use(withOrganizationAccess)
+        .handler(async ({ context, input }) => {
+          const { auth } = context;
           await requireRepositoryInOrganization(
             input.organizationId,
             input.repositoryId
@@ -1228,11 +1330,9 @@ export const integrationsRouter = {
         }),
       generateSecret: baseProcedure
         .input(repositoryInputSchema)
+        .use(withOrganizationAccess)
         .handler(async ({ context, input }) => {
-          const auth = await assertOrganizationAccess({
-            headers: context.headers,
-            organizationId: input.organizationId,
-          });
+          const { auth } = context;
           await assertActiveSubscription(input.organizationId);
 
           await requireRepositoryInOrganization(
@@ -1266,11 +1366,8 @@ export const integrationsRouter = {
   outputs: {
     update: baseProcedure
       .input(outputInputSchema.and(updateOutputBodySchema))
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         await assertActiveSubscription(input.organizationId);
 
         const output = await requireOutputInOrganization(
@@ -1299,12 +1396,8 @@ export const integrationsRouter = {
   linear: {
     list: baseProcedure
       .input(organizationIdInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         const integrations = await getLinearIntegrationsByOrganization(
           input.organizationId
         );
@@ -1317,34 +1410,15 @@ export const integrationsRouter = {
             createdAt: integration.createdAt.toISOString(),
             linearOrganizationName: integration.linearOrganizationName,
             linearTeamName: integration.linearTeamName,
-            createdByUser: integration.createdByUser
-              ? {
-                  id: integration.createdByUser.id,
-                  name: integration.createdByUser.name,
-                  email: integration.createdByUser.email,
-                  image: integration.createdByUser.image,
-                }
-              : undefined,
+            createdByUser: serializeCreatedByUser(integration.createdByUser),
           })),
         };
       }),
     get: baseProcedure
       .input(integrationInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
-        const integration = await getLinearIntegrationById(input.integrationId);
-
-        if (!integration) {
-          throw notFound("Linear integration not found");
-        }
-
-        if (integration.organizationId !== input.organizationId) {
-          throw notFound("Linear integration not found");
-        }
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
+        const integration = await requireLinearIntegration(input);
 
         return {
           id: integration.id,
@@ -1355,29 +1429,17 @@ export const integrationsRouter = {
           linearOrganizationName: integration.linearOrganizationName,
           linearTeamId: integration.linearTeamId,
           linearTeamName: integration.linearTeamName,
-          createdByUser: integration.createdByUser
-            ? {
-                id: integration.createdByUser.id,
-                name: integration.createdByUser.name,
-                email: integration.createdByUser.email,
-                image: integration.createdByUser.image,
-              }
-            : undefined,
+          createdByUser: serializeCreatedByUser(integration.createdByUser),
         };
       }),
     update: baseProcedure
       .input(integrationInputSchema.and(updateLinearIntegrationBodySchema))
+      .use(withOrganizationAccess)
       .handler(async ({ context, input }) => {
-        const auth = await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
+        const { auth } = context;
         await assertActiveSubscription(input.organizationId);
 
-        const existing = await getLinearIntegrationById(input.integrationId);
-        if (!existing || existing.organizationId !== input.organizationId) {
-          throw notFound("Linear integration not found");
-        }
+        const existing = await requireLinearIntegration(input);
 
         const updated = await updateLinearIntegration(input.integrationId, {
           enabled: input.enabled,
@@ -1402,20 +1464,22 @@ export const integrationsRouter = {
           });
         }
 
-        return updated;
+        return (
+          updated && {
+            id: updated.id,
+            displayName: updated.displayName,
+            enabled: updated.enabled,
+            linearTeamId: updated.linearTeamId,
+            linearTeamName: updated.linearTeamName,
+          }
+        );
       }),
     delete: baseProcedure
       .input(integrationInputSchema)
+      .use(withOrganizationAccess)
       .handler(async ({ context, input }) => {
-        const auth = await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
-        const existing = await getLinearIntegrationById(input.integrationId);
-        if (!existing || existing.organizationId !== input.organizationId) {
-          throw notFound("Linear integration not found");
-        }
+        const { auth } = context;
+        const existing = await requireLinearIntegration(input);
 
         await deleteLinearIntegration(input.integrationId);
 
@@ -1436,14 +1500,36 @@ export const integrationsRouter = {
       }),
   },
   slack: {
+    createChannel: baseProcedure
+      .input(integrationInputSchema.and(slackCreateChannelBodySchema))
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
+        assertNotDemo();
+        await assertActiveSubscription(input.organizationId);
+        const integration = await getSlackIntegrationById(
+          input.organizationId,
+          input.integrationId
+        );
+        if (!integration?.enabled) {
+          throw notFound("Active Slack integration not found");
+        }
+        const channel = await createSlackChannel(
+          getSlackIntegrationBotToken(integration),
+          input.name
+        );
+        await clearCachedSlackChannels(input.integrationId).catch((error) => {
+          logError(
+            "Failed to clear Slack channel cache after channel creation",
+            error,
+            { integrationId: input.integrationId }
+          );
+        });
+        return { channel };
+      }),
     list: baseProcedure
       .input(organizationIdInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         const integrations = await getSlackIntegrationsByOrganization(
           input.organizationId
         );
@@ -1458,25 +1544,14 @@ export const integrationsRouter = {
             slackTeamName: integration.slackTeamName,
             allowedChannelIds: integration.allowedChannelIds ?? null,
             notificationChannelId: integration.notificationChannelId ?? null,
-            createdByUser: integration.createdByUser
-              ? {
-                  id: integration.createdByUser.id,
-                  name: integration.createdByUser.name,
-                  email: integration.createdByUser.email,
-                  image: integration.createdByUser.image,
-                }
-              : undefined,
+            createdByUser: serializeCreatedByUser(integration.createdByUser),
           })),
         };
       }),
     listChannels: baseProcedure
       .input(integrationInputSchema.and(slackListChannelsOptionsSchema))
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         const integration = await getSlackIntegrationById(
           input.organizationId,
           input.integrationId
@@ -1528,11 +1603,9 @@ export const integrationsRouter = {
       }),
     update: baseProcedure
       .input(integrationInputSchema.and(updateSlackIntegrationBodySchema))
+      .use(withOrganizationAccess)
       .handler(async ({ context, input }) => {
-        const auth = await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
+        const { auth } = context;
         await assertActiveSubscription(input.organizationId);
 
         const updated = await updateSlackIntegration({
@@ -1598,12 +1671,9 @@ export const integrationsRouter = {
       }),
     delete: baseProcedure
       .input(integrationInputSchema)
+      .use(withOrganizationAccess)
       .handler(async ({ context, input }) => {
-        const auth = await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
+        const { auth } = context;
         const deleted = await deleteSlackIntegration(
           input.organizationId,
           input.integrationId
@@ -1631,12 +1701,8 @@ export const integrationsRouter = {
   granola: {
     list: baseProcedure
       .input(organizationIdInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         const integrations = await getGranolaIntegrationsByOrganization(
           input.organizationId
         );
@@ -1648,35 +1714,15 @@ export const integrationsRouter = {
             enabled: integration.enabled,
             createdAt: integration.createdAt.toISOString(),
             workspaceName: integration.workspaceName,
-            createdByUser: integration.createdByUser
-              ? {
-                  id: integration.createdByUser.id,
-                  name: integration.createdByUser.name,
-                  email: integration.createdByUser.email,
-                  image: integration.createdByUser.image,
-                }
-              : undefined,
+            createdByUser: serializeCreatedByUser(integration.createdByUser),
           })),
         };
       }),
     get: baseProcedure
       .input(integrationInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
-        const integration = await getGranolaIntegrationById(
-          input.integrationId
-        );
-
-        if (
-          !integration ||
-          integration.organizationId !== input.organizationId
-        ) {
-          throw notFound("Granola integration not found");
-        }
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
+        const integration = await requireGranolaIntegration(input);
 
         return {
           id: integration.id,
@@ -1684,23 +1730,14 @@ export const integrationsRouter = {
           enabled: integration.enabled,
           createdAt: integration.createdAt.toISOString(),
           workspaceName: integration.workspaceName,
-          createdByUser: integration.createdByUser
-            ? {
-                id: integration.createdByUser.id,
-                name: integration.createdByUser.name,
-                email: integration.createdByUser.email,
-                image: integration.createdByUser.image,
-              }
-            : undefined,
+          createdByUser: serializeCreatedByUser(integration.createdByUser),
         };
       }),
     create: baseProcedure
       .input(createGranolaIntegrationRequestSchema)
+      .use(withOrganizationAccess)
       .handler(async ({ context, input }) => {
-        const { user } = await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
+        const { user } = context.auth;
         await assertActiveSubscription(input.organizationId);
 
         const { success } = await ratelimit.granolaConnection.limit(
@@ -1765,17 +1802,12 @@ export const integrationsRouter = {
       }),
     update: baseProcedure
       .input(integrationInputSchema.and(updateGranolaIntegrationBodySchema))
+      .use(withOrganizationAccess)
       .handler(async ({ context, input }) => {
-        const auth = await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
+        const { auth } = context;
         await assertActiveSubscription(input.organizationId);
 
-        const existing = await getGranolaIntegrationById(input.integrationId);
-        if (!existing || existing.organizationId !== input.organizationId) {
-          throw notFound("Granola integration not found");
-        }
+        const existing = await requireGranolaIntegration(input);
 
         const updated = await updateGranolaIntegration(input.integrationId, {
           enabled: input.enabled,
@@ -1813,16 +1845,10 @@ export const integrationsRouter = {
       }),
     delete: baseProcedure
       .input(integrationInputSchema)
+      .use(withOrganizationAccess)
       .handler(async ({ context, input }) => {
-        const auth = await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
-        const existing = await getGranolaIntegrationById(input.integrationId);
-        if (!existing || existing.organizationId !== input.organizationId) {
-          throw notFound("Granola integration not found");
-        }
+        const { auth } = context;
+        const existing = await requireGranolaIntegration(input);
 
         await deleteGranolaIntegration(input.integrationId);
 
@@ -1845,12 +1871,8 @@ export const integrationsRouter = {
   mcp: {
     list: baseProcedure
       .input(organizationIdInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         const [integrations, storeIntegrations] = await Promise.all([
           getMcpConnectionIntegrationsByOrganization(input.organizationId),
           listLiveMcpStoreIntegrations(),
@@ -1870,12 +1892,8 @@ export const integrationsRouter = {
       }),
     storeList: baseProcedure
       .input(organizationIdInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         const [storeIntegrations, ownIntegrations] = await Promise.all([
           listLiveMcpStoreIntegrations(),
           getMcpConnectionIntegrationsByOrganization(input.organizationId),
@@ -1918,6 +1936,7 @@ export const integrationsRouter = {
     create: baseProcedure
       .input(createMcpServerRequestSchema)
       .handler(async ({ context, input }) => {
+        assertNotDemo();
         const auth = await assertOrganizationAccess({
           headers: context.headers,
           organizationId: input.organizationId,
@@ -1990,12 +2009,12 @@ export const integrationsRouter = {
                 ? INTEGRATION_PROVIDERS.MCP_STORE
                 : INTEGRATION_PROVIDERS.MCP,
               auth_kind: toMcpIntegrationAuthKind(input.authType),
-              error_code: isUniqueConstraintError(error)
+              error_code: isPgUniqueViolation(error)
                 ? "name_conflict"
                 : "create_failed",
             },
           });
-          if (isUniqueConstraintError(error)) {
+          if (isPgUniqueViolation(error)) {
             const tErrors = await getTranslations("errors.integrations");
             throw conflict(tErrors("mcpNameTaken"));
           }
@@ -2014,19 +2033,14 @@ export const integrationsRouter = {
     update: baseProcedure
       .input(mcpServerInputSchema.and(updateMcpServerBodySchema))
       .handler(async ({ context, input }) => {
+        assertNotDemo();
         const auth = await assertOrganizationAccess({
           headers: context.headers,
           organizationId: input.organizationId,
         });
         await assertActiveSubscription(input.organizationId);
 
-        const existing = await getMcpConnectionIntegration({
-          integrationId: input.serverId,
-          organizationId: input.organizationId,
-        });
-        if (!existing || existing.organizationId !== input.organizationId) {
-          throw notFound("MCP server not found");
-        }
+        const existing = await requireMcpServer(input);
         let updated:
           | Awaited<ReturnType<typeof updateMcpConnectionIntegration>>
           | undefined;
@@ -2046,7 +2060,7 @@ export const integrationsRouter = {
             }
           );
         } catch (error) {
-          if (isUniqueConstraintError(error)) {
+          if (isPgUniqueViolation(error)) {
             const tErrors = await getTranslations("errors.integrations");
             throw conflict(tErrors("mcpNameTaken"));
           }
@@ -2084,6 +2098,7 @@ export const integrationsRouter = {
     beginOAuth: baseProcedure
       .input(beginMcpOAuthRequestSchema)
       .handler(async ({ context, input }) => {
+        assertNotDemo();
         const access = await assertOrganizationAccess({
           headers: context.headers,
           organizationId: input.organizationId,
@@ -2091,10 +2106,7 @@ export const integrationsRouter = {
         await assertMcpConnectionRateLimit(input.organizationId);
         await assertActiveSubscription(input.organizationId);
 
-        const baseUrl = process.env.APP_URL ?? process.env.NEXT_PUBLIC_SITE_URL;
-        if (!baseUrl) {
-          throw internalServerError("MCP OAuth is not configured");
-        }
+        const redirectUrl = getMcpOAuthRedirectUrl();
 
         const storeIntegration = input.storeIntegrationId
           ? await getLiveMcpStoreIntegrationById(input.storeIntegrationId)
@@ -2117,7 +2129,7 @@ export const integrationsRouter = {
               description: storeIntegration?.description ?? input.description,
               storeSourceIntegrationId: storeIntegration?.id,
               callbackPath: input.callbackPath,
-              redirectUrl: `${baseUrl}${MCP_OAUTH_CALLBACK_PATH}`,
+              redirectUrl,
               resourceType: "connection",
             })
           );
@@ -2132,7 +2144,7 @@ export const integrationsRouter = {
               )
             );
           }
-          if (isUniqueConstraintError(error)) {
+          if (isPgUniqueViolation(error)) {
             const tErrors = await getTranslations("errors.integrations");
             throw conflict(tErrors("mcpNameTaken"));
           }
@@ -2147,6 +2159,7 @@ export const integrationsRouter = {
     reauthorizeOAuth: baseProcedure
       .input(reauthorizeMcpOAuthRequestSchema)
       .handler(async ({ context, input }) => {
+        assertNotDemo();
         const access = await assertOrganizationAccess({
           headers: context.headers,
           organizationId: input.organizationId,
@@ -2165,10 +2178,7 @@ export const integrationsRouter = {
         ) {
           throw notFound("OAuth MCP server not found");
         }
-        const baseUrl = process.env.APP_URL ?? process.env.NEXT_PUBLIC_SITE_URL;
-        if (!baseUrl) {
-          throw internalServerError("MCP OAuth is not configured");
-        }
+        const redirectUrl = getMcpOAuthRedirectUrl();
 
         try {
           return await Effect.runPromise(
@@ -2180,7 +2190,7 @@ export const integrationsRouter = {
               url: existing.url,
               description: existing.description,
               callbackPath: input.callbackPath,
-              redirectUrl: `${baseUrl}${MCP_OAUTH_CALLBACK_PATH}`,
+              redirectUrl,
               resourceType: "connection",
             })
           );
@@ -2200,19 +2210,10 @@ export const integrationsRouter = {
       }),
     delete: baseProcedure
       .input(mcpServerInputSchema)
+      .use(withOrganizationAccess)
       .handler(async ({ context, input }) => {
-        const auth = await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
-        const existing = await getMcpConnectionIntegration({
-          integrationId: input.serverId,
-          organizationId: input.organizationId,
-        });
-        if (!existing || existing.organizationId !== input.organizationId) {
-          throw notFound("MCP server not found");
-        }
+        const { auth } = context;
+        const existing = await requireMcpServer(input);
         const deleted = await deleteMcpConnectionIntegration({
           integrationId: input.serverId,
           organizationId: input.organizationId,
@@ -2240,6 +2241,7 @@ export const integrationsRouter = {
     refreshTools: baseProcedure
       .input(mcpServerInputSchema)
       .handler(async ({ context, input }) => {
+        assertNotDemo();
         const auth = await assertOrganizationAccess({
           headers: context.headers,
           organizationId: input.organizationId,
@@ -2247,13 +2249,7 @@ export const integrationsRouter = {
         await assertMcpConnectionRateLimit(input.organizationId);
         await assertActiveSubscription(input.organizationId);
 
-        const existing = await getMcpConnectionIntegration({
-          integrationId: input.serverId,
-          organizationId: input.organizationId,
-        });
-        if (!existing || existing.organizationId !== input.organizationId) {
-          throw notFound("MCP server not found");
-        }
+        const existing = await requireMcpServer(input);
         try {
           const result = await refreshMcpToolIndexForIntegration({
             organizationId: input.organizationId,
@@ -2293,6 +2289,7 @@ export const integrationsRouter = {
     test: baseProcedure
       .input(testMcpServerRequestSchema)
       .handler(async ({ context, input }) => {
+        assertNotDemo();
         const auth = await assertOrganizationAccess({
           headers: context.headers,
           organizationId: input.organizationId,

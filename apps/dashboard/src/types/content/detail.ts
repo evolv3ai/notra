@@ -1,5 +1,6 @@
 import type { PostGitHubPublish } from "@notra/db/types/post-github-publish";
 
+import type { CONTENT_DOCUMENT_TABS } from "@/constants/content-detail";
 import type { GitHubRepository } from "@/types/integrations";
 import type {
   GitHubPublishContentType,
@@ -18,9 +19,12 @@ export interface PublishContentToGitHubDialogProps {
   contentType: GitHubPublishContentType;
   githubPublish: PostGitHubPublish | null;
   onSave: () => Promise<boolean>;
+  onPublished?: () => Promise<boolean>;
   organizationId: string;
   organizationSlug: string;
   title: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
 export interface GitHubPublishDialogBodyProps {
@@ -60,6 +64,20 @@ export interface GitHubPublishRepositoryFieldProps {
   selectedRepository: GitHubRepository | undefined;
 }
 
+/** The repository field's props that come from the shared repository selection. */
+export type GitHubPublishRepositorySelectionFieldProps = Omit<
+  GitHubPublishRepositoryFieldProps,
+  "isPublishing" | "onRepositoryChange" | "organizationSlug"
+>;
+
+export interface GitHubPublishRepositorySelectionOptions {
+  organizationId: string;
+  contentType: string;
+  /** The preferred repository; falls back to the first publishable one. */
+  repositoryId: string;
+  enabled: boolean;
+}
+
 export interface GitHubPublishRepositoryStatusProps {
   connectedRepositoryCount: number;
   contentTypeLabel: string;
@@ -77,10 +95,43 @@ export interface GitHubPublishRecoveryAlertProps {
 }
 
 export interface GitHubPublishDialogFooterProps {
+  onPublish: () => void;
   hasSelectedRepository: boolean;
   isPublishing: boolean;
   organizationSlug: string;
   publishRecovery: GitHubPublishRecovery | null;
   pullRequest: GitHubPublishPullRequestResult | undefined;
   selectedPublishingEnabled: boolean;
+}
+
+/** The generation inputs a post records, when they are complete. */
+export interface ParsedSourceMetadata {
+  brandVoiceId?: string | null;
+  brandVoiceName?: string | null;
+  lookbackRange: { end: string; start: string };
+  lookbackWindow: string;
+  repositories: Array<{ owner: string; repo: string }>;
+  triggerSourceType: string;
+}
+
+export interface GitHubPublishDialogCopyParams {
+  direct?: boolean;
+  operation?: "created" | "updated";
+  title: string;
+  description: string;
+  directDescription: string;
+  createdTitle: string;
+  createdDescription: string;
+  updatedTitle: string;
+  updatedDescription: string;
+}
+
+export type ContentDocumentTab = (typeof CONTENT_DOCUMENT_TABS)[number];
+
+export interface ContentDocumentTabsProps {
+  /** Width of the article column, so the sticky tabs line up with it. */
+  columnClassName: string;
+  enabled: boolean;
+  value: ContentDocumentTab;
+  onValueChange: (value: ContentDocumentTab) => void;
 }

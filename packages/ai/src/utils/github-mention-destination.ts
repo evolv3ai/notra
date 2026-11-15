@@ -18,17 +18,10 @@ export function resolveGitHubMentionDestination(params: {
     };
   }
 
-  if (wantsSeparatePullRequest(params.commentBody)) {
-    return {
-      mode: "new_pull_request",
-      pullRequestNumber: params.pullRequest.number,
-      headRef: params.pullRequest.headRef,
-      headSha: params.pullRequest.headSha,
-    };
-  }
-
   return {
-    mode: "same_pull_request",
+    mode: wantsSeparatePullRequest(params.commentBody)
+      ? "new_pull_request"
+      : "same_pull_request",
     pullRequestNumber: params.pullRequest.number,
     headRef: params.pullRequest.headRef,
     headSha: params.pullRequest.headSha,

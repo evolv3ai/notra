@@ -26,13 +26,6 @@ export function parseLocalDay(day: string): Date {
   return new Date(year ?? 0, (month ?? 1) - 1, date ?? 1);
 }
 
-/**
- * Presets resolve in UTC on purpose. The day strings are handed straight to the
- * API, which reads them as UTC days (`toGeoCheckWindow`), and the same preset
- * has to resolve identically on the server and in the browser — otherwise the
- * server-rendered query key never matches the one the client builds and the
- * prefetched data is silently discarded.
- */
 function shiftedDay(offsetDays: number): string {
   const date = new Date();
   date.setUTCDate(date.getUTCDate() - offsetDays);
@@ -57,7 +50,7 @@ export function geoPresetRange(preset: GeoRangePreset): GeoDateRange {
   }
 }
 
-export function isGeoRangePreset(value: string): value is GeoRangePreset {
+function isGeoRangePreset(value: string): value is GeoRangePreset {
   return GEO_RANGE_PRESETS.some((preset) => preset.value === value);
 }
 

@@ -1,14 +1,8 @@
-import {
-  isTinybirdConfigured,
-  queryEngagementTimeseries,
-} from "@notra/analytics/tinybird/client";
+import { queryEngagementTimeseries } from "@notra/analytics/tinybird/client";
 import { defineTool } from "eve/tools";
 
-import {
-  ANALYTICS_NOT_CONFIGURED_MESSAGE,
-  ANALYTICS_QUERY_FAILED_MESSAGE,
-} from "../constants/analytics";
 import { getEngagementTimeseriesInputSchema } from "../schemas/analytics-tools";
+import { runSocialAnalyticsQuery } from "../utils/analytics";
 import { requireOrganizationId } from "../utils/organization";
 
 export function createGetEngagementTimeseriesTool() {
@@ -18,27 +12,11 @@ export function createGetEngagementTimeseriesTool() {
     inputSchema: getEngagementTimeseriesInputSchema,
     async execute({ days }, ctx) {
       const organizationId = requireOrganizationId(ctx);
-
-      if (!isTinybirdConfigured()) {
-        return ANALYTICS_NOT_CONFIGURED_MESSAGE;
-      }
-
-      try {
-        const result = await queryEngagementTimeseries({
-          organization_id: organizationId,
-          days,
-        });
-
-        if (!result) {
-          return ANALYTICS_NOT_CONFIGURED_MESSAGE;
-        }
-
-        return { days, timeseries: result.data };
-      } catch (error) {
-        return `${ANALYTICS_QUERY_FAILED_MESSAGE} ${
-          error instanceof Error ? error.message : String(error)
-        }`;
-      }
+      return await runSocialAnalyticsQuery(
+        () =>
+          queryEngagementTimeseries({ organization_id: organizationId, days }),
+        (timeseries) => ({ days, timeseries })
+      );
     },
   });
 }

@@ -3,10 +3,8 @@ import type { DemoAffectedEntity } from "@notra/db/types/demo";
 const MAX_AFFECTED = 5;
 const ID_LIKE = /^[A-Za-z0-9_-]{6,}$/;
 const LABEL_KEYS = ["title", "name", "prompt", "label", "domain"] as const;
-/** Response envelopes that describe context, not the changed record. */
 const CONTEXT_KEYS = new Set(["organization", "project", "meta", "pagination"]);
 
-/** `/v1/projects/p1/geo/prompts/x` → `geo.prompt`; `/v1/posts` → `post`. */
 function demoEntityTypeFromPath(path: string): string {
   const segments =
     path

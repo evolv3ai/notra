@@ -1,3 +1,4 @@
+import { GITHUB_API_VERSION_HEADERS } from "@notra/ai/constants/github";
 import {
   deleteGitHubAppInstallationForOrganization,
   getCachedGitHubAppCanPublish,
@@ -28,7 +29,6 @@ import {
   saveGitHubAppRepositoriesInputSchema,
 } from "@notra/schemas/dashboard/github";
 import { Data, Effect } from "effect";
-import { getTranslations } from "next-intl/server";
 
 import {
   GITHUB_INSTALL_STATE_TTL_SECONDS,
@@ -39,8 +39,8 @@ import {
   INTEGRATION_PROVIDERS,
 } from "@/constants/integration-analytics";
 import { trackServerEvent } from "@/lib/analytics/posthog-server";
-import { assertOrganizationAccess } from "@/lib/auth/organization";
-import { authorizedProcedure } from "@/lib/orpc/base";
+import { getTranslations } from "@/lib/i18n/server";
+import { authorizedProcedure, withOrganizationAccess } from "@/lib/orpc/base";
 import { runOrpcEffect } from "@/lib/orpc/effect";
 import {
   assertNotDemo,
@@ -196,12 +196,8 @@ export const githubRouter = {
   app: {
     get: authorizedProcedure
       .input(organizationIdInputSchema)
-      .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
+      .use(withOrganizationAccess)
+      .handler(async ({ input }) => {
         const installations = await listGitHubAppInstallationsByOrganization(
           input.organizationId
         );
@@ -237,12 +233,8 @@ export const githubRouter = {
       }),
     catalog: authorizedProcedure
       .input(organizationIdInputSchema)
+      .use(withOrganizationAccess)
       .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
         const installations = await listGitHubAppInstallationsByOrganization(
           input.organizationId
         );
@@ -303,12 +295,9 @@ export const githubRouter = {
       }),
     saveRepositories: authorizedProcedure
       .input(saveGitHubAppRepositoriesInputSchema)
+      .use(withOrganizationAccess)
       .handler(async ({ context, input }) => {
-        const auth = await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
+        const { auth } = context;
         const selection = await runOrpcEffect(
           setSelectedGitHubAppRepositoriesEffect({
             organizationId: input.organizationId,
@@ -332,12 +321,8 @@ export const githubRouter = {
       }),
     disconnect: authorizedProcedure
       .input(disconnectGitHubAppInputSchema)
+      .use(withOrganizationAccess)
       .handler(async ({ context, input }) => {
-        await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-
         const installations = await listGitHubAppInstallationsByOrganization(
           input.organizationId
         );
@@ -372,12 +357,9 @@ export const githubRouter = {
       }),
     prepareInstallUrl: authorizedProcedure
       .input(prepareInstallUrlInputSchema)
+      .use(withOrganizationAccess)
       .handler(async ({ context, input }) => {
-        const auth = await assertOrganizationAccess({
-          headers: context.headers,
-          organizationId: input.organizationId,
-        });
-        // The demo never installs the GitHub App; it ships a sample repository.
+        const { auth } = context;
         assertNotDemo();
 
         return runOrpcEffect(
@@ -412,7 +394,7 @@ export const githubRouter = {
               {
                 owner: input.owner,
                 repo: input.repo,
-                headers: { "X-GitHub-Api-Version": "2022-11-28" },
+                headers: GITHUB_API_VERSION_HEADERS,
               }
             );
 

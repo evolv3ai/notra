@@ -27,10 +27,6 @@ const brandsByOrganization = new Map<
   { loadedAt: number; brands: Promise<GeoDemoBrands> }
 >();
 
-/**
- * Brand and competitor names, cached briefly: a scan asks for them once per
- * answer, while a rename or new competitor should show up on the next scan.
- */
 function loadBrands(organizationId: string): Promise<GeoDemoBrands> {
   const now = Date.now();
   const cached = brandsByOrganization.get(organizationId);
@@ -73,7 +69,6 @@ function mentionRate(engine: string): number {
   );
 }
 
-/** Two to four consecutive sources, wrapping around the list. */
 function pickSources(seed: string): GeoCheckSource[] {
   const { sources } = GEO_DEMO_PROFILE;
   const count = 2 + (hashInt(`${seed}:sources`) % 3);
@@ -84,11 +79,6 @@ function pickSources(seed: string): GeoCheckSource[] {
   );
 }
 
-/**
- * A believable assistant answer: a short ranked list of brands. Whether the
- * organization's own brand makes the list follows the engine's sample mention
- * rate, seeded by engine, prompt and day so a rerun on the same day agrees.
- */
 function composeAnswer(
   brands: GeoDemoBrands,
   engine: string,

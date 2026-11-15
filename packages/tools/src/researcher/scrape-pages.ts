@@ -1,14 +1,14 @@
-import { fetchWebpage } from "@notra/ai/utils/context-dev";
 import { Effect } from "effect";
 import { defineTool } from "eve/tools";
 
 import {
   SCRAPE_BATCH_MIN_PAGE_LENGTH,
+  SCRAPE_BATCH_TIMEOUT_MS,
   SCRAPE_MARKDOWN_MAX_LENGTH,
 } from "../constants/context-dev";
 import { webpagesInputSchema } from "../schemas/research-tools";
-import { saveReferenceSnapshot } from "../utils/reference-snapshot";
-import { withTransientRetryEffect } from "../utils/retry";
+import type { ScrapePageResult } from "../types/scrape";
+import { scrapePageEffect } from "../utils/scrape";
 
 export function createScrapePagesTool() {
   return defineTool({
@@ -16,29 +16,17 @@ export function createScrapePagesTool() {
       "Scrape up to 50 known owned-blog or newsroom URLs via context.dev in one bounded-concurrency call. Use after crawl_sitemap to collect reference candidates efficiently.",
     inputSchema: webpagesInputSchema,
     async execute({ urls }, ctx) {
+      // Exact matches only: query ordering and signed URLs remain untouched.
+      const uniqueUrls = [...new Set(urls)];
+      const results = new Map<string, ScrapePageResult>();
       const perPageMarkdownLimit = Math.max(
         SCRAPE_BATCH_MIN_PAGE_LENGTH,
-        Math.floor(SCRAPE_MARKDOWN_MAX_LENGTH / urls.length)
+        Math.floor(SCRAPE_MARKDOWN_MAX_LENGTH / uniqueUrls.length)
       );
-      return Effect.runPromise(
+      await Effect.runPromise(
         Effect.all(
-          urls.map((url) =>
-            withTransientRetryEffect(
-              async () => {
-                const page = await fetchWebpage({ url });
-                const snapshot = await saveReferenceSnapshot({
-                  ctx,
-                  markdown: page.markdown,
-                });
-                return {
-                  markdown: page.markdown.slice(0, perPageMarkdownLimit),
-                  title: page.metadata?.title ?? null,
-                  url: page.url,
-                  ...(snapshot ?? {}),
-                };
-              },
-              { operationName: `Context.dev page scrape for ${url}` }
-            ).pipe(
+          uniqueUrls.map((url) =>
+            scrapePageEffect(url, ctx, perPageMarkdownLimit).pipe(
               Effect.catch((error) =>
                 Effect.succeed({
                   error: error.message,
@@ -46,11 +34,23 @@ export function createScrapePagesTool() {
                   title: null,
                   url,
                 })
+              ),
+              Effect.tap((result) =>
+                Effect.sync(() => results.set(url, result))
               )
             )
           ),
           { concurrency: 5 }
-        )
+        ).pipe(Effect.timeoutOption(SCRAPE_BATCH_TIMEOUT_MS))
+      );
+      return uniqueUrls.map(
+        (url) =>
+          results.get(url) ?? {
+            url,
+            error: "Scrape batch deadline exceeded",
+            markdown: null,
+            title: null,
+          }
       );
     },
   });

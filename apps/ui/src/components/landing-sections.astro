@@ -8,13 +8,21 @@ import ChatgptPreview from "./previews/chatgpt-preview";
 import ClaudeCodePreview from "./previews/claude-code-preview";
 import ClaudePreview from "./previews/claude-preview";
 import CodexPreview from "./previews/codex-preview";
+import ComposerPreview from "./previews/composer-preview";
+import DataTablePreview from "./previews/data-table-preview";
 import DuotoneTooltipPreview from "./previews/duotone-tooltip-preview.astro";
 import GeminiPreview from "./previews/gemini-preview";
+import IconTabsPreview from "./previews/icon-tabs-preview";
+import ListicleOutreachPreview from "./previews/listicle-outreach-preview";
 import MarketingButtonPreview from "./previews/marketing-button-preview";
 import OpencodePreview from "./previews/opencode-preview";
 import PerplexityPreview from "./previews/perplexity-preview";
 import ShimmerPreview from "./previews/shimmer-preview";
+import SonnerPreview from "./previews/sonner-preview";
+import StepSliderPreview from "./previews/step-slider-preview";
 import TooltipPreview from "./previews/tooltip-preview";
+import WorkflowBuilderPreview from "./previews/workflow-builder-preview";
+import WorkflowNodePreview from "./previews/workflow-node-preview";
 
 const previews = {
   "ai-overview": AIOverviewPreview,
@@ -24,13 +32,21 @@ const previews = {
   claude: ClaudePreview,
   "claude-code": ClaudeCodePreview,
   codex: CodexPreview,
+  composer: ComposerPreview,
+  "data-table": DataTablePreview,
   "duotone-tooltip": DuotoneTooltipPreview,
   gemini: GeminiPreview,
+  "icon-tabs": IconTabsPreview,
+  "listicle-outreach": ListicleOutreachPreview,
   "marketing-button": MarketingButtonPreview,
   opencode: OpencodePreview,
   perplexity: PerplexityPreview,
   shimmer: ShimmerPreview,
+  sonner: SonnerPreview,
+  "step-slider": StepSliderPreview,
   tooltip: TooltipPreview,
+  "workflow-builder": WorkflowBuilderPreview,
+  "workflow-node": WorkflowNodePreview,
 } satisfies Record<LandingPreview, unknown>;
 ---
 

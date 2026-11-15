@@ -2,11 +2,7 @@ import "zod/compile";
 // biome-ignore lint/performance/noNamespaceImport: Zod recommended way of importing
 import * as z from "zod";
 
-export const triggerIdQuerySchema = z.object({
-  triggerId: z.string().min(1),
-});
-
-export const webhookLogSourceFilterSchema = z.enum([
+const webhookLogSourceFilterSchema = z.enum([
   "all",
   "github",
   "linear",
@@ -20,7 +16,7 @@ export const webhookLogSourceFilterSchema = z.enum([
   "brand",
 ]);
 
-export const webhookLogStatusFilterSchema = z.enum([
+const webhookLogStatusFilterSchema = z.enum([
   "all",
   "success",
   "failed",

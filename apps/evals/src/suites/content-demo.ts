@@ -13,7 +13,6 @@ const DEMO_SLOP = [
   "Seamlessly elevate your workflow",
 ];
 
-/** Plausible createPost/skip output for demo runs. */
 export function demoContentOutput(
   scenario: ContentScenario,
   contentType: ContentAgentProfile,

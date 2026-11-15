@@ -26,13 +26,14 @@ export function createGetLinearIssuesTool() {
         filter.team = { id: { eq: resolved.linearTeamId } };
       }
       if (since || until) {
-        filter.updatedAt = {};
+        const updatedAt: Record<string, string> = {};
         if (since) {
-          (filter.updatedAt as Record<string, string>).gte = since;
+          updatedAt.gte = since;
         }
         if (until) {
-          (filter.updatedAt as Record<string, string>).lte = until;
+          updatedAt.lte = until;
         }
+        filter.updatedAt = updatedAt;
       }
       if (!includeCompleted) {
         filter.completedAt = { null: true };

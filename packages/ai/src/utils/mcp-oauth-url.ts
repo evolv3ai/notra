@@ -21,18 +21,18 @@ export function getValidatedMcpOAuthResource(
       configuredResource: resourceMetadata.resource,
     })
   ) {
-    throw new McpOAuthAuthorizationError(
-      "The OAuth resource does not match the MCP server."
-    );
+    throw new McpOAuthAuthorizationError({
+      message: "The OAuth resource does not match the MCP server.",
+    });
   }
   return new URL(resourceMetadata.resource);
 }
 
 export async function assertValidMcpOAuthAuthorizationUrl(url: URL) {
   if (url.protocol !== "https:") {
-    throw new McpOAuthAuthorizationError(
-      "The OAuth authorization endpoint must use HTTPS."
-    );
+    throw new McpOAuthAuthorizationError({
+      message: "The OAuth authorization endpoint must use HTTPS.",
+    });
   }
   await assertPublicHttpUrlResolution(url.toString());
 }

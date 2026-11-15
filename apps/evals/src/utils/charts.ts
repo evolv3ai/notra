@@ -2,7 +2,6 @@ const EIGHTHS = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉"] as const;
 const SPARK = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"] as const;
 const SHADES = [" ", "░", "▒", "▓", "█"] as const;
 
-/** Horizontal bar with 1/8 cell resolution. */
 export function bar(fraction: number, width: number): string {
   const clamped = Math.max(0, Math.min(1, fraction));
   const eighths = Math.round(clamped * width * 8);
@@ -24,7 +23,6 @@ export function sparkline(values: readonly number[], width: number): string {
     .join("");
 }
 
-/** Bucketed distribution (e.g. latency histogram) as one line of blocks. */
 export function histogram(
   values: readonly number[],
   buckets: number,
@@ -76,13 +74,11 @@ export function padStart(text: string, width: number): string {
   return " ".repeat(Math.max(0, width - cut.length)) + cut;
 }
 
-/** Word-wraps one line to `width`, keeping its leading indentation. */
 export function wrapLine(line: string, width: number): string[] {
   if (width <= 4 || line.length <= width) {
     return [line];
   }
   const rawIndent = line.match(/^\s*/)?.[0] ?? "";
-  // A deep indent on a narrow pane would never fit; drop it.
   const indent = rawIndent.length > width / 2 ? "" : rawIndent;
   const words = line.trimStart().split(" ");
   const lines: string[] = [];
@@ -111,14 +107,9 @@ export function wrapLine(line: string, width: number): string[] {
 export interface ScatterPoint {
   readonly x: number;
   readonly y: number;
-  /** Index into the caller's series (colour + legend). */
   readonly series: number;
 }
 
-/**
- * Plots points on a character grid. Returns one series index (or -1 for
- * empty) per cell, rows top to bottom. Later points win collisions.
- */
 export function scatterGrid(
   points: readonly ScatterPoint[],
   width: number,

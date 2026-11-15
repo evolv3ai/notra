@@ -1,9 +1,4 @@
 import { compileIgnoreCommitPatterns } from "@notra/ai/schemas/ignore-commit-patterns";
-import {
-  joinIgnoreCommitPatterns,
-  MAX_IGNORE_COMMIT_PATTERNS,
-  splitIgnoreCommitPatternsText,
-} from "@notra/ai/utils/ignore-commit-patterns";
 
 import type { GithubProcessedEvent } from "@/types/webhooks/webhooks";
 import { getPushCommitMessages } from "@/utils/push-event-commits";
@@ -23,28 +18,6 @@ export const IGNORE_COMMIT_PATTERN_PRESET_PREFIXES = [
 
 export function buildIgnoreCommitPrefixPattern(prefix: string): string {
   return `^${prefix}(\\(|:)`;
-}
-
-export function addIgnoreCommitPatternToText(
-  currentText: string,
-  pattern: string
-): string {
-  const lines = splitIgnoreCommitPatternsText(currentText);
-  if (lines.includes(pattern) || lines.length >= MAX_IGNORE_COMMIT_PATTERNS) {
-    return currentText;
-  }
-  return joinIgnoreCommitPatterns([...lines, pattern]);
-}
-
-export function removeIgnoreCommitPatternFromText(
-  currentText: string,
-  pattern: string
-): string {
-  return joinIgnoreCommitPatterns(
-    splitIgnoreCommitPatternsText(currentText).filter(
-      (line) => line !== pattern
-    )
-  );
 }
 
 export function isPushEventIgnoredByPatterns(

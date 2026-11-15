@@ -1,4 +1,3 @@
-/** Name, company name and website come from the visitor's company. */
 export const DEMO_SEED_BRAND = {
   companyDescription:
     "Fieldnote is an AI meeting notes app for product teams. It records calls, writes summaries and action items, and makes every decision searchable in plain language.",

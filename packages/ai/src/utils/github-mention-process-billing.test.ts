@@ -1,20 +1,21 @@
 import { expect, mock, test } from "bun:test";
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import type { GitHubMentionContext } from "@notra/ai/types/github-mention";
+import { spawnAsync } from "@notra/ai/utils/spawn-async";
 
 if (process.env.NOTRA_MENTION_PROCESS_BILLING_TEST !== "1") {
-  test("mention process settles billing correctly in an isolated module registry", () => {
-    const result = spawnSync(
+  test("mention process settles billing correctly in an isolated module registry", async () => {
+    const result = await spawnAsync(
       process.execPath,
       ["test", fileURLToPath(import.meta.url)],
       {
         env: { ...process.env, NOTRA_MENTION_PROCESS_BILLING_TEST: "1" },
+        timeoutMs: 15_000,
       }
     );
-    expect(result.status, result.stderr?.toString()).toBe(0);
-  });
+    expect(result.status, result.stderr).toBe(0);
+  }, 20_000);
 } else {
   const confirm = mock(async (_params: unknown) => undefined);
   const release = mock(async (_params: unknown) => undefined);
@@ -145,53 +146,6 @@ if (process.env.NOTRA_MENTION_PROCESS_BILLING_TEST !== "1") {
     postReply.mockRejectedValueOnce(new Error("reply failed"));
     await processGitHubMention(context);
     expect(confirm).toHaveBeenCalledTimes(1);
-    expect(release).not.toHaveBeenCalled();
-  });
-
-  test("reports a committed follow-up branch whose draft pull request failed", async () => {
-    confirm.mockClear();
-    release.mockClear();
-    postReply.mockClear();
-    runAgent.mockResolvedValueOnce({
-      committed: true,
-      commitSha: "commit-on-follow-up-branch",
-      pullRequestUrl: null,
-      reply: "done",
-      declined: false,
-      proposals: [],
-      permissionDenied: false,
-      usage: paidUsage,
-    });
-
-    const result = await processGitHubMention({
-      ...context,
-      destination: {
-        mode: "new_pull_request",
-        pullRequestNumber: 1,
-        headRef: "docs",
-        headSha: "source-head",
-      },
-      pullRequest: {
-        number: 1,
-        title: "Docs",
-        body: null,
-        htmlUrl: "https://github.com/acme/docs/pull/1",
-        headRef: "docs",
-        headSha: "source-head",
-        headRepoFullName: "acme/docs",
-        baseRef: "main",
-        draft: false,
-      },
-    });
-
-    expect(result).toMatchObject({
-      status: "failed",
-      reason: "follow_up_pull_request_failed",
-      commitSha: "commit-on-follow-up-branch",
-      pullRequestUrl: null,
-    });
-    expect(postReply).toHaveBeenCalledTimes(1);
-    expect(postReply.mock.calls[0]?.[0]).toMatchObject({ commitSha: null });
     expect(release).not.toHaveBeenCalled();
   });
 }

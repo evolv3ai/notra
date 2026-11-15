@@ -1,6 +1,15 @@
-/** Rows shown before a competitors table scrolls. */
 export const GEO_COMPETITORS_TABLE_VISIBLE_ROWS = 12;
-/** Competitor pickers get a search field once the list is longer than this. */
 export const GEO_COMPETITOR_CHOICES_SEARCH_THRESHOLD = 12;
-/** Cards a competitor picker renders at once; search narrows the rest. */
 export const GEO_COMPETITOR_CHOICES_MAX_SHOWN = 30;
+export const GEO_ENGINE_MATRIX_MAX_ROWS = 15;
+export const GEO_ENGINE_MATRIX_COLLAPSED_ROWS = 6;
+export const GEO_ENGINE_MATRIX_MIN_TINT = 6;
+export const GEO_ENGINE_MATRIX_MAX_TINT = 45;
+export const GEO_ENGINE_MATRIX_LIGHT_TEXT_TINT = 100;
+export const COMPETITOR_MENTIONS_BAR_MAX_WIDTH_PX = 10;
+export const COMPETITOR_MENTIONS_BAR_RADIUS_PX = 3;
+export const GEO_COMPETITOR_DETAIL_QUERY_KEY = "competitor";
+export const GEO_COMPETITOR_SUGGESTION_MIN_MENTIONS = 2;
+export const GEO_COMPETITOR_SUGGESTIONS_MAX = 12;
+export const GEO_COMPETITOR_UNTRACKED_RANKING_MAX = 15;
+export const GEO_COMPETITOR_DOMAIN_BACKFILL_MAX = 25;

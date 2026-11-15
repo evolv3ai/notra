@@ -1,0 +1,34 @@
+import { cn } from "@notra/ui/lib/utils";
+
+/** Notra brand mark on its cream tile, matching the usenotra.com footer treatment. */
+export function NotraMark({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center rounded-[22%] bg-[#F6F3F1] ring-1 ring-black/10",
+        className
+      )}
+    >
+      <svg
+        aria-hidden="true"
+        className="size-[72%]"
+        fill="none"
+        viewBox="0 0 800 800"
+      >
+        <path
+          d="M572.881 462.223c-12.712 43.22-290.678 105.932-394.068 83.898l-48.305-10.169 48.305-78.814 68.644-104.237 73.729-106.78 251.695-127.119 78.814-22.881 17.796 17.796h10.17c17.796 35.593 3.945 147.458-12.712 195.763-25.424 73.729-124.576 96.61-177.966 114.407-4.064 1.355 96.61-5.085 83.898 38.136Z"
+          fill="#c8b2ee"
+          stroke="#1e1e1e"
+          strokeLinecap="round"
+          strokeWidth="35"
+        />
+        <path
+          d="M700 96.111c-162.712-4.237-510.508 111.356-600 607.627"
+          stroke="#1e1e1e"
+          strokeLinecap="round"
+          strokeWidth="75"
+        />
+      </svg>
+    </span>
+  );
+}

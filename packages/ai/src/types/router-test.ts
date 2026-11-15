@@ -1,8 +1,6 @@
 import type { LanguageModelV4CallOptions } from "@ai-sdk/provider";
 import type {
-  DecideGatewayInput,
   GatewayAdapter,
-  GatewayDecision,
   GatewayId,
   ModelRouterConfig,
   Plan,
@@ -20,8 +18,9 @@ export interface FakeAdapterOptions {
   id: GatewayId;
   enforcesZdr?: boolean;
   supportedModels?: (modelId: string) => boolean;
+  supportedTools?: (modelId: string, toolIds: readonly string[]) => boolean;
   balance?: number | null;
-  onCall?: (call: RecordedRouterCall) => void;
+  onCall?: (call: RecordedRouterCall) => void | Promise<void>;
   upstreamProvider?: string;
 }
 
@@ -47,10 +46,4 @@ export interface TestRouterOptions {
   now?: () => number;
   planCacheTtlMs?: number;
   creditCheckTtlMs?: number;
-}
-
-export interface PolicyTestCase {
-  name: string;
-  input: Omit<DecideGatewayInput, "policy">;
-  expected: GatewayDecision;
 }

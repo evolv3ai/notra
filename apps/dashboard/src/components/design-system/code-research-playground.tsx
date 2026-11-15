@@ -44,9 +44,7 @@ import { getAssistantActivityStep } from "@/utils/group-assistant-message-parts"
 
 type ChatPart = UIMessage["parts"][number];
 
-function noop() {
-  // The replayed chat is read-only.
-}
+function noop() {}
 
 function renderAssistantPart(
   part: ChatPart,
@@ -123,8 +121,6 @@ function toolAgentOf(
   );
 }
 
-// Root-level subagent calls become cards; the calls their child session made
-// are nested inside the card instead of mixed into the parent's activity.
 function buildAssistantBlocks(
   parts: ChatPart[],
   startIndex: number,
@@ -196,8 +192,6 @@ function SubagentCard({
   );
 }
 
-// Same building blocks as the chat page, but groups stay open so every
-// sandbox call is visible while the replay runs.
 function AssistantParts({
   message,
   toolAgents,

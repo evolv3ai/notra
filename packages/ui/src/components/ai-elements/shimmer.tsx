@@ -38,6 +38,7 @@ const ShimmerComponent = ({
         aria-hidden="true"
         className="text-shimmer__mask"
         inert
+        key={children}
       >
         {children}
       </span>

@@ -11,7 +11,7 @@ export interface CodexStoryExec {
   moreLines?: number;
 }
 
-export interface CodexStoryHighlight {
+interface CodexStoryHighlight {
   id: string;
   label: string;
   text: string;

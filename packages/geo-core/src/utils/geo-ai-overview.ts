@@ -1,3 +1,5 @@
+import { isRecord } from "@notra/utils/unknown-record";
+
 import {
   GEO_AI_OVERVIEW_INVALID_ENVELOPE,
   GEO_AI_OVERVIEW_INVALID_OVERVIEW,
@@ -10,10 +12,6 @@ import type {
 import { getReferenceDomain } from "./reference-display";
 
 const MAX_BLOCK_DEPTH = 8;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function readString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";

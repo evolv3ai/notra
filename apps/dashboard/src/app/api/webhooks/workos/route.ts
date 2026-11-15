@@ -1,19 +1,19 @@
+import { logError } from "@notra/ai/utils/server-log";
 import { workosWebhookPayloadSchema } from "@notra/schemas/dashboard/workos-webhook";
-import { getWorkOS } from "@workos-inc/authkit-nextjs";
 import type { Event as WorkOSEvent } from "@workos-inc/node";
+import { getWorkOS } from "@workos/authkit-session";
 import { Effect } from "effect";
-import type { NextRequest } from "next/server";
 
 import {
   removeMembershipFromWebhook,
-  upsertMembershipFromWebhook,
+  syncMembershipFromWebhook,
 } from "@/lib/auth/webhook-sync";
 
 function handleMembershipEvent(event: WorkOSEvent) {
   switch (event.event) {
     case "organization_membership.created":
     case "organization_membership.updated":
-      return upsertMembershipFromWebhook(event.data);
+      return syncMembershipFromWebhook(event.data);
     case "organization_membership.deleted":
       return removeMembershipFromWebhook(event.data);
     default:
@@ -21,7 +21,7 @@ function handleMembershipEvent(event: WorkOSEvent) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   const secret = process.env.WORKOS_WEBHOOK_SECRET;
 
   if (!secret) {
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       secret,
     });
   } catch (error) {
-    console.error("WorkOS webhook verification failed", error);
+    logError("WorkOS webhook verification failed", error);
     return Response.json({ error: "invalid_signature" }, { status: 401 });
   }
 

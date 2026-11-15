@@ -1,6 +1,6 @@
 import type { IconSvgElement } from "@hugeicons/react";
 
-export type ChatSuggestionId =
+type ChatSuggestionId =
   | "blogPost"
   | "releaseNotes"
   | "socialPost"

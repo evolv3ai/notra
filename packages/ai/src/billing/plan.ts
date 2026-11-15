@@ -1,6 +1,6 @@
 import type { Plan } from "@notra/ai/types/router";
 
-import { autumn } from "./autumn";
+import { autumn, AUTUMN_READ_TIMEOUT_MS } from "./autumn";
 import { PAID_OR_LEGACY_PLAN_IDS } from "./features";
 
 /**
@@ -17,9 +17,10 @@ export async function resolveOrganizationPlan(
     return "free";
   }
 
-  const customer = await autumn.customers.getOrCreate({
-    customerId: organizationId,
-  });
+  const customer = await autumn.customers.getOrCreate(
+    { customerId: organizationId },
+    { timeoutMs: AUTUMN_READ_TIMEOUT_MS }
+  );
 
   const hasPaidPlan = customer.subscriptions.some(
     (subscription) =>

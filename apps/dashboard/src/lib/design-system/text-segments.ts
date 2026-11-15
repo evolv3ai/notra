@@ -17,8 +17,6 @@ export function splitWithOffsets(
   const segments: TextSegment[] = [];
   let offset = 0;
   for (const part of text.split(separator)) {
-    // A capturing split yields "" before a leading match; it renders nothing
-    // and would share its offset (and React key) with that match.
     if (part.length > 0) {
       segments.push({ offset, text: part });
     }

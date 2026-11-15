@@ -1,27 +1,64 @@
-import {
-  type generateRepoImage,
-  RepoImageError,
-} from "@notra/ai/agents/repo-image";
+import type { generateRepoImage } from "@notra/ai/agents/repo-image";
+import { RepoImageError } from "@notra/ai/agents/repo-image-agent";
 import { calculateAiCreditCostCents } from "@notra/ai/billing/ai-credit-cost";
 import {
   allowUnmeteredAiInDevelopment,
   autumn,
 } from "@notra/ai/billing/autumn";
 import { FEATURES } from "@notra/ai/billing/features";
-import { getChatProjectId } from "@notra/ai/chat/history";
 import { IMAGE_GEN_MODEL_ID } from "@notra/ai/constants/repo-image";
 import { maybeGenerateCollectionTitle } from "@notra/ai/jobs/collection-title";
+import type { GenerateRepoImageResult } from "@notra/ai/types/repo-image";
 import {
+  readDiagramRevision,
+  readDiagramSpec,
+  readImageFormat,
+} from "@notra/ai/utils/diagram-metadata";
+import {
+  uploadGeneratedExcalidrawAsset,
   uploadGeneratedHtmlAsset,
   uploadGeneratedImageAsset,
 } from "@notra/ai/utils/image-assets";
+import { ensureChatPostCollection } from "@notra/ai/utils/post-service";
+import { logError, logInfo } from "@notra/ai/utils/server-log";
 import { db } from "@notra/db/drizzle";
 import { postCollections, posts } from "@notra/db/schema";
-import { buildPostCollectionName } from "@notra/db/utils/post-collections";
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
 import { captureServerEvent, flushPostHogServer } from "@notra/posthog/server";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
+
+/**
+ * Uploads the editable Excalidraw scene for diagram images and returns the
+ * metadata fields the dashboard reads to offer Excalidraw/tldraw export.
+ */
+async function buildImageFormatMetadata(params: {
+  organizationId: string;
+  postId: string;
+  result: Pick<
+    GenerateRepoImageResult,
+    "format" | "excalidrawScene" | "diagramSpec"
+  >;
+}) {
+  if (params.result.format !== "diagram" || !params.result.excalidrawScene) {
+    return {
+      format: params.result.format,
+      excalidrawUrl: null,
+      diagramSpec: null,
+    };
+  }
+
+  const excalidrawUrl = await uploadGeneratedExcalidrawAsset({
+    organizationId: params.organizationId,
+    postId: params.postId,
+    scene: params.result.excalidrawScene,
+  });
+  return {
+    format: params.result.format,
+    excalidrawUrl,
+    diagramSpec: params.result.diagramSpec ?? null,
+  };
+}
 
 export async function buildRevisionSourceMetadata(params: {
   organizationId: string;
@@ -43,9 +80,15 @@ export async function buildRevisionSourceMetadata(params: {
     !Array.isArray(post.sourceMetadata)
       ? post.sourceMetadata
       : {};
+  const formatMetadata = await buildImageFormatMetadata({
+    organizationId: params.organizationId,
+    postId: params.postId,
+    result: params.result,
+  });
 
   return {
     ...existing,
+    ...formatMetadata,
     type: "generated_image",
     integrationId: params.integrationId,
     branch: params.branch,
@@ -56,6 +99,9 @@ export async function buildRevisionSourceMetadata(params: {
     sourcePostId: params.postId,
     sandbox: params.result.sandbox,
     usage: params.result.usage ?? null,
+    ...(params.result.format === "diagram"
+      ? { diagramRevision: readDiagramRevision(existing) + 1 }
+      : {}),
   };
 }
 
@@ -75,16 +121,14 @@ export async function trackImageGenerationUsage(params: {
     return;
   }
 
-  const cost = calculateAiCreditCostCents(
-    params.usage,
-    params.usage.modelId ?? IMAGE_GEN_MODEL_ID,
-    params.useMarkup ?? false
-  );
+  const model = params.usage.modelId ?? IMAGE_GEN_MODEL_ID;
+  const markupApplied = params.useMarkup ?? false;
+  const cost = calculateAiCreditCostCents(params.usage, model, markupApplied);
 
-  console.info("[Autumn] Marketing asset usage cost comparison", {
+  logInfo("[Autumn] Marketing asset usage cost comparison", {
     organizationId: params.organizationId,
     postId: params.postId,
-    model: params.usage.modelId ?? IMAGE_GEN_MODEL_ID,
+    model,
     billingBasis: cost.billingBasis,
     computedCostCents: cost.costCents,
     reportedCostCents: cost.reportedCostCents,
@@ -95,7 +139,7 @@ export async function trackImageGenerationUsage(params: {
     cacheReadTokens: params.usage.cacheReadTokens,
     cacheWriteTokens: params.usage.cacheWriteTokens,
     totalTokens: params.usage.totalTokens,
-    markupApplied: params.useMarkup ?? false,
+    markupApplied,
   });
 
   try {
@@ -106,7 +150,7 @@ export async function trackImageGenerationUsage(params: {
       properties: {
         source: "marketing_assets",
         post_id: params.postId,
-        model: params.usage.modelId ?? IMAGE_GEN_MODEL_ID,
+        model,
         billing_basis: cost.billingBasis,
         input_tokens: params.usage.inputTokens,
         output_tokens: params.usage.outputTokens,
@@ -114,7 +158,7 @@ export async function trackImageGenerationUsage(params: {
         cache_write_tokens: params.usage.cacheWriteTokens,
         total_tokens: params.usage.totalTokens,
         sandbox_total_usd: params.usage.totalUsd,
-        markup_applied: params.useMarkup ?? false,
+        markup_applied: markupApplied,
         cost_cents: cost.costCents,
         reported_cost_cents: cost.reportedCostCents,
         token_cost_cents: cost.tokenCostCents,
@@ -126,23 +170,22 @@ export async function trackImageGenerationUsage(params: {
       properties: {
         cost_cents: cost.costCents,
         source: "marketing_assets",
-        model: params.usage.modelId ?? IMAGE_GEN_MODEL_ID,
+        model,
         billing_basis: cost.billingBasis,
         input_tokens: params.usage.inputTokens,
         output_tokens: params.usage.outputTokens,
         cache_read_tokens: params.usage.cacheReadTokens,
         cache_write_tokens: params.usage.cacheWriteTokens,
         total_tokens: params.usage.totalTokens,
-        markup_applied: params.useMarkup ?? false,
+        markup_applied: markupApplied,
         post_id: params.postId,
       },
     });
     await flushPostHogServer();
   } catch (error) {
-    console.error("[Autumn] Track error after marketing asset generation:", {
+    logError("[Autumn] Track error after marketing asset generation", error, {
       customerId: params.organizationId,
       postId: params.postId,
-      error,
     });
   }
 }
@@ -178,10 +221,16 @@ export async function getImageSnapshot(organizationId: string, postId: string) {
       : undefined;
   const brandIdentityId = getStoredBrandIdentityId(metadata) ?? undefined;
 
-  return { boxId, snapshotId: metadata.sandbox.snapshotId, brandIdentityId };
+  return {
+    boxId,
+    snapshotId: metadata.sandbox.snapshotId,
+    brandIdentityId,
+    diagramSpec: readDiagramSpec(metadata),
+    format: readImageFormat(metadata),
+  };
 }
 
-export function getStoredBrandIdentityId(metadata: object) {
+function getStoredBrandIdentityId(metadata: object) {
   if (
     "brandIdentityId" in metadata &&
     typeof metadata.brandIdentityId === "string"
@@ -205,9 +254,13 @@ export async function saveGeneratedImagePost(params: {
   pngBase64: string;
   html: string;
   sourceMetadata: Record<string, unknown>;
+  result?: Pick<
+    GenerateRepoImageResult,
+    "format" | "excalidrawScene" | "diagramSpec"
+  >;
 }) {
   const postId = params.postId ?? nanoid();
-  const [imageUrl, htmlUrl] = await Promise.all([
+  const [imageUrl, htmlUrl, formatMetadata] = await Promise.all([
     uploadGeneratedImageAsset({
       organizationId: params.organizationId,
       pngBase64: params.pngBase64,
@@ -218,7 +271,15 @@ export async function saveGeneratedImagePost(params: {
       html: params.html,
       postId,
     }),
+    params.result
+      ? buildImageFormatMetadata({
+          organizationId: params.organizationId,
+          postId,
+          result: params.result,
+        })
+      : null,
   ]);
+  const sourceMetadata = { ...params.sourceMetadata, ...formatMetadata };
 
   if (params.collectionId) {
     const ownedCollection = await db.query.postCollections.findFirst({
@@ -238,73 +299,30 @@ export async function saveGeneratedImagePost(params: {
       incrementCollectionCount: true,
       organizationId: params.organizationId,
       postId,
-      sourceMetadata: params.sourceMetadata,
+      sourceMetadata,
       title: params.title,
     });
     return { imageUrl, postId };
   }
 
-  const collectionId = nanoid();
-  const now = new Date();
-  const contentTypesJson = JSON.stringify(["image"]);
-  const projectId = params.chatId
-    ? await getChatProjectId(params.organizationId, params.chatId)
-    : null;
-
-  const [collection] = await db
-    .insert(postCollections)
-    .values({
-      id: collectionId,
-      organizationId: params.organizationId,
-      projectId,
-      source: "chat",
-      sourceId: params.chatId ?? null,
-      name: buildPostCollectionName(["image"], now),
-      nameSource: "generated",
-      contentTypes: ["image"],
-      expectedPostCount: null,
-      completedPostCount: 0,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .onConflictDoUpdate({
-      target: [
-        postCollections.organizationId,
-        postCollections.source,
-        postCollections.sourceId,
-      ],
-      targetWhere: and(
-        eq(postCollections.source, "chat"),
-        isNotNull(postCollections.sourceId)
-      ),
-      set: {
-        projectId,
-        contentTypes: sql`CASE
-          WHEN ${postCollections.contentTypes} @> ${contentTypesJson}::jsonb
-            THEN ${postCollections.contentTypes}
-          ELSE ${postCollections.contentTypes} || ${contentTypesJson}::jsonb
-        END`,
-        updatedAt: now,
-      },
-    })
-    .returning({ id: postCollections.id });
-
-  if (!collection) {
-    throw new Error("Failed to create image content collection");
-  }
+  const collectionId = await ensureChatPostCollection({
+    organizationId: params.organizationId,
+    chatId: params.chatId,
+    contentType: "image",
+  });
 
   await insertGeneratedImagePost({
-    collectionId: collection.id,
+    collectionId,
     htmlUrl,
     imageUrl,
     organizationId: params.organizationId,
     postId,
-    sourceMetadata: params.sourceMetadata,
+    sourceMetadata,
     title: params.title,
   });
 
   await maybeGenerateCollectionTitle({
-    collectionId: collection.id,
+    collectionId,
     organizationId: params.organizationId,
   });
 

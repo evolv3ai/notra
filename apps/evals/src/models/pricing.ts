@@ -7,7 +7,6 @@ const PRICE_LIST_URL = "https://ai-gateway.vercel.sh/v1/models";
 const PRICE_CACHE_FILE = join(CACHE_DIR, "gateway-prices.json");
 const PRICE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
-/** USD per token. */
 export interface ModelPrice {
   input: number;
   output: number;
@@ -73,7 +72,6 @@ export async function priceFor(
   return prices[modelId];
 }
 
-/** Whole gateway price list (cached for a day). */
 export function allPrices(): Promise<Record<string, ModelPrice>> {
   pricesPromise ??= loadPrices();
   return pricesPromise;

@@ -1,24 +1,3 @@
-/**
- * Single source of truth for Notra public-API scopes.
- *
- * Everything that talks about public-API permissions derives from
- * `API_SCOPE_RESOURCES`:
- * - `apps/dashboard` renders the API-key scope picker and validates submitted
- *   scopes.
- *
- * HOW TO ADD A RESOURCE
- * 1. Append an entry to `API_SCOPE_RESOURCES` with `id`, `paths`, `label` and
- *    `description` (plus `pathPatterns` when the resource lives under a nested
- *    path with an id segment, and `legacyOrganizationSegments` only when the
- *    resource still answers on `/v1/{organizationId}/...`).
- * 2. Nothing else. Scope ids (`<id>.read` / `<id>.write`), the request →
- *    scope resolver, the UI groups, the accepted-scope allow list and the
- *    legacy `api.read` / `api.write` expansion are all derived from it.
- *
- * Keep this module dependency-free: it is imported by a Next.js client bundle,
- * a Hono worker and plain Node tests.
- */
-
 export type ApiScopeAccess = "read" | "write";
 
 export interface ApiScopeResourceDefinition {
@@ -184,7 +163,10 @@ export const API_SCOPE_RESOURCES = [
   {
     id: "geo-settings",
     paths: [],
-    pathPatterns: ["/projects/{projectId}/geo/settings"],
+    pathPatterns: [
+      "/projects/{projectId}/geo/settings",
+      "/projects/{projectId}/geo/engines",
+    ],
     label: "GEO settings",
     description: "Read and manage a project's GEO tracking configuration",
     openApiTag: "GEO",
@@ -251,8 +233,6 @@ export const API_SCOPE_RESOURCES = [
   },
   {
     id: "traffic",
-    // `/geo/ingest/*` is organization-level: the ingest token identifies the
-    // organization, not a project, so it cannot live under `/projects/{id}`.
     paths: ["/geo/ingest"],
     pathPatterns: ["/projects/{projectId}/geo/traffic"],
     label: "GEO AI traffic",
@@ -285,9 +265,6 @@ export function getApiScopeId(
 ): ApiGranularScope {
   return `${resourceId}.${access}`;
 }
-
-export const API_SCOPE_RESOURCE_IDS: readonly ApiScopeResourceId[] =
-  API_SCOPE_RESOURCES.map((resource) => resource.id);
 
 /** Read scopes in registry order. */
 export const API_READ_SCOPES: readonly ApiReadScope[] = API_SCOPE_RESOURCES.map(
@@ -388,8 +365,6 @@ export function isUnscopedApiPath(pathname: string): boolean {
   return UNSCOPED_PATHS.has(normalizeApiPath(pathname));
 }
 
-// `as const satisfies` keeps each entry narrow, so resources that omit the
-// optional field genuinely do not have it — narrow with `in` rather than `?.`.
 function getLegacyOrganizationSegments(
   resource: ApiScopeResource
 ): readonly string[] {
@@ -493,8 +468,6 @@ export function getRequiredApiScope(
     return getApiScopeId(legacyMatch.resourceId, accessForMethod(method));
   }
 
-  // Nested resources first: `/projects/{id}/geo/prompts` belongs to `prompts`,
-  // not to the `projects` resource that owns the `/projects` prefix.
   const patternMatch = PATH_PATTERN_MATCHERS.find((matcher) =>
     matcher.regex.test(path)
   );

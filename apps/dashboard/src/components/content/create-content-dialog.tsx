@@ -29,10 +29,9 @@ import { cn } from "@notra/ui/lib/utils";
 import { useForm, useStore } from "@tanstack/react-form";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
-import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { CreateContentButton } from "@/components/content/create-content-button";
 import { StepActivity } from "@/components/content/create/step-activity";
@@ -44,6 +43,7 @@ import { DEFAULT_DATA_POINTS } from "@/constants/content-preview";
 import { trackEvent } from "@/lib/analytics/posthog-client";
 import { useActiveProject } from "@/lib/hooks/use-active-project";
 import { useWizardStepLabels } from "@/lib/hooks/use-wizard-step-labels";
+import { useParams, useRouter } from "@/lib/navigation";
 import { dashboardOrpc } from "@/lib/orpc/query";
 import type { ContentCreateEntry } from "@/types/analytics/studio-events";
 import type {
@@ -158,13 +158,19 @@ function CreateContentDialogFooter({
             disabled={!isProjectResolved}
             loading={isPending}
             onClick={onCreate}
+            data-dialog-confirm
             type="button"
           >
             {identityButtonLabel}
             <HugeiconsIcon className="size-3.5" icon={ArrowRight01Icon} />
           </Button>
         ) : (
-          <Button disabled={isPending} onClick={onNext} type="button">
+          <Button
+            data-dialog-confirm
+            disabled={isPending}
+            onClick={onNext}
+            type="button"
+          >
             {tCommon("actions.continue")}
             <HugeiconsIcon className="size-3.5" icon={ArrowRight01Icon} />
           </Button>
@@ -541,10 +547,6 @@ export function CreateContentDialog({
       const calls = formats.flatMap((format) =>
         voiceIds.map((voiceId) => ({ format, voiceId }))
       );
-      // TODO: replace this client-side fan-out with a single boss agent
-      // that delegates to N sub-agents (one per format), with the boss
-      // deciding the angle / topic each sub-agent writes about so the
-      // outputs are coordinated instead of independently drafted.
       const { collectionId } =
         await dashboardOrpc.content.createCollection.call({
           organizationId: requestOrganizationId,
@@ -1064,6 +1066,7 @@ export function CreateContentDialog({
     eventCounts,
     selectedBrandVoiceIds.length,
     t,
+    tCommon,
   ]);
 
   return (

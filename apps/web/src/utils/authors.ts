@@ -6,7 +6,9 @@ import { BLOG_AUTHORS } from "@/constants/blog-authors";
 export async function listNotraAuthors(): Promise<NotraAuthor[]> {
   return BLOG_AUTHORS.map((author) => ({
     ...author,
-    postCount: blog.filter((entry) => entry.author === author.slug).length,
+    postCount: blog.filter(
+      (entry) => entry.author === author.slug && !entry.hidden
+    ).length,
   }));
 }
 

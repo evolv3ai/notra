@@ -15,7 +15,7 @@ export type CodeResearchBoxPhase =
   | "expired"
   | "disabled";
 
-export type CodeResearchRedisState =
+type CodeResearchRedisState =
   | "empty"
   | "miss"
   | "lease"
@@ -23,11 +23,7 @@ export type CodeResearchRedisState =
   | "stored"
   | "expired";
 
-export type CodeResearchStageStatus =
-  | "pending"
-  | "running"
-  | "done"
-  | "skipped";
+type CodeResearchStageStatus = "pending" | "running" | "done" | "skipped";
 
 export type CodeResearchStageId =
   | "lookup"
@@ -87,7 +83,7 @@ export type CodeResearchChatOp =
   | { kind: "assistant-end" }
   | { kind: "divider"; id: string; label: string };
 
-export interface CodeResearchLogEntry {
+interface CodeResearchLogEntry {
   agent: CodeResearchAgent;
   label: string;
   detail?: string;

@@ -1,13 +1,11 @@
+import { isRecord } from "@notra/utils/unknown-record";
+
 import {
   EMPTY_GEO_CHECK_GROUNDING,
   GEO_CHECK_GROUNDING_MAX_QUERIES,
   GEO_CHECK_GROUNDING_MAX_SOURCES,
 } from "../constants/geo-checks";
 import type { GeoCheckGrounding, GeoCheckSource } from "../types/geo-checks";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function parseSource(value: unknown): GeoCheckSource | null {
   if (!isRecord(value)) {
@@ -59,9 +57,25 @@ export function parseGeoCheckGrounding(value: unknown): GeoCheckGrounding {
         .slice(0, GEO_CHECK_GROUNDING_MAX_SOURCES)
     : [];
 
-  if (queries.length === 0 && sources.length === 0) {
+  const rawCapture = value.capture;
+  const capture =
+    isRecord(rawCapture) &&
+    rawCapture.provider === "context.dev" &&
+    typeof rawCapture.parserVersion === "number" &&
+    Number.isSafeInteger(rawCapture.parserVersion) &&
+    rawCapture.parserVersion > 0 &&
+    typeof rawCapture.requestId === "string" &&
+    rawCapture.requestId.length > 0 &&
+    rawCapture.requestId.length <= 200
+      ? {
+          provider: "context.dev" as const,
+          parserVersion: rawCapture.parserVersion,
+          requestId: rawCapture.requestId,
+        }
+      : undefined;
+  if (queries.length === 0 && sources.length === 0 && !capture) {
     return EMPTY_GEO_CHECK_GROUNDING;
   }
 
-  return { queries, sources };
+  return { queries, sources, ...(capture ? { capture } : {}) };
 }

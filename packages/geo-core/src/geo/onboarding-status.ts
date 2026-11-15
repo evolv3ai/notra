@@ -10,7 +10,6 @@ import type {
 } from "../types/geo";
 import { trackedGeoLanguages } from "../utils/geo-language-rows";
 
-/** Settings of the project onboarding works on; the oldest one by default. */
 async function findOnboardingSettings(
   organizationId: string,
   projectId?: string
@@ -54,7 +53,6 @@ function toStage(settings: OnboardingSettings): GeoOnboardingStage {
     : "competitors";
 }
 
-/** Saved languages, prompt language first; null before onboarding saved any. */
 function toLanguages(
   settings: OnboardingSettings
 ): GeoOnboardingLanguages | null {

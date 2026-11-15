@@ -5,7 +5,7 @@ import type {
 } from "@notra/ui/components/ai-skins/claude-chat/claude-chat-search";
 import type { ClaudeChatSourcePill } from "@notra/ui/components/ai-skins/claude-chat/claude-chat-sources";
 
-export interface ClaudeChatStorySearch {
+interface ClaudeChatStorySearch {
   verb: string;
   groups: ClaudeChatSearchGroup[];
   steps?: ClaudeChatSearchStep[];

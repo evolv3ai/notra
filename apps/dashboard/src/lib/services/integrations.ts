@@ -11,9 +11,7 @@ import type {
   IntegrationsResponse,
 } from "@/types/services/integrations";
 
-const integrationFetchers: Partial<
-  Record<IntegrationType, IntegrationFetcher>
-> = {
+const integrationFetchers = {
   github: async (organizationId) => {
     const integrations =
       await getGitHubIntegrationsByOrganization(organizationId);
@@ -42,6 +40,7 @@ const integrationFetchers: Partial<
           repo: repo.repo,
           defaultBranch: repo.defaultBranch,
           enabled: repo.enabled,
+          hasWebhook: Boolean(repo.encryptedWebhookSecret),
           outputs: repo.outputs.map((output) => ({
             id: output.id,
             outputType: output.outputType,
@@ -107,25 +106,13 @@ const integrationFetchers: Partial<
       },
     ];
   },
-};
-
-export function registerIntegrationFetcher(
-  type: IntegrationType,
-  fetcher: IntegrationFetcher
-) {
-  integrationFetchers[type] = fetcher;
-}
+} satisfies Partial<Record<IntegrationType, IntegrationFetcher>>;
 
 export async function getIntegrationsByOrganization(
   organizationId: string
 ): Promise<IntegrationsResponse> {
-  const activeFetchers = Object.entries(integrationFetchers).filter(
-    (entry): entry is [IntegrationType, IntegrationFetcher] =>
-      entry[1] !== undefined
-  );
-
   const results = await Promise.all(
-    activeFetchers.map(([, fetcher]) => fetcher(organizationId))
+    Object.values(integrationFetchers).map((fetcher) => fetcher(organizationId))
   );
 
   const integrations = results.flat();
@@ -134,11 +121,4 @@ export async function getIntegrationsByOrganization(
     integrations,
     count: integrations.length,
   };
-}
-
-export async function getIntegrationCountByOrganization(
-  organizationId: string
-) {
-  const { count } = await getIntegrationsByOrganization(organizationId);
-  return count;
 }

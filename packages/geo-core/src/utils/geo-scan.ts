@@ -7,8 +7,6 @@ import {
   GEO_MAX_SEQUENCES,
   GEO_SEQUENCE_MAX_TURNS,
   GEO_SCAN_HOURS_PER_DAY,
-  GEO_SCAN_INTERVAL_FALLBACK_NOUN,
-  GEO_SCAN_INTERVAL_LABEL_PREFIX,
   GEO_SCAN_INTERVAL_OPTIONS,
   GEO_SCAN_STALE_MS,
 } from "../constants/geo";
@@ -19,7 +17,7 @@ import type {
   GeoScanSizeInput,
 } from "../types/geo";
 import { isGeoBoxCodingAgent } from "./geo-coding-agents";
-import { isGeoNativeSearchEngine } from "./geo-engines";
+import { isGeoConsumerConversationEngine } from "./geo-conversation-engine";
 
 function toTimestamp(value: Date | string | null | undefined): number | null {
   if (!value) {
@@ -43,28 +41,8 @@ export function isGeoScanRunning(
   return finishedAt === null || startedAt > finishedAt;
 }
 
-export function geoScanEmptyMessage(
-  isScanning: boolean,
-  idleMessage: string
-): string {
-  return isScanning ? "Scanning engines…" : idleMessage;
-}
-
-/**
- * Non-2xx answer from the dashboard's internal workflow route
- * (`InternalDashboardError` in `apps/api`), matched by name because the class
- * lives in the host and cannot be imported here.
- */
 const HANDOFF_REJECTED_ERROR_NAME = "InternalDashboardError";
 
-/**
- * Failures raised while the connection was still being established, so the
- * request bytes provably never reached the dashboard. `EAI_AGAIN` and
- * `ENOTFOUND` are DNS, `ECONNREFUSED` is a closed port, and
- * `UND_ERR_CONNECT_TIMEOUT` is undici giving up before the socket opened.
- * Anything later (a reset mid-flight, a headers/body timeout, an aborted wait)
- * is deliberately absent: the workflow may well have been accepted.
- */
 const HANDOFF_REJECTED_ERROR_CODES = new Set([
   "ECONNREFUSED",
   "EAI_AGAIN",
@@ -200,26 +178,6 @@ export function classifyGeoScanExecutionFailure(
   };
 }
 
-/** "day", "3 days", "36 hours" — the noun that follows "every". */
-export function geoScanIntervalNoun(intervalHours: number): string {
-  const option = GEO_SCAN_INTERVAL_OPTIONS.find(
-    (entry) => entry.value === intervalHours
-  );
-  if (option) {
-    return option.label
-      .replace(GEO_SCAN_INTERVAL_LABEL_PREFIX, "")
-      .toLowerCase();
-  }
-  if (!Number.isFinite(intervalHours) || intervalHours <= 0) {
-    return GEO_SCAN_INTERVAL_FALLBACK_NOUN;
-  }
-  if (intervalHours % GEO_SCAN_HOURS_PER_DAY === 0) {
-    const days = intervalHours / GEO_SCAN_HOURS_PER_DAY;
-    return days === 1 ? "day" : `${days} days`;
-  }
-  return `${intervalHours} hours`;
-}
-
 /** Whole days for a custom interval, rounded up so partial days stay visible. */
 export function geoScanIntervalDays(intervalHours: number): number {
   return Math.max(1, Math.ceil(intervalHours / GEO_SCAN_HOURS_PER_DAY));
@@ -253,9 +211,8 @@ export function summarizeGeoEngineAttempts(
 
 /**
  * Counts prompt checks and sequence turns using the scan planner's limits.
- * Only web-search engines are counted: grounded catalog models, SerpApi, and
- * Box agents. ZDR filtering and failed translations can reduce the actual
- * number of checks.
+ * Each engine runs once: with web search when it has a route, else without.
+ * ZDR filtering and failed translations can reduce the actual number of checks.
  */
 export function calcGeoScanSize(input: GeoScanSizeInput): number {
   if (!Number.isFinite(input.promptCount) || input.promptCount < 0) {
@@ -267,10 +224,7 @@ export function calcGeoScanSize(input: GeoScanSizeInput): number {
       (model) => model.id === engine && model.supportsGroundedChecks
     )
   ).length;
-  const nativeSearchCount = engines.filter((engine) =>
-    isGeoNativeSearchEngine(input.catalog, engine)
-  ).length;
-  const passes = nativeSearchCount + groundedCount;
+  const passes = engines.length;
   const sourceLanguage = input.promptLanguage ?? DEFAULT_LANGUAGE;
   const scanSourceLanguage = input.languages.includes(sourceLanguage);
   const defaultTranslated = Math.min(
@@ -291,7 +245,9 @@ export function calcGeoScanSize(input: GeoScanSizeInput): number {
     groundedCount +
     engines.filter(
       (engine) =>
-        engine === GEO_OPENCODE_ENGINE_ID || isGeoBoxCodingAgent(engine)
+        engine === GEO_OPENCODE_ENGINE_ID ||
+        isGeoBoxCodingAgent(engine) ||
+        isGeoConsumerConversationEngine(engine)
     ).length;
   const sequenceTurns = scanSourceLanguage
     ? input.sequences

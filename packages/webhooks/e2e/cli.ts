@@ -1,15 +1,3 @@
-// Local e2e driver: exercises the REAL @notra/webhooks programs against the
-// Docker Postgres, the same way apps/api routes and the generation producer do.
-//
-// Usage:
-//   bun run e2e/cli.ts create-endpoint <org> <url> <events,csv>
-//   bun run e2e/cli.ts list-endpoints <org>
-//   bun run e2e/cli.ts delete-endpoint <org> <endpointId>
-//   bun run e2e/cli.ts publish <org> <completed|failed|skipped> <jobId> [detail]
-//   bun run e2e/cli.ts publish-brand <org> <completed|failed> <jobId> <detail>
-//   bun run e2e/cli.ts publish-post <org> <postId>
-//   bun run e2e/cli.ts retry <org> <deliveryId>
-//   bun run e2e/cli.ts deliveries <org> [status] [offset]
 import "./env";
 import { readFileSync, writeFileSync } from "node:fs";
 
@@ -67,7 +55,6 @@ switch (command) {
       })
     );
     console.log(JSON.stringify(result, null, 2));
-    // Register the one-time secret with the receiver, keyed by /hook/<mode>.
     const mode = new URL(url).pathname.split("/").pop();
     if (mode) {
       let secrets: Record<string, string> = {};

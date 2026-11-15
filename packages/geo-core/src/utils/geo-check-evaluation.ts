@@ -29,6 +29,7 @@ export function buildJudgePrompt(
   const inputJson = JSON.stringify({
     companyName: context.companyName,
     aliases: context.aliases,
+    companyDescription: context.companyDescription ?? null,
     userPrompt: promptText,
     assistantAnswer: answer,
   });
@@ -37,11 +38,18 @@ export function buildJudgePrompt(
 INPUT_JSON:
 ${inputJson}
 
-Analyze only assistantAnswer using companyName and aliases, then report:
+Analyze only assistantAnswer using companyName, aliases and companyDescription, then report:
 - mentioned: true when the complete company name or an alias appears as a boundary-delimited term, case-insensitively. Treat whitespace, hyphens, underscores, slashes, @, and periods as equivalent separators. Sharing only some words does not count.
 - position: the 1-based rank of the company among the recommended brands if the answer contains an ordered or bulleted list of brands, otherwise null.
 - sentiment: the sentiment expressed toward the company ("positive", "neutral" or "negative"), or null if it is not mentioned.
-- competitors: up to ${MAX_JUDGE_COMPETITORS} other brand or product names mentioned in the answer, excluding the company and its aliases.
+- competitors: up to ${MAX_JUDGE_COMPETITORS} brands or products that assistantAnswer presents as options the user could choose instead of the company for the need in userPrompt, meaning they do the same job as the company (see companyDescription). Only list names that literally appear in assistantAnswer. Do not include:
+  - the company or its aliases;
+  - the AI assistants, chatbots, answer engines and model vendors themselves, including the one that wrote the answer (e.g. ChatGPT, Claude, Gemini, Perplexity, Copilot, Google AI Overviews, OpenAI, Anthropic) and their crawlers (e.g. GPTBot);
+  - general platforms, search engines, marketplaces, social networks, hosting, cloud and infrastructure (e.g. Google, Bing, GitHub, AWS, Cloudflare, WordPress, LinkedIn);
+  - integrations or data sources used alongside the company rather than instead of it (e.g. Google Analytics, Google Search Console, Slack);
+  - review sites, communities, publications and agencies (e.g. G2, Capterra, Reddit, Wikipedia, Forbes);
+  - standards, protocols, file formats and generic categories (e.g. Schema.org, llms.txt, "AI writing tools").
+  Use each brand's canonical name once. Name the vendor brand rather than a sub-product or module ("Semrush" for "Semrush AI Toolkit", "Ahrefs" for "Ahrefs Brand Radar") unless the product is marketed as its own brand ("GitHub Copilot"). Order by first appearance. Return an empty array when the answer offers no alternatives.
 - excerpt: at most ${GEO_EXCERPT_MAX_LENGTH} characters of the answer around the mention, or the first 200 characters of the answer if the company is not mentioned.
 
 The answer may be written in any language or script; count mentions of the company or its aliases regardless of language.`;
@@ -79,7 +87,7 @@ export const MENTION_EVALUATION_QUESTIONS = {
   },
 } as const;
 
-export type MentionEvaluationResult = EvaluationResult<
+type MentionEvaluationResult = EvaluationResult<
   typeof MENTION_EVALUATION_QUESTIONS
 >;
 
@@ -109,7 +117,6 @@ export function toMentionEvaluation(
   };
 }
 
-/** The evaluator only offers ranks 1–MAX_POSITION and "none". */
 function isEvaluablePosition(position: number | null): boolean {
   return position === null || position <= GEO_MENTION_EVALUATION_MAX_POSITION;
 }

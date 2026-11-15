@@ -1,5 +1,10 @@
 import { Schema } from "effect";
 
+export class GitHubWebhookRepairPreconditionError extends Schema.TaggedError<GitHubWebhookRepairPreconditionError>()(
+  "GitHubWebhookRepairPreconditionError",
+  { message: Schema.String }
+) {}
+
 export class GitHubAppRequiredForPublishError extends Schema.TaggedError<GitHubAppRequiredForPublishError>()(
   "GitHubAppRequiredForPublishError",
   { organizationId: Schema.String }

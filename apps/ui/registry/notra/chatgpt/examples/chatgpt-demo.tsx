@@ -32,7 +32,6 @@ import type {
 
 const BOLD_PATTERN = /(\*\*[^*]+\*\*)/g;
 
-/** Copy should not include the citation markers. */
 const CITE_STRIP = /\s?\{\{[a-z0-9,-]+\}\}/g;
 
 const CITE_PATTERN = /(\{\{[a-z0-9,-]+\}\})/g;
@@ -189,8 +188,6 @@ export default function ChatgptDemo() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasMountedRef = useRef(false);
 
-  // Follow new messages inside the fixed-height card. Scrolling the viewport
-  // directly (not scrollIntoView) keeps the host page from jumping.
   useEffect(() => {
     if (!hasMountedRef.current) {
       hasMountedRef.current = true;

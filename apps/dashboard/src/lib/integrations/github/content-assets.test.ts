@@ -1,30 +1,14 @@
-import { beforeAll, expect, mock, test } from "bun:test";
-
-mock.module("server-only", () => ({}));
+import { beforeAll, expect, test } from "bun:test";
 
 let prepareGitHubContentAssets: typeof import("./content-assets").prepareGitHubContentAssets;
-let resolveGitHubImagePathTemplate: typeof import("./content-assets").resolveGitHubImagePathTemplate;
 
 beforeAll(async () => {
-  ({ prepareGitHubContentAssets, resolveGitHubImagePathTemplate } =
-    await import("./content-assets"));
+  ({ prepareGitHubContentAssets } = await import("./content-assets"));
 });
 
 const KEY = "organization/org_1/content/abc123.png";
 const SECOND_KEY = "organization/org_1/content/def456.jpg";
 const VIDEO_KEY = "organization/org_1/content/clip123.mp4";
-
-test("defaults the image path to the markdown file name", () => {
-  expect(resolveGitHubImagePathTemplate("blog/hello-world.md", null)).toBe(
-    "blog/hello-world"
-  );
-  expect(
-    resolveGitHubImagePathTemplate(
-      "blog/hello-world.md",
-      "public/blog/:slug/image"
-    )
-  ).toBe("public/blog/:slug/image");
-});
 
 test("puts uploaded media in the pull request and leaves the rest as links", async () => {
   const png = new Uint8Array([1, 2, 3]);
@@ -94,58 +78,25 @@ test("puts uploaded media in the pull request and leaves the rest as links", asy
   );
 });
 
-test("keeps GitHub asset paths when markdown order changes", async () => {
-  const loadImage = async (key: string) => ({
-    contents: new Uint8Array([1]),
-    extension: key.endsWith(".jpg") ? ".jpg" : ".png",
-  });
-  const first = await prepareGitHubContentAssets({
-    appOrigin: null,
-    contentPath: "blog/hello-world.md",
-    imagePathTemplate: "public/blog/:slug/image",
-    loadImage,
-    markdown: `![A](https://cdn.example/${KEY})\n![B](https://cdn.example/${SECOND_KEY})`,
-    organizationId: "org_1",
-    publicUrl: "https://cdn.example",
-    slug: "hello-world",
-  });
-  const reordered = await prepareGitHubContentAssets({
-    appOrigin: null,
-    contentPath: "blog/hello-world.md",
-    imagePathTemplate: "public/blog/:slug/image",
-    loadImage,
-    markdown: `![B](https://cdn.example/${SECOND_KEY})\n![A](https://cdn.example/${KEY})`,
-    organizationId: "org_1",
-    publicUrl: "https://cdn.example",
-    slug: "hello-world",
-  });
-  expect(first.assets.map((asset) => asset.path).toSorted()).toEqual(
-    reordered.assets.map((asset) => asset.path).toSorted()
-  );
-  expect(reordered.markdown).toContain(
-    "![A](/blog/hello-world/image-abc123.png)"
-  );
-  expect(reordered.markdown).toContain(
-    "![B](/blog/hello-world/image-def456.jpg)"
-  );
-});
-
-test("does not treat data-src as the video source", async () => {
-  const videoUrl = `/api/uploads/content-images/${VIDEO_KEY}`;
+test("serves assets from a nested public folder at the site root", async () => {
   const prepared = await prepareGitHubContentAssets({
-    appOrigin: "https://app.usenotra.com",
-    contentPath: "blog/hello-world.md",
-    imagePathTemplate: "public/blog/:slug/image",
+    appOrigin: null,
+    contentPath: "docs/blog/hello-world.md",
+    imagePathTemplate: "docs/public/images/blog/:slug/image",
     loadImage: async () => ({
-      contents: new Uint8Array([5]),
-      extension: ".mp4",
+      contents: new Uint8Array([1]),
+      extension: ".png",
     }),
-    markdown: `<video data-src="${videoUrl}" src="https://example.com/poster.mp4"></video>`,
+    markdown: `![A](https://cdn.example/${KEY})`,
     organizationId: "org_1",
-    publicUrl: null,
+    publicDirectory: "docs/public",
+    publicUrl: "https://cdn.example",
     slug: "hello-world",
   });
-  expect(prepared.assets).toEqual([]);
-  expect(prepared.markdown).toContain(`data-src="${videoUrl}"`);
-  expect(prepared.markdown).toContain('src="https://example.com/poster.mp4"');
+  expect(prepared.assets.map((asset) => asset.path)).toEqual([
+    "docs/public/images/blog/hello-world/image-abc123.png",
+  ]);
+  expect(prepared.markdown).toBe(
+    "![A](/images/blog/hello-world/image-abc123.png)"
+  );
 });

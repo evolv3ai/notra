@@ -23,11 +23,6 @@ function isStreamed(response: Response): boolean {
   return STREAMED_CONTENT_TYPES.some((type) => contentType.includes(type));
 }
 
-/**
- * Public demo only: writes every authenticated request into the visitor's
- * request feed (and pushes it live to the dashboard) so API calls from curl,
- * the CLI, MCP or the in-app console show up next to what they changed.
- */
 export async function demoRequestLogMiddleware(c: Context<ApiEnv>, next: Next) {
   const startedAt = performance.now();
   const isMutation = MUTATION_METHODS.has(c.req.method);
@@ -41,11 +36,7 @@ export async function demoRequestLogMiddleware(c: Context<ApiEnv>, next: Next) {
     return;
   }
   const path = new URL(c.req.url).pathname;
-  // Reading a streamed body would wait for the whole stream and hold the
-  // response back, so streamed responses (SSE, NDJSON) are logged without one.
   const responseBody = isStreamed(c.res) ? null : await readBody(c.res);
-  // Bun serves this app directly, so finishing the write before responding
-  // is the only way to guarantee it; it adds a few milliseconds in the demo.
   await recordDemoRequest({
     organizationId,
     source: c.req.header(DEMO_CONSOLE_HEADER) ? "console" : "api",

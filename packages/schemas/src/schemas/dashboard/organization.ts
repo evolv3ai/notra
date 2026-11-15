@@ -24,7 +24,7 @@ export const organizationNameSchema = z
   .min(2, "Organization name must be at least 2 characters")
   .max(100, "Organization name must be at most 100 characters");
 
-export const organizationWebsiteSchema = z
+const organizationWebsiteSchema = z
   .string()
   .url("Please enter a valid URL (e.g., https://example.com)")
   .optional()

@@ -6,3 +6,9 @@ import type { z } from "zod";
 
 export type PublishSavedContentInput = z.infer<typeof contentInputSchema> &
   z.infer<typeof publishContentToGitHubSchema>;
+
+export interface PublishSavedContentOptions {
+  publisherUserId?: string;
+  /** Opens a pull request even when the repository output publishes directly. */
+  requirePullRequest?: boolean;
+}

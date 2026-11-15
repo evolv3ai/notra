@@ -1,4 +1,5 @@
 import { gateway } from "@notra/ai/gateway";
+import type { GeoCheckScope, GeoCheckWindow } from "@notra/db/types/geo-checks";
 import {
   queryGeoSentimentAnalysisSample,
   queryGeoSentimentAnalysisSnapshot,
@@ -71,6 +72,25 @@ async function readProjectSentimentAnalysis(
   return current;
 }
 
+async function readSentimentSnapshot(
+  checkScope: GeoCheckScope,
+  checkWindow: GeoCheckWindow
+) {
+  const currentBrand = await queryGeoSentimentBrand(checkScope);
+  const companyName = currentBrand?.companyName ?? "";
+  const value = await queryGeoSentimentAnalysisSnapshot(
+    checkScope,
+    checkWindow
+  );
+  return {
+    companyName,
+    snapshot: {
+      ...value,
+      fingerprint: sentimentAnalysisKey(value.fingerprint, null, companyName),
+    },
+  };
+}
+
 export const loadGeoSentimentAnalysis = Effect.fn("geo.sentimentAnalysis")(
   function* (
     input: GeoScopeInput,
@@ -98,6 +118,9 @@ export const loadGeoSentimentAnalysis = Effect.fn("geo.sentimentAnalysis")(
         !(
           process.env.AI_GATEWAY_API_KEY ||
           process.env.OPENROUTER_API_KEY ||
+          ((process.env.NEON_AI_GATEWAY_API_KEY?.trim() ||
+            process.env.NEON_AI_GATEWAY_TOKEN?.trim()) &&
+            process.env.NEON_AI_GATEWAY_BASE_URL?.trim()) ||
           process.env.VERCEL_OIDC_TOKEN ||
           process.env.VERCEL === "1" ||
           isDemoMode()
@@ -118,16 +141,9 @@ export const loadGeoSentimentAnalysis = Effect.fn("geo.sentimentAnalysis")(
     let companyName = brand.companyName;
     const key = sentimentAnalysisKey(input.organizationId, scope.projectId);
     const snapshot = async () => {
-      const currentBrand = await queryGeoSentimentBrand(checkScope);
-      companyName = currentBrand?.companyName ?? "";
-      const value = await queryGeoSentimentAnalysisSnapshot(
-        checkScope,
-        checkWindow
-      );
-      return {
-        ...value,
-        fingerprint: sentimentAnalysisKey(value.fingerprint, null, companyName),
-      };
+      const current = await readSentimentSnapshot(checkScope, checkWindow);
+      companyName = current.companyName;
+      return current.snapshot;
     };
     return yield* geoDb("sentiment analysis failed", async () => {
       const cached = await readProjectSentimentAnalysis(
@@ -212,22 +228,8 @@ export const loadStoredGeoSentimentAnalysis = Effect.fn(
       period,
       window,
       store,
-      async () => {
-        const currentBrand = await queryGeoSentimentBrand(checkScope);
-        const companyName = currentBrand?.companyName ?? "";
-        const value = await queryGeoSentimentAnalysisSnapshot(
-          checkScope,
-          checkWindow
-        );
-        return {
-          ...value,
-          fingerprint: sentimentAnalysisKey(
-            value.fingerprint,
-            null,
-            companyName
-          ),
-        };
-      }
+      async () =>
+        (await readSentimentSnapshot(checkScope, checkWindow)).snapshot
     )
   );
 });

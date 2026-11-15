@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ImageResponse } from "@vercel/og";
 
 import logoSvg from "@/../public/notra-mark.svg?raw";
 import { getNotraAuthorBySlug } from "@/utils/authors";
 import { OG_BLOG_TITLE_MAX_LENGTH } from "@/utils/constants";
+import { ImageResponse } from "@/utils/image-response";
 import {
   loadInterFont,
   loadImageAsDataUrl,

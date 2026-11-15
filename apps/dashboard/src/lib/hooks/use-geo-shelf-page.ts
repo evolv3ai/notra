@@ -96,7 +96,7 @@ export function useGeoShelfPage(organizationSlug: string): GeoShelfPageModel {
   const [shelfFilter, setShelfFilter] = useQueryState(
     "shelf",
     parseAsStringLiteral(GEO_SHELF_SHELF_FILTERS)
-      .withDefault("all")
+      .withDefault("relevant")
       .withOptions({ clearOnDefault: true })
   );
   const [ticketFilter, setTicketFilter] = useQueryState(
@@ -114,8 +114,6 @@ export function useGeoShelfPage(organizationSlug: string): GeoShelfPageModel {
   const [sort, setSort] = useState<GeoShelfSortState>(GEO_SHELF_DEFAULT_SORT);
   const [addOpen, setAddOpen] = useState(false);
   const [selected, setSelected] = useState<GeoShelfSource | null>(null);
-  // A URL-restored query can exceed what the list endpoint accepts; the
-  // toolbar and the request both use the same trimmed value.
   const normalizedSearch = search.slice(0, GEO_SHELF_SEARCH_MAX_LENGTH);
   const [debouncedSearch] = useDebouncedValue(normalizedSearch, {
     wait: GEO_SHELF_SEARCH_DEBOUNCE_MS,
@@ -124,7 +122,6 @@ export function useGeoShelfPage(organizationSlug: string): GeoShelfPageModel {
   const settings = settingsData?.settings ?? null;
   const hasSettings = settings !== null;
   const shelf = useGeoShelfSources(organizationId, {
-    // The list endpoint checks settings itself; start it alongside settings.
     enabled: organizationId.length > 0,
     currentMemberId: membersQuery.data?.currentMemberId ?? null,
     members: membersQuery.data?.members ?? [],
@@ -150,8 +147,6 @@ export function useGeoShelfPage(organizationSlug: string): GeoShelfPageModel {
     view,
   });
 
-  // The open dialog edits its snapshot too, so it stays current after the
-  // edit moves the row out of the filtered pages.
   const updateOpportunity: GeoShelfDbApi["updateOpportunity"] = (
     sourceId,
     changes

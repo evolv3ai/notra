@@ -4,13 +4,14 @@ import { GEO_LOGO_SIZE_PX } from "@notra/geo-core/constants/geo";
 import { projectLogoSources } from "@notra/geo-core/geo/logo";
 import { brandEngineIconKey } from "@notra/geo-core/utils/geo-engine-family";
 import { cn } from "@notra/ui/lib/utils";
-import { useTranslations } from "next-intl";
-import Image from "next/image";
 import { useState } from "react";
+import { useTranslations } from "use-intl";
 
+import Image from "@/components/framework/image";
 import { EngineIcon } from "@/components/geo/engine-icon";
 import { useCompanyLogo } from "@/lib/hooks/use-onboarding";
 import type { GeoProjectLogoProps } from "@/types/geo";
+import { avatarDataUri } from "@/utils/avatar";
 
 function ProjectLogoInner({
   name,
@@ -20,7 +21,11 @@ function ProjectLogoInner({
   fallbackClassName,
 }: GeoProjectLogoProps & { logo: string | null }) {
   const tCommon = useTranslations("common");
-  const sources = projectLogoSources(domain, name.toLowerCase(), logo);
+  const sources = projectLogoSources(
+    domain,
+    avatarDataUri(name.toLowerCase()),
+    logo
+  );
   const [sourceIndex, setSourceIndex] = useState(0);
   const activeIndex = Math.min(sourceIndex, sources.length - 1);
   const src = sources[activeIndex] ?? sources.at(-1) ?? "";
@@ -57,9 +62,10 @@ export function ProjectLogo({
   domain,
   className,
   fallbackClassName,
+  logo: knownLogo,
 }: GeoProjectLogoProps) {
   const engine = brandEngineIconKey(name);
-  const { data } = useCompanyLogo(engine ? null : domain);
+  const { data } = useCompanyLogo(engine || knownLogo ? null : domain);
   if (engine) {
     return (
       <EngineIcon
@@ -69,7 +75,7 @@ export function ProjectLogo({
     );
   }
 
-  const logo = data?.url ?? null;
+  const logo = knownLogo ?? data?.url ?? null;
   return (
     <ProjectLogoInner
       className={className}

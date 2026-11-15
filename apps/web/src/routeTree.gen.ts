@@ -18,10 +18,13 @@ import { Route as IpCheckerDotmdRouteImport } from './routes/ip-checker[.]md'
 import { Route as LlmsFullDottxtRouteImport } from './routes/llms-full[.]txt'
 import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
 import { Route as ManifestDotjsonRouteImport } from './routes/manifest[.]json'
+import { Route as OnboardDotmdRouteImport } from './routes/onboard[.]md'
+import { Route as QrCodeGeneratorDotmdRouteImport } from './routes/qr-code-generator[.]md'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as RssDotxmlRouteImport } from './routes/rss[.]xml'
 import { Route as SchemaMapDotxmlRouteImport } from './routes/schema-map[.]xml'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as UtmBuilderDotmdRouteImport } from './routes/utm-builder[.]md'
 import { Route as DotwellKnownAgentCardDotjsonRouteImport } from './routes/[.]well-known/agent-card[.]json'
 import { Route as DotwellKnownAgentDotjsonRouteImport } from './routes/[.]well-known/agent[.]json'
 import { Route as DotwellKnownApiCatalogRouteImport } from './routes/[.]well-known/api-catalog'
@@ -45,13 +48,16 @@ import { Route as SiteHtmlToPaperRouteImport } from './routes/_site/html-to-pape
 import { Route as SiteIpCheckerRouteImport } from './routes/_site/ip-checker'
 import { Route as SiteOssProgramRouteImport } from './routes/_site/oss-program'
 import { Route as SitePricingRouteImport } from './routes/_site/pricing'
+import { Route as SiteQrCodeGeneratorRouteImport } from './routes/_site/qr-code-generator'
 import { Route as SiteRepoStarVideoRouteImport } from './routes/_site/repo-star-video'
 import { Route as SiteTwitterThreadCreatorRouteImport } from './routes/_site/twitter-thread-creator'
+import { Route as SiteUtmBuilderRouteImport } from './routes/_site/utm-builder'
 import { Route as ApiIndexRouteImport } from './routes/api/index'
 import { Route as ApiContactRouteImport } from './routes/api/contact'
 import { Route as ApiIpCheckerRouteImport } from './routes/api/ip-checker'
 import { Route as ApiLlmsDottxtRouteImport } from './routes/api/llms[.]txt'
 import { Route as ApiOssProgramRouteImport } from './routes/api/oss-program'
+import { Route as ApiQrCodeRouteImport } from './routes/api/qr-code'
 import { Route as ApiStatusRouteImport } from './routes/api/status'
 import { Route as ApiV1RouteImport } from './routes/api/v1'
 import { Route as DevelopersLlmsDottxtRouteImport } from './routes/developers/llms[.]txt'
@@ -62,25 +68,40 @@ import { Route as V1IndexRouteImport } from './routes/v1/index'
 import { Route as V1StatusRouteImport } from './routes/v1/status'
 import { Route as DotwellKnownMcpIndexRouteImport } from './routes/[.]well-known/mcp/index'
 import { Route as DotwellKnownMcpServerCardDotjsonRouteImport } from './routes/[.]well-known/mcp/server-card[.]json'
+import { Route as SiteLegalDpaRouteImport } from './routes/_site/_legal/dpa'
 import { Route as SiteLegalLegalRouteImport } from './routes/_site/_legal/legal'
+import { Route as SiteLegalPartnerTermsRouteImport } from './routes/_site/_legal/partner-terms'
 import { Route as SiteLegalPrivacyRouteImport } from './routes/_site/_legal/privacy'
+import { Route as SiteLegalSubprocessorsRouteImport } from './routes/_site/_legal/subprocessors'
 import { Route as SiteLegalTermsRouteImport } from './routes/_site/_legal/terms'
+import { Route as SiteCompareIndexRouteImport } from './routes/_site/compare/index'
 import { Route as SiteContributorsIndexRouteImport } from './routes/_site/contributors/index'
 import { Route as SiteContributorsOpengraphImageRouteImport } from './routes/_site/contributors/opengraph-image'
 import { Route as SiteFeaturesIndexRouteImport } from './routes/_site/features/index'
 import { Route as SiteFeaturesAiCrawlerLogsRouteImport } from './routes/_site/features/ai-crawler-logs'
 import { Route as SiteFeaturesConversationsRouteImport } from './routes/_site/features/conversations'
 import { Route as SiteFeaturesPersonasRouteImport } from './routes/_site/features/personas'
+import { Route as SiteFeaturesSitesRouteImport } from './routes/_site/features/sites'
 import { Route as SiteIntegrationsIndexRouteImport } from './routes/_site/integrations/index'
 import { Route as SiteIntegrationsIdRouteImport } from './routes/_site/integrations/$id'
+import { Route as SiteIntegrationsGithubRouteImport } from './routes/_site/integrations/github'
+import { Route as SiteIntegrationsGranolaRouteImport } from './routes/_site/integrations/granola'
+import { Route as SiteIntegrationsLinearRouteImport } from './routes/_site/integrations/linear'
 import { Route as SiteIntegrationsSlackRouteImport } from './routes/_site/integrations/slack'
 import { Route as SiteMcpIndexRouteImport } from './routes/_site/mcp/index'
+import { Route as SiteNotraVsChar123slugChar125IndexRouteImport } from './routes/_site/notra-vs-{$slug}/index'
+import { Route as SiteNotraVsChar123slugChar125OpengraphImageRouteImport } from './routes/_site/notra-vs-{$slug}/opengraph-image'
+import { Route as SiteOfferingIndexRouteImport } from './routes/_site/offering/index'
+import { Route as SiteOfferingReportRouteImport } from './routes/_site/offering/report'
+import { Route as SiteStateOfAiSearchIndexRouteImport } from './routes/_site/state-of-ai-search/index'
 import { Route as AgentAuthAuthorizeRouteImport } from './routes/agent/auth/authorize'
 import { Route as AgentAuthClaimRouteImport } from './routes/agent/auth/claim'
 import { Route as AgentAuthRegisterRouteImport } from './routes/agent/auth/register'
 import { Route as AgentAuthRevokeRouteImport } from './routes/agent/auth/revoke'
 import { Route as AgentAuthTokenRouteImport } from './routes/agent/auth/token'
 import { Route as ApiC15tSplatRouteImport } from './routes/api/c15t/$'
+import { Route as ApiOfferingCheckIndexRouteImport } from './routes/api/offering-check/index'
+import { Route as ApiOfferingCheckPreflightRouteImport } from './routes/api/offering-check/preflight'
 import { Route as ApiStarVideoRenderRouteImport } from './routes/api/star-video/render'
 import { Route as ApiStarVideoRepoRouteImport } from './routes/api/star-video/repo'
 import { Route as SiteBlogBlogIndexRouteImport } from './routes/_site/_blog/blog/index'
@@ -88,6 +109,7 @@ import { Route as SiteChangelogChangelogIndexRouteImport } from './routes/_site/
 import { Route as SiteFeaturesMarketingAssetsRouteImport } from './routes/_site/features/marketing/assets'
 import { Route as SiteMcpUseCasesIndexRouteImport } from './routes/_site/mcp/use-cases/index'
 import { Route as SiteMcpUseCasesSlugRouteImport } from './routes/_site/mcp/use-cases/$slug'
+import { Route as SiteStateOfAiSearchCategoryIndexRouteImport } from './routes/_site/state-of-ai-search/$category/index'
 import { Route as ApiStarVideoGithubAuthorizeRouteImport } from './routes/api/star-video/github/authorize'
 import { Route as ApiStarVideoGithubCallbackRouteImport } from './routes/api/star-video/github/callback'
 import { Route as SiteBlogBlogSlugIndexRouteImport } from './routes/_site/_blog/blog/$slug/index'
@@ -96,6 +118,9 @@ import { Route as SiteChangelogChangelogNameIndexRouteImport } from './routes/_s
 import { Route as SiteChangelogChangelogNameSlugRouteImport } from './routes/_site/_changelog/changelog/$name/$slug'
 import { Route as SiteChangelogChangelogNotraIndexRouteImport } from './routes/_site/_changelog/changelog/notra/index'
 import { Route as SiteChangelogChangelogNotraSlugRouteImport } from './routes/_site/_changelog/changelog/notra/$slug'
+import { Route as SiteStateOfAiSearchCategoryEditionIndexRouteImport } from './routes/_site/state-of-ai-search/$category/$edition/index'
+import { Route as SiteStateOfAiSearchCategoryEditionDataDotcsvRouteImport } from './routes/_site/state-of-ai-search/$category/$edition/data[.]csv'
+import { Route as SiteStateOfAiSearchCategoryEditionOpengraphImageRouteImport } from './routes/_site/state-of-ai-search/$category/$edition/opengraph-image'
 import { Route as SiteBlogBlogAuthorSlugIndexRouteImport } from './routes/_site/_blog/blog/author/$slug/index'
 import { Route as SiteBlogBlogAuthorSlugOpengraphImageRouteImport } from './routes/_site/_blog/blog/author/$slug/opengraph-image'
 
@@ -142,6 +167,16 @@ const ManifestDotjsonRoute = ManifestDotjsonRouteImport.update({
   path: '/manifest.json',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OnboardDotmdRoute = OnboardDotmdRouteImport.update({
+  id: '/onboard.md',
+  path: '/onboard.md',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QrCodeGeneratorDotmdRoute = QrCodeGeneratorDotmdRouteImport.update({
+  id: '/qr-code-generator.md',
+  path: '/qr-code-generator.md',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
   id: '/robots.txt',
   path: '/robots.txt',
@@ -160,6 +195,11 @@ const SchemaMapDotxmlRoute = SchemaMapDotxmlRouteImport.update({
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UtmBuilderDotmdRoute = UtmBuilderDotmdRouteImport.update({
+  id: '/utm-builder.md',
+  path: '/utm-builder.md',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DotwellKnownAgentCardDotjsonRoute =
@@ -279,6 +319,11 @@ const SitePricingRoute = SitePricingRouteImport.update({
   path: '/pricing',
   getParentRoute: () => SiteRoute,
 } as any)
+const SiteQrCodeGeneratorRoute = SiteQrCodeGeneratorRouteImport.update({
+  id: '/qr-code-generator',
+  path: '/qr-code-generator',
+  getParentRoute: () => SiteRoute,
+} as any)
 const SiteRepoStarVideoRoute = SiteRepoStarVideoRouteImport.update({
   id: '/repo-star-video',
   path: '/repo-star-video',
@@ -290,6 +335,11 @@ const SiteTwitterThreadCreatorRoute =
     path: '/twitter-thread-creator',
     getParentRoute: () => SiteRoute,
   } as any)
+const SiteUtmBuilderRoute = SiteUtmBuilderRouteImport.update({
+  id: '/utm-builder',
+  path: '/utm-builder',
+  getParentRoute: () => SiteRoute,
+} as any)
 const ApiIndexRoute = ApiIndexRouteImport.update({
   id: '/api/',
   path: '/api/',
@@ -313,6 +363,11 @@ const ApiLlmsDottxtRoute = ApiLlmsDottxtRouteImport.update({
 const ApiOssProgramRoute = ApiOssProgramRouteImport.update({
   id: '/api/oss-program',
   path: '/api/oss-program',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiQrCodeRoute = ApiQrCodeRouteImport.update({
+  id: '/api/qr-code',
+  path: '/api/qr-code',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiStatusRoute = ApiStatusRouteImport.update({
@@ -366,9 +421,19 @@ const DotwellKnownMcpServerCardDotjsonRoute =
     path: '/.well-known/mcp/server-card.json',
     getParentRoute: () => rootRouteImport,
   } as any)
+const SiteLegalDpaRoute = SiteLegalDpaRouteImport.update({
+  id: '/dpa',
+  path: '/dpa',
+  getParentRoute: () => SiteLegalRoute,
+} as any)
 const SiteLegalLegalRoute = SiteLegalLegalRouteImport.update({
   id: '/legal',
   path: '/legal',
+  getParentRoute: () => SiteLegalRoute,
+} as any)
+const SiteLegalPartnerTermsRoute = SiteLegalPartnerTermsRouteImport.update({
+  id: '/partner-terms',
+  path: '/partner-terms',
   getParentRoute: () => SiteLegalRoute,
 } as any)
 const SiteLegalPrivacyRoute = SiteLegalPrivacyRouteImport.update({
@@ -376,10 +441,20 @@ const SiteLegalPrivacyRoute = SiteLegalPrivacyRouteImport.update({
   path: '/privacy',
   getParentRoute: () => SiteLegalRoute,
 } as any)
+const SiteLegalSubprocessorsRoute = SiteLegalSubprocessorsRouteImport.update({
+  id: '/subprocessors',
+  path: '/subprocessors',
+  getParentRoute: () => SiteLegalRoute,
+} as any)
 const SiteLegalTermsRoute = SiteLegalTermsRouteImport.update({
   id: '/terms',
   path: '/terms',
   getParentRoute: () => SiteLegalRoute,
+} as any)
+const SiteCompareIndexRoute = SiteCompareIndexRouteImport.update({
+  id: '/compare/',
+  path: '/compare/',
+  getParentRoute: () => SiteRoute,
 } as any)
 const SiteContributorsIndexRoute = SiteContributorsIndexRouteImport.update({
   id: '/contributors/',
@@ -414,6 +489,11 @@ const SiteFeaturesPersonasRoute = SiteFeaturesPersonasRouteImport.update({
   path: '/features/personas',
   getParentRoute: () => SiteRoute,
 } as any)
+const SiteFeaturesSitesRoute = SiteFeaturesSitesRouteImport.update({
+  id: '/features/sites',
+  path: '/features/sites',
+  getParentRoute: () => SiteRoute,
+} as any)
 const SiteIntegrationsIndexRoute = SiteIntegrationsIndexRouteImport.update({
   id: '/integrations/',
   path: '/integrations/',
@@ -422,6 +502,21 @@ const SiteIntegrationsIndexRoute = SiteIntegrationsIndexRouteImport.update({
 const SiteIntegrationsIdRoute = SiteIntegrationsIdRouteImport.update({
   id: '/integrations/$id',
   path: '/integrations/$id',
+  getParentRoute: () => SiteRoute,
+} as any)
+const SiteIntegrationsGithubRoute = SiteIntegrationsGithubRouteImport.update({
+  id: '/integrations/github',
+  path: '/integrations/github',
+  getParentRoute: () => SiteRoute,
+} as any)
+const SiteIntegrationsGranolaRoute = SiteIntegrationsGranolaRouteImport.update({
+  id: '/integrations/granola',
+  path: '/integrations/granola',
+  getParentRoute: () => SiteRoute,
+} as any)
+const SiteIntegrationsLinearRoute = SiteIntegrationsLinearRouteImport.update({
+  id: '/integrations/linear',
+  path: '/integrations/linear',
   getParentRoute: () => SiteRoute,
 } as any)
 const SiteIntegrationsSlackRoute = SiteIntegrationsSlackRouteImport.update({
@@ -434,6 +529,34 @@ const SiteMcpIndexRoute = SiteMcpIndexRouteImport.update({
   path: '/mcp/',
   getParentRoute: () => SiteRoute,
 } as any)
+const SiteNotraVsChar123slugChar125IndexRoute =
+  SiteNotraVsChar123slugChar125IndexRouteImport.update({
+    id: '/notra-vs-{$slug}/',
+    path: '/notra-vs-{$slug}/',
+    getParentRoute: () => SiteRoute,
+  } as any)
+const SiteNotraVsChar123slugChar125OpengraphImageRoute =
+  SiteNotraVsChar123slugChar125OpengraphImageRouteImport.update({
+    id: '/notra-vs-{$slug}/opengraph-image',
+    path: '/notra-vs-{$slug}/opengraph-image',
+    getParentRoute: () => SiteRoute,
+  } as any)
+const SiteOfferingIndexRoute = SiteOfferingIndexRouteImport.update({
+  id: '/offering/',
+  path: '/offering/',
+  getParentRoute: () => SiteRoute,
+} as any)
+const SiteOfferingReportRoute = SiteOfferingReportRouteImport.update({
+  id: '/offering/report',
+  path: '/offering/report',
+  getParentRoute: () => SiteRoute,
+} as any)
+const SiteStateOfAiSearchIndexRoute =
+  SiteStateOfAiSearchIndexRouteImport.update({
+    id: '/state-of-ai-search/',
+    path: '/state-of-ai-search/',
+    getParentRoute: () => SiteRoute,
+  } as any)
 const AgentAuthAuthorizeRoute = AgentAuthAuthorizeRouteImport.update({
   id: '/agent/auth/authorize',
   path: '/agent/auth/authorize',
@@ -464,6 +587,17 @@ const ApiC15tSplatRoute = ApiC15tSplatRouteImport.update({
   path: '/api/c15t/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiOfferingCheckIndexRoute = ApiOfferingCheckIndexRouteImport.update({
+  id: '/api/offering-check/',
+  path: '/api/offering-check/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiOfferingCheckPreflightRoute =
+  ApiOfferingCheckPreflightRouteImport.update({
+    id: '/api/offering-check/preflight',
+    path: '/api/offering-check/preflight',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiStarVideoRenderRoute = ApiStarVideoRenderRouteImport.update({
   id: '/api/star-video/render',
   path: '/api/star-video/render',
@@ -501,6 +635,12 @@ const SiteMcpUseCasesSlugRoute = SiteMcpUseCasesSlugRouteImport.update({
   path: '/mcp/use-cases/$slug',
   getParentRoute: () => SiteRoute,
 } as any)
+const SiteStateOfAiSearchCategoryIndexRoute =
+  SiteStateOfAiSearchCategoryIndexRouteImport.update({
+    id: '/state-of-ai-search/$category/',
+    path: '/state-of-ai-search/$category/',
+    getParentRoute: () => SiteRoute,
+  } as any)
 const ApiStarVideoGithubAuthorizeRoute =
   ApiStarVideoGithubAuthorizeRouteImport.update({
     id: '/api/star-video/github/authorize',
@@ -548,6 +688,24 @@ const SiteChangelogChangelogNotraSlugRoute =
     path: '/changelog/notra/$slug',
     getParentRoute: () => SiteChangelogRoute,
   } as any)
+const SiteStateOfAiSearchCategoryEditionIndexRoute =
+  SiteStateOfAiSearchCategoryEditionIndexRouteImport.update({
+    id: '/state-of-ai-search/$category/$edition/',
+    path: '/state-of-ai-search/$category/$edition/',
+    getParentRoute: () => SiteRoute,
+  } as any)
+const SiteStateOfAiSearchCategoryEditionDataDotcsvRoute =
+  SiteStateOfAiSearchCategoryEditionDataDotcsvRouteImport.update({
+    id: '/state-of-ai-search/$category/$edition/data.csv',
+    path: '/state-of-ai-search/$category/$edition/data.csv',
+    getParentRoute: () => SiteRoute,
+  } as any)
+const SiteStateOfAiSearchCategoryEditionOpengraphImageRoute =
+  SiteStateOfAiSearchCategoryEditionOpengraphImageRouteImport.update({
+    id: '/state-of-ai-search/$category/$edition/opengraph-image',
+    path: '/state-of-ai-search/$category/$edition/opengraph-image',
+    getParentRoute: () => SiteRoute,
+  } as any)
 const SiteBlogBlogAuthorSlugIndexRoute =
   SiteBlogBlogAuthorSlugIndexRouteImport.update({
     id: '/blog/author/$slug/',
@@ -570,10 +728,13 @@ export interface FileRoutesByFullPath {
   '/llms-full.txt': typeof LlmsFullDottxtRoute
   '/llms.txt': typeof LlmsDottxtRoute
   '/manifest.json': typeof ManifestDotjsonRoute
+  '/onboard.md': typeof OnboardDotmdRoute
+  '/qr-code-generator.md': typeof QrCodeGeneratorDotmdRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/rss.xml': typeof RssDotxmlRoute
   '/schema-map.xml': typeof SchemaMapDotxmlRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/utm-builder.md': typeof UtmBuilderDotmdRoute
   '/.well-known/agent-card.json': typeof DotwellKnownAgentCardDotjsonRoute
   '/.well-known/agent.json': typeof DotwellKnownAgentDotjsonRoute
   '/.well-known/api-catalog': typeof DotwellKnownApiCatalogRoute
@@ -593,12 +754,15 @@ export interface FileRoutesByFullPath {
   '/ip-checker': typeof SiteIpCheckerRoute
   '/oss-program': typeof SiteOssProgramRoute
   '/pricing': typeof SitePricingRoute
+  '/qr-code-generator': typeof SiteQrCodeGeneratorRoute
   '/repo-star-video': typeof SiteRepoStarVideoRoute
   '/twitter-thread-creator': typeof SiteTwitterThreadCreatorRoute
+  '/utm-builder': typeof SiteUtmBuilderRoute
   '/api/contact': typeof ApiContactRoute
   '/api/ip-checker': typeof ApiIpCheckerRoute
   '/api/llms.txt': typeof ApiLlmsDottxtRoute
   '/api/oss-program': typeof ApiOssProgramRoute
+  '/api/qr-code': typeof ApiQrCodeRoute
   '/api/status': typeof ApiStatusRoute
   '/api/v1': typeof ApiV1Route
   '/developers/llms.txt': typeof DevelopersLlmsDottxtRoute
@@ -609,28 +773,43 @@ export interface FileRoutesByFullPath {
   '/api/': typeof ApiIndexRoute
   '/v1/': typeof V1IndexRoute
   '/.well-known/mcp/server-card.json': typeof DotwellKnownMcpServerCardDotjsonRoute
+  '/dpa': typeof SiteLegalDpaRoute
   '/legal': typeof SiteLegalLegalRoute
+  '/partner-terms': typeof SiteLegalPartnerTermsRoute
   '/privacy': typeof SiteLegalPrivacyRoute
+  '/subprocessors': typeof SiteLegalSubprocessorsRoute
   '/terms': typeof SiteLegalTermsRoute
   '/contributors/opengraph-image': typeof SiteContributorsOpengraphImageRoute
   '/features/ai-crawler-logs': typeof SiteFeaturesAiCrawlerLogsRoute
   '/features/conversations': typeof SiteFeaturesConversationsRoute
   '/features/personas': typeof SiteFeaturesPersonasRoute
+  '/features/sites': typeof SiteFeaturesSitesRoute
   '/integrations/$id': typeof SiteIntegrationsIdRoute
+  '/integrations/github': typeof SiteIntegrationsGithubRoute
+  '/integrations/granola': typeof SiteIntegrationsGranolaRoute
+  '/integrations/linear': typeof SiteIntegrationsLinearRoute
   '/integrations/slack': typeof SiteIntegrationsSlackRoute
+  '/notra-vs-{$slug}/opengraph-image': typeof SiteNotraVsChar123slugChar125OpengraphImageRoute
+  '/offering/report': typeof SiteOfferingReportRoute
   '/agent/auth/authorize': typeof AgentAuthAuthorizeRoute
   '/agent/auth/claim': typeof AgentAuthClaimRoute
   '/agent/auth/register': typeof AgentAuthRegisterRoute
   '/agent/auth/revoke': typeof AgentAuthRevokeRoute
   '/agent/auth/token': typeof AgentAuthTokenRoute
   '/api/c15t/$': typeof ApiC15tSplatRoute
+  '/api/offering-check/preflight': typeof ApiOfferingCheckPreflightRoute
   '/api/star-video/render': typeof ApiStarVideoRenderRoute
   '/api/star-video/repo': typeof ApiStarVideoRepoRoute
   '/.well-known/mcp/': typeof DotwellKnownMcpIndexRoute
+  '/compare/': typeof SiteCompareIndexRoute
   '/contributors/': typeof SiteContributorsIndexRoute
   '/features/': typeof SiteFeaturesIndexRoute
   '/integrations/': typeof SiteIntegrationsIndexRoute
   '/mcp/': typeof SiteMcpIndexRoute
+  '/notra-vs-{$slug}/': typeof SiteNotraVsChar123slugChar125IndexRoute
+  '/offering/': typeof SiteOfferingIndexRoute
+  '/state-of-ai-search/': typeof SiteStateOfAiSearchIndexRoute
+  '/api/offering-check/': typeof ApiOfferingCheckIndexRoute
   '/features/marketing/assets': typeof SiteFeaturesMarketingAssetsRoute
   '/mcp/use-cases/$slug': typeof SiteMcpUseCasesSlugRoute
   '/api/star-video/github/authorize': typeof ApiStarVideoGithubAuthorizeRoute
@@ -638,12 +817,16 @@ export interface FileRoutesByFullPath {
   '/blog/': typeof SiteBlogBlogIndexRoute
   '/changelog/': typeof SiteChangelogChangelogIndexRoute
   '/mcp/use-cases/': typeof SiteMcpUseCasesIndexRoute
+  '/state-of-ai-search/$category/': typeof SiteStateOfAiSearchCategoryIndexRoute
   '/blog/$slug/opengraph-image': typeof SiteBlogBlogSlugOpengraphImageRoute
   '/changelog/$name/$slug': typeof SiteChangelogChangelogNameSlugRoute
   '/changelog/notra/$slug': typeof SiteChangelogChangelogNotraSlugRoute
+  '/state-of-ai-search/$category/$edition/data.csv': typeof SiteStateOfAiSearchCategoryEditionDataDotcsvRoute
+  '/state-of-ai-search/$category/$edition/opengraph-image': typeof SiteStateOfAiSearchCategoryEditionOpengraphImageRoute
   '/blog/$slug/': typeof SiteBlogBlogSlugIndexRoute
   '/changelog/$name/': typeof SiteChangelogChangelogNameIndexRoute
   '/changelog/notra/': typeof SiteChangelogChangelogNotraIndexRoute
+  '/state-of-ai-search/$category/$edition/': typeof SiteStateOfAiSearchCategoryEditionIndexRoute
   '/blog/author/$slug/opengraph-image': typeof SiteBlogBlogAuthorSlugOpengraphImageRoute
   '/blog/author/$slug/': typeof SiteBlogBlogAuthorSlugIndexRoute
 }
@@ -656,10 +839,13 @@ export interface FileRoutesByTo {
   '/llms-full.txt': typeof LlmsFullDottxtRoute
   '/llms.txt': typeof LlmsDottxtRoute
   '/manifest.json': typeof ManifestDotjsonRoute
+  '/onboard.md': typeof OnboardDotmdRoute
+  '/qr-code-generator.md': typeof QrCodeGeneratorDotmdRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/rss.xml': typeof RssDotxmlRoute
   '/schema-map.xml': typeof SchemaMapDotxmlRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/utm-builder.md': typeof UtmBuilderDotmdRoute
   '/.well-known/agent-card.json': typeof DotwellKnownAgentCardDotjsonRoute
   '/.well-known/agent.json': typeof DotwellKnownAgentDotjsonRoute
   '/.well-known/api-catalog': typeof DotwellKnownApiCatalogRoute
@@ -679,12 +865,15 @@ export interface FileRoutesByTo {
   '/ip-checker': typeof SiteIpCheckerRoute
   '/oss-program': typeof SiteOssProgramRoute
   '/pricing': typeof SitePricingRoute
+  '/qr-code-generator': typeof SiteQrCodeGeneratorRoute
   '/repo-star-video': typeof SiteRepoStarVideoRoute
   '/twitter-thread-creator': typeof SiteTwitterThreadCreatorRoute
+  '/utm-builder': typeof SiteUtmBuilderRoute
   '/api/contact': typeof ApiContactRoute
   '/api/ip-checker': typeof ApiIpCheckerRoute
   '/api/llms.txt': typeof ApiLlmsDottxtRoute
   '/api/oss-program': typeof ApiOssProgramRoute
+  '/api/qr-code': typeof ApiQrCodeRoute
   '/api/status': typeof ApiStatusRoute
   '/api/v1': typeof ApiV1Route
   '/developers/llms.txt': typeof DevelopersLlmsDottxtRoute
@@ -695,28 +884,43 @@ export interface FileRoutesByTo {
   '/api': typeof ApiIndexRoute
   '/v1': typeof V1IndexRoute
   '/.well-known/mcp/server-card.json': typeof DotwellKnownMcpServerCardDotjsonRoute
+  '/dpa': typeof SiteLegalDpaRoute
   '/legal': typeof SiteLegalLegalRoute
+  '/partner-terms': typeof SiteLegalPartnerTermsRoute
   '/privacy': typeof SiteLegalPrivacyRoute
+  '/subprocessors': typeof SiteLegalSubprocessorsRoute
   '/terms': typeof SiteLegalTermsRoute
   '/contributors/opengraph-image': typeof SiteContributorsOpengraphImageRoute
   '/features/ai-crawler-logs': typeof SiteFeaturesAiCrawlerLogsRoute
   '/features/conversations': typeof SiteFeaturesConversationsRoute
   '/features/personas': typeof SiteFeaturesPersonasRoute
+  '/features/sites': typeof SiteFeaturesSitesRoute
   '/integrations/$id': typeof SiteIntegrationsIdRoute
+  '/integrations/github': typeof SiteIntegrationsGithubRoute
+  '/integrations/granola': typeof SiteIntegrationsGranolaRoute
+  '/integrations/linear': typeof SiteIntegrationsLinearRoute
   '/integrations/slack': typeof SiteIntegrationsSlackRoute
+  '/notra-vs-{$slug}/opengraph-image': typeof SiteNotraVsChar123slugChar125OpengraphImageRoute
+  '/offering/report': typeof SiteOfferingReportRoute
   '/agent/auth/authorize': typeof AgentAuthAuthorizeRoute
   '/agent/auth/claim': typeof AgentAuthClaimRoute
   '/agent/auth/register': typeof AgentAuthRegisterRoute
   '/agent/auth/revoke': typeof AgentAuthRevokeRoute
   '/agent/auth/token': typeof AgentAuthTokenRoute
   '/api/c15t/$': typeof ApiC15tSplatRoute
+  '/api/offering-check/preflight': typeof ApiOfferingCheckPreflightRoute
   '/api/star-video/render': typeof ApiStarVideoRenderRoute
   '/api/star-video/repo': typeof ApiStarVideoRepoRoute
   '/.well-known/mcp': typeof DotwellKnownMcpIndexRoute
+  '/compare': typeof SiteCompareIndexRoute
   '/contributors': typeof SiteContributorsIndexRoute
   '/features': typeof SiteFeaturesIndexRoute
   '/integrations': typeof SiteIntegrationsIndexRoute
   '/mcp': typeof SiteMcpIndexRoute
+  '/notra-vs-{$slug}': typeof SiteNotraVsChar123slugChar125IndexRoute
+  '/offering': typeof SiteOfferingIndexRoute
+  '/state-of-ai-search': typeof SiteStateOfAiSearchIndexRoute
+  '/api/offering-check': typeof ApiOfferingCheckIndexRoute
   '/features/marketing/assets': typeof SiteFeaturesMarketingAssetsRoute
   '/mcp/use-cases/$slug': typeof SiteMcpUseCasesSlugRoute
   '/api/star-video/github/authorize': typeof ApiStarVideoGithubAuthorizeRoute
@@ -724,12 +928,16 @@ export interface FileRoutesByTo {
   '/blog': typeof SiteBlogBlogIndexRoute
   '/changelog': typeof SiteChangelogChangelogIndexRoute
   '/mcp/use-cases': typeof SiteMcpUseCasesIndexRoute
+  '/state-of-ai-search/$category': typeof SiteStateOfAiSearchCategoryIndexRoute
   '/blog/$slug/opengraph-image': typeof SiteBlogBlogSlugOpengraphImageRoute
   '/changelog/$name/$slug': typeof SiteChangelogChangelogNameSlugRoute
   '/changelog/notra/$slug': typeof SiteChangelogChangelogNotraSlugRoute
+  '/state-of-ai-search/$category/$edition/data.csv': typeof SiteStateOfAiSearchCategoryEditionDataDotcsvRoute
+  '/state-of-ai-search/$category/$edition/opengraph-image': typeof SiteStateOfAiSearchCategoryEditionOpengraphImageRoute
   '/blog/$slug': typeof SiteBlogBlogSlugIndexRoute
   '/changelog/$name': typeof SiteChangelogChangelogNameIndexRoute
   '/changelog/notra': typeof SiteChangelogChangelogNotraIndexRoute
+  '/state-of-ai-search/$category/$edition': typeof SiteStateOfAiSearchCategoryEditionIndexRoute
   '/blog/author/$slug/opengraph-image': typeof SiteBlogBlogAuthorSlugOpengraphImageRoute
   '/blog/author/$slug': typeof SiteBlogBlogAuthorSlugIndexRoute
 }
@@ -744,10 +952,13 @@ export interface FileRoutesById {
   '/llms-full.txt': typeof LlmsFullDottxtRoute
   '/llms.txt': typeof LlmsDottxtRoute
   '/manifest.json': typeof ManifestDotjsonRoute
+  '/onboard.md': typeof OnboardDotmdRoute
+  '/qr-code-generator.md': typeof QrCodeGeneratorDotmdRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/rss.xml': typeof RssDotxmlRoute
   '/schema-map.xml': typeof SchemaMapDotxmlRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/utm-builder.md': typeof UtmBuilderDotmdRoute
   '/.well-known/agent-card.json': typeof DotwellKnownAgentCardDotjsonRoute
   '/.well-known/agent.json': typeof DotwellKnownAgentDotjsonRoute
   '/.well-known/api-catalog': typeof DotwellKnownApiCatalogRoute
@@ -770,12 +981,15 @@ export interface FileRoutesById {
   '/_site/ip-checker': typeof SiteIpCheckerRoute
   '/_site/oss-program': typeof SiteOssProgramRoute
   '/_site/pricing': typeof SitePricingRoute
+  '/_site/qr-code-generator': typeof SiteQrCodeGeneratorRoute
   '/_site/repo-star-video': typeof SiteRepoStarVideoRoute
   '/_site/twitter-thread-creator': typeof SiteTwitterThreadCreatorRoute
+  '/_site/utm-builder': typeof SiteUtmBuilderRoute
   '/api/contact': typeof ApiContactRoute
   '/api/ip-checker': typeof ApiIpCheckerRoute
   '/api/llms.txt': typeof ApiLlmsDottxtRoute
   '/api/oss-program': typeof ApiOssProgramRoute
+  '/api/qr-code': typeof ApiQrCodeRoute
   '/api/status': typeof ApiStatusRoute
   '/api/v1': typeof ApiV1Route
   '/developers/llms.txt': typeof DevelopersLlmsDottxtRoute
@@ -787,28 +1001,43 @@ export interface FileRoutesById {
   '/api/': typeof ApiIndexRoute
   '/v1/': typeof V1IndexRoute
   '/.well-known/mcp/server-card.json': typeof DotwellKnownMcpServerCardDotjsonRoute
+  '/_site/_legal/dpa': typeof SiteLegalDpaRoute
   '/_site/_legal/legal': typeof SiteLegalLegalRoute
+  '/_site/_legal/partner-terms': typeof SiteLegalPartnerTermsRoute
   '/_site/_legal/privacy': typeof SiteLegalPrivacyRoute
+  '/_site/_legal/subprocessors': typeof SiteLegalSubprocessorsRoute
   '/_site/_legal/terms': typeof SiteLegalTermsRoute
   '/_site/contributors/opengraph-image': typeof SiteContributorsOpengraphImageRoute
   '/_site/features/ai-crawler-logs': typeof SiteFeaturesAiCrawlerLogsRoute
   '/_site/features/conversations': typeof SiteFeaturesConversationsRoute
   '/_site/features/personas': typeof SiteFeaturesPersonasRoute
+  '/_site/features/sites': typeof SiteFeaturesSitesRoute
   '/_site/integrations/$id': typeof SiteIntegrationsIdRoute
+  '/_site/integrations/github': typeof SiteIntegrationsGithubRoute
+  '/_site/integrations/granola': typeof SiteIntegrationsGranolaRoute
+  '/_site/integrations/linear': typeof SiteIntegrationsLinearRoute
   '/_site/integrations/slack': typeof SiteIntegrationsSlackRoute
+  '/_site/notra-vs-{$slug}/opengraph-image': typeof SiteNotraVsChar123slugChar125OpengraphImageRoute
+  '/_site/offering/report': typeof SiteOfferingReportRoute
   '/agent/auth/authorize': typeof AgentAuthAuthorizeRoute
   '/agent/auth/claim': typeof AgentAuthClaimRoute
   '/agent/auth/register': typeof AgentAuthRegisterRoute
   '/agent/auth/revoke': typeof AgentAuthRevokeRoute
   '/agent/auth/token': typeof AgentAuthTokenRoute
   '/api/c15t/$': typeof ApiC15tSplatRoute
+  '/api/offering-check/preflight': typeof ApiOfferingCheckPreflightRoute
   '/api/star-video/render': typeof ApiStarVideoRenderRoute
   '/api/star-video/repo': typeof ApiStarVideoRepoRoute
   '/.well-known/mcp/': typeof DotwellKnownMcpIndexRoute
+  '/_site/compare/': typeof SiteCompareIndexRoute
   '/_site/contributors/': typeof SiteContributorsIndexRoute
   '/_site/features/': typeof SiteFeaturesIndexRoute
   '/_site/integrations/': typeof SiteIntegrationsIndexRoute
   '/_site/mcp/': typeof SiteMcpIndexRoute
+  '/_site/notra-vs-{$slug}/': typeof SiteNotraVsChar123slugChar125IndexRoute
+  '/_site/offering/': typeof SiteOfferingIndexRoute
+  '/_site/state-of-ai-search/': typeof SiteStateOfAiSearchIndexRoute
+  '/api/offering-check/': typeof ApiOfferingCheckIndexRoute
   '/_site/features/marketing/assets': typeof SiteFeaturesMarketingAssetsRoute
   '/_site/mcp/use-cases/$slug': typeof SiteMcpUseCasesSlugRoute
   '/api/star-video/github/authorize': typeof ApiStarVideoGithubAuthorizeRoute
@@ -816,12 +1045,16 @@ export interface FileRoutesById {
   '/_site/_blog/blog/': typeof SiteBlogBlogIndexRoute
   '/_site/_changelog/changelog/': typeof SiteChangelogChangelogIndexRoute
   '/_site/mcp/use-cases/': typeof SiteMcpUseCasesIndexRoute
+  '/_site/state-of-ai-search/$category/': typeof SiteStateOfAiSearchCategoryIndexRoute
   '/_site/_blog/blog/$slug/opengraph-image': typeof SiteBlogBlogSlugOpengraphImageRoute
   '/_site/_changelog/changelog/$name/$slug': typeof SiteChangelogChangelogNameSlugRoute
   '/_site/_changelog/changelog/notra/$slug': typeof SiteChangelogChangelogNotraSlugRoute
+  '/_site/state-of-ai-search/$category/$edition/data.csv': typeof SiteStateOfAiSearchCategoryEditionDataDotcsvRoute
+  '/_site/state-of-ai-search/$category/$edition/opengraph-image': typeof SiteStateOfAiSearchCategoryEditionOpengraphImageRoute
   '/_site/_blog/blog/$slug/': typeof SiteBlogBlogSlugIndexRoute
   '/_site/_changelog/changelog/$name/': typeof SiteChangelogChangelogNameIndexRoute
   '/_site/_changelog/changelog/notra/': typeof SiteChangelogChangelogNotraIndexRoute
+  '/_site/state-of-ai-search/$category/$edition/': typeof SiteStateOfAiSearchCategoryEditionIndexRoute
   '/_site/_blog/blog/author/$slug/opengraph-image': typeof SiteBlogBlogAuthorSlugOpengraphImageRoute
   '/_site/_blog/blog/author/$slug/': typeof SiteBlogBlogAuthorSlugIndexRoute
 }
@@ -836,10 +1069,13 @@ export interface FileRouteTypes {
     | '/llms-full.txt'
     | '/llms.txt'
     | '/manifest.json'
+    | '/onboard.md'
+    | '/qr-code-generator.md'
     | '/robots.txt'
     | '/rss.xml'
     | '/schema-map.xml'
     | '/sitemap.xml'
+    | '/utm-builder.md'
     | '/.well-known/agent-card.json'
     | '/.well-known/agent.json'
     | '/.well-known/api-catalog'
@@ -859,12 +1095,15 @@ export interface FileRouteTypes {
     | '/ip-checker'
     | '/oss-program'
     | '/pricing'
+    | '/qr-code-generator'
     | '/repo-star-video'
     | '/twitter-thread-creator'
+    | '/utm-builder'
     | '/api/contact'
     | '/api/ip-checker'
     | '/api/llms.txt'
     | '/api/oss-program'
+    | '/api/qr-code'
     | '/api/status'
     | '/api/v1'
     | '/developers/llms.txt'
@@ -875,28 +1114,43 @@ export interface FileRouteTypes {
     | '/api/'
     | '/v1/'
     | '/.well-known/mcp/server-card.json'
+    | '/dpa'
     | '/legal'
+    | '/partner-terms'
     | '/privacy'
+    | '/subprocessors'
     | '/terms'
     | '/contributors/opengraph-image'
     | '/features/ai-crawler-logs'
     | '/features/conversations'
     | '/features/personas'
+    | '/features/sites'
     | '/integrations/$id'
+    | '/integrations/github'
+    | '/integrations/granola'
+    | '/integrations/linear'
     | '/integrations/slack'
+    | '/notra-vs-{$slug}/opengraph-image'
+    | '/offering/report'
     | '/agent/auth/authorize'
     | '/agent/auth/claim'
     | '/agent/auth/register'
     | '/agent/auth/revoke'
     | '/agent/auth/token'
     | '/api/c15t/$'
+    | '/api/offering-check/preflight'
     | '/api/star-video/render'
     | '/api/star-video/repo'
     | '/.well-known/mcp/'
+    | '/compare/'
     | '/contributors/'
     | '/features/'
     | '/integrations/'
     | '/mcp/'
+    | '/notra-vs-{$slug}/'
+    | '/offering/'
+    | '/state-of-ai-search/'
+    | '/api/offering-check/'
     | '/features/marketing/assets'
     | '/mcp/use-cases/$slug'
     | '/api/star-video/github/authorize'
@@ -904,12 +1158,16 @@ export interface FileRouteTypes {
     | '/blog/'
     | '/changelog/'
     | '/mcp/use-cases/'
+    | '/state-of-ai-search/$category/'
     | '/blog/$slug/opengraph-image'
     | '/changelog/$name/$slug'
     | '/changelog/notra/$slug'
+    | '/state-of-ai-search/$category/$edition/data.csv'
+    | '/state-of-ai-search/$category/$edition/opengraph-image'
     | '/blog/$slug/'
     | '/changelog/$name/'
     | '/changelog/notra/'
+    | '/state-of-ai-search/$category/$edition/'
     | '/blog/author/$slug/opengraph-image'
     | '/blog/author/$slug/'
   fileRoutesByTo: FileRoutesByTo
@@ -922,10 +1180,13 @@ export interface FileRouteTypes {
     | '/llms-full.txt'
     | '/llms.txt'
     | '/manifest.json'
+    | '/onboard.md'
+    | '/qr-code-generator.md'
     | '/robots.txt'
     | '/rss.xml'
     | '/schema-map.xml'
     | '/sitemap.xml'
+    | '/utm-builder.md'
     | '/.well-known/agent-card.json'
     | '/.well-known/agent.json'
     | '/.well-known/api-catalog'
@@ -945,12 +1206,15 @@ export interface FileRouteTypes {
     | '/ip-checker'
     | '/oss-program'
     | '/pricing'
+    | '/qr-code-generator'
     | '/repo-star-video'
     | '/twitter-thread-creator'
+    | '/utm-builder'
     | '/api/contact'
     | '/api/ip-checker'
     | '/api/llms.txt'
     | '/api/oss-program'
+    | '/api/qr-code'
     | '/api/status'
     | '/api/v1'
     | '/developers/llms.txt'
@@ -961,28 +1225,43 @@ export interface FileRouteTypes {
     | '/api'
     | '/v1'
     | '/.well-known/mcp/server-card.json'
+    | '/dpa'
     | '/legal'
+    | '/partner-terms'
     | '/privacy'
+    | '/subprocessors'
     | '/terms'
     | '/contributors/opengraph-image'
     | '/features/ai-crawler-logs'
     | '/features/conversations'
     | '/features/personas'
+    | '/features/sites'
     | '/integrations/$id'
+    | '/integrations/github'
+    | '/integrations/granola'
+    | '/integrations/linear'
     | '/integrations/slack'
+    | '/notra-vs-{$slug}/opengraph-image'
+    | '/offering/report'
     | '/agent/auth/authorize'
     | '/agent/auth/claim'
     | '/agent/auth/register'
     | '/agent/auth/revoke'
     | '/agent/auth/token'
     | '/api/c15t/$'
+    | '/api/offering-check/preflight'
     | '/api/star-video/render'
     | '/api/star-video/repo'
     | '/.well-known/mcp'
+    | '/compare'
     | '/contributors'
     | '/features'
     | '/integrations'
     | '/mcp'
+    | '/notra-vs-{$slug}'
+    | '/offering'
+    | '/state-of-ai-search'
+    | '/api/offering-check'
     | '/features/marketing/assets'
     | '/mcp/use-cases/$slug'
     | '/api/star-video/github/authorize'
@@ -990,12 +1269,16 @@ export interface FileRouteTypes {
     | '/blog'
     | '/changelog'
     | '/mcp/use-cases'
+    | '/state-of-ai-search/$category'
     | '/blog/$slug/opengraph-image'
     | '/changelog/$name/$slug'
     | '/changelog/notra/$slug'
+    | '/state-of-ai-search/$category/$edition/data.csv'
+    | '/state-of-ai-search/$category/$edition/opengraph-image'
     | '/blog/$slug'
     | '/changelog/$name'
     | '/changelog/notra'
+    | '/state-of-ai-search/$category/$edition'
     | '/blog/author/$slug/opengraph-image'
     | '/blog/author/$slug'
   id:
@@ -1009,10 +1292,13 @@ export interface FileRouteTypes {
     | '/llms-full.txt'
     | '/llms.txt'
     | '/manifest.json'
+    | '/onboard.md'
+    | '/qr-code-generator.md'
     | '/robots.txt'
     | '/rss.xml'
     | '/schema-map.xml'
     | '/sitemap.xml'
+    | '/utm-builder.md'
     | '/.well-known/agent-card.json'
     | '/.well-known/agent.json'
     | '/.well-known/api-catalog'
@@ -1035,12 +1321,15 @@ export interface FileRouteTypes {
     | '/_site/ip-checker'
     | '/_site/oss-program'
     | '/_site/pricing'
+    | '/_site/qr-code-generator'
     | '/_site/repo-star-video'
     | '/_site/twitter-thread-creator'
+    | '/_site/utm-builder'
     | '/api/contact'
     | '/api/ip-checker'
     | '/api/llms.txt'
     | '/api/oss-program'
+    | '/api/qr-code'
     | '/api/status'
     | '/api/v1'
     | '/developers/llms.txt'
@@ -1052,28 +1341,43 @@ export interface FileRouteTypes {
     | '/api/'
     | '/v1/'
     | '/.well-known/mcp/server-card.json'
+    | '/_site/_legal/dpa'
     | '/_site/_legal/legal'
+    | '/_site/_legal/partner-terms'
     | '/_site/_legal/privacy'
+    | '/_site/_legal/subprocessors'
     | '/_site/_legal/terms'
     | '/_site/contributors/opengraph-image'
     | '/_site/features/ai-crawler-logs'
     | '/_site/features/conversations'
     | '/_site/features/personas'
+    | '/_site/features/sites'
     | '/_site/integrations/$id'
+    | '/_site/integrations/github'
+    | '/_site/integrations/granola'
+    | '/_site/integrations/linear'
     | '/_site/integrations/slack'
+    | '/_site/notra-vs-{$slug}/opengraph-image'
+    | '/_site/offering/report'
     | '/agent/auth/authorize'
     | '/agent/auth/claim'
     | '/agent/auth/register'
     | '/agent/auth/revoke'
     | '/agent/auth/token'
     | '/api/c15t/$'
+    | '/api/offering-check/preflight'
     | '/api/star-video/render'
     | '/api/star-video/repo'
     | '/.well-known/mcp/'
+    | '/_site/compare/'
     | '/_site/contributors/'
     | '/_site/features/'
     | '/_site/integrations/'
     | '/_site/mcp/'
+    | '/_site/notra-vs-{$slug}/'
+    | '/_site/offering/'
+    | '/_site/state-of-ai-search/'
+    | '/api/offering-check/'
     | '/_site/features/marketing/assets'
     | '/_site/mcp/use-cases/$slug'
     | '/api/star-video/github/authorize'
@@ -1081,12 +1385,16 @@ export interface FileRouteTypes {
     | '/_site/_blog/blog/'
     | '/_site/_changelog/changelog/'
     | '/_site/mcp/use-cases/'
+    | '/_site/state-of-ai-search/$category/'
     | '/_site/_blog/blog/$slug/opengraph-image'
     | '/_site/_changelog/changelog/$name/$slug'
     | '/_site/_changelog/changelog/notra/$slug'
+    | '/_site/state-of-ai-search/$category/$edition/data.csv'
+    | '/_site/state-of-ai-search/$category/$edition/opengraph-image'
     | '/_site/_blog/blog/$slug/'
     | '/_site/_changelog/changelog/$name/'
     | '/_site/_changelog/changelog/notra/'
+    | '/_site/state-of-ai-search/$category/$edition/'
     | '/_site/_blog/blog/author/$slug/opengraph-image'
     | '/_site/_blog/blog/author/$slug/'
   fileRoutesById: FileRoutesById
@@ -1101,10 +1409,13 @@ export interface RootRouteChildren {
   LlmsFullDottxtRoute: typeof LlmsFullDottxtRoute
   LlmsDottxtRoute: typeof LlmsDottxtRoute
   ManifestDotjsonRoute: typeof ManifestDotjsonRoute
+  OnboardDotmdRoute: typeof OnboardDotmdRoute
+  QrCodeGeneratorDotmdRoute: typeof QrCodeGeneratorDotmdRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
   RssDotxmlRoute: typeof RssDotxmlRoute
   SchemaMapDotxmlRoute: typeof SchemaMapDotxmlRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  UtmBuilderDotmdRoute: typeof UtmBuilderDotmdRoute
   DotwellKnownAgentCardDotjsonRoute: typeof DotwellKnownAgentCardDotjsonRoute
   DotwellKnownAgentDotjsonRoute: typeof DotwellKnownAgentDotjsonRoute
   DotwellKnownApiCatalogRoute: typeof DotwellKnownApiCatalogRoute
@@ -1115,6 +1426,7 @@ export interface RootRouteChildren {
   ApiIpCheckerRoute: typeof ApiIpCheckerRoute
   ApiLlmsDottxtRoute: typeof ApiLlmsDottxtRoute
   ApiOssProgramRoute: typeof ApiOssProgramRoute
+  ApiQrCodeRoute: typeof ApiQrCodeRoute
   ApiStatusRoute: typeof ApiStatusRoute
   ApiV1Route: typeof ApiV1Route
   DevelopersLlmsDottxtRoute: typeof DevelopersLlmsDottxtRoute
@@ -1131,9 +1443,11 @@ export interface RootRouteChildren {
   AgentAuthRevokeRoute: typeof AgentAuthRevokeRoute
   AgentAuthTokenRoute: typeof AgentAuthTokenRoute
   ApiC15tSplatRoute: typeof ApiC15tSplatRoute
+  ApiOfferingCheckPreflightRoute: typeof ApiOfferingCheckPreflightRoute
   ApiStarVideoRenderRoute: typeof ApiStarVideoRenderRoute
   ApiStarVideoRepoRoute: typeof ApiStarVideoRepoRoute
   DotwellKnownMcpIndexRoute: typeof DotwellKnownMcpIndexRoute
+  ApiOfferingCheckIndexRoute: typeof ApiOfferingCheckIndexRoute
   ApiStarVideoGithubAuthorizeRoute: typeof ApiStarVideoGithubAuthorizeRoute
   ApiStarVideoGithubCallbackRoute: typeof ApiStarVideoGithubCallbackRoute
 }
@@ -1203,6 +1517,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ManifestDotjsonRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/onboard.md': {
+      id: '/onboard.md'
+      path: '/onboard.md'
+      fullPath: '/onboard.md'
+      preLoaderRoute: typeof OnboardDotmdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qr-code-generator.md': {
+      id: '/qr-code-generator.md'
+      path: '/qr-code-generator.md'
+      fullPath: '/qr-code-generator.md'
+      preLoaderRoute: typeof QrCodeGeneratorDotmdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/robots.txt': {
       id: '/robots.txt'
       path: '/robots.txt'
@@ -1229,6 +1557,13 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/utm-builder.md': {
+      id: '/utm-builder.md'
+      path: '/utm-builder.md'
+      fullPath: '/utm-builder.md'
+      preLoaderRoute: typeof UtmBuilderDotmdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/.well-known/agent-card.json': {
@@ -1392,6 +1727,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SitePricingRouteImport
       parentRoute: typeof SiteRoute
     }
+    '/_site/qr-code-generator': {
+      id: '/_site/qr-code-generator'
+      path: '/qr-code-generator'
+      fullPath: '/qr-code-generator'
+      preLoaderRoute: typeof SiteQrCodeGeneratorRouteImport
+      parentRoute: typeof SiteRoute
+    }
     '/_site/repo-star-video': {
       id: '/_site/repo-star-video'
       path: '/repo-star-video'
@@ -1404,6 +1746,13 @@ declare module '@tanstack/react-router' {
       path: '/twitter-thread-creator'
       fullPath: '/twitter-thread-creator'
       preLoaderRoute: typeof SiteTwitterThreadCreatorRouteImport
+      parentRoute: typeof SiteRoute
+    }
+    '/_site/utm-builder': {
+      id: '/_site/utm-builder'
+      path: '/utm-builder'
+      fullPath: '/utm-builder'
+      preLoaderRoute: typeof SiteUtmBuilderRouteImport
       parentRoute: typeof SiteRoute
     }
     '/api/': {
@@ -1439,6 +1788,13 @@ declare module '@tanstack/react-router' {
       path: '/api/oss-program'
       fullPath: '/api/oss-program'
       preLoaderRoute: typeof ApiOssProgramRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/qr-code': {
+      id: '/api/qr-code'
+      path: '/api/qr-code'
+      fullPath: '/api/qr-code'
+      preLoaderRoute: typeof ApiQrCodeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/status': {
@@ -1511,11 +1867,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DotwellKnownMcpServerCardDotjsonRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_site/_legal/dpa': {
+      id: '/_site/_legal/dpa'
+      path: '/dpa'
+      fullPath: '/dpa'
+      preLoaderRoute: typeof SiteLegalDpaRouteImport
+      parentRoute: typeof SiteLegalRoute
+    }
     '/_site/_legal/legal': {
       id: '/_site/_legal/legal'
       path: '/legal'
       fullPath: '/legal'
       preLoaderRoute: typeof SiteLegalLegalRouteImport
+      parentRoute: typeof SiteLegalRoute
+    }
+    '/_site/_legal/partner-terms': {
+      id: '/_site/_legal/partner-terms'
+      path: '/partner-terms'
+      fullPath: '/partner-terms'
+      preLoaderRoute: typeof SiteLegalPartnerTermsRouteImport
       parentRoute: typeof SiteLegalRoute
     }
     '/_site/_legal/privacy': {
@@ -1525,12 +1895,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SiteLegalPrivacyRouteImport
       parentRoute: typeof SiteLegalRoute
     }
+    '/_site/_legal/subprocessors': {
+      id: '/_site/_legal/subprocessors'
+      path: '/subprocessors'
+      fullPath: '/subprocessors'
+      preLoaderRoute: typeof SiteLegalSubprocessorsRouteImport
+      parentRoute: typeof SiteLegalRoute
+    }
     '/_site/_legal/terms': {
       id: '/_site/_legal/terms'
       path: '/terms'
       fullPath: '/terms'
       preLoaderRoute: typeof SiteLegalTermsRouteImport
       parentRoute: typeof SiteLegalRoute
+    }
+    '/_site/compare/': {
+      id: '/_site/compare/'
+      path: '/compare'
+      fullPath: '/compare/'
+      preLoaderRoute: typeof SiteCompareIndexRouteImport
+      parentRoute: typeof SiteRoute
     }
     '/_site/contributors/': {
       id: '/_site/contributors/'
@@ -1574,6 +1958,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SiteFeaturesPersonasRouteImport
       parentRoute: typeof SiteRoute
     }
+    '/_site/features/sites': {
+      id: '/_site/features/sites'
+      path: '/features/sites'
+      fullPath: '/features/sites'
+      preLoaderRoute: typeof SiteFeaturesSitesRouteImport
+      parentRoute: typeof SiteRoute
+    }
     '/_site/integrations/': {
       id: '/_site/integrations/'
       path: '/integrations'
@@ -1588,6 +1979,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SiteIntegrationsIdRouteImport
       parentRoute: typeof SiteRoute
     }
+    '/_site/integrations/github': {
+      id: '/_site/integrations/github'
+      path: '/integrations/github'
+      fullPath: '/integrations/github'
+      preLoaderRoute: typeof SiteIntegrationsGithubRouteImport
+      parentRoute: typeof SiteRoute
+    }
+    '/_site/integrations/granola': {
+      id: '/_site/integrations/granola'
+      path: '/integrations/granola'
+      fullPath: '/integrations/granola'
+      preLoaderRoute: typeof SiteIntegrationsGranolaRouteImport
+      parentRoute: typeof SiteRoute
+    }
+    '/_site/integrations/linear': {
+      id: '/_site/integrations/linear'
+      path: '/integrations/linear'
+      fullPath: '/integrations/linear'
+      preLoaderRoute: typeof SiteIntegrationsLinearRouteImport
+      parentRoute: typeof SiteRoute
+    }
     '/_site/integrations/slack': {
       id: '/_site/integrations/slack'
       path: '/integrations/slack'
@@ -1600,6 +2012,41 @@ declare module '@tanstack/react-router' {
       path: '/mcp'
       fullPath: '/mcp/'
       preLoaderRoute: typeof SiteMcpIndexRouteImport
+      parentRoute: typeof SiteRoute
+    }
+    '/_site/notra-vs-{$slug}/': {
+      id: '/_site/notra-vs-{$slug}/'
+      path: '/notra-vs-{$slug}'
+      fullPath: '/notra-vs-{$slug}/'
+      preLoaderRoute: typeof SiteNotraVsChar123slugChar125IndexRouteImport
+      parentRoute: typeof SiteRoute
+    }
+    '/_site/notra-vs-{$slug}/opengraph-image': {
+      id: '/_site/notra-vs-{$slug}/opengraph-image'
+      path: '/notra-vs-{$slug}/opengraph-image'
+      fullPath: '/notra-vs-{$slug}/opengraph-image'
+      preLoaderRoute: typeof SiteNotraVsChar123slugChar125OpengraphImageRouteImport
+      parentRoute: typeof SiteRoute
+    }
+    '/_site/offering/': {
+      id: '/_site/offering/'
+      path: '/offering'
+      fullPath: '/offering/'
+      preLoaderRoute: typeof SiteOfferingIndexRouteImport
+      parentRoute: typeof SiteRoute
+    }
+    '/_site/offering/report': {
+      id: '/_site/offering/report'
+      path: '/offering/report'
+      fullPath: '/offering/report'
+      preLoaderRoute: typeof SiteOfferingReportRouteImport
+      parentRoute: typeof SiteRoute
+    }
+    '/_site/state-of-ai-search/': {
+      id: '/_site/state-of-ai-search/'
+      path: '/state-of-ai-search'
+      fullPath: '/state-of-ai-search/'
+      preLoaderRoute: typeof SiteStateOfAiSearchIndexRouteImport
       parentRoute: typeof SiteRoute
     }
     '/agent/auth/authorize': {
@@ -1642,6 +2089,20 @@ declare module '@tanstack/react-router' {
       path: '/api/c15t/$'
       fullPath: '/api/c15t/$'
       preLoaderRoute: typeof ApiC15tSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/offering-check/': {
+      id: '/api/offering-check/'
+      path: '/api/offering-check'
+      fullPath: '/api/offering-check/'
+      preLoaderRoute: typeof ApiOfferingCheckIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/offering-check/preflight': {
+      id: '/api/offering-check/preflight'
+      path: '/api/offering-check/preflight'
+      fullPath: '/api/offering-check/preflight'
+      preLoaderRoute: typeof ApiOfferingCheckPreflightRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/star-video/render': {
@@ -1691,6 +2152,13 @@ declare module '@tanstack/react-router' {
       path: '/mcp/use-cases/$slug'
       fullPath: '/mcp/use-cases/$slug'
       preLoaderRoute: typeof SiteMcpUseCasesSlugRouteImport
+      parentRoute: typeof SiteRoute
+    }
+    '/_site/state-of-ai-search/$category/': {
+      id: '/_site/state-of-ai-search/$category/'
+      path: '/state-of-ai-search/$category'
+      fullPath: '/state-of-ai-search/$category/'
+      preLoaderRoute: typeof SiteStateOfAiSearchCategoryIndexRouteImport
       parentRoute: typeof SiteRoute
     }
     '/api/star-video/github/authorize': {
@@ -1748,6 +2216,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/changelog/notra/$slug'
       preLoaderRoute: typeof SiteChangelogChangelogNotraSlugRouteImport
       parentRoute: typeof SiteChangelogRoute
+    }
+    '/_site/state-of-ai-search/$category/$edition/': {
+      id: '/_site/state-of-ai-search/$category/$edition/'
+      path: '/state-of-ai-search/$category/$edition'
+      fullPath: '/state-of-ai-search/$category/$edition/'
+      preLoaderRoute: typeof SiteStateOfAiSearchCategoryEditionIndexRouteImport
+      parentRoute: typeof SiteRoute
+    }
+    '/_site/state-of-ai-search/$category/$edition/data.csv': {
+      id: '/_site/state-of-ai-search/$category/$edition/data.csv'
+      path: '/state-of-ai-search/$category/$edition/data.csv'
+      fullPath: '/state-of-ai-search/$category/$edition/data.csv'
+      preLoaderRoute: typeof SiteStateOfAiSearchCategoryEditionDataDotcsvRouteImport
+      parentRoute: typeof SiteRoute
+    }
+    '/_site/state-of-ai-search/$category/$edition/opengraph-image': {
+      id: '/_site/state-of-ai-search/$category/$edition/opengraph-image'
+      path: '/state-of-ai-search/$category/$edition/opengraph-image'
+      fullPath: '/state-of-ai-search/$category/$edition/opengraph-image'
+      preLoaderRoute: typeof SiteStateOfAiSearchCategoryEditionOpengraphImageRouteImport
+      parentRoute: typeof SiteRoute
     }
     '/_site/_blog/blog/author/$slug/': {
       id: '/_site/_blog/blog/author/$slug/'
@@ -1823,14 +2312,20 @@ const SiteChangelogRouteWithChildren = SiteChangelogRoute._addFileChildren(
 )
 
 interface SiteLegalRouteChildren {
+  SiteLegalDpaRoute: typeof SiteLegalDpaRoute
   SiteLegalLegalRoute: typeof SiteLegalLegalRoute
+  SiteLegalPartnerTermsRoute: typeof SiteLegalPartnerTermsRoute
   SiteLegalPrivacyRoute: typeof SiteLegalPrivacyRoute
+  SiteLegalSubprocessorsRoute: typeof SiteLegalSubprocessorsRoute
   SiteLegalTermsRoute: typeof SiteLegalTermsRoute
 }
 
 const SiteLegalRouteChildren: SiteLegalRouteChildren = {
+  SiteLegalDpaRoute: SiteLegalDpaRoute,
   SiteLegalLegalRoute: SiteLegalLegalRoute,
+  SiteLegalPartnerTermsRoute: SiteLegalPartnerTermsRoute,
   SiteLegalPrivacyRoute: SiteLegalPrivacyRoute,
+  SiteLegalSubprocessorsRoute: SiteLegalSubprocessorsRoute,
   SiteLegalTermsRoute: SiteLegalTermsRoute,
 }
 
@@ -1853,21 +2348,37 @@ interface SiteRouteChildren {
   SiteIpCheckerRoute: typeof SiteIpCheckerRoute
   SiteOssProgramRoute: typeof SiteOssProgramRoute
   SitePricingRoute: typeof SitePricingRoute
+  SiteQrCodeGeneratorRoute: typeof SiteQrCodeGeneratorRoute
   SiteRepoStarVideoRoute: typeof SiteRepoStarVideoRoute
   SiteTwitterThreadCreatorRoute: typeof SiteTwitterThreadCreatorRoute
+  SiteUtmBuilderRoute: typeof SiteUtmBuilderRoute
   SiteContributorsOpengraphImageRoute: typeof SiteContributorsOpengraphImageRoute
   SiteFeaturesAiCrawlerLogsRoute: typeof SiteFeaturesAiCrawlerLogsRoute
   SiteFeaturesConversationsRoute: typeof SiteFeaturesConversationsRoute
   SiteFeaturesPersonasRoute: typeof SiteFeaturesPersonasRoute
+  SiteFeaturesSitesRoute: typeof SiteFeaturesSitesRoute
   SiteIntegrationsIdRoute: typeof SiteIntegrationsIdRoute
+  SiteIntegrationsGithubRoute: typeof SiteIntegrationsGithubRoute
+  SiteIntegrationsGranolaRoute: typeof SiteIntegrationsGranolaRoute
+  SiteIntegrationsLinearRoute: typeof SiteIntegrationsLinearRoute
   SiteIntegrationsSlackRoute: typeof SiteIntegrationsSlackRoute
+  SiteNotraVsChar123slugChar125OpengraphImageRoute: typeof SiteNotraVsChar123slugChar125OpengraphImageRoute
+  SiteOfferingReportRoute: typeof SiteOfferingReportRoute
+  SiteCompareIndexRoute: typeof SiteCompareIndexRoute
   SiteContributorsIndexRoute: typeof SiteContributorsIndexRoute
   SiteFeaturesIndexRoute: typeof SiteFeaturesIndexRoute
   SiteIntegrationsIndexRoute: typeof SiteIntegrationsIndexRoute
   SiteMcpIndexRoute: typeof SiteMcpIndexRoute
+  SiteNotraVsChar123slugChar125IndexRoute: typeof SiteNotraVsChar123slugChar125IndexRoute
+  SiteOfferingIndexRoute: typeof SiteOfferingIndexRoute
+  SiteStateOfAiSearchIndexRoute: typeof SiteStateOfAiSearchIndexRoute
   SiteFeaturesMarketingAssetsRoute: typeof SiteFeaturesMarketingAssetsRoute
   SiteMcpUseCasesSlugRoute: typeof SiteMcpUseCasesSlugRoute
   SiteMcpUseCasesIndexRoute: typeof SiteMcpUseCasesIndexRoute
+  SiteStateOfAiSearchCategoryIndexRoute: typeof SiteStateOfAiSearchCategoryIndexRoute
+  SiteStateOfAiSearchCategoryEditionDataDotcsvRoute: typeof SiteStateOfAiSearchCategoryEditionDataDotcsvRoute
+  SiteStateOfAiSearchCategoryEditionOpengraphImageRoute: typeof SiteStateOfAiSearchCategoryEditionOpengraphImageRoute
+  SiteStateOfAiSearchCategoryEditionIndexRoute: typeof SiteStateOfAiSearchCategoryEditionIndexRoute
 }
 
 const SiteRouteChildren: SiteRouteChildren = {
@@ -1885,21 +2396,42 @@ const SiteRouteChildren: SiteRouteChildren = {
   SiteIpCheckerRoute: SiteIpCheckerRoute,
   SiteOssProgramRoute: SiteOssProgramRoute,
   SitePricingRoute: SitePricingRoute,
+  SiteQrCodeGeneratorRoute: SiteQrCodeGeneratorRoute,
   SiteRepoStarVideoRoute: SiteRepoStarVideoRoute,
   SiteTwitterThreadCreatorRoute: SiteTwitterThreadCreatorRoute,
+  SiteUtmBuilderRoute: SiteUtmBuilderRoute,
   SiteContributorsOpengraphImageRoute: SiteContributorsOpengraphImageRoute,
   SiteFeaturesAiCrawlerLogsRoute: SiteFeaturesAiCrawlerLogsRoute,
   SiteFeaturesConversationsRoute: SiteFeaturesConversationsRoute,
   SiteFeaturesPersonasRoute: SiteFeaturesPersonasRoute,
+  SiteFeaturesSitesRoute: SiteFeaturesSitesRoute,
   SiteIntegrationsIdRoute: SiteIntegrationsIdRoute,
+  SiteIntegrationsGithubRoute: SiteIntegrationsGithubRoute,
+  SiteIntegrationsGranolaRoute: SiteIntegrationsGranolaRoute,
+  SiteIntegrationsLinearRoute: SiteIntegrationsLinearRoute,
   SiteIntegrationsSlackRoute: SiteIntegrationsSlackRoute,
+  SiteNotraVsChar123slugChar125OpengraphImageRoute:
+    SiteNotraVsChar123slugChar125OpengraphImageRoute,
+  SiteOfferingReportRoute: SiteOfferingReportRoute,
+  SiteCompareIndexRoute: SiteCompareIndexRoute,
   SiteContributorsIndexRoute: SiteContributorsIndexRoute,
   SiteFeaturesIndexRoute: SiteFeaturesIndexRoute,
   SiteIntegrationsIndexRoute: SiteIntegrationsIndexRoute,
   SiteMcpIndexRoute: SiteMcpIndexRoute,
+  SiteNotraVsChar123slugChar125IndexRoute:
+    SiteNotraVsChar123slugChar125IndexRoute,
+  SiteOfferingIndexRoute: SiteOfferingIndexRoute,
+  SiteStateOfAiSearchIndexRoute: SiteStateOfAiSearchIndexRoute,
   SiteFeaturesMarketingAssetsRoute: SiteFeaturesMarketingAssetsRoute,
   SiteMcpUseCasesSlugRoute: SiteMcpUseCasesSlugRoute,
   SiteMcpUseCasesIndexRoute: SiteMcpUseCasesIndexRoute,
+  SiteStateOfAiSearchCategoryIndexRoute: SiteStateOfAiSearchCategoryIndexRoute,
+  SiteStateOfAiSearchCategoryEditionDataDotcsvRoute:
+    SiteStateOfAiSearchCategoryEditionDataDotcsvRoute,
+  SiteStateOfAiSearchCategoryEditionOpengraphImageRoute:
+    SiteStateOfAiSearchCategoryEditionOpengraphImageRoute,
+  SiteStateOfAiSearchCategoryEditionIndexRoute:
+    SiteStateOfAiSearchCategoryEditionIndexRoute,
 }
 
 const SiteRouteWithChildren = SiteRoute._addFileChildren(SiteRouteChildren)
@@ -1914,10 +2446,13 @@ const rootRouteChildren: RootRouteChildren = {
   LlmsFullDottxtRoute: LlmsFullDottxtRoute,
   LlmsDottxtRoute: LlmsDottxtRoute,
   ManifestDotjsonRoute: ManifestDotjsonRoute,
+  OnboardDotmdRoute: OnboardDotmdRoute,
+  QrCodeGeneratorDotmdRoute: QrCodeGeneratorDotmdRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
   RssDotxmlRoute: RssDotxmlRoute,
   SchemaMapDotxmlRoute: SchemaMapDotxmlRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  UtmBuilderDotmdRoute: UtmBuilderDotmdRoute,
   DotwellKnownAgentCardDotjsonRoute: DotwellKnownAgentCardDotjsonRoute,
   DotwellKnownAgentDotjsonRoute: DotwellKnownAgentDotjsonRoute,
   DotwellKnownApiCatalogRoute: DotwellKnownApiCatalogRoute,
@@ -1930,6 +2465,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiIpCheckerRoute: ApiIpCheckerRoute,
   ApiLlmsDottxtRoute: ApiLlmsDottxtRoute,
   ApiOssProgramRoute: ApiOssProgramRoute,
+  ApiQrCodeRoute: ApiQrCodeRoute,
   ApiStatusRoute: ApiStatusRoute,
   ApiV1Route: ApiV1Route,
   DevelopersLlmsDottxtRoute: DevelopersLlmsDottxtRoute,
@@ -1946,9 +2482,11 @@ const rootRouteChildren: RootRouteChildren = {
   AgentAuthRevokeRoute: AgentAuthRevokeRoute,
   AgentAuthTokenRoute: AgentAuthTokenRoute,
   ApiC15tSplatRoute: ApiC15tSplatRoute,
+  ApiOfferingCheckPreflightRoute: ApiOfferingCheckPreflightRoute,
   ApiStarVideoRenderRoute: ApiStarVideoRenderRoute,
   ApiStarVideoRepoRoute: ApiStarVideoRepoRoute,
   DotwellKnownMcpIndexRoute: DotwellKnownMcpIndexRoute,
+  ApiOfferingCheckIndexRoute: ApiOfferingCheckIndexRoute,
   ApiStarVideoGithubAuthorizeRoute: ApiStarVideoGithubAuthorizeRoute,
   ApiStarVideoGithubCallbackRoute: ApiStarVideoGithubCallbackRoute,
 }

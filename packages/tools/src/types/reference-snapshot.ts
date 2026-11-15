@@ -16,4 +16,5 @@ export interface ReferenceSnapshotStorageEnv {
 export interface SaveReferenceSnapshotInput {
   ctx: SessionContext;
   markdown: string;
+  signal?: AbortSignal;
 }

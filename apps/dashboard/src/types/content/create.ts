@@ -16,14 +16,6 @@ export interface WizardStepLabel {
   label: string;
 }
 
-export interface WizardFormValues {
-  formats: OnDemandContentType[];
-  lookbackWindow: LookbackWindow;
-  dataPoints: ContentDataPointSettings;
-  repositoryIds: string[];
-  brandVoiceIds: string[];
-}
-
 export interface IntegrationOption {
   value: string;
   label: string;
@@ -81,11 +73,4 @@ export interface BrandIdentitiesStepProps {
 export interface StepProgressProps {
   activeIndex: number;
   onStepSelect: (index: number) => void;
-}
-
-export interface SelectionState {
-  commits: Set<string>;
-  prs: Set<string>;
-  releases: Set<string>;
-  linear: Set<string>;
 }

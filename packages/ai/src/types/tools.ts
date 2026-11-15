@@ -110,3 +110,8 @@ export interface BuildLinearDataToolsOptions {
   dataPointSettings?: AgentDataPointSettings;
   resolveContext?: ResolveLinearIntegrationContext;
 }
+
+export interface PostDetailsToolsContext {
+  organizationId: string;
+  postId: string;
+}

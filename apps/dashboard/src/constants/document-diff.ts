@@ -3,7 +3,7 @@ export const DOCUMENT_DIFF_FALLBACK_FILENAME = "document.md";
 export const DOCUMENT_DIFF_FRAME_CLASSNAME =
   "chat-document-diff border-border bg-background mt-3 max-h-80 overflow-auto rounded-lg border text-xs";
 
-export const CHAT_DOCUMENT_DIFF_UNSAFE_CSS = `
+const CHAT_DOCUMENT_DIFF_UNSAFE_CSS = `
 [data-diffs-header="default"] {
   min-height: 2.25rem;
   padding-inline: 0.75rem;

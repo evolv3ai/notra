@@ -47,6 +47,7 @@ async function listNotraReplyLogins(octokit: GitHubMentionOctokit) {
 export async function resolveGitHubMentionContext(params: {
   payload: GitHubAppWebhookPayload;
   deliveryId: string | null;
+  allowEditedFeedback?: boolean;
 }): Promise<GitHubMentionResolveResult> {
   const sender = params.payload.sender;
   const repository = params.payload.repository;
@@ -58,15 +59,16 @@ export async function resolveGitHubMentionContext(params: {
   if (!(sender && repository && comment && issueNumber && installation)) {
     return { status: "ignored", reason: "missing_payload_fields" };
   }
-  if (params.payload.action && params.payload.action !== "created") {
+  if (
+    params.payload.action &&
+    params.payload.action !== "created" &&
+    !(params.allowEditedFeedback && params.payload.action === "edited")
+  ) {
     return { status: "ignored", reason: "not_created" };
   }
   if (isGitHubBotSender(sender)) {
     return { status: "ignored", reason: "bot_sender" };
   }
-  // A reply in a review thread Notra already answered is aimed at Notra even
-  // without the handle. Only the thread lookup below can tell, and that needs
-  // the integration first.
   const mentioned = commentMentionsNotra(comment.body);
   if (!(mentioned || comment.in_reply_to_id)) {
     return { status: "ignored", reason: "not_mentioned" };
@@ -151,6 +153,7 @@ export async function resolveGitHubMentionContext(params: {
           headRepoFullName: payloadPullRequest.head.repo?.full_name ?? null,
           baseRef: payloadPullRequest.base.ref,
           draft: Boolean(payloadPullRequest.draft),
+          authorLogin: payloadPullRequest.user?.login ?? null,
         };
       } else {
         const token = await getGitHubPublishToken(integrationId, {
@@ -207,6 +210,8 @@ export async function resolveGitHubMentionContext(params: {
         defaultBranch: repository.default_branch,
         issueNumber,
         comment: {
+          edited: params.payload.action === "edited",
+          updatedAt: comment.updated_at,
           id: comment.id,
           body: comment.body,
           htmlUrl: comment.html_url,

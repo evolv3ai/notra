@@ -44,7 +44,7 @@ The agent is a standalone eve server. It is not part of the dashboard's Next.js 
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `DATABASE_URL` | yes | Direct Postgres access for skills, brand data, suggestions, and the ran flag |
-| `SUPERMEMORY_API_KEY` | yes | Organization memory |
+| `CODE_STORAGE_NAME` / `CODE_STORAGE_API_KEY` | yes | Organization memory on code.storage (knowledge facts) |
 | `CONTEXT_DEV_API_KEY` | yes | Website scraping, brand lookup, web search |
 | `TWITTER_BEARER_TOKEN` | no | Higher-fidelity X API data for `fetch_recent_tweets`; Context.dev web research is used when unset |
 | `GITHUB_TOKEN` | no | Higher GitHub rate limits for repo/activity tools |
@@ -93,7 +93,7 @@ The 401 is the point: route auth fails closed. Only three callers get in — the
 - Each signup creates one **durable eve session**, keyed by a `sessionId` and bound to one organization via the auth attributes above. Sessions are fully isolated from each other: separate conversation state, separate event streams, separate subagent children.
 - On Vercel the agent runs as serverless functions on Vercel Workflow. Concurrent sessions scale horizontally like any serverless workload — 50 signups at once means 50 independent durable sessions progressing in parallel, subject to your Vercel plan's concurrency limits and the model provider's rate limits, not to any per-instance capacity of the agent.
 - Session state is persisted by eve's runtime (not in process memory), so a function instance dying mid-run does not lose the run; the workflow resumes.
-- Each org's data writes are scoped by the session's organization id, and Supermemory is partitioned per organization by container tag. Nothing is shared between concurrent runs except code.
+- Each org's data writes are scoped by the session's organization id, and each organization's memory is its own code.storage repository. Nothing is shared between concurrent runs except code.
 - Model throughput is the practical bottleneck under load: every run makes many gateway calls (GPT-6 Sol + Sonnet). If signups spike, runs queue at the provider rate limit and simply take longer; the 15-minute target is per-run, not global.
 - The completion hook resolves the organization from Eve's durable session-auth snapshot, not process memory, so it survives workflow step boundaries and serverless instance recycling.
 - External research reads retry transient network, rate-limit, and 5xx failures with bounded exponential backoff. Permanent 4xx and validation errors fail immediately so the agent can record the unavailable source and continue.

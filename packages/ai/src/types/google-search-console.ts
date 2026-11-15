@@ -55,4 +55,6 @@ export interface QueryGscTopQueriesParams {
   siteUrl: string;
   days: number;
   rowLimit: number;
+  /** RE2 pattern; only queries that match it are returned. */
+  queryPattern?: string;
 }

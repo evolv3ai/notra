@@ -17,13 +17,14 @@ import { routingDecisionSchema } from "@notra/ai/schemas/orchestration";
 import type {
   AutoSelection,
   RoutingDecision,
+  RoutingResult,
 } from "@notra/ai/types/orchestration";
+import { logError } from "@notra/ai/utils/server-log";
 import { buildTelemetryOptions, type TccMetadata } from "@notra/ai/utils/tcc";
-import { generateObject, generateText } from "ai";
+import { generateObject, generateText, type UIMessage } from "ai";
 
 const LLM_ROUTER_FALLBACK_MODEL = "openai/gpt-oss-120b";
 const ROUTER_EVALUATION_FEATURE = "chat_router";
-// Slower than this and the LLM router would have answered anyway.
 const ROUTER_EVALUATION_TIMEOUT_MS = 2500;
 
 const AUTO_POOL = {
@@ -44,7 +45,7 @@ const EXPLICIT_TOOL_REQUEST_PATTERNS = [
   /\btools?\b[\s\S]{0,120}\b(call|use|run|execute|invoke|exercise|trigger|test)\b/i,
 ];
 
-export function isTrivialMessage(userMessage: string): boolean {
+function isTrivialMessage(userMessage: string): boolean {
   const trimmed = userMessage.trim();
   if (!trimmed || trimmed.length > 40) {
     return false;
@@ -116,14 +117,13 @@ export async function routeMessage(
     };
   }
 
-  // Typed evaluation first (~300 ms); the LLM router below is the fallback
-  // when the gateway is unavailable, the flag is off, or the call fails.
+  const organizationId =
+    typeof telemetryMetadata?.organizationId === "string"
+      ? telemetryMetadata.organizationId
+      : undefined;
   const evaluation = await getEvaluationClient().tryEvaluate({
     feature: ROUTER_EVALUATION_FEATURE,
-    organizationId:
-      typeof telemetryMetadata?.organizationId === "string"
-        ? telemetryMetadata.organizationId
-        : undefined,
+    organizationId,
     state: buildRoutingEvaluationState(userMessage, hasIntegrationContext),
     questions: ROUTING_EVALUATION_QUESTIONS,
     timeoutMs: ROUTER_EVALUATION_TIMEOUT_MS,
@@ -137,12 +137,7 @@ export async function routeMessage(
     : "";
 
   const routerModel = wrapModelWithObservability(
-    gateway(LLM_ROUTER_FALLBACK_MODEL, {
-      organizationId:
-        typeof telemetryMetadata?.organizationId === "string"
-          ? telemetryMetadata.organizationId
-          : undefined,
-    }),
+    gateway(LLM_ROUTER_FALLBACK_MODEL, { organizationId }),
     log
   );
 
@@ -201,12 +196,7 @@ export async function routeMessage(
 
           return repairedText;
         } catch (repairError) {
-          console.error("[Chat Router] Repair failed", {
-            error:
-              repairError instanceof Error
-                ? repairError.message
-                : String(repairError),
-          });
+          logError("[Chat Router] Repair failed", repairError);
           return null;
         }
       },
@@ -216,9 +206,7 @@ export async function routeMessage(
 
     return object;
   } catch (error) {
-    console.error("[Chat Router] Routing failed; using fallback", {
-      error: error instanceof Error ? error.message : String(error),
-    });
+    logError("[Chat Router] Routing failed; using fallback", error);
     return {
       complexity: "complex",
       requiresTools: false,
@@ -227,4 +215,62 @@ export async function routeMessage(
         "Router structured output failed; falling back to Sonnet without tool routing.",
     };
   }
+}
+
+export async function routeAutoModel(
+  messages: UIMessage[],
+  hasIntegrationContext: boolean,
+  log?: AILogTarget,
+  telemetryMetadata?: TccMetadata
+): Promise<RoutingResult> {
+  const decision = await routeMessage(
+    getLastUserMessage(messages),
+    hasIntegrationContext,
+    log,
+    lastUserMessageHasNonTextParts(messages),
+    telemetryMetadata
+  );
+  const auto = selectAutoModel(decision);
+  return {
+    model: auto.model,
+    thinkingLevel: auto.thinkingLevel,
+    complexity: decision.complexity,
+    requiresTools: true,
+    reasoning: decision.requiresTools
+      ? `auto → ${auto.model}: ${decision.reasoning}`
+      : `auto → ${auto.model}: ${decision.reasoning} (tools available by default)`,
+  };
+}
+
+function lastUserMessageHasNonTextParts(messages: UIMessage[]): boolean {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (!message || message.role !== "user") {
+      continue;
+    }
+    if (!Array.isArray(message.parts)) {
+      return false;
+    }
+    return message.parts.some((part) => part.type !== "text");
+  }
+  return false;
+}
+
+function getLastUserMessage(messages: UIMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (!message || message.role !== "user") {
+      continue;
+    }
+    const parts = message.parts;
+    if (!Array.isArray(parts)) {
+      continue;
+    }
+    for (const part of parts) {
+      if (part.type === "text") {
+        return part.text;
+      }
+    }
+  }
+  return "";
 }

@@ -3,7 +3,10 @@ import {
   AI_TRAFFIC_PAGES_FETCH_LIMIT,
   GEO_JOURNEY_RECENT_LIMIT,
 } from "@notra/geo-core/constants/geo";
-import type { GeoTrafficLogFilters } from "@notra/geo-core/types/geo";
+import type {
+  GeoTrafficLogFilters,
+  GeoTrafficSitesMode,
+} from "@notra/geo-core/types/geo";
 import {
   toGeoTrafficLogPurposeFilter,
   toGeoTrafficLogVisitorFilter,
@@ -32,6 +35,30 @@ export function geoOverviewQueryInput(
   return { ...geoSettingsQueryInput(scope), ...toGeoWindowInput(range) };
 }
 
+function trafficPathInput(path: string | undefined) {
+  return path ? { path } : {};
+}
+
+function trafficSitesInput(sites: GeoTrafficSitesMode | undefined) {
+  return sites ? { sites } : {};
+}
+
+export function geoHostQueryInput(
+  scope: GeoQueryScope,
+  range: GeoRangeQuery | undefined,
+  host: string | undefined,
+  path?: string,
+  sites?: GeoTrafficSitesMode
+) {
+  const filter = trafficLogHostFilter(host);
+  return {
+    ...geoOverviewQueryInput(scope, range),
+    ...(filter ? { host: filter } : {}),
+    ...trafficPathInput(path),
+    ...trafficSitesInput(sites),
+  };
+}
+
 export function geoTrafficJourneysQueryInput(
   scope: GeoQueryScope,
   range: GeoRangeQuery | undefined
@@ -45,19 +72,25 @@ export function geoTrafficJourneysQueryInput(
 export function geoTrafficPagesQueryInput(
   scope: GeoQueryScope,
   range: GeoRangeQuery | undefined,
-  host: string | undefined
+  host: string | undefined,
+  path?: string,
+  sites?: GeoTrafficSitesMode
 ) {
   return {
     ...geoOverviewQueryInput(scope, range),
     limit: AI_TRAFFIC_PAGES_FETCH_LIMIT,
     host: trafficLogHostFilter(host),
+    ...trafficPathInput(path),
+    ...trafficSitesInput(sites),
   };
 }
 
 export function geoTrafficLogQueryInput(
   scope: GeoQueryScope,
   filters: GeoTrafficLogFilters,
-  host: string | undefined
+  host: string | undefined,
+  path?: string,
+  sites?: GeoTrafficSitesMode
 ) {
   return {
     ...geoSettingsQueryInput(scope),
@@ -65,5 +98,7 @@ export function geoTrafficLogQueryInput(
     visitorTypes: toGeoTrafficLogVisitorFilter(filters.visitorTypes),
     categories: toGeoTrafficLogPurposeFilter(filters.categories),
     host: trafficLogHostFilter(host),
+    ...trafficPathInput(path),
+    ...trafficSitesInput(sites),
   };
 }

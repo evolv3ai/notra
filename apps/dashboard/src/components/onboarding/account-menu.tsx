@@ -16,10 +16,9 @@ import {
   AvatarImage,
 } from "@notra/ui/components/ui/avatar";
 import { Skeleton } from "@notra/ui/components/ui/skeleton";
-import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { DeleteAccountDialog } from "@/components/settings/delete-account-dialog";
@@ -29,7 +28,6 @@ import { getUserAvatarUrl } from "@/utils/avatar";
 export function OnboardingAccountMenu() {
   const t = useTranslations("onboarding.accountMenu");
   const tCommon = useTranslations("common");
-  const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
   const signOut = authClient.useSignOut();
   const user = session?.user;
@@ -41,18 +39,11 @@ export function OnboardingAccountMenu() {
   async function handleSignOut() {
     setIsSigningOut(true);
     try {
-      await signOut({
-        fetchOptions: {
-          onSuccess: () => {
-            toast.success(tCommon("labels.signedOutSuccessfully"));
-            router.push("/login");
-          },
-        },
-      });
+      await signOut();
     } catch {
       toast.error(tCommon("labels.failedToSignOut"));
-      setIsSigningOut(false);
     }
+    setIsSigningOut(false);
   }
 
   function handleOpenDelete() {

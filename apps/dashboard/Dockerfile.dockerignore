@@ -1,10 +1,8 @@
-# Build context is the monorepo root (overrides the API-focused .dockerignore).
 .git
 node_modules
 **/node_modules
 .turbo
 **/.turbo
-**/.next
 **/.vercel
 **/.wrangler
 .env
@@ -17,6 +15,8 @@ node_modules
 .cursor
 .repos
 .output
+**/.output
+**/.cache
 .workflow-data
 .openlogs
 **/.workflow-data

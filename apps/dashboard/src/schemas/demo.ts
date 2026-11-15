@@ -8,6 +8,7 @@ import {
   DEMO_THEME_MESSAGE,
   DEMO_THEMES,
 } from "@/constants/demo";
+import { turnstileTokenSchema } from "@/schemas/turnstile";
 
 export const demoSessionPayloadSchema = z.object({
   anonymousId: z.string().regex(DEMO_ANONYMOUS_ID_PATTERN),
@@ -16,6 +17,11 @@ export const demoSessionPayloadSchema = z.object({
 export const demoSandboxCreateInputSchema = z.object({
   timeZone: z.string().max(64).nullish(),
 });
+
+export const demoSandboxAdmissionInputSchema =
+  demoSandboxCreateInputSchema.extend({
+    "cf-turnstile-response": turnstileTokenSchema,
+  });
 
 export const demoRequestEventSchema = z.object({
   id: z.string(),

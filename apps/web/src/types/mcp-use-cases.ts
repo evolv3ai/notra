@@ -41,13 +41,9 @@ export interface McpUseCase {
   title: string;
   tagline: string;
   category: McpUseCaseCategoryId;
-  /** Logos shown on the card and detail page, Notra first. */
   stack: McpUseCaseToolId[];
-  /** The prompt a user pastes into their agent. */
   prompt: string;
-  /** Notra MCP tool names the workflow calls, in call order. */
   tools: string[];
-  /** Body paragraphs for "What this use case can do for you". */
   body: string[];
   author?: McpUseCaseAuthor;
 }

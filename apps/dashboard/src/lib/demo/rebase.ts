@@ -12,11 +12,6 @@ import type {
 
 let timestampColumnsPromise: Promise<DemoTimestampColumns[]> | null = null;
 
-/**
- * Every timestamp column of every organization-scoped table, read from the
- * catalog instead of a hand-kept list so new columns are rebased
- * automatically.
- */
 function loadTimestampColumns(): Promise<DemoTimestampColumns[]> {
   timestampColumnsPromise ??= db
     .execute<DemoTimestampColumnRow>(
@@ -72,8 +67,6 @@ export async function rebaseDemoSandbox(
   }
   const tables = await loadTimestampColumns();
   const interval = `${Math.round(deltaMs / 1000)} seconds`;
-  // Columns hold UTC wall time (drizzle writes ISO strings); casting the ISO
-  // string to timestamp keeps the comparison in UTC too.
   const anchor = sql`${sandbox.anchorAt.toISOString()}::timestamp`;
   const current = sql`${now.toISOString()}::timestamp`;
 

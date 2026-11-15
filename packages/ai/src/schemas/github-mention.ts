@@ -23,6 +23,7 @@ const repositorySchema = z.object({
 
 const commentSchema = z.object({
   id: z.number(),
+  updated_at: z.iso.datetime().optional(),
   body: z.string(),
   html_url: z.string(),
   user: senderSchema.optional(),
@@ -63,6 +64,7 @@ const pullRequestSchema = z.object({
   merged: z.boolean().nullable().optional(),
   head: pullRequestRefSchema,
   base: pullRequestRefSchema,
+  user: senderSchema.nullable().optional(),
 });
 
 const installationSchema = z.object({
@@ -78,16 +80,6 @@ export const githubAppWebhookPayloadSchema = z.object({
   sender: senderSchema.optional(),
   installation: installationSchema.optional(),
 });
-
-export const contentPublicationStatusSchema = z.enum(
-  CONTENT_PUBLICATION_STATUSES
-);
-
-export const githubMentionDestinationModeSchema = z.enum([
-  "same_pull_request",
-  "new_pull_request",
-  "reply_only",
-]);
 
 export const githubMentionDirectorySchema = z.object({
   path: z
@@ -159,6 +151,22 @@ export const githubMentionFileReadSchema = z.object({
     .describe(
       "Maximum characters to return; defaults to 6000, at most 16000. Long lines can be read across pages."
     ),
+});
+
+export const githubMentionOgImageSchema = z.strictObject({
+  title: z
+    .string()
+    .trim()
+    .min(1)
+    .max(240)
+    .describe("Headline shown on the image, usually the post title"),
+  imagePath: z
+    .string()
+    .min(1)
+    .describe(
+      "Repository-relative .png path, following where the site keeps the OG images of other posts"
+    ),
+  headline: z.string().trim().min(1).describe("Commit headline"),
 });
 
 export const githubMentionMoveSchema = z.strictObject({

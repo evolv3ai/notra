@@ -7,6 +7,8 @@ import {
   GEO_JOURNEY_PATH_KINDS,
   GEO_JOURNEY_PATH_LABEL_MAX,
   GEO_JOURNEY_SEARCH_PREFIXES,
+  GEO_TRAFFIC_TREND_CRAWLER_KEY,
+  GEO_TRAFFIC_TREND_REFERRAL_KEY,
 } from "@notra/geo-core/constants/geo";
 import type {
   GeoJourney,
@@ -15,8 +17,10 @@ import type {
   GeoJourneySourceStats,
   GeoJourneyEvent,
   GeoJourneyPathKind,
+  GeoTrafficTrendRow,
 } from "@notra/geo-core/types/geo";
 import { trafficVisitDelta } from "@notra/geo-core/utils/ai-traffic";
+import { formatDayLabel } from "@notra/geo-core/utils/day-label";
 
 import type {
   GeoJourneyGroupSelection,
@@ -27,7 +31,6 @@ import type {
   GeoJourneySourceRow,
   GeoJourneyTreeNode,
   JourneyGroupSheetStat,
-  JourneyPageKindStat,
 } from "@/types/geo";
 
 const WWW_PREFIX = /^www\./;
@@ -77,7 +80,7 @@ function startsWithPrefix(path: string, prefixes: readonly string[]): boolean {
   );
 }
 
-export function classifyGeoJourneyPath(path: string): GeoJourneyPathKind {
+function classifyGeoJourneyPath(path: string): GeoJourneyPathKind {
   const normalized = normalizeGeoJourneyPath(path);
   if (
     SEARCH_QUERY.test(path) ||
@@ -97,7 +100,7 @@ export function classifyGeoJourneyPath(path: string): GeoJourneyPathKind {
   return "page";
 }
 
-export function formatGeoJourneyPathLabel(path: string): string {
+function formatGeoJourneyPathLabel(path: string): string {
   const kind = classifyGeoJourneyPath(path);
   if (kind === "home") {
     return "home";
@@ -116,7 +119,7 @@ export function formatGeoJourneyPathLabel(path: string): string {
   return last ? `…/${last}` : normalized.slice(0, GEO_JOURNEY_PATH_LABEL_MAX);
 }
 
-export function toGeoJourneyPathNode(path: string): GeoJourneyPathNode {
+function toGeoJourneyPathNode(path: string): GeoJourneyPathNode {
   return {
     path,
     label: formatGeoJourneyPathLabel(path),
@@ -242,7 +245,6 @@ function refererPath(event: GeoJourneyEvent): string | null {
   }
 }
 
-/** Deepest visited section page the path lives under, e.g. /docs for /docs/a. */
 function closestVisitedSection(
   path: string,
   nodes: ReadonlyMap<string, GeoJourneyTreeNode>
@@ -322,22 +324,6 @@ export function countJourneyBranches(roots: readonly GeoJourneyTreeNode[]) {
  * window's full page count, so pages the response sampled away land in "Other"
  * rather than making the breakdown fall short of the card's headline.
  */
-export function journeyPageKindStats(
-  kindCounts: readonly GeoJourneyKindCount[],
-  totalPages: number
-): JourneyPageKindStat[] {
-  const count = (kind: GeoJourneyPathKind) =>
-    kindCounts.find((entry) => entry.kind === kind)?.paths ?? 0;
-  const docs = count("docs");
-  const posts = count("blog");
-  const other = Math.max(0, totalPages - docs - posts);
-  return [
-    { kind: "docs", pages: docs },
-    { kind: "blog", pages: posts },
-    { kind: "other", pages: other },
-  ];
-}
-
 export function journeysForGroup(
   journeys: readonly GeoJourney[],
   selection: GeoJourneyGroupSelection
@@ -358,38 +344,7 @@ export function journeysForGroup(
   );
 }
 
-const DAY_MS = 86_400_000;
-
 /** Every day from the first to the last day any source saw a journey, so gaps plot as zero. */
-export function journeyTrendDays(
-  series: readonly { daily: readonly GeoJourneyDailyPoint[] }[]
-): string[] {
-  let first: string | null = null;
-  let last: string | null = null;
-  for (const row of series) {
-    for (const point of row.daily) {
-      if (first === null || point.day < first) {
-        first = point.day;
-      }
-      if (last === null || point.day > last) {
-        last = point.day;
-      }
-    }
-  }
-  if (first === null || last === null) {
-    return [];
-  }
-  const days: string[] = [];
-  for (
-    let time = Date.parse(`${first}T00:00:00Z`);
-    time <= Date.parse(`${last}T00:00:00Z`);
-    time += DAY_MS
-  ) {
-    days.push(new Date(time).toISOString().slice(0, 10));
-  }
-  return days;
-}
-
 export function journeySeries(
   daily: readonly GeoJourneyDailyPoint[],
   days: readonly string[]
@@ -481,18 +436,23 @@ export function journeyGroupSheetStats(input: {
   return [journeyStat];
 }
 
-export function journeyPageKindCounts(
-  pages: readonly GeoJourneyPageStats[]
-): GeoJourneyKindCount[] {
-  const totals = new Map<GeoJourneyPathKind, number>(
-    GEO_JOURNEY_PATH_KINDS.map((kind) => [kind, 0])
-  );
-  for (const page of pages) {
-    const kind = classifyGeoJourneyPath(page.path);
-    totals.set(kind, (totals.get(kind) ?? 0) + 1);
+export function journeyActivityRows(
+  sources: readonly GeoJourneySourceStats[],
+  days: readonly string[],
+  locale: string
+): GeoTrafficTrendRow[] {
+  const crawler = new Map<string, number>();
+  const aiReferral = new Map<string, number>();
+  for (const row of sources) {
+    const target = row.visitorType === "crawler" ? crawler : aiReferral;
+    for (const point of row.daily) {
+      target.set(point.day, (target.get(point.day) ?? 0) + point.journeys);
+    }
   }
-  return GEO_JOURNEY_PATH_KINDS.flatMap((kind) => {
-    const count = totals.get(kind) ?? 0;
-    return count > 0 ? [{ kind, paths: count }] : [];
-  });
+  return days.map((day) => ({
+    day: formatDayLabel(day, locale),
+    rawDay: day,
+    [GEO_TRAFFIC_TREND_CRAWLER_KEY]: crawler.get(day) ?? 0,
+    [GEO_TRAFFIC_TREND_REFERRAL_KEY]: aiReferral.get(day) ?? 0,
+  }));
 }

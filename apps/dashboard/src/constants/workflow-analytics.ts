@@ -5,16 +5,17 @@ export const WORKFLOW_ANALYTICS_NAMES = {
   BRAND_GUIDELINES: "brand-guidelines",
   CHAT: "chat",
   ONBOARDING_AGENT: "onboarding-agent",
-  IRIS_CONTROLLER: "iris-controller",
   SCHEDULE_CONTENT: "schedule-content",
   EVENT_CONTENT: "event-content",
   SOCIAL_ANALYTICS_SYNC: "social-analytics-sync",
   GEO_SCAN: "geo-scan",
   GEO_WRITER: "geo-writer",
   AGENT_READINESS: "agent-readiness",
+  AUTOPILOT: "autopilot",
   GSC_SYNC: "gsc-sync",
   ON_DEMAND_CONTENT: "on-demand-content",
   CONTENT_EMAIL_DIGEST: "content-email-digest",
+  WORKFLOW_GRAPH: "workflow-graph",
 } as const;
 
 export const WORKFLOW_TRIGGERS = {
@@ -28,6 +29,16 @@ export const WORKFLOW_TRIGGERS = {
 export const WORKFLOW_OUTCOMES = {
   COMPLETED: "completed",
   FAILED: "failed",
+} as const;
+
+export const WORKFLOW_FAILURE_CLASSIFICATIONS = {
+  CONFIGURATION: "configuration",
+  UNEXPECTED: "unexpected",
+} as const;
+
+export const WORKFLOW_ON_DEMAND_PHASES = {
+  SOURCE_VALIDATION: "source_validation",
+  GENERATION: "generation",
 } as const;
 
 export const WORKFLOW_UNEXPECTED_FAILURE_REASON = "unexpected_error";

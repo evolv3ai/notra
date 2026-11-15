@@ -1,0 +1,13 @@
+/* Proves global stylesheets reach every page. */
+:root {
+  --e2e-global-style: loaded;
+}
+
+/* Site CSS that tries to hide the Notra badge; the badge must stay visible. */
+notra-badge,
+[data-notra-badge],
+a[href^="https://usenotra.com"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}

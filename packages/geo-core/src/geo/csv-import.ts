@@ -118,20 +118,22 @@ function readCsvRows<TRow>(
   return { rows, issues, duplicates, total: document.records.length };
 }
 
+function cellAt(
+  record: CsvRecord,
+  document: CsvDocument,
+  column: string
+): string {
+  return csvCell(record, csvColumnIndex(document.header, column));
+}
+
 const promptsReader: CsvRowReader<GeoPromptImportRow> = {
   requiredColumn: GEO_PROMPTS_CSV_COLUMNS.prompt,
   maxRows: GEO_CSV_IMPORT_MAX_ROWS,
   schema: geoPromptImportRowSchema,
   toRaw: (record, document) => ({
-    prompt: csvCell(
-      record,
-      csvColumnIndex(document.header, GEO_PROMPTS_CSV_COLUMNS.prompt)
-    ),
+    prompt: cellAt(record, document, GEO_PROMPTS_CSV_COLUMNS.prompt),
     enabled: toCsvBoolean(
-      csvCell(
-        record,
-        csvColumnIndex(document.header, GEO_PROMPTS_CSV_COLUMNS.enabled)
-      )
+      cellAt(record, document, GEO_PROMPTS_CSV_COLUMNS.enabled)
     ),
   }),
   keyOf: (row) => promptKey(row.prompt),
@@ -142,27 +144,15 @@ const competitorsReader: CsvRowReader<GeoCompetitorImportRow> = {
   maxRows: GEO_MAX_COMPETITORS,
   schema: geoCompetitorImportRowSchema,
   toRaw: (record, document) => ({
-    name: csvCell(
-      record,
-      csvColumnIndex(document.header, GEO_COMPETITORS_CSV_COLUMNS.name)
-    ),
+    name: cellAt(record, document, GEO_COMPETITORS_CSV_COLUMNS.name),
     domain: toOptionalCell(
-      csvCell(
-        record,
-        csvColumnIndex(document.header, GEO_COMPETITORS_CSV_COLUMNS.domain)
-      )
+      cellAt(record, document, GEO_COMPETITORS_CSV_COLUMNS.domain)
     ),
     kind: toOptionalCell(
-      csvCell(
-        record,
-        csvColumnIndex(document.header, GEO_COMPETITORS_CSV_COLUMNS.kind)
-      ).toLowerCase()
+      cellAt(record, document, GEO_COMPETITORS_CSV_COLUMNS.kind).toLowerCase()
     ),
     synonyms: toSynonyms(
-      csvCell(
-        record,
-        csvColumnIndex(document.header, GEO_COMPETITORS_CSV_COLUMNS.synonyms)
-      )
+      cellAt(record, document, GEO_COMPETITORS_CSV_COLUMNS.synonyms)
     ),
   }),
   keyOf: (row) => competitorKey(row.name),

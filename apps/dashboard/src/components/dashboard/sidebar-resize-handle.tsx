@@ -1,8 +1,8 @@
 "use client";
 
 import { SidebarRail, useSidebar } from "@notra/ui/components/ui/sidebar";
-import { useTranslations } from "next-intl";
 import { type KeyboardEvent, type PointerEvent, useRef } from "react";
+import { useTranslations } from "use-intl";
 
 import {
   SIDEBAR_DEFAULT_WIDTH,
@@ -57,7 +57,19 @@ export function SidebarResizeHandle({
     }
     const nextWidth = clampSidebarWidth(draggedWidth);
     currentWidthRef.current = nextWidth;
-    onWidthChange(nextWidth);
+    const container = event.currentTarget.closest<HTMLElement>(
+      '[data-slot="sidebar-wrapper"]'
+    );
+    if (container) {
+      container.style.setProperty("--sidebar-width", `${nextWidth}px`);
+      event.currentTarget.setAttribute("aria-valuenow", String(nextWidth));
+      event.currentTarget.setAttribute(
+        "aria-valuetext",
+        t("widthPixels", { width: nextWidth })
+      );
+    } else {
+      onWidthChange(nextWidth);
+    }
     if (draggedWidth < SIDEBAR_MIN_WIDTH - 40) {
       finishResize(event);
       setOpen(false);
@@ -127,7 +139,6 @@ export function SidebarResizeHandle({
       }
       className="touch-none group-data-[collapsible=icon]:-right-5.5! after:hidden max-sm:hidden"
       onClick={(event) => {
-        // A mouse click must not move the rail before the second click lands.
         if (event.detail === 0) {
           setOpen(state === "collapsed");
         }

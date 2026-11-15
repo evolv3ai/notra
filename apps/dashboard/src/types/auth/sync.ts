@@ -2,7 +2,6 @@ import type { User } from "@workos-inc/node";
 
 export interface OAuthProviderTokens {
   accessToken: string;
-  refreshToken?: string;
   expiresAt?: number;
   scopes?: string[];
 }

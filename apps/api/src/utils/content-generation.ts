@@ -1,25 +1,27 @@
-import type { ContentGenerationWorkflowPayload } from "@notra/content-generation/schemas";
-import type { createDb } from "@notra/db/drizzle";
+import type {
+  ContentDataPointSettings,
+  ContentGenerationWorkflowPayload,
+} from "@notra/content-generation/schemas";
+import { findContentSourceIssue } from "@notra/content-generation/utils/sources";
 import {
   brandSettings,
   githubIntegrations,
   linearIntegrations,
 } from "@notra/db/schema";
 import { InternalDashboardAdapterError } from "@notra/schemas/api/internal-dashboard";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import { Effect } from "effect";
 
 import {
   PostDatabaseError,
+  PostGenerationSourcesUnavailableError,
   PostGenerationTargetUnavailableError,
 } from "../errors/posts";
-import { isConfirmedWorkflowTriggerRejection } from "./brand-analysis";
+import type { DbClient } from "../types/db";
 import {
   getInternalWorkflowUrl,
   startDashboardWorkflow,
 } from "./internal-workflow";
-
-type DbClient = ReturnType<typeof createDb>;
 
 interface ContentGenerationEnv {
   WORKFLOW_BASE_URL?: string;
@@ -35,10 +37,6 @@ function getContentGenerationWorkflowUrl(env: ContentGenerationEnv) {
     env,
     "/api/internal/workflows/on-demand-content"
   );
-}
-
-export function isContentGenerationConfigured(env: ContentGenerationEnv) {
-  return !!getContentGenerationWorkflowUrl(env);
 }
 
 export function getContentGenerationUnavailableReason(
@@ -72,10 +70,6 @@ export async function triggerContentGenerationWorkflow(
 
   return await startDashboardWorkflow(url, payload);
 }
-
-/** True when the dashboard explicitly rejected content generation before acceptance. */
-export const isConfirmedContentGenerationRejection =
-  isConfirmedWorkflowTriggerRejection;
 
 const queryPostTargets = <A>(operation: () => Promise<A>) =>
   Effect.tryPromise({
@@ -319,4 +313,47 @@ export const resolveRequestedBrandVoiceId = Effect.fn(
   );
 
   return latestVoice?.id ?? null;
+});
+
+export const assertContentGenerationSourcesAvailable = Effect.fn(
+  "posts.assertContentGenerationSourcesAvailable"
+)(function* (
+  db: DbClient,
+  organizationId: string,
+  request: {
+    dataPoints: ContentDataPointSettings;
+    repositoryIds?: string[];
+    linearIntegrationIds?: string[];
+  }
+) {
+  const hasLinearSelection = Boolean(request.linearIntegrationIds?.length);
+  let gitHubSourceCount = request.repositoryIds?.length ?? 0;
+
+  // Without any selector the workflow reads every connected repository.
+  if (request.repositoryIds === undefined && !hasLinearSelection) {
+    const [row] = yield* queryPostTargets(() =>
+      db
+        .select({ total: count() })
+        .from(githubIntegrations)
+        .where(
+          and(
+            eq(githubIntegrations.organizationId, organizationId),
+            eq(githubIntegrations.enabled, true),
+            isNotNull(githubIntegrations.owner),
+            isNotNull(githubIntegrations.repo)
+          )
+        )
+    );
+    gitHubSourceCount = row?.total ?? 0;
+  }
+
+  const issue = findContentSourceIssue({
+    dataPoints: request.dataPoints,
+    gitHubSourceCount,
+    hasLinearSelection,
+  });
+
+  if (issue) {
+    return yield* new PostGenerationSourcesUnavailableError(issue);
+  }
 });

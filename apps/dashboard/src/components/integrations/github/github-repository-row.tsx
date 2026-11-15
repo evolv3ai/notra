@@ -1,21 +1,23 @@
 "use client";
 
-import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@notra/ui/components/ui/collapsible";
 import { Github } from "@notra/ui/components/ui/svgs/github";
-import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { Switch } from "@notra/ui/components/ui/switch";
+import { TitleCard } from "@notra/ui/components/ui/title-card";
+import { useId, useState } from "react";
+import { useTranslations } from "use-intl";
 
-import type { GitHubRepositoryRowProps } from "@/types/integrations/github";
+import { Button } from "@/components/button";
+import { useGitHubRepositoryActions } from "@/hooks/use-github-repository-actions";
+import { useGitHubWebhookActions } from "@/hooks/use-github-webhook-actions";
+import type {
+  GitHubPublishingEditor,
+  GitHubRepositoryRowProps,
+} from "@/types/integrations/github";
 
 import { GitHubBranchPicker } from "./github-branch-picker";
 import { GitHubPublishingSettings } from "./github-publishing-settings";
 import { GitHubRepositoryActions } from "./github-repository-actions";
+import { GitHubSettingRow } from "./github-setting-row";
 import { GitHubWebhookSettings } from "./github-webhook-settings";
 
 export function GitHubRepositoryRow({
@@ -26,124 +28,153 @@ export function GitHubRepositoryRow({
   onManageRepositories,
 }: GitHubRepositoryRowProps) {
   const t = useTranslations("integrations.github.repositoryRow");
-  const [webhooksOpen, setWebhooksOpen] = useState(false);
+  const tWebhook = useTranslations("integrations.github.webhookSettings");
+  const tCommon = useTranslations("common");
+  const headingId = useId();
+  const statusSwitchId = useId();
+  const [openEditor, setOpenEditor] = useState<GitHubPublishingEditor | null>(
+    null
+  );
+  const { isEnabled, toggle } = useGitHubRepositoryActions({
+    integration,
+    organizationId,
+  });
   const legacy = !integration.managedByGitHubApp;
   const primaryRepository = integration.repositories[0];
+  const webhookRepository = legacy ? primaryRepository : undefined;
+  const webhook = useGitHubWebhookActions({
+    organizationId,
+    repository: webhookRepository,
+  });
+  const multipleRepositories = integration.repositories.length > 1;
   return (
-    <Collapsible
-      className="group/repo border-border bg-muted scroll-mt-24 rounded-2xl border"
-      defaultOpen
+    <article
+      aria-labelledby={headingId}
+      className="min-w-0 scroll-mt-24"
       id={`repository-${integration.id}`}
-      render={<article />}
     >
-      <div className="flex items-center gap-4 px-5 py-4 group-data-open/repo:pb-9">
-        <CollapsibleTrigger
-          className="group/header flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left [&_[data-chevron]]:transition-transform [&[data-panel-open]_[data-chevron]]:rotate-180"
-          nativeButton={false}
-          render={<div />}
+      <TitleCard
+        action={
+          <GitHubRepositoryActions
+            onMigrate={() => onMigrate(integration)}
+            isMigrating={isMigrating}
+            webhook={webhookRepository ? webhook : null}
+            integration={integration}
+            organizationId={organizationId}
+            onManageRepositories={onManageRepositories}
+          />
+        }
+        contentClassName="divide-border divide-y p-0"
+        heading={
+          <h3
+            className="truncate text-sm"
+            id={headingId}
+            title={
+              primaryRepository
+                ? `${primaryRepository.owner}/${primaryRepository.repo}`
+                : integration.displayName
+            }
+          >
+            {primaryRepository ? (
+              <a
+                className="underline-offset-4 hover:underline"
+                href={`https://github.com/${encodeURIComponent(primaryRepository.owner)}/${encodeURIComponent(primaryRepository.repo)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span className="text-muted-foreground font-normal">
+                  {primaryRepository.owner}/
+                </span>
+                {primaryRepository.repo}
+              </a>
+            ) : (
+              integration.displayName
+            )}
+          </h3>
+        }
+        headingAs="div"
+        icon={<Github />}
+      >
+        <GitHubSettingRow
+          htmlFor={statusSwitchId}
+          title={t("statusTitle")}
+          description={isEnabled ? t("statusActive") : t("statusPaused")}
         >
-          <span className="text-muted-foreground group-hover/header:bg-muted group-hover/header:text-foreground dark:group-hover/header:bg-muted/50 flex size-7 shrink-0 items-center justify-center rounded-md transition-colors">
-            <HugeiconsIcon
-              className="size-4"
-              data-chevron
-              icon={ArrowDown01Icon}
-            />
-          </span>
-          <div className="bg-background flex size-9 shrink-0 items-center justify-center rounded-lg border">
-            <Github className="size-4" />
-          </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h3
-              className="max-w-full truncate text-sm font-medium"
-              title={
-                primaryRepository
-                  ? `${primaryRepository.owner}/${primaryRepository.repo}`
-                  : integration.displayName
-              }
-            >
-              {primaryRepository ? (
-                <a
-                  className="underline-offset-4 hover:underline"
-                  onClick={(event) => event.stopPropagation()}
-                  onKeyDown={(event) => event.stopPropagation()}
-                  href={`https://github.com/${encodeURIComponent(primaryRepository.owner)}/${encodeURIComponent(primaryRepository.repo)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <span className="text-muted-foreground font-normal">
-                    {primaryRepository.owner}/
-                  </span>
-                  {primaryRepository.repo}
-                </a>
-              ) : (
-                integration.displayName
-              )}
-            </h3>
-            {integration.repositories.length === 1 && primaryRepository ? (
-              <>
-                <span className="text-muted-foreground text-xs">·</span>
-                <GitHubBranchPicker
-                  organizationId={organizationId}
-                  repository={primaryRepository}
-                />
-              </>
-            ) : null}
-          </div>
-        </CollapsibleTrigger>
-        <GitHubRepositoryActions
-          onMigrate={() => onMigrate(integration)}
-          isMigrating={isMigrating}
-          onToggleWebhooks={() => setWebhooksOpen(!webhooksOpen)}
-          webhooksOpen={webhooksOpen}
-          integration={integration}
-          organizationId={organizationId}
-          onManageRepositories={onManageRepositories}
-        />
-      </div>
-      <CollapsibleContent className="border-border bg-background -mx-px -mt-5 -mb-px min-w-0 space-y-3 rounded-2xl border p-5">
+          <Switch
+            id={statusSwitchId}
+            aria-label={
+              isEnabled
+                ? tCommon("labels.pauseName", { name: integration.displayName })
+                : tCommon("labels.enableName", {
+                    name: integration.displayName,
+                  })
+            }
+            checked={isEnabled}
+            onCheckedChange={toggle}
+          />
+        </GitHubSettingRow>
         {integration.repositories.map((repository) => (
-          <div key={repository.id}>
-            {integration.repositories.length > 1 ? (
-              <div className="mb-2 flex min-w-0 items-center gap-1">
-                <h4
-                  className="min-w-0 flex-1 truncate text-sm font-medium"
-                  title={`${repository.owner}/${repository.repo}`}
-                >
-                  {repository.owner}/{repository.repo}
-                </h4>
-                <span className="text-muted-foreground text-xs">·</span>
-                <GitHubBranchPicker
-                  organizationId={organizationId}
-                  repository={repository}
-                />
-              </div>
+          <div className="divide-border min-w-0 divide-y" key={repository.id}>
+            {multipleRepositories ? (
+              <h4
+                className="bg-muted/40 text-muted-foreground truncate px-4 py-2 text-xs font-medium"
+                title={`${repository.owner}/${repository.repo}`}
+              >
+                {repository.owner}/{repository.repo}
+              </h4>
             ) : null}
+            <GitHubSettingRow
+              title={t("branchTitle")}
+              description={t("branchDescription")}
+            >
+              <GitHubBranchPicker
+                organizationId={organizationId}
+                repository={repository}
+              />
+            </GitHubSettingRow>
             <GitHubPublishingSettings
               repository={repository}
               organizationId={organizationId}
               disabled={!integration.enabled || !repository.enabled}
+              openEditor={openEditor}
+              onOpenEditorChange={setOpenEditor}
             />
           </div>
         ))}
         {integration.repositories.length === 0 ? (
-          <p className="text-muted-foreground text-sm">{t("noRepository")}</p>
+          <p className="text-muted-foreground px-4 py-3 text-sm">
+            {t("noRepository")}
+          </p>
         ) : null}
-        {legacy && integration.repositories.length > 0 ? (
-          <div id={`webhooks-${integration.id}`} hidden={!webhooksOpen}>
-            {webhooksOpen ? (
-              <div className="space-y-5 pt-2">
-                {integration.repositories.map((repository) => (
-                  <GitHubWebhookSettings
-                    key={repository.id}
-                    repository={repository}
-                    organizationId={organizationId}
-                  />
-                ))}
-              </div>
-            ) : null}
-          </div>
+        {webhookRepository && webhookRepository.hasWebhook !== undefined ? (
+          <GitHubSettingRow
+            title={tWebhook("title")}
+            description={
+              webhookRepository.hasWebhook
+                ? tWebhook("rowConfigured")
+                : tWebhook("rowNotConfigured")
+            }
+          >
+            <Button
+              disabled={webhook.busy}
+              size="sm"
+              type="button"
+              variant="outline"
+              onClick={() => webhook.open("setup")}
+            >
+              {webhookRepository.hasWebhook
+                ? tWebhook("view")
+                : tWebhook("setUp")}
+            </Button>
+          </GitHubSettingRow>
         ) : null}
-      </CollapsibleContent>
-    </Collapsible>
+      </TitleCard>
+      {webhookRepository ? (
+        <GitHubWebhookSettings
+          repository={webhookRepository}
+          webhook={webhook}
+        />
+      ) : null}
+    </article>
   );
 }

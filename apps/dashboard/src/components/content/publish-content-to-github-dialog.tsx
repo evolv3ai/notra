@@ -7,36 +7,32 @@ import {
   ResponsiveDialogFooter,
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
-  ResponsiveDialogTrigger,
 } from "@notra/ui/components/shared/responsive-dialog";
-import { Github } from "@notra/ui/components/ui/svgs/github";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
-import { type FormEvent, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
-import { Button } from "@/components/button";
+import { ContentPublishingTarget } from "@/components/content/content-publishing-target";
 import { GitHubPublishDialogFooter } from "@/components/content/github-publish-dialog-footer";
 import { GitHubPublishRecoveryAlert } from "@/components/content/github-publish-recovery-alert";
 import { GitHubPublishRepositoryField } from "@/components/content/github-publish-repository-field";
 import { GitHubPublishResultCard } from "@/components/content/github-publish-result-card";
+import { useGitHubPublishRepositorySelection } from "@/lib/hooks/use-github-publish-repository-selection";
 import { dashboardOrpc } from "@/lib/orpc/query";
 import type {
   GitHubPublishDialogBodyProps,
   PublishContentToGitHubDialogProps,
 } from "@/types/content/detail";
 import type { ContentApiResponse } from "@/types/hooks/content";
+import { githubPublishDialogCopy } from "@/utils/github-publish-dialog-copy";
 import { getGitHubPublishRecovery } from "@/utils/github-publish-recovery";
-import {
-  formatGitHubRepositoryLabel,
-  getGitHubPublishRepositoryLists,
-  isGitHubContentPublishingEnabled,
-  resolveGitHubPublishRepositoryId,
-} from "@/utils/github-publish-repositories";
+import { formatGitHubRepositoryLabel } from "@/utils/github-publish-repositories";
 import {
   readStoredGitHubPublishRepositoryId,
   writeStoredGitHubPublishRepositoryId,
 } from "@/utils/github-publish-repository-preference";
+import { resolveGitHubPublishingSiteId } from "@/utils/github-publish-site-selection";
 
 function GitHubPublishDialogBody({
   contentLabel,
@@ -96,43 +92,56 @@ export function PublishContentToGitHubDialog({
   contentType,
   githubPublish,
   onSave,
+  onPublished,
   organizationId,
   organizationSlug,
   title,
+  open,
+  onOpenChange,
 }: PublishContentToGitHubDialogProps) {
   const t = useTranslations("content.githubPublish");
+  const tGit = useTranslations("content.gitPublishing");
+  const [siteId, setSiteId] = useState<string | undefined>(
+    githubPublish?.siteId
+  );
   const tContentShared = useTranslations("content.shared");
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
   const [repositoryId, setRepositoryId] = useState(
     () =>
       githubPublish?.repositoryId ??
       readStoredGitHubPublishRepositoryId(organizationId) ??
       ""
   );
-  const contentLabel = contentType === "changelog" ? "changelog" : "blog post";
-
-  const integrationsQuery = useQuery(
-    dashboardOrpc.integrations.list.queryOptions({
-      input: { organizationId },
-      enabled: open,
-      staleTime: 5 * 60 * 1000,
+  const {
+    repositories,
+    selectedRepositoryId,
+    selectedRepository,
+    selectedPublishingEnabled,
+    fieldProps,
+  } = useGitHubPublishRepositorySelection({
+    organizationId,
+    contentType,
+    repositoryId,
+    enabled: open,
+  });
+  const { contentLabel } = fieldProps;
+  const target = useQuery(
+    dashboardOrpc.integrations.repositories.contentDirectory.get.queryOptions({
+      input: {
+        organizationId,
+        repositoryId: selectedRepositoryId,
+        contentType,
+        contentId,
+      },
+      enabled: open && Boolean(selectedRepositoryId),
     })
   );
-  const { connected, publishable: repositories } =
-    getGitHubPublishRepositoryLists(integrationsQuery.data?.integrations ?? []);
-  const integrationsLoadFailed =
-    integrationsQuery.isError && !integrationsQuery.data;
-  const selectedRepositoryId = resolveGitHubPublishRepositoryId(
-    repositoryId,
-    repositories
-  );
-  const selectedRepository = repositories.find(
-    (repository) => repository.id === selectedRepositoryId
-  );
-  const selectedPublishingEnabled = selectedRepository
-    ? isGitHubContentPublishingEnabled(selectedRepository, contentType)
-    : false;
+  const selectedSiteId = resolveGitHubPublishingSiteId(siteId, target.data);
+  const branch =
+    target.data?.sites.find((site) => site.id === selectedSiteId)
+      ?.productionBranch ??
+    selectedRepository?.defaultBranch ??
+    "main";
 
   const invalidateIntegrations = () => {
     queryClient.invalidateQueries({
@@ -154,9 +163,10 @@ export function PublishContentToGitHubDialog({
         contentId,
         contentType,
         repositoryId: targetRepositoryId,
+        siteId: selectedSiteId,
       });
     },
-    onSuccess: (result, targetRepositoryId) => {
+    onSuccess: async (result, targetRepositoryId) => {
       const repository = repositories.find(
         (item) => item.id === targetRepositoryId
       );
@@ -195,10 +205,29 @@ export function PublishContentToGitHubDialog({
           input: { organizationId, contentId },
         }),
       });
+      await queryClient.invalidateQueries({
+        queryKey: dashboardOrpc.content.pullRequestState.queryKey({
+          input: { organizationId, contentId },
+        }),
+      });
+      await onPublished?.();
+      const fallbackMessage = result.fallbackReason
+        ? tGit(
+            result.fallbackReason === "protected"
+              ? "protectedFallback"
+              : result.fallbackReason === "changed"
+                ? "changedFallback"
+                : "draftFallback",
+            { branch }
+          )
+        : undefined;
       toast.success(
-        result.operation === "created"
-          ? t("prCreated")
-          : tContentShared("pullRequestUpdated")
+        result.direct
+          ? tGit("publishedDirectly", { branch: result.branchName })
+          : result.operation === "created"
+            ? t("prCreated")
+            : tContentShared("pullRequestUpdated"),
+        { description: fallbackMessage }
       );
     },
     onError: (error) => {
@@ -211,34 +240,31 @@ export function PublishContentToGitHubDialog({
   });
   const pullRequest = publishMutation.data;
   const publishRecovery = getGitHubPublishRecovery(publishMutation.error);
-  let copy = {
-    description: t("createDescription", { kind: contentLabel }),
-    title: t("createTitle"),
-  };
-  if (pullRequest?.operation === "created") {
-    copy = {
-      description: t("createdDescription", { kind: contentLabel }),
-      title: t("prCreated"),
-    };
-  } else if (pullRequest) {
-    copy = {
-      description: t("updatedDescription", { kind: contentLabel }),
-      title: tContentShared("pullRequestUpdated"),
-    };
-  }
+  const copy = githubPublishDialogCopy({
+    direct: pullRequest?.direct,
+    operation: pullRequest?.operation,
+    title: tGit("publish"),
+    description:
+      target.data?.reviewProcess === "direct"
+        ? tGit("publishesDirectly", { branch })
+        : tGit("pullRequestDescription", { branch }),
+    directDescription: tGit("publishedDirectly", {
+      branch: pullRequest?.branchName ?? branch,
+    }),
+    createdTitle: t("prCreated"),
+    createdDescription: t("createdDescription", { kind: contentLabel }),
+    updatedTitle: tContentShared("pullRequestUpdated"),
+    updatedDescription: t("updatedDescription", { kind: contentLabel }),
+  });
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
       if (publishMutation.isPending) {
         return;
       }
-      setOpen(false);
-      return;
-    }
-    setOpen(true);
-    if (!publishMutation.isPending) {
       publishMutation.reset();
     }
+    onOpenChange(nextOpen);
   };
 
   const rememberRepository = (nextRepositoryId: string) => {
@@ -250,12 +276,12 @@ export function PublishContentToGitHubDialog({
     if (nextRepositoryId === selectedRepositoryId) {
       return;
     }
+    setSiteId(undefined);
     rememberRepository(nextRepositoryId);
     publishMutation.reset();
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleSubmit = () => {
     if (publishMutation.isPending) {
       return;
     }
@@ -267,12 +293,8 @@ export function PublishContentToGitHubDialog({
 
   return (
     <ResponsiveDialog onOpenChange={handleOpenChange} open={open}>
-      <ResponsiveDialogTrigger render={<Button size="sm" variant="outline" />}>
-        <Github className="size-4" />
-        {t("trigger")}
-      </ResponsiveDialogTrigger>
       <ResponsiveDialogContent className="min-w-0 sm:max-w-[600px]">
-        <form className="contents" onSubmit={handleSubmit}>
+        <div className="contents">
           <ResponsiveDialogHeader>
             <ResponsiveDialogTitle>{copy.title}</ResponsiveDialogTitle>
             <ResponsiveDialogDescription>
@@ -282,26 +304,37 @@ export function PublishContentToGitHubDialog({
 
           <div className="min-w-0 space-y-4">
             <GitHubPublishDialogBody
-              contentLabel={contentLabel}
-              connectedRepositoryCount={connected.length}
-              integrationsLoadFailed={integrationsLoadFailed}
-              isLoadingIntegrations={integrationsQuery.isLoading}
+              {...fieldProps}
               isPublishing={publishMutation.isPending}
               onRepositoryChange={handleRepositoryChange}
-              onRetryIntegrations={() => integrationsQuery.refetch()}
               organizationSlug={organizationSlug}
               publishRecovery={publishRecovery}
               pullRequest={pullRequest}
-              repositories={repositories}
-              selectedPublishingEnabled={selectedPublishingEnabled}
-              selectedRepository={selectedRepository}
               title={title}
             />
+            {!pullRequest && target.data ? (
+              <ContentPublishingTarget
+                config={target.data}
+                siteId={selectedSiteId}
+                onSiteChange={setSiteId}
+                branch={branch}
+                disabled={publishMutation.isPending}
+              />
+            ) : null}
           </div>
 
           <ResponsiveDialogFooter>
             <GitHubPublishDialogFooter
-              hasSelectedRepository={Boolean(selectedRepository)}
+              onPublish={handleSubmit}
+              hasSelectedRepository={
+                Boolean(selectedRepository) &&
+                !target.isLoading &&
+                !(
+                  target.data &&
+                  target.data.sites.length > 1 &&
+                  !selectedSiteId
+                )
+              }
               isPublishing={publishMutation.isPending}
               organizationSlug={organizationSlug}
               publishRecovery={publishRecovery}
@@ -309,7 +342,7 @@ export function PublishContentToGitHubDialog({
               selectedPublishingEnabled={selectedPublishingEnabled}
             />
           </ResponsiveDialogFooter>
-        </form>
+        </div>
       </ResponsiveDialogContent>
     </ResponsiveDialog>
   );

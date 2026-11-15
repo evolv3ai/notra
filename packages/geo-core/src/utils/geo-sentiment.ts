@@ -1,7 +1,4 @@
-import type {
-  GeoSentimentCounts,
-  GeoSentimentRow,
-} from "@notra/db/types/geo-sentiment";
+import type { GeoSentimentCounts } from "@notra/db/types/geo-sentiment";
 
 import type { GeoSentimentBucket } from "../types/geo-sentiment";
 
@@ -70,24 +67,4 @@ export function summarizeSentiment(
       ? classifiedMentions / counts.mentions
       : null,
   };
-}
-
-export function sentimentPoints(rows: GeoSentimentRow[]) {
-  const days = [...new Set(rows.map((row) => row.day))].sort();
-  const first = days.at(0);
-  const last = days.at(-1);
-  if (!first || !last) {
-    return [];
-  }
-  const points = [];
-  const date = new Date(`${first}T00:00:00Z`);
-  while (date.toISOString().slice(0, 10) <= last) {
-    const day = date.toISOString().slice(0, 10);
-    points.push({
-      day,
-      ...summarizeSentiment(rows.filter((row) => row.day === day)),
-    });
-    date.setUTCDate(date.getUTCDate() + 1);
-  }
-  return points;
 }

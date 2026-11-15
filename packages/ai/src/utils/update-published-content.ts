@@ -101,8 +101,6 @@ export async function updatePublishedContentAndCommit(params: {
   onCommitted?: (sha: string) => void;
   scheduleRepair?: PublicationRepairScheduler;
 }) {
-  // Commit first: a rejected commit (stale head, protected branch) must not
-  // leave the Notra post ahead of the pull request.
   const commitSha = await commitFilesToPullRequest({
     octokit: params.octokit,
     owner: params.owner,
@@ -171,7 +169,6 @@ export async function syncPublishedPostAfterCommit(params: {
   scheduleRepair?: PublicationRepairScheduler;
 }) {
   const publication = params.publication;
-  // A follow-up branch is not the published pull request, so the post stays.
   if (!publication || !params.recordPublicationHead) {
     return false;
   }
@@ -180,7 +177,7 @@ export async function syncPublishedPostAfterCommit(params: {
   if (!file) {
     return false;
   }
-  const result = await syncOrScheduleRepair(
+  return syncOrScheduleRepair(
     {
       organizationId: params.organizationId,
       publicationId: publication.id,
@@ -212,7 +209,6 @@ export async function syncPublishedPostAfterCommit(params: {
     params.scheduleRepair,
     params.octokit
   );
-  return result;
 }
 
 /**
@@ -273,9 +269,6 @@ export async function syncPublishedPostFromPullRequestHead(params: {
       ref: params.commitSha,
     }
   );
-  // Publishing exports a saved Notra snapshot. Its webhook must never import
-  // that snapshot over an edit saved while the GitHub request was in flight.
-  // The publisher's durable reconciliation records this head instead.
   const message = commit.commit?.message ?? "";
   const postMarker = `${GITHUB_CONTENT_POST_TRAILER}${params.organizationId}/${params.publication.postId}`;
   const marker = message
@@ -298,9 +291,6 @@ export async function syncPublishedPostFromPullRequestHead(params: {
     ) {
       return { status: "superseded" as const };
     }
-    // Legacy exports and exports signed before key rotation cannot safely be
-    // distinguished from forged markers. Do not import or acknowledge them;
-    // retry once durable reconciliation has recorded the publication head.
     return {
       status: "failed" as const,
       error:

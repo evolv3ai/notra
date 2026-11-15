@@ -7,6 +7,7 @@ import { CONTENT_IMAGE_MIME_EXTENSIONS } from "@/constants/content-image";
 import { CONTENT_VIDEO_MIME_EXTENSIONS } from "@/constants/content-video";
 import {
   GITHUB_CONTENT_MAX_ASSET_BYTES,
+  GITHUB_DEFAULT_PUBLIC_DIRECTORY,
   GITHUB_CONTENT_MAX_ASSET_COUNT,
   GITHUB_CONTENT_MAX_SINGLE_ASSET_BYTES,
 } from "@/constants/github";
@@ -15,6 +16,7 @@ import type {
   PrepareGitHubContentAssetsParams,
   PreparedGitHubContent,
 } from "@/types/integrations/github";
+import type { PrepareR2GitHubContentAssetsParams } from "@/types/integrations/github-content-assets";
 import {
   contentImageKeyBelongsToOrganization,
   contentMediaExtension,
@@ -44,17 +46,6 @@ export function expandGitHubPathTemplate(template: string, slug: string) {
   return template.replaceAll(":slug", slug);
 }
 
-/**
- * Returns image and video URL spans in source order. Image destinations keep
- * alt text, titles, and angle-bracket forms. Reference-style images and raw
- * `<img>` HTML stay untouched: the editor only emits inline images and
- * `<video controls src="...">`.
- *
- * The extension overrides mdast-util-from-markdown's default
- * `resourceDestinationString` handlers, which is the only place the parser
- * exposes the destination's offsets. The replacement keeps the default
- * behaviour (`buffer` on enter, `resume` + `node.url` on exit).
- */
 function findMarkdownMediaOccurrences(markdown: string) {
   const occurrences: Array<{ end: number; start: number; url: string }> = [];
   let destination: { end: number; image: boolean; start: number } | undefined;
@@ -66,9 +57,6 @@ function findMarkdownMediaOccurrences(markdown: string) {
           resourceDestinationString(token) {
             destination = {
               end: token.end.offset,
-              // A destination belongs to an image when the image node is on
-              // top of the stack and it is not nested inside another image's
-              // alt text (that inner syntax is rendered as plain text).
               image:
                 this.stack.at(-1)?.type === "image" &&
                 !this.stack.slice(0, -1).some((node) => node.type === "image"),
@@ -182,7 +170,6 @@ function resolveStoredAssetPath(
       .split("/")
       .pop()
       ?.replace(/\.[^.]+$/, "") || "media";
-  // Identity-stable: reorder and republish keep the same GitHub path.
   const base = template
     .replaceAll(":index", stem)
     .replace(GITHUB_IMAGE_EXTENSION_REGEX, "");
@@ -192,16 +179,15 @@ function resolveStoredAssetPath(
   return `${base}-${stem}${extension}`;
 }
 
+function encodeRfc3986(value: string) {
+  return encodeURIComponent(value).replace(
+    /[!'()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`
+  );
+}
+
 function encodeMarkdownPath(path: string) {
-  return path
-    .split("/")
-    .map((segment) =>
-      encodeURIComponent(segment).replace(
-        /[!'()*]/g,
-        (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`
-      )
-    )
-    .join("/");
+  return path.split("/").map(encodeRfc3986).join("/");
 }
 
 function sourceFragment(sourceUrl: string) {
@@ -231,10 +217,7 @@ function appendSourceFragment(destination: string, sourceUrl: string) {
       break;
     }
     const character = String.fromCodePoint(codePoint);
-    encodedFragment += encodeURIComponent(character).replace(
-      /[!'()*]/g,
-      (value) => `%${value.charCodeAt(0).toString(16).toUpperCase()}`
-    );
+    encodedFragment += encodeRfc3986(character);
     index += character.length;
   }
   return `${destination}#${encodedFragment}`;
@@ -260,9 +243,14 @@ function resolveStoredImageKey(
   return r2Key ?? getAppContentImageKey(imageUrl, appOrigin);
 }
 
-function resolveMarkdownImagePath(contentPath: string, imagePath: string) {
-  if (imagePath.startsWith("public/")) {
-    return `/${encodeMarkdownPath(imagePath.slice("public/".length))}`;
+function resolveMarkdownImagePath(
+  contentPath: string,
+  imagePath: string,
+  publicDirectory: string
+) {
+  const publicPrefix = `${publicDirectory}/`;
+  if (imagePath.startsWith(publicPrefix)) {
+    return `/${encodeMarkdownPath(imagePath.slice(publicPrefix.length))}`;
   }
 
   const relativePath = posix.relative(posix.dirname(contentPath), imagePath);
@@ -330,7 +318,8 @@ export async function prepareGitHubContentAssets(
     assets.push({ contents: image.asset.contents, path: imagePath });
     const markdownImagePath = resolveMarkdownImagePath(
       params.contentPath,
-      imagePath
+      imagePath,
+      params.publicDirectory ?? GITHUB_DEFAULT_PUBLIC_DIRECTORY
     );
     for (const imageUrl of image.imageUrls) {
       replacements.set(
@@ -351,19 +340,13 @@ export async function prepareGitHubContentAssets(
   };
 }
 
-export async function prepareR2GitHubContentAssets(params: {
-  contentPath: string;
-  imagePathTemplate: string;
-  markdown: string;
-  organizationId: string;
-  slug: string;
-}) {
-  const publicUrl = getOptionalR2PublicUrl();
-
+export async function prepareR2GitHubContentAssets(
+  params: PrepareR2GitHubContentAssetsParams
+) {
   return prepareGitHubContentAssets({
     ...params,
     appOrigin: readAppOrigin(),
-    publicUrl,
+    publicUrl: getOptionalR2PublicUrl(),
     loadImage: async (key, maxBytes) => {
       const stored = await readContentImage(key, maxBytes);
       if (!stored) {

@@ -8,6 +8,7 @@ import type { GeoSearchConsoleStatus } from "@notra/geo-core/types/google-search
 import type { ReactNode } from "react";
 
 import type { GeoPromptSuggestion } from "@/types/geo";
+import type { GeoAccessLevel } from "@/types/geo-access";
 
 export interface PromptSuggestionsProps {
   organizationId: string;
@@ -40,6 +41,7 @@ export interface SuggestionColumnsOptions {
     clicks: string;
     position: string;
     openDetails: (prompt: string) => string;
+    askedOnGoogle: (question: string) => string;
   };
 }
 
@@ -124,11 +126,14 @@ export interface GeoUpgradeGateProps {
   slug: string;
   children: ReactNode;
   fallback?: ReactNode;
+  /** The server's access level: render the page while billing loads. */
+  initialAccess?: GeoAccessLevel;
 }
 
 export interface GeoPageGateProps {
   children: ReactNode;
   fallback: ReactNode;
+  initialAccess?: GeoAccessLevel;
 }
 
 export interface GeoUpgradeDialogProps {
@@ -136,7 +141,7 @@ export interface GeoUpgradeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOpenChangeComplete?: (open: boolean) => void;
-  entry?: "geo" | "sidebar" | "studio";
+  entry?: "geo" | "sidebar" | "studio" | "sites";
 }
 
 export interface GeoCsvImportDialogProps<TRow> {

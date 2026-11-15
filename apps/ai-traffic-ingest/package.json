@@ -12,12 +12,13 @@
   "dependencies": {
     "@notra/ai": "workspace:*",
     "@notra/analytics": "workspace:*",
+    "@notra/db": "workspace:*",
     "@notra/geo-core": "workspace:*",
-    "hono": "^4.12.30"
+    "hono": "^4.13.13"
   },
   "devDependencies": {
     "@notra/typescript-config": "workspace:*",
-    "bun-types": "1.4.0",
-    "typescript": "7.0.2"
+    "bun-types": "catalog:",
+    "typescript": "catalog:"
   }
 }

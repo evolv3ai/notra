@@ -11,7 +11,7 @@ export const USAGE_ALERT_THRESHOLD_TYPES = [
   "remaining_percentage",
 ] as const;
 
-export const usageAlertSchema = z
+const usageAlertSchema = z
   .object({
     featureId: z.string().trim().min(1).max(100).optional(),
     enabled: z.boolean(),

@@ -1,0 +1,65 @@
+---
+title: Canvas
+description: A React Flow canvas with workflow nodes, animated edges, zoom controls and grid styles.
+---
+
+<Component path="workflow/examples/workflow-canvas" />
+
+<RegistryInstall name="workflow-canvas" />
+
+`WorkflowCanvas` is a [React Flow](https://reactflow.dev) canvas set up for workflows. Pass it your steps and connections and it renders every step as a `WorkflowNodeCard` and every connection as a `WorkflowEdge`. Press Run to play the workflow from left to right, drag a node to move it, or drag from an output handle to an input handle to connect two steps. The canvas opens fitted to the graph, and when a long workflow would get too small to read it starts at the first step instead and you scroll along.
+
+```tsx
+const graph = useWorkflowGraph(SCHEMA_AUDIT_WORKFLOW);
+const run = useWorkflowRun(graph.nodes, graph.edges);
+
+<WorkflowCanvas
+  nodes={graph.nodes}
+  edges={graph.edges}
+  nodeState={run.nodeState}
+  edgeState={run.edgeState}
+  onNodeMove={graph.moveNode}
+  onConnect={graph.connect}
+/>
+```
+
+| Prop | Default | Description |
+| --- | --- | --- |
+| `nodes` | | Steps, each with an `id`, `kind`, `title` and `position`. |
+| `edges` | | Connections, each with a `source`, `target` and optional `sourcePort`, `targetPort`, `label` and `animated`. |
+| `nodeState` | | Returns `{ status, elapsedMs }` for a step id. |
+| `edgeState` | | Returns `idle`, `active`, `done` or `skipped` for an edge id. |
+| `background` | `dots` | `dots`, `lines`, `grid`, `cross` or `none`. |
+| `gap` | `16` | Space between dots or lines. |
+| `focusId` | | Scrolls a step into view, like one you just added. |
+| `selectedId` | | Draws the selection ring on a step. |
+| `onSelectNode` | | Called when a step is clicked. |
+| `onNodeMove` | | Makes steps draggable. |
+| `onNodeRemove` | | Lets Backspace delete the selected step. |
+| `onConnect` | | Turns on drag-to-connect and gets the new edge. |
+| `onDropBlock` | | Called with a block id and canvas position when a palette block is dropped. |
+| `controls` | `true` | Shows zoom out, zoom in and fit in the corner. |
+| `minimap` | `false` | Shows a React Flow minimap in the corner on wider screens. |
+| `toolbar` | | Extra content next to the zoom controls. |
+| `minZoom` | `0.3` | The smallest zoom. |
+| `maxZoom` | `1.5` | The largest zoom. |
+
+The canvas fits the graph on mount and pans when you scroll. It imports React Flow's base stylesheet, so there's nothing to add to your CSS.
+
+## Grid styles
+
+<Component path="workflow/examples/workflow-canvas-backgrounds" />
+
+`background` picks the grid. `grid` layers a faint minor grid under a major line every fifth cell, like a design tool. All styles mix `--foreground` into transparent, so they work in light and dark mode. `WorkflowCanvasBackground` is exported on its own if you want the same grids in your own React Flow.
+
+```tsx
+<WorkflowCanvas background="grid" gap={24} nodes={nodes} edges={edges} />
+```
+
+## Playing a workflow
+
+`useWorkflowRun(nodes, edges)` schedules every step ahead of time. Steps start once all of their taken inputs finish, so parallel branches run side by side and a merge waits for both. Conditions and decisions follow their `branch`, and everything behind a branch that wasn't taken is skipped. Each node runs for its `durationMs`. Replace the hook with your engine's run events to show a real run.
+
+`useWorkflowGraph(template)` keeps the nodes and edges editable with `moveNode`, `addNode`, `removeNode`, `updateNode` and `connect`.
+
+<include>./_used-in.mdx</include>

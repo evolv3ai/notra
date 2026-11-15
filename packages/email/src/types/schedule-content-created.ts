@@ -10,4 +10,6 @@ export interface ScheduledContentCreatedEmailProps {
   contentType: string;
   contentOverviewLink: string;
   organizationSlug: string;
+  /** Every run in this email asked for it through its Then notify step. */
+  automationEmail?: boolean;
 }

@@ -1,225 +1,187 @@
 "use client";
 
-import { Label } from "@notra/ui/components/ui/label";
+import { PencilEdit01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Field, FieldLabel } from "@notra/ui/components/ui/field";
 import { Switch } from "@notra/ui/components/ui/switch";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@notra/ui/components/ui/tooltip";
 import { useId } from "react";
-import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
-import {
-  DEFAULT_GITHUB_CONTENT_DIRECTORIES,
-  DEFAULT_GITHUB_CONTENT_OUTPUT_ENABLED,
-} from "@/constants/github";
-import { useGitHubRepositoriesDb } from "@/lib/hooks/use-github-repositories-db";
-import { dashboardOrpc } from "@/lib/orpc/query";
+import { useGitHubContentPublishing } from "@/hooks/use-github-content-publishing";
 import type {
-  GitHubContentDirectoryMutationVariables,
-  GitHubContentPathMutationVariables,
   GitHubContentPublishingSettingsProps,
   GitHubPublishingSettingsProps,
 } from "@/types/integrations/github";
 
 import { GitHubDirectoryPicker } from "./github-directory-picker";
 import { GitHubPublishingPathFields } from "./github-publishing-path-fields";
+import { GitHubReviewProcess } from "./github-review-process";
+import { GitHubSettingRow } from "./github-setting-row";
 
 function GitHubContentPublishingSettings({
-  contentType,
-  organizationId,
-  repository: selectedRepository,
   disabled = false,
+  ...props
 }: GitHubContentPublishingSettingsProps) {
+  const { contentType, organizationId, repository } = props;
   const t = useTranslations("integrations.github");
   const tCommon = useTranslations("common");
-  const queryClient = useQueryClient();
-  const repositoriesDb = useGitHubRepositoriesDb(organizationId);
   const folderTriggerId = useId();
   const publishingSwitchId = useId();
-  const repositoryId = selectedRepository?.id ?? "";
-  const contentOutput = selectedRepository?.outputs?.find(
-    (output) => output.outputType === contentType
-  );
-  const publishingEnabled =
-    contentOutput?.enabled ??
-    DEFAULT_GITHUB_CONTENT_OUTPUT_ENABLED[contentType];
-  const directoryQuery = useQuery(
-    dashboardOrpc.integrations.repositories.contentDirectory.get.queryOptions({
-      input: {
-        organizationId,
-        repositoryId,
-        contentType,
-      },
-      enabled: Boolean(organizationId && repositoryId),
-      staleTime: 5 * 60 * 1000,
-    })
-  );
-  const directory =
-    directoryQuery.data?.directory ??
-    DEFAULT_GITHUB_CONTENT_DIRECTORIES[contentType];
-  const directoryQueryKey =
-    dashboardOrpc.integrations.repositories.contentDirectory.get.queryKey({
-      input: { organizationId, repositoryId, contentType },
-    });
-  // Both saves return the whole configuration. Overlapping requests can
-  // resolve out of order, so the server state is refetched after each save
-  // instead of trusting the response as the latest configuration.
-  const settleDirectoryConfig = (
-    result: NonNullable<typeof directoryQuery.data>
-  ) => {
-    queryClient.setQueryData(directoryQueryKey, result);
-    return queryClient.invalidateQueries({ queryKey: directoryQueryKey });
-  };
-  const directoryMutation = useMutation({
-    mutationFn: ({
-      nextDirectory,
-      targetRepositoryId,
-    }: GitHubContentDirectoryMutationVariables) =>
-      dashboardOrpc.integrations.repositories.contentDirectory.update.call({
-        organizationId,
-        repositoryId: targetRepositoryId,
-        contentType,
-        directory: nextDirectory,
-      }),
-    onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: directoryQueryKey });
-    },
-    onSuccess: async (result) => {
-      await settleDirectoryConfig(result);
-      queryClient.invalidateQueries({
-        queryKey: dashboardOrpc.integrations.list.queryKey({
-          input: { organizationId },
-        }),
-      });
-    },
-    onError: (error) => {
-      toast.error(
-        error.message || t("publishing.saveFolderFailed", { type: contentType })
-      );
-    },
-  });
-  const pathMutation = useMutation({
-    mutationFn: ({
-      contentPath,
-      imagePath,
-      targetRepositoryId,
-    }: GitHubContentPathMutationVariables) =>
-      dashboardOrpc.integrations.repositories.contentDirectory.update.call({
-        organizationId,
-        repositoryId: targetRepositoryId,
-        contentType,
-        contentPath,
-        imagePath,
-      }),
-    onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: directoryQueryKey });
-    },
-    onSuccess: async (result) => {
-      await settleDirectoryConfig(result);
-    },
-    onError: (error) => {
-      toast.error(
-        error.message || t("publishing.savePathsFailed", { type: contentType })
-      );
-    },
-  });
+  const editorId = useId();
+  const locationId = useId();
+  const publishing = useGitHubContentPublishing(props);
+  const { directoryQuery } = publishing;
+  const repositoryName = `${repository.owner}/${repository.repo}`;
+
   return (
-    <div className="min-w-0 space-y-2.5">
-      <div className="flex items-center gap-2">
-        <Switch
-          id={publishingSwitchId}
-          aria-label={t("publishing.publishAriaLabel", {
-            type: contentType,
-            repository: `${selectedRepository.owner}/${selectedRepository.repo}`,
-          })}
-          checked={publishingEnabled}
-          disabled={disabled}
-          onCheckedChange={(enabled) => {
-            void repositoriesDb
-              .setRepositoryOutputEnabled(
-                selectedRepository.id,
-                contentType,
-                enabled
-              )
-              .catch(() => {});
-          }}
-        />
-        <Label
-          className="cursor-pointer text-xs font-medium"
-          htmlFor={publishingSwitchId}
-        >
-          {t("contentTypes.label", { type: contentType })}
-        </Label>
-      </div>
-
-      <div className="min-w-0">
-        {directoryQuery.isError && !directoryQuery.data ? (
-          <div
-            className="border-destructive/30 flex min-h-10 items-center justify-between gap-3 rounded-lg border px-3"
-            role="alert"
-          >
-            <p className="text-destructive text-sm">
-              {t("publishing.loadFolderFailed", { type: contentType })}
-            </p>
-            <Button
-              onClick={() => directoryQuery.refetch()}
-              size="sm"
-              type="button"
-              variant="ghost"
+    <div className="min-w-0">
+      <GitHubSettingRow
+        htmlFor={publishingSwitchId}
+        title={t("contentTypes.label", { type: contentType })}
+        description={
+          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <span
+              className="min-w-0 truncate font-mono text-xs"
+              id={locationId}
+              title={
+                publishing.loadFailed || directoryQuery.isLoading
+                  ? undefined
+                  : publishing.location
+              }
             >
-              {tCommon("actions.retry")}
-            </Button>
-          </div>
-        ) : (
-          <GitHubDirectoryPicker
-            contentType={contentType}
-            directory={directory}
-            disabled={disabled || directoryQuery.isLoading}
-            isSaving={directoryMutation.isPending}
-            key={selectedRepository.id}
-            onSave={async (nextDirectory) => {
-              await directoryMutation.mutateAsync({
-                nextDirectory,
-                targetRepositoryId: selectedRepository.id,
-              });
-            }}
-            organizationId={organizationId}
-            repositoryId={selectedRepository.id}
-            repositoryName={`${selectedRepository.owner}/${selectedRepository.repo}`}
-            triggerId={folderTriggerId}
-          />
-        )}
-      </div>
-
-      <GitHubPublishingPathFields
-        contentType={contentType}
-        contentPath={directoryQuery.data?.contentPath ?? null}
-        directory={directory}
-        disabled={
-          disabled ||
-          directoryQuery.isLoading ||
-          (directoryQuery.isError && !directoryQuery.data)
+              {publishing.loadFailed && (
+                <span className="text-destructive" role="alert">
+                  {t("publishing.loadFolderFailed", { type: contentType })}
+                </span>
+              )}
+              {!directoryQuery.isLoading &&
+                !publishing.loadFailed &&
+                publishing.location}
+            </span>
+            {publishing.showUnsavedChanges ? (
+              <span className="text-badge-warning text-xs">
+                {t("publishing.unsavedChanges")}
+              </span>
+            ) : null}
+          </span>
         }
-        imagePath={directoryQuery.data?.imagePath ?? null}
-        isSaving={pathMutation.isPending}
-        key={`${selectedRepository.id}:${directoryQuery.data?.contentPath ?? ""}:${directoryQuery.data?.imagePath ?? ""}`}
-        onSave={({ contentPath, imagePath }) => {
-          pathMutation.mutate({
-            contentPath,
-            imagePath,
-            targetRepositoryId: selectedRepository.id,
-          });
-        }}
-      />
+      >
+        <div className="flex items-center gap-2">
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  aria-controls={editorId}
+                  aria-describedby={locationId}
+                  aria-expanded={publishing.editing}
+                  aria-label={t("publishing.editPathsAriaLabel", {
+                    type: contentType,
+                  })}
+                  className="text-muted-foreground"
+                  size="icon-sm"
+                  type="button"
+                  variant="ghost"
+                  onClick={publishing.toggleEditor}
+                />
+              }
+            >
+              <HugeiconsIcon className="size-4" icon={PencilEdit01Icon} />
+            </TooltipTrigger>
+            <TooltipContent>{t("publishing.editPaths")}</TooltipContent>
+          </Tooltip>
+          <Switch
+            id={publishingSwitchId}
+            aria-label={t("publishing.publishAriaLabel", {
+              type: contentType,
+              repository: repositoryName,
+            })}
+            checked={publishing.publishingEnabled}
+            disabled={disabled}
+            onCheckedChange={publishing.setPublishingEnabled}
+          />
+        </div>
+      </GitHubSettingRow>
+
+      <div
+        className="bg-muted/40 mx-4 mb-3 max-w-2xl space-y-4 rounded-lg border p-3"
+        hidden={!publishing.editing}
+        id={editorId}
+      >
+        <Field>
+          <FieldLabel htmlFor={folderTriggerId}>
+            {t("pathFields.folder")}
+          </FieldLabel>
+          {publishing.loadFailed ? (
+            <div
+              className="border-destructive/30 flex min-h-10 items-center justify-between gap-3 rounded-lg border px-3"
+              role="alert"
+            >
+              <p className="text-destructive text-sm">
+                {t("publishing.loadFolderFailed", { type: contentType })}
+              </p>
+              <Button
+                onClick={() => directoryQuery.refetch()}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                {tCommon("actions.retry")}
+              </Button>
+            </div>
+          ) : (
+            <GitHubDirectoryPicker
+              contentType={contentType}
+              directory={publishing.directory}
+              disabled={disabled || directoryQuery.isLoading}
+              isSaving={publishing.isSavingDirectory}
+              key={repository.id}
+              onSave={publishing.saveDirectory}
+              organizationId={organizationId}
+              repositoryId={repository.id}
+              repositoryName={repositoryName}
+              triggerId={folderTriggerId}
+            />
+          )}
+        </Field>
+
+        {directoryQuery.data ? (
+          <GitHubReviewProcess
+            organizationId={organizationId}
+            repository={repository}
+            contentType={contentType}
+            disabled={disabled}
+            config={directoryQuery.data}
+          />
+        ) : null}
+        <GitHubPublishingPathFields
+          contentPath={publishing.contentPath}
+          directory={publishing.directory}
+          disabled={
+            disabled || directoryQuery.isLoading || publishing.loadFailed
+          }
+          imagePath={publishing.imagePath}
+          isSaving={publishing.isSavingPaths}
+          key={publishing.pathFieldsKey}
+          onCancel={publishing.closeEditor}
+          onDirtyChange={publishing.changeDraft}
+          onSave={publishing.savePaths}
+        />
+      </div>
     </div>
   );
 }
 
 export function GitHubPublishingSettings(props: GitHubPublishingSettingsProps) {
   return (
-    <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+    <>
       <GitHubContentPublishingSettings {...props} contentType="changelog" />
       <GitHubContentPublishingSettings {...props} contentType="blog_post" />
-    </div>
+    </>
   );
 }

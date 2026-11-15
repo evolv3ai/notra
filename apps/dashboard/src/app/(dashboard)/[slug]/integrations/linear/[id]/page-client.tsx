@@ -1,5 +1,8 @@
 "use client";
 
+import { Edit02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { PageHeading } from "@notra/ui/components/shared/page-heading";
 import { Badge } from "@notra/ui/components/ui/badge";
 import { Linear } from "@notra/ui/components/ui/svgs/linear";
 import {
@@ -9,15 +12,17 @@ import {
 } from "@notra/ui/components/ui/tooltip";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { useTranslations } from "next-intl";
-import dynamic from "next/dynamic";
 import { useState } from "react";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
+import { EmptyState } from "@/components/empty-state";
+import { PageContainer } from "@/components/layout/container";
 import { useOrganizationsContext } from "@/components/providers/organization-provider";
 import { useDateFnsLocale } from "@/lib/i18n/date-fns";
 import { dashboardOrpc } from "@/lib/orpc/query";
 import type { LinearIntegration } from "@/types/integrations";
+import dynamic from "@/utils/lazy-component";
 
 import { LinearIntegrationDetailSkeleton } from "./skeleton";
 
@@ -81,16 +86,14 @@ function LinearIntegrationMissing() {
   const t = useTranslations("integrations.detailPage");
 
   return (
-    <div className="flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
+    <PageContainer className="flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
       <div className="w-full space-y-6 px-4 lg:px-6">
-        <div className="rounded-xl border border-dashed p-12 text-center">
-          <h3 className="text-lg font-medium">{t("notFoundTitle")}</h3>
-          <p className="text-muted-foreground text-sm">
-            {t("notFoundDescription")}
-          </p>
-        </div>
+        <EmptyState
+          description={t("notFoundDescription")}
+          title={t("notFoundTitle")}
+        />
       </div>
-    </div>
+    </PageContainer>
   );
 }
 
@@ -123,19 +126,41 @@ function LinearIntegrationLoaded({
     : tCommon("states.disabled");
 
   return (
-    <div className="flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
+    <PageContainer className="flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
       <div className="w-full space-y-6 px-4 lg:px-6">
-        <div className="flex flex-col items-start gap-3 @min-[40rem]/main:flex-row @min-[40rem]/main:justify-between">
-          <div className="min-w-0 space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
+        <PageHeading
+          description={
+            <span className="block space-y-1">
+              {integration.linearOrganizationName ? (
+                <span className="flex flex-wrap items-center gap-2">
+                  <Linear className="size-4 shrink-0" />
+                  <span className="min-w-0 wrap-anywhere">
+                    {integration.linearOrganizationName}
+                  </span>
+                  {integration.linearTeamName ? (
+                    <>
+                      <span
+                        aria-hidden="true"
+                        className="bg-muted-foreground/70 size-1 rounded-full"
+                      />
+                      <span className="min-w-0 wrap-anywhere">
+                        {integration.linearTeamName}
+                      </span>
+                    </>
+                  ) : null}
+                </span>
+              ) : null}
+              <span className="block">{t("linearSubtitle")}</span>
+            </span>
+          }
+          title={
+            <span className="inline-flex max-w-full flex-wrap items-center gap-2.5">
               <Tooltip>
                 <TooltipTrigger
                   render={
-                    <h1 className="min-w-0 text-3xl font-bold tracking-tight wrap-anywhere">
-                      <span className="cursor-help">
-                        {integration.displayName}
-                      </span>
-                    </h1>
+                    <span className="min-w-0 cursor-help wrap-anywhere">
+                      {integration.displayName}
+                    </span>
                   }
                 />
                 <TooltipContent>{createdLabel}</TooltipContent>
@@ -143,50 +168,14 @@ function LinearIntegrationLoaded({
               <Badge variant={integration.enabled ? "default" : "secondary"}>
                 {statusLabel}
               </Badge>
-            </div>
-            {integration.linearOrganizationName ? (
-              <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
-                <Linear className="size-4 shrink-0" />
-                <span className="min-w-0 wrap-anywhere">
-                  {integration.linearOrganizationName}
-                </span>
-                {integration.linearTeamName ? (
-                  <>
-                    <span
-                      aria-hidden="true"
-                      className="bg-muted-foreground/70 size-1 rounded-full"
-                    />
-                    <span className="min-w-0 wrap-anywhere">
-                      {integration.linearTeamName}
-                    </span>
-                  </>
-                ) : null}
-              </div>
-            ) : null}
-            <p className="text-muted-foreground">{t("linearSubtitle")}</p>
-          </div>
-          <Button
-            onClick={() => onEditOpenChange(true)}
-            size="sm"
-            variant="outline"
-          >
-            <svg
-              className="size-4"
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <title>{t("editIcon")}</title>
-              <path d="M12 20h9" />
-              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-            </svg>
-            <span className="ml-2">{tCommon("actions.edit")}</span>
+            </span>
+          }
+        >
+          <Button onClick={() => onEditOpenChange(true)} variant="outline">
+            <HugeiconsIcon className="size-4" icon={Edit02Icon} />
+            {tCommon("actions.edit")}
           </Button>
-        </div>
+        </PageHeading>
 
         <EditLinearIntegrationDialog
           integration={integration}
@@ -237,6 +226,6 @@ function LinearIntegrationLoaded({
           </div>
         </div>
       </div>
-    </div>
+    </PageContainer>
   );
 }

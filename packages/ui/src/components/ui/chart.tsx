@@ -6,7 +6,6 @@ import * as RechartsPrimitive from "recharts"
 import { cn } from "@notra/ui/lib/utils"
 import { useUiLabels } from "@notra/ui/components/shared/ui-labels-provider"
 
-// Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const
 
 export type ChartConfig = {
@@ -97,7 +96,9 @@ ${colorConfig
 }
 `
           )
-          .join("\n"),
+          .join("\n")
+          // CSS-escape "<" so a value can never close the <style> element.
+          .replaceAll("<", "\\3c "),
       }}
     />
   )

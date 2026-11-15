@@ -11,15 +11,13 @@ import type {
   GatewayId,
   RouterProviderOptions,
 } from "@notra/ai/types/router";
+import { isRecord } from "@notra/utils/unknown-record";
 
+import { NoCompliantRouteError } from "./errors";
 import { toOpenRouterModelId, toVercelModelId } from "./model-ids";
 
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function asObject(value: unknown): Record<string, unknown> {
-  return isObject(value) ? value : {};
+  return isRecord(value) ? value : {};
 }
 
 function isStringArray(value: unknown): value is string[] {
@@ -39,24 +37,29 @@ function resolveFallbackModels(
   return isStringArray(existingModels) ? existingModels : undefined;
 }
 
-/**
- * Production forces ZDR on. A relaxed call (caller accepted a non-ZDR route)
- * drops it; the development bypass only sends it when the caller asks.
- */
 function resolveZdrFlag(
   relaxZdr: boolean,
   allowNonZdr: boolean,
   requested: unknown
 ): boolean {
-  if (relaxZdr) {
-    return false;
-  }
-  return allowNonZdr ? requested === true : true;
+  return requested === true || !(relaxZdr || allowNonZdr);
 }
 
-/**
- * Split the neutral router block from the caller's provider options.
- */
+function explicitPrivacyRequirements(providerOptions: SharedV4ProviderOptions) {
+  const gateway = asObject(providerOptions[VERCEL_OPTIONS_KEY]);
+  const provider = asObject(
+    asObject(providerOptions[OPENROUTER_OPTIONS_KEY]).provider
+  );
+  const zdr = gateway.zeroDataRetention === true || provider.zdr === true;
+  return {
+    zdr,
+    noTraining:
+      zdr ||
+      gateway.disallowPromptTraining === true ||
+      provider.data_collection === "deny",
+  };
+}
+
 export function splitRouterOptions(providerOptions?: SharedV4ProviderOptions): {
   router: RouterProviderOptions;
   rest: SharedV4ProviderOptions;
@@ -79,13 +82,51 @@ export function stripForeignGatewayOptions(
   gateway: GatewayId,
   providerOptions: SharedV4ProviderOptions
 ): SharedV4ProviderOptions {
-  const foreignKey =
-    gateway === "vercel" ? OPENROUTER_OPTIONS_KEY : VERCEL_OPTIONS_KEY;
-  if (!(foreignKey in providerOptions)) {
-    return providerOptions;
+  return Object.fromEntries(
+    Object.entries(providerOptions).filter(
+      ([key]) =>
+        (key !== VERCEL_OPTIONS_KEY || gateway === "vercel") &&
+        (key !== OPENROUTER_OPTIONS_KEY || gateway === "openrouter") &&
+        (key !== "neon" || gateway === "neon")
+    )
+  );
+}
+
+export function buildNeonProviderOptions(
+  input: BuildProviderOptionsInput
+): SharedV4ProviderOptions {
+  const privacy = explicitPrivacyRequirements(input.providerOptions);
+  if (privacy.zdr || privacy.noTraining) {
+    throw new NoCompliantRouteError(
+      "neon",
+      "Neon cannot enforce explicit privacy restrictions"
+    );
   }
-  const { [foreignKey]: _removed, ...rest } = providerOptions;
-  return rest;
+  const options = stripForeignGatewayOptions("neon", input.providerOptions);
+  const existing = asObject(options.neon);
+  const openai = asObject(options.openai);
+  const anthropic = asObject(options.anthropic);
+  const effort =
+    input.router.reasoning?.effort ??
+    existing.reasoningEffort ??
+    openai.reasoningEffort ??
+    anthropic.effort;
+  return {
+    ...options,
+    // Claude runs on Neon's native Messages endpoint; top-level cache_control
+    // mirrors Vercel's `caching: "auto"` so agent loops read the prefix.
+    anthropic: {
+      cacheControl: { type: "ephemeral" },
+      ...anthropic,
+    } as JSONObject,
+    // OpenAI runs on Neon's Responses endpoint, which stores generations by
+    // default; nothing here chains on previous response ids.
+    openai: { store: false, ...openai } as JSONObject,
+    neon: {
+      ...existing,
+      ...(typeof effort === "string" ? { reasoningEffort: effort } : {}),
+    } as JSONObject,
+  };
 }
 
 export function buildVercelProviderOptions(
@@ -93,27 +134,25 @@ export function buildVercelProviderOptions(
 ): SharedV4ProviderOptions {
   const { providerOptions, router, allowNonZdr, relaxZdr = false } = input;
   const existing = asObject(providerOptions[VERCEL_OPTIONS_KEY]);
+  const privacy = explicitPrivacyRequirements(providerOptions);
   const fallbackModels = resolveFallbackModels(
     router,
     existing.models,
     toVercelModelId
   );
 
-  // Relaxed routes accept providers without ZDR or no-training guarantees.
-  // Explicit caller no-training restrictions still apply.
-  const zeroDataRetention = resolveZdrFlag(
-    relaxZdr,
-    allowNonZdr,
-    existing.zeroDataRetention
-  );
-  const disallowPromptTraining = relaxZdr
-    ? existing.disallowPromptTraining === true
-    : !(allowNonZdr && existing.disallowPromptTraining === false);
+  const zeroDataRetention = resolveZdrFlag(relaxZdr, allowNonZdr, privacy.zdr);
+  const disallowPromptTraining =
+    privacy.noTraining ||
+    !(allowNonZdr && existing.disallowPromptTraining === false);
 
   const { zeroDataRetention: _ignoredZdr, ...existingWithoutZdr } = existing;
   const gatewayOptions: Record<string, unknown> = {
     ...existingWithoutZdr,
     tags: existing.tags ?? ["other"],
+    ...(existing.user === undefined && input.organizationId
+      ? { user: input.organizationId }
+      : {}),
     caching: router.caching ?? existing.caching ?? "auto",
     ...(fallbackModels ? { models: fallbackModels } : {}),
     ...(zeroDataRetention ? { zeroDataRetention: true } : {}),
@@ -146,8 +185,7 @@ function deriveOpenRouterReasoning(
     return { max_tokens: thinking.budgetTokens };
   }
   if (thinking.type === "adaptive") {
-    const outputConfig = asObject(anthropic.output_config);
-    const effort = outputConfig.effort;
+    const effort = anthropic.effort;
     if (typeof effort === "string" && OPENROUTER_EFFORTS.has(effort)) {
       return { effort };
     }
@@ -172,11 +210,13 @@ export function buildOpenRouterProviderOptions(
   const { providerOptions, router, allowNonZdr, relaxZdr = false } = input;
   const existing = asObject(providerOptions[OPENROUTER_OPTIONS_KEY]);
   const existingProvider = asObject(existing.provider);
+  const privacy = explicitPrivacyRequirements(providerOptions);
 
-  const zdr = resolveZdrFlag(relaxZdr, allowNonZdr, existingProvider.zdr);
+  const zdr = resolveZdrFlag(relaxZdr, allowNonZdr, privacy.zdr);
   const dataCollection =
-    (relaxZdr && existingProvider.data_collection !== "deny") ||
-    (allowNonZdr && existingProvider.data_collection === "allow")
+    !privacy.noTraining &&
+    allowNonZdr &&
+    existingProvider.data_collection === "allow"
       ? "allow"
       : "deny";
 
@@ -193,12 +233,15 @@ export function buildOpenRouterProviderOptions(
     toOpenRouterModelId
   );
 
-  const reasoning = isObject(existing.reasoning)
+  const reasoning = isRecord(existing.reasoning)
     ? existing.reasoning
     : deriveOpenRouterReasoning(router, providerOptions);
 
   const openrouterOptions: Record<string, unknown> = {
     ...existing,
+    ...(existing.user === undefined && input.organizationId
+      ? { user: input.organizationId }
+      : {}),
     provider,
     ...(fallbackModels ? { models: fallbackModels } : {}),
     ...(reasoning ? { reasoning } : {}),
@@ -210,9 +253,6 @@ export function buildOpenRouterProviderOptions(
   };
 }
 
-/**
- * Attach the neutral router block to caller provider options.
- */
 export function withRouterProviderOptions(
   providerOptions: SharedV4ProviderOptions | undefined,
   router: RouterProviderOptions

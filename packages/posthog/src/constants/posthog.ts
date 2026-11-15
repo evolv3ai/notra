@@ -16,5 +16,3 @@ export const POSTHOG_SERVER_FLUSH_INTERVAL_MS = 0;
 export const POSTHOG_SERVER_REQUEST_TIMEOUT_MS = 5000;
 
 export const POSTHOG_SERVICE_DISTINCT_ID_PREFIX = "service:";
-
-export const POSTHOG_OTEL_SERVICE_NAME = "notra";

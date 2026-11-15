@@ -1,7 +1,7 @@
 {
   "$schema": "https://ui.shadcn.com/schema/registry.json",
   "name": "notra",
-  "homepage": "https://github.com/usenotra/notra/tree/main/apps/ui",
+  "homepage": "https://github.com/usenotra",
   "items": [
     {
       "name": "ai-overview",
@@ -98,14 +98,7 @@
           "type": "registry:lib",
           "target": "components/google-ai-overview/types/google-ai-overview.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "ai-overview-header",
@@ -818,14 +811,7 @@
           "type": "registry:file",
           "target": "~/public/google-ai-overview/nextjs.svg"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "marketing-button",
@@ -836,16 +822,46 @@
       "cssVars": {
         "theme": {
           "color-marketing-light-foreground": "#1e1e1e",
-          "tracking-marketing": "-0.015em"
+          "tracking-marketing": "-0.015em",
+          "animate-button-swap-in": "button-swap-in 280ms cubic-bezier(0.23, 1, 0.32, 1) both",
+          "animate-button-swap-out": "button-swap-out 360ms cubic-bezier(0.45, 0, 0.25, 1) both"
         }
       },
       "files": [
         {
           "path": "registry/notra/marketing-button/components/marketing-button.tsx",
           "type": "registry:component"
+        },
+        {
+          "path": "registry/notra/marketing-button/components/marketing-button-content.tsx",
+          "type": "registry:component"
         }
       ],
       "css": {
+        "@keyframes button-swap-in": {
+          "from": {
+            "opacity": "0",
+            "transform": "translateY(0.45em)",
+            "filter": "blur(4px)"
+          },
+          "to": {
+            "opacity": "1",
+            "transform": "translateY(0)",
+            "filter": "blur(0)"
+          }
+        },
+        "@keyframes button-swap-out": {
+          "from": {
+            "opacity": "1",
+            "transform": "translateY(0)",
+            "filter": "blur(0)"
+          },
+          "to": {
+            "opacity": "0",
+            "transform": "translateY(-0.45em)",
+            "filter": "blur(4px)"
+          }
+        },
         "@property --marketing-gradient-from": {
           "syntax": "\"<color>\"",
           "inherits": "false",
@@ -861,6 +877,20 @@
           "--marketing-gradient-to": "oklab(52.6% 0.113 -0.27)",
           "background-image": "linear-gradient(180deg, var(--marketing-gradient-from) 0%, var(--marketing-gradient-to) 100%)",
           "box-shadow": "#8b5cf640 0 0 0 0.5rem, #28282814 0 0.0625rem 0.125rem, #1e1e1e40 0 0 0 0.0625rem",
+          "transition": "--marketing-gradient-from 200ms ease-out, --marketing-gradient-to 200ms ease-out",
+          "&:hover": {
+            "--marketing-gradient-to": "oklab(33.9% 0.073 -0.174)"
+          },
+          "&:active": {
+            "--marketing-gradient-from": "oklab(52.6% 0.113 -0.27)",
+            "--marketing-gradient-to": "oklab(24.8% 0.053 -0.127)"
+          }
+        },
+        "@utility marketing-gradient-flat": {
+          "--marketing-gradient-from": "oklab(69.9% 0.067 -0.16)",
+          "--marketing-gradient-to": "oklab(52.6% 0.113 -0.27)",
+          "background-image": "linear-gradient(180deg, var(--marketing-gradient-from) 0%, var(--marketing-gradient-to) 100%)",
+          "box-shadow": "#28282814 0 0.0625rem 0.125rem, #1e1e1e40 0 0 0 0.0625rem",
           "transition": "--marketing-gradient-from 200ms ease-out, --marketing-gradient-to 200ms ease-out",
           "&:hover": {
             "--marketing-gradient-to": "oklab(33.9% 0.073 -0.174)"
@@ -888,7 +918,7 @@
     },
     {
       "name": "notra-button",
-      "type": "registry:ui",
+      "type": "registry:component",
       "title": "Button",
       "description": "A Base UI button with Depth primary, secondary, outline and destructive variants, squircle corners, and loading and progress states.",
       "dependencies": ["@base-ui/react", "class-variance-authority", "cn"],
@@ -946,43 +976,404 @@
       },
       "files": [
         {
-          "path": "components/ui/button.tsx",
-          "type": "registry:ui",
-          "target": "components/ui/button.tsx"
+          "path": "registry/notra/button/components/button.tsx",
+          "type": "registry:component",
+          "target": "components/button/components/button.tsx"
         },
         {
-          "path": "components/ui/button-content.tsx",
-          "type": "registry:ui",
-          "target": "components/ui/button-content.tsx"
+          "path": "registry/notra/button/components/button-content.tsx",
+          "type": "registry:component",
+          "target": "components/button/components/button-content.tsx"
+        }
+      ],
+      "registryDependencies": ["button"]
+    },
+    {
+      "name": "notra-dropdown-menu",
+      "type": "registry:component",
+      "title": "Dropdown Menu",
+      "description": "A Base UI menu with Depth surfaces, squircle corners, submenus, checkbox and radio items.",
+      "dependencies": ["@base-ui/react", "cn", "lucide-react"],
+      "files": [
+        {
+          "path": "registry/notra/dropdown-menu/components/dropdown-menu.tsx",
+          "type": "registry:component",
+          "target": "components/dropdown-menu/components/dropdown-menu.tsx"
+        },
+        {
+          "path": "registry/notra/dropdown-menu/constants/dropdown-menu.ts",
+          "type": "registry:lib",
+          "target": "components/dropdown-menu/constants/dropdown-menu.ts"
+        }
+      ],
+      "registryDependencies": ["dropdown-menu"]
+    },
+    {
+      "name": "notra-select",
+      "type": "registry:component",
+      "title": "Select",
+      "description": "A Base UI select with a Depth button trigger and a scrollable popup below it.",
+      "dependencies": ["@base-ui/react", "cn", "lucide-react"],
+      "registryDependencies": [
+        "select",
+        "https://ui.usenotra.com/r/notra-button.json",
+        "https://ui.usenotra.com/r/notra-dropdown-menu.json"
+      ],
+      "files": [
+        {
+          "path": "registry/notra/select/components/select.tsx",
+          "type": "registry:component",
+          "target": "components/select/components/select.tsx"
+        },
+        {
+          "path": "registry/notra/select/constants/select.ts",
+          "type": "registry:lib",
+          "target": "components/select/constants/select.ts"
         }
       ]
     },
     {
       "name": "notra-tooltip",
-      "type": "registry:ui",
+      "type": "registry:component",
       "title": "Tooltip",
       "description": "A Base UI tooltip with the Depth surface of the buttons that glides between neighbouring triggers.",
       "dependencies": ["@base-ui/react", "cn"],
       "files": [
         {
-          "path": "components/ui/tooltip.tsx",
-          "type": "registry:ui",
-          "target": "components/ui/tooltip.tsx"
+          "path": "registry/notra/tooltip/components/tooltip.tsx",
+          "type": "registry:component",
+          "target": "components/tooltip/components/tooltip.tsx"
         }
       ]
     },
     {
       "name": "notra-sonner",
-      "type": "registry:ui",
+      "type": "registry:component",
       "title": "Sonner",
       "description": "A Sonner toaster with the Depth surface of the buttons and tinted status icons.",
       "dependencies": ["cn", "lucide-react", "next-themes", "sonner"],
-      "registryDependencies": ["https://ui.usenotra.com/r/notra-button.json"],
+      "registryDependencies": [
+        "sonner",
+        "https://ui.usenotra.com/r/notra-button.json"
+      ],
       "files": [
         {
-          "path": "components/ui/sonner.tsx",
-          "type": "registry:ui",
-          "target": "components/ui/sonner.tsx"
+          "path": "registry/notra/sonner/components/sonner.tsx",
+          "type": "registry:component",
+          "target": "components/sonner/components/sonner.tsx"
+        }
+      ]
+    },
+    {
+      "name": "notra-table",
+      "type": "registry:component",
+      "title": "Table",
+      "description": "shadcn table primitives in a grey shell with a 2px rim around a lifted body card.",
+      "dependencies": ["cn"],
+      "cssVars": {
+        "theme": {
+          "color-table-shell": "var(--table-shell)",
+          "color-table-shell-border": "var(--table-shell-border)",
+          "color-table-card": "var(--table-card)",
+          "color-table-card-border": "var(--table-card-border)",
+          "color-table-row-border": "var(--table-row-border)",
+          "shadow-table-card": "var(--table-card-shadow)"
+        },
+        "light": {
+          "table-shell": "#f3f3f2",
+          "table-shell-border": "#e7e7e5",
+          "table-card": "#ffffff",
+          "table-card-border": "#e5e5e5",
+          "table-row-border": "#efefee",
+          "table-card-shadow": "0 1px 2px hsl(240 10% 10% / 0.06), 0 2px 8px -2px hsl(240 10% 10% / 0.06)"
+        },
+        "dark": {
+          "table-shell": "#161616",
+          "table-shell-border": "#232323",
+          "table-card": "#1f1f1f",
+          "table-card-border": "#2c2c2c",
+          "table-row-border": "#292929",
+          "table-card-shadow": "inset 0 1px 0 hsl(0 0% 100% / 0.05), inset 0 0 0 1px hsl(0 0% 100% / 0.015), inset 0 12px 18px -16px hsl(0 0% 100% / 0.035)"
+        }
+      },
+      "files": [
+        {
+          "path": "registry/notra/table/components/table.tsx",
+          "type": "registry:component",
+          "target": "components/table/components/table.tsx"
+        }
+      ],
+      "registryDependencies": ["table"]
+    },
+    {
+      "name": "table",
+      "type": "registry:component",
+      "title": "Table",
+      "description": "A sortable, selectable table with a sticky header, virtualized rows, pagination with a page-size select, and an infinite-scroll variant.",
+      "dependencies": [
+        "@hugeicons/core-free-icons",
+        "@hugeicons/react",
+        "@tanstack/react-virtual",
+        "cn"
+      ],
+      "registryDependencies": [
+        "https://ui.usenotra.com/r/notra-table.json",
+        "https://ui.usenotra.com/r/notra-button.json",
+        "https://ui.usenotra.com/r/notra-tooltip.json",
+        "checkbox",
+        "context-menu",
+        "https://ui.usenotra.com/r/notra-select.json",
+        "skeleton"
+      ],
+      "files": [
+        {
+          "path": "registry/notra/table/components/data-table-body.tsx",
+          "type": "registry:component",
+          "target": "components/table/components/data-table-body.tsx"
+        },
+        {
+          "path": "registry/notra/table/components/data-table-column-group.tsx",
+          "type": "registry:component",
+          "target": "components/table/components/data-table-column-group.tsx"
+        },
+        {
+          "path": "registry/notra/table/components/data-table-header.tsx",
+          "type": "registry:component",
+          "target": "components/table/components/data-table-header.tsx"
+        },
+        {
+          "path": "registry/notra/table/components/data-table-labels.tsx",
+          "type": "registry:component",
+          "target": "components/table/components/data-table-labels.tsx"
+        },
+        {
+          "path": "registry/notra/table/components/data-table-pager.tsx",
+          "type": "registry:component",
+          "target": "components/table/components/data-table-pager.tsx"
+        },
+        {
+          "path": "registry/notra/table/components/data-table-pagination.tsx",
+          "type": "registry:component",
+          "target": "components/table/components/data-table-pagination.tsx"
+        },
+        {
+          "path": "registry/notra/table/components/data-table-root.tsx",
+          "type": "registry:component",
+          "target": "components/table/components/data-table-root.tsx"
+        },
+        {
+          "path": "registry/notra/table/components/data-table-corner-scrollbar.tsx",
+          "type": "registry:component",
+          "target": "components/table/components/data-table-corner-scrollbar.tsx"
+        },
+        {
+          "path": "registry/notra/table/components/data-table-surfaces.tsx",
+          "type": "registry:component",
+          "target": "components/table/components/data-table-surfaces.tsx"
+        },
+        {
+          "path": "registry/notra/table/components/data-table.tsx",
+          "type": "registry:component",
+          "target": "components/table/components/data-table.tsx"
+        },
+        {
+          "path": "registry/notra/table/constants/data-table.ts",
+          "type": "registry:lib",
+          "target": "components/table/constants/data-table.ts"
+        },
+        {
+          "path": "registry/notra/table/hooks/use-collapsible-columns.ts",
+          "type": "registry:hook",
+          "target": "components/table/hooks/use-collapsible-columns.ts"
+        },
+        {
+          "path": "registry/notra/table/hooks/use-column-resize.ts",
+          "type": "registry:hook",
+          "target": "components/table/hooks/use-column-resize.ts"
+        },
+        {
+          "path": "registry/notra/table/hooks/use-column-sort.ts",
+          "type": "registry:hook",
+          "target": "components/table/hooks/use-column-sort.ts"
+        },
+        {
+          "path": "registry/notra/table/hooks/use-row-selection.ts",
+          "type": "registry:hook",
+          "target": "components/table/hooks/use-row-selection.ts"
+        },
+        {
+          "path": "registry/notra/table/hooks/use-table-paging.ts",
+          "type": "registry:hook",
+          "target": "components/table/hooks/use-table-paging.ts"
+        },
+        {
+          "path": "registry/notra/table/hooks/use-table-viewport.ts",
+          "type": "registry:hook",
+          "target": "components/table/hooks/use-table-viewport.ts"
+        },
+        {
+          "path": "registry/notra/table/lib/data-table.ts",
+          "type": "registry:lib",
+          "target": "components/table/lib/data-table.ts"
+        },
+        {
+          "path": "registry/notra/table/types/data-table.ts",
+          "type": "registry:lib",
+          "target": "components/table/types/data-table.ts"
+        }
+      ]
+    },
+    {
+      "name": "card",
+      "type": "registry:component",
+      "title": "Card",
+      "description": "The dualtone card from the Notra dashboard: a grey shell with a lifted body, an eyebrow title with an optional hint, a readout and an action slot, plus a flat variant, a section heading and an empty state.",
+      "dependencies": ["@hugeicons/core-free-icons", "@hugeicons/react", "cn"],
+      "registryDependencies": [
+        "card",
+        "spinner",
+        "https://ui.usenotra.com/r/notra-tooltip.json",
+        "https://ui.usenotra.com/r/shimmer.json"
+      ],
+      "cssVars": {
+        "theme": {
+          "color-shell": "var(--shell)",
+          "color-shell-border": "var(--shell-border)",
+          "color-table-shell": "var(--table-shell)",
+          "color-table-shell-border": "var(--table-shell-border)",
+          "color-table-card": "var(--table-card)",
+          "color-table-card-border": "var(--table-card-border)",
+          "color-table-row-border": "var(--table-row-border)",
+          "shadow-table-card": "var(--table-card-shadow)"
+        },
+        "light": {
+          "shell": "var(--table-shell)",
+          "shell-border": "var(--table-shell-border)",
+          "table-shell": "#f3f3f2",
+          "table-shell-border": "#e7e7e5",
+          "table-card": "#ffffff",
+          "table-card-border": "#e5e5e5",
+          "table-row-border": "#efefee",
+          "table-card-shadow": "0 1px 2px hsl(240 10% 10% / 0.06), 0 2px 8px -2px hsl(240 10% 10% / 0.06)"
+        },
+        "dark": {
+          "shell": "var(--table-shell)",
+          "shell-border": "var(--table-shell-border)",
+          "table-shell": "#161616",
+          "table-shell-border": "#232323",
+          "table-card": "#1f1f1f",
+          "table-card-border": "#2c2c2c",
+          "table-row-border": "#292929",
+          "table-card-shadow": "inset 0 1px 0 hsl(0 0% 100% / 0.05), inset 0 0 0 1px hsl(0 0% 100% / 0.015), inset 0 12px 18px -16px hsl(0 0% 100% / 0.035)"
+        }
+      },
+      "files": [
+        {
+          "path": "registry/notra/card/components/card-labels.tsx",
+          "type": "registry:component",
+          "target": "components/card/components/card-labels.tsx"
+        },
+        {
+          "path": "registry/notra/card/components/instrument-grid.tsx",
+          "type": "registry:component",
+          "target": "components/card/components/instrument-grid.tsx"
+        },
+        {
+          "path": "registry/notra/card/components/instrument-module.tsx",
+          "type": "registry:component",
+          "target": "components/card/components/instrument-module.tsx"
+        },
+        {
+          "path": "registry/notra/card/components/instrument-reveal.tsx",
+          "type": "registry:component",
+          "target": "components/card/components/instrument-reveal.tsx"
+        },
+        {
+          "path": "registry/notra/card/constants/card.ts",
+          "type": "registry:lib",
+          "target": "components/card/constants/card.ts"
+        },
+        {
+          "path": "registry/notra/card/types/card.ts",
+          "type": "registry:lib",
+          "target": "components/card/types/card.ts"
+        }
+      ]
+    },
+    {
+      "name": "notra-sidebar",
+      "type": "registry:component",
+      "title": "Sidebar",
+      "description": "The shadcn sidebar on Base UI with a fading icon rail, a resizable rail, collapsible sub-rows and gliding Notra tooltips.",
+      "dependencies": [
+        "@base-ui/react",
+        "class-variance-authority",
+        "cn",
+        "lucide-react"
+      ],
+      "registryDependencies": [
+        "https://ui.usenotra.com/r/notra-button.json",
+        "https://ui.usenotra.com/r/notra-tooltip.json",
+        "input",
+        "separator",
+        "sheet",
+        "skeleton"
+      ],
+      "files": [
+        {
+          "path": "registry/notra/sidebar/components/sidebar.tsx",
+          "type": "registry:component",
+          "target": "components/sidebar/components/sidebar.tsx"
+        }
+      ]
+    },
+    {
+      "name": "app-sidebar",
+      "type": "registry:block",
+      "title": "App Sidebar",
+      "description": "The Notra dashboard sidebar: project switcher, search, grouped navigation with sub-rows and a rail flyout, and the account menu.",
+      "dependencies": ["cn", "lucide-react"],
+      "registryDependencies": [
+        "https://ui.usenotra.com/r/notra-sidebar.json",
+        "https://ui.usenotra.com/r/notra-dropdown-menu.json",
+        "avatar",
+        "kbd"
+      ],
+      "files": [
+        {
+          "path": "registry/notra/app-sidebar/components/sidebar-nav.tsx",
+          "type": "registry:component",
+          "target": "components/app-sidebar/components/sidebar-nav.tsx"
+        },
+        {
+          "path": "registry/notra/app-sidebar/components/sidebar-search.tsx",
+          "type": "registry:component",
+          "target": "components/app-sidebar/components/sidebar-search.tsx"
+        },
+        {
+          "path": "registry/notra/app-sidebar/components/sidebar-switcher.tsx",
+          "type": "registry:component",
+          "target": "components/app-sidebar/components/sidebar-switcher.tsx"
+        },
+        {
+          "path": "registry/notra/app-sidebar/components/sidebar-user-menu.tsx",
+          "type": "registry:component",
+          "target": "components/app-sidebar/components/sidebar-user-menu.tsx"
+        },
+        {
+          "path": "registry/notra/app-sidebar/constants/app-sidebar.ts",
+          "type": "registry:lib",
+          "target": "components/app-sidebar/constants/app-sidebar.ts"
+        },
+        {
+          "path": "registry/notra/app-sidebar/hooks/use-sidebar-settled.ts",
+          "type": "registry:hook",
+          "target": "components/app-sidebar/hooks/use-sidebar-settled.ts"
+        },
+        {
+          "path": "registry/notra/app-sidebar/types/app-sidebar.ts",
+          "type": "registry:lib",
+          "target": "components/app-sidebar/types/app-sidebar.ts"
         }
       ]
     },
@@ -1041,6 +1432,65 @@
           "path": "registry/notra/step-slider/lib/step-slider.ts",
           "type": "registry:lib",
           "target": "components/step-slider/lib/step-slider.ts"
+        }
+      ]
+    },
+    {
+      "name": "icon-tabs",
+      "type": "registry:component",
+      "title": "Icon Tabs",
+      "description": "A segmented tab selector where only the active tab shows its icon, sliding in beside the label. Built on the Base UI Tabs.",
+      "dependencies": ["@base-ui/react", "cn"],
+      "files": [
+        {
+          "path": "registry/notra/icon-tabs/components/icon-tabs.tsx",
+          "type": "registry:component",
+          "target": "components/icon-tabs/components/icon-tabs.tsx"
+        },
+        {
+          "path": "registry/notra/icon-tabs/constants/icon-tabs.ts",
+          "type": "registry:lib",
+          "target": "components/icon-tabs/constants/icon-tabs.ts"
+        },
+        {
+          "path": "registry/notra/icon-tabs/lib/icon-tabs.ts",
+          "type": "registry:lib",
+          "target": "components/icon-tabs/lib/icon-tabs.ts"
+        },
+        {
+          "path": "registry/notra/icon-tabs/types/icon-tabs.ts",
+          "type": "registry:lib",
+          "target": "components/icon-tabs/types/icon-tabs.ts"
+        }
+      ]
+    },
+    {
+      "name": "composer",
+      "type": "registry:component",
+      "title": "Composer",
+      "description": "The chat composer from the Notra dashboard: a muted tray around the input card, with queued messages and attachments as chips. Built on the Notra Button and Tooltip and the shadcn Textarea.",
+      "dependencies": ["@base-ui/react", "cn", "lucide-react", "motion"],
+      "registryDependencies": [
+        "https://ui.usenotra.com/r/notra-button.json",
+        "https://ui.usenotra.com/r/notra-tooltip.json",
+        "spinner",
+        "textarea"
+      ],
+      "files": [
+        {
+          "path": "registry/notra/composer/components/composer.tsx",
+          "type": "registry:component",
+          "target": "components/composer/components/composer.tsx"
+        },
+        {
+          "path": "registry/notra/composer/constants/composer.ts",
+          "type": "registry:lib",
+          "target": "components/composer/constants/composer.ts"
+        },
+        {
+          "path": "registry/notra/composer/types/composer.ts",
+          "type": "registry:lib",
+          "target": "components/composer/types/composer.ts"
         }
       ]
     },
@@ -1189,14 +1639,7 @@
           "type": "registry:lib",
           "target": "components/perplexity/types/perplexity.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "perplexity-search",
@@ -1341,14 +1784,7 @@
           "type": "registry:hook",
           "target": "components/perplexity/hooks/use-perplexity-search-sequence.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "perplexity-citation",
@@ -1487,14 +1923,7 @@
           "type": "registry:lib",
           "target": "components/perplexity/constants/perplexity.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "perplexity-favicon",
@@ -1611,14 +2040,7 @@
           "type": "registry:lib",
           "target": "components/perplexity/types/perplexity.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "perplexity-rewrite-panel",
@@ -1764,14 +2186,7 @@
           "type": "registry:component",
           "target": "components/perplexity/components/perplexity-icons.tsx"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "perplexity-actions",
@@ -1784,7 +2199,7 @@
         "badge",
         "button",
         "collapsible",
-        "dropdown-menu",
+        "https://ui.usenotra.com/r/notra-dropdown-menu.json",
         "item",
         "popover",
         "scroll-area",
@@ -1930,14 +2345,7 @@
           "type": "registry:component",
           "target": "components/perplexity/components/perplexity-icons.tsx"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "perplexity-user-actions",
@@ -2059,14 +2467,7 @@
           "type": "registry:lib",
           "target": "components/perplexity/constants/perplexity.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "perplexity-sources-summary",
@@ -2193,14 +2594,7 @@
           "type": "registry:lib",
           "target": "components/perplexity/types/perplexity.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "perplexity-composer",
@@ -2213,7 +2607,7 @@
         "badge",
         "button",
         "collapsible",
-        "dropdown-menu",
+        "https://ui.usenotra.com/r/notra-dropdown-menu.json",
         "input-group"
       ],
       "cssVars": {
@@ -2344,14 +2738,7 @@
           "type": "registry:lib",
           "target": "components/perplexity/types/perplexity.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "perplexity-model-selector",
@@ -2364,7 +2751,7 @@
         "badge",
         "button",
         "collapsible",
-        "dropdown-menu"
+        "https://ui.usenotra.com/r/notra-dropdown-menu.json"
       ],
       "cssVars": {
         "theme": {
@@ -2489,14 +2876,7 @@
           "type": "registry:lib",
           "target": "components/perplexity/types/perplexity.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "perplexity-model-icon",
@@ -2618,14 +2998,7 @@
           "type": "registry:lib",
           "target": "components/perplexity/types/perplexity.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "perplexity-thinking",
@@ -2746,14 +3119,7 @@
           "type": "registry:lib",
           "target": "components/perplexity/types/perplexity.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "perplexity",
@@ -2767,7 +3133,7 @@
         "button",
         "card",
         "collapsible",
-        "dropdown-menu",
+        "https://ui.usenotra.com/r/notra-dropdown-menu.json",
         "empty",
         "hover-card",
         "input-group",
@@ -2982,14 +3348,7 @@
           "type": "registry:hook",
           "target": "components/perplexity/hooks/use-perplexity-search-sequence.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "chatgpt-thread",
@@ -3103,14 +3462,7 @@
           "type": "registry:lib",
           "target": "components/chatgpt/constants/chatgpt.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "chatgpt-message",
@@ -3213,14 +3565,7 @@
           "type": "registry:lib",
           "target": "components/chatgpt/types/chatgpt.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "chatgpt-reasoning",
@@ -3328,14 +3673,110 @@
           "type": "registry:lib",
           "target": "components/chatgpt/types/chatgpt.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
+      ]
+    },
+    {
+      "name": "chatgpt-app-call",
+      "type": "registry:component",
+      "title": "ChatGPT App Call",
+      "description": "The \"Used Notra\" line with the app logo, shown when ChatGPT calls an app.",
+      "dependencies": ["cn"],
+      "registryDependencies": ["avatar", "button", "collapsible", "sheet"],
+      "cssVars": {
+        "theme": {
+          "color-chatgpt-bg": "var(--chatgpt-bg)",
+          "color-chatgpt-fg": "var(--chatgpt-fg)",
+          "color-chatgpt-muted": "var(--chatgpt-muted)",
+          "color-chatgpt-hover": "var(--chatgpt-hover)",
+          "color-chatgpt-border": "var(--chatgpt-border)",
+          "color-chatgpt-bubble": "var(--chatgpt-bubble)",
+          "color-chatgpt-composer": "var(--chatgpt-composer)",
+          "color-chatgpt-composer-border": "var(--chatgpt-composer-border)",
+          "color-chatgpt-popover": "var(--chatgpt-popover)",
+          "color-chatgpt-tooltip": "var(--chatgpt-tooltip)",
+          "color-chatgpt-tooltip-fg": "var(--chatgpt-tooltip-fg)",
+          "color-chatgpt-send": "var(--chatgpt-send)",
+          "color-chatgpt-send-hover": "var(--chatgpt-send-hover)",
+          "color-chatgpt-send-fg": "var(--chatgpt-send-fg)",
+          "color-chatgpt-focus": "var(--chatgpt-focus)",
+          "color-chatgpt-search": "var(--chatgpt-search)",
+          "shadow-chatgpt-composer": "var(--chatgpt-composer-shadow)",
+          "shadow-chatgpt-menu": "var(--chatgpt-menu-shadow)",
+          "font-chatgpt": "ui-sans-serif, -apple-system, system-ui, \"Segoe UI\", Helvetica, \"Apple Color Emoji\", Arial, sans-serif, \"Segoe UI Emoji\", \"Segoe UI Symbol\"",
+          "color-chatgpt-slider-track": "var(--chatgpt-slider-track)",
+          "color-chatgpt-slider-fill": "var(--chatgpt-slider-fill)",
+          "color-chatgpt-slider-thumb": "var(--chatgpt-slider-thumb)",
+          "color-chatgpt-slider-dot": "var(--chatgpt-slider-dot)",
+          "color-chatgpt-slider-dot-fill": "var(--chatgpt-slider-dot-fill)",
+          "color-chatgpt-pro": "var(--chatgpt-pro)"
+        },
+        "light": {
+          "chatgpt-bg": "#ffffff",
+          "chatgpt-fg": "#0d0d0d",
+          "chatgpt-muted": "#5d5d5d",
+          "chatgpt-hover": "#f3f3f3",
+          "chatgpt-border": "#e5e5e5",
+          "chatgpt-bubble": "#f4f4f4",
+          "chatgpt-composer": "#ffffff",
+          "chatgpt-composer-border": "#00000014",
+          "chatgpt-composer-shadow": "0 1px 2px rgb(0 0 0 / 0.04), 0 2px 8px rgb(0 0 0 / 0.04)",
+          "chatgpt-popover": "#ffffff",
+          "chatgpt-menu-shadow": "0 0 0 1px rgb(0 0 0 / 0.05), 0 4px 16px rgb(0 0 0 / 0.08)",
+          "chatgpt-tooltip": "#0d0d0d",
+          "chatgpt-tooltip-fg": "#ffffff",
+          "chatgpt-send": "#2563eb",
+          "chatgpt-send-hover": "#1d4ed8",
+          "chatgpt-send-fg": "#ffffff",
+          "chatgpt-focus": "#2563eb",
+          "chatgpt-search": "#e4543a",
+          "chatgpt-slider-track": "#e4e4e4",
+          "chatgpt-slider-fill": "#3b82f6",
+          "chatgpt-slider-thumb": "#ffffff",
+          "chatgpt-slider-dot": "#a3a3a3",
+          "chatgpt-slider-dot-fill": "rgb(255 255 255 / 60%)",
+          "chatgpt-pro": "#7c3aed",
+          "chatgpt-pro-gradient": "linear-gradient(90deg, #2b3fd6 0%, #6a5be2 25%, #b58cf5 50%, #6a5be2 75%, #2b3fd6 100%)"
+        },
+        "dark": {
+          "chatgpt-bg": "#212121",
+          "chatgpt-fg": "#ececec",
+          "chatgpt-muted": "#afafaf",
+          "chatgpt-hover": "#303030",
+          "chatgpt-border": "#3a3a3a",
+          "chatgpt-bubble": "#303030",
+          "chatgpt-composer": "#303030",
+          "chatgpt-composer-border": "#ffffff1a",
+          "chatgpt-composer-shadow": "0 1px 2px rgb(0 0 0 / 0.2)",
+          "chatgpt-popover": "#353535",
+          "chatgpt-menu-shadow": "0 0 0 1px rgb(255 255 255 / 0.08), 0 8px 24px rgb(0 0 0 / 0.4)",
+          "chatgpt-tooltip": "#000000",
+          "chatgpt-tooltip-fg": "#ffffff",
+          "chatgpt-send": "#2563eb",
+          "chatgpt-send-hover": "#1d4ed8",
+          "chatgpt-send-fg": "#ffffff",
+          "chatgpt-focus": "#2563eb",
+          "chatgpt-search": "#e4543a",
+          "chatgpt-slider-track": "#454545",
+          "chatgpt-slider-fill": "#3b82f6",
+          "chatgpt-slider-thumb": "#ffffff",
+          "chatgpt-slider-dot": "#8c8c8c",
+          "chatgpt-slider-dot-fill": "rgb(255 255 255 / 55%)",
+          "chatgpt-pro": "#b794f6",
+          "chatgpt-pro-gradient": "linear-gradient(90deg, #2b3fd6 0%, #6a5be2 25%, #b58cf5 50%, #6a5be2 75%, #2b3fd6 100%)"
         }
-      }
+      },
+      "files": [
+        {
+          "path": "registry/notra/chatgpt/components/chatgpt-app-call.tsx",
+          "type": "registry:component",
+          "target": "components/chatgpt/components/chatgpt-app-call.tsx"
+        },
+        {
+          "path": "registry/notra/chatgpt/types/chatgpt.ts",
+          "type": "registry:lib",
+          "target": "components/chatgpt/types/chatgpt.ts"
+        }
+      ]
     },
     {
       "name": "chatgpt-source-chip",
@@ -3456,14 +3897,7 @@
           "type": "registry:component",
           "target": "components/chatgpt/components/chatgpt-source-chip.tsx"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "chatgpt-search",
@@ -3581,14 +4015,7 @@
           "type": "registry:lib",
           "target": "components/chatgpt/constants/chatgpt.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "chatgpt-activity",
@@ -3720,14 +4147,7 @@
           "type": "registry:lib",
           "target": "components/chatgpt/constants/chatgpt.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "chatgpt-thinking",
@@ -3836,14 +4256,7 @@
           "type": "registry:lib",
           "target": "components/chatgpt/types/chatgpt.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "chatgpt-actions",
@@ -3962,14 +4375,7 @@
           "type": "registry:lib",
           "target": "components/chatgpt/constants/chatgpt.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "chatgpt-model-selector",
@@ -4095,11 +4501,6 @@
         }
       ],
       "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        },
         "@keyframes chatgpt-burst": {
           "0%": {
             "opacity": "1",
@@ -4264,11 +4665,6 @@
         }
       ],
       "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        },
         "@keyframes chatgpt-burst": {
           "0%": {
             "opacity": "1",
@@ -4470,6 +4866,11 @@
           "target": "components/chatgpt/components/chatgpt-thinking.tsx"
         },
         {
+          "path": "registry/notra/chatgpt/components/chatgpt-app-call.tsx",
+          "type": "registry:component",
+          "target": "components/chatgpt/components/chatgpt-app-call.tsx"
+        },
+        {
           "path": "registry/notra/chatgpt/components/chatgpt-thread.tsx",
           "type": "registry:component",
           "target": "components/chatgpt/components/chatgpt-thread.tsx"
@@ -4511,11 +4912,6 @@
         }
       ],
       "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        },
         "@keyframes chatgpt-burst": {
           "0%": {
             "opacity": "1",
@@ -5309,7 +5705,7 @@
         "badge",
         "button",
         "collapsible",
-        "dropdown-menu",
+        "https://ui.usenotra.com/r/notra-dropdown-menu.json",
         "input-group"
       ],
       "cssVars": {
@@ -5431,7 +5827,7 @@
         "badge",
         "button",
         "collapsible",
-        "dropdown-menu"
+        "https://ui.usenotra.com/r/notra-dropdown-menu.json"
       ],
       "cssVars": {
         "theme": {
@@ -5549,7 +5945,7 @@
         "button",
         "card",
         "collapsible",
-        "dropdown-menu",
+        "https://ui.usenotra.com/r/notra-dropdown-menu.json",
         "hover-card",
         "input-group",
         "scroll-area",
@@ -5733,14 +6129,7 @@
           "type": "registry:component",
           "target": "components/gemini/components/gemini-source-chip.tsx"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "claude-composer",
@@ -5751,7 +6140,7 @@
       "registryDependencies": [
         "button",
         "collapsible",
-        "dropdown-menu",
+        "https://ui.usenotra.com/r/notra-dropdown-menu.json",
         "input-group",
         "kbd",
         "progress",
@@ -5912,14 +6301,7 @@
           "type": "registry:component",
           "target": "components/claude/components/claude-usage-ring.tsx"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "claude-plus-menu",
@@ -5927,7 +6309,12 @@
       "title": "Claude Plus Menu",
       "description": "The composer's + menu with files, skills, connectors, design system, plugins and research.",
       "dependencies": ["cn", "lucide-react"],
-      "registryDependencies": ["button", "collapsible", "dropdown-menu", "kbd"],
+      "registryDependencies": [
+        "button",
+        "collapsible",
+        "https://ui.usenotra.com/r/notra-dropdown-menu.json",
+        "kbd"
+      ],
       "cssVars": {
         "theme": {
           "color-claude-bg": "var(--claude-bg)",
@@ -6068,14 +6455,7 @@
           "type": "registry:component",
           "target": "components/claude/components/claude-plus-menu.tsx"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "claude-model-selector",
@@ -6083,7 +6463,11 @@
       "title": "Claude Model Selector",
       "description": "A hover-open model and effort picker built on shadcn DropdownMenu.",
       "dependencies": ["cn"],
-      "registryDependencies": ["button", "collapsible", "dropdown-menu"],
+      "registryDependencies": [
+        "button",
+        "collapsible",
+        "https://ui.usenotra.com/r/notra-dropdown-menu.json"
+      ],
       "cssVars": {
         "theme": {
           "color-claude-bg": "var(--claude-bg)",
@@ -6219,14 +6603,7 @@
           "type": "registry:lib",
           "target": "components/claude/types/claude.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "claude-message",
@@ -6355,14 +6732,7 @@
           "type": "registry:lib",
           "target": "components/claude/types/claude.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "claude-actions",
@@ -6496,14 +6866,7 @@
           "type": "registry:lib",
           "target": "components/claude/types/claude.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "claude-search",
@@ -6666,14 +7029,7 @@
           "type": "registry:hook",
           "target": "components/claude/hooks/use-claude-search-sequence.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "claude-sources",
@@ -6817,14 +7173,7 @@
           "type": "registry:lib",
           "target": "components/claude/lib/claude-search.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "claude-thinking",
@@ -6971,14 +7320,7 @@
           "type": "registry:lib",
           "target": "components/claude/types/claude.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "claude-spinner",
@@ -7117,14 +7459,7 @@
           "type": "registry:lib",
           "target": "components/claude/types/claude.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "claude",
@@ -7137,7 +7472,7 @@
         "button",
         "card",
         "collapsible",
-        "dropdown-menu",
+        "https://ui.usenotra.com/r/notra-dropdown-menu.json",
         "hover-card",
         "input-group",
         "item",
@@ -7374,6 +7709,11 @@
           "target": "components/claude/examples/claude-tool-calls.tsx"
         },
         {
+          "path": "registry/notra/claude/examples/claude-connector.tsx",
+          "type": "registry:component",
+          "target": "components/claude/examples/claude-connector.tsx"
+        },
+        {
           "path": "registry/notra/claude/components/claude-source-link.tsx",
           "type": "registry:component",
           "target": "components/claude/components/claude-source-link.tsx"
@@ -7383,14 +7723,7 @@
           "type": "registry:hook",
           "target": "components/claude/hooks/use-claude-search-sequence.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "claude-code-terminal",
@@ -7482,14 +7815,7 @@
           "type": "registry:lib",
           "target": "components/claude-code/types/claude-code.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "claude-code-header",
@@ -7596,14 +7922,7 @@
           "type": "registry:lib",
           "target": "components/claude-code/lib/claude-code-inline.tsx"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "claude-code-message",
@@ -7700,14 +8019,7 @@
           "type": "registry:lib",
           "target": "components/claude-code/lib/claude-code-inline.tsx"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "claude-code-todo-list",
@@ -7804,14 +8116,7 @@
           "type": "registry:lib",
           "target": "components/claude-code/constants/claude-code.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "claude-code-thinking",
@@ -7903,14 +8208,7 @@
           "type": "registry:lib",
           "target": "components/claude-code/types/claude-code.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "claude-code-tool-call",
@@ -8007,14 +8305,7 @@
           "type": "registry:lib",
           "target": "components/claude-code/constants/claude-code.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "claude-code-status",
@@ -8116,14 +8407,7 @@
           "type": "registry:lib",
           "target": "components/claude-code/lib/claude-code-inline.tsx"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "claude-code-prompt",
@@ -8220,14 +8504,7 @@
           "type": "registry:lib",
           "target": "components/claude-code/constants/claude-code.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "claude-code",
@@ -8391,14 +8668,7 @@
           "type": "registry:component",
           "target": "components/claude-code/examples/claude-code-demo.tsx"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "codex-terminal",
@@ -8499,14 +8769,7 @@
           "type": "registry:lib",
           "target": "components/codex/types/codex.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "codex-header",
@@ -8935,14 +9198,7 @@
           "type": "registry:lib",
           "target": "components/codex/types/codex.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "codex-explored",
@@ -9048,14 +9304,7 @@
           "type": "registry:lib",
           "target": "components/codex/types/codex.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "codex-working",
@@ -9169,7 +9418,7 @@
       "title": "Codex Markdown",
       "description": "Bullet lists, tables with yellow headers and green inline code, styled like Codex answers.",
       "dependencies": ["cn"],
-      "registryDependencies": ["card", "collapsible", "table"],
+      "registryDependencies": ["card", "collapsible"],
       "cssVars": {
         "theme": {
           "color-codex-bg": "var(--codex-bg)",
@@ -9382,8 +9631,7 @@
         "collapsible",
         "input-group",
         "kbd",
-        "scroll-area",
-        "table"
+        "scroll-area"
       ],
       "cssVars": {
         "theme": {
@@ -9542,14 +9790,7 @@
           "type": "registry:component",
           "target": "components/codex/examples/codex-demo.tsx"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "opencode-window",
@@ -9614,14 +9855,7 @@
           "type": "registry:lib",
           "target": "components/opencode/types/opencode.ts"
         }
-      ],
-      "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "opencode-logo",
@@ -10307,12 +10541,1967 @@
           "type": "registry:hook",
           "target": "components/opencode/hooks/use-opencode-sources-sequence.ts"
         }
+      ]
+    },
+    {
+      "name": "workflow-canvas",
+      "type": "registry:component",
+      "title": "Workflow Canvas",
+      "description": "A zoomable, scrollable canvas that draws stroked, animated edges between node handles, with drag-to-connect and palette drops.",
+      "dependencies": ["@xyflow/react", "cn", "lucide-react"],
+      "registryDependencies": ["badge", "button"],
+      "files": [
+        {
+          "path": "registry/notra/workflow/components/workflow-block-icon.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-block-icon.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-canvas.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-canvas.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-edge.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-edge.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-handle.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-handle.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logo.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logo.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logos.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logos.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-node.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-node.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-shell.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-shell.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-status.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-status.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-timer.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-timer.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-ui.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-ui.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/hooks/use-workflow-graph.ts",
+          "type": "registry:hook",
+          "target": "components/workflow/hooks/use-workflow-graph.ts"
+        },
+        {
+          "path": "registry/notra/workflow/hooks/use-workflow-run.ts",
+          "type": "registry:hook",
+          "target": "components/workflow/hooks/use-workflow-run.ts"
+        },
+        {
+          "path": "registry/notra/workflow/lib/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/lib/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
       ],
       "css": {
-        "@layer base": {
-          "button:not(:disabled), [role=\"button\"]:not(:disabled)": {
-            "cursor": "pointer"
+        "@keyframes workflow-dash": {
+          "to": {
+            "stroke-dashoffset": "-20"
           }
+        }
+      },
+      "cssVars": {
+        "theme": {
+          "color-table-shell": "var(--table-shell)",
+          "color-table-shell-border": "var(--table-shell-border)",
+          "color-table-card": "var(--table-card)",
+          "color-table-card-border": "var(--table-card-border)",
+          "color-table-row-border": "var(--table-row-border)",
+          "shadow-table-card": "var(--table-card-shadow)",
+          "animate-workflow-dash": "workflow-dash 0.8s linear infinite"
+        },
+        "light": {
+          "table-shell": "#f3f3f2",
+          "table-shell-border": "#e7e7e5",
+          "table-card": "#ffffff",
+          "table-card-border": "#e5e5e5",
+          "table-row-border": "#efefee",
+          "table-card-shadow": "0 1px 2px hsl(240 10% 10% / 0.06), 0 2px 8px -2px hsl(240 10% 10% / 0.06)"
+        },
+        "dark": {
+          "table-shell": "#161616",
+          "table-shell-border": "#232323",
+          "table-card": "#1f1f1f",
+          "table-card-border": "#2c2c2c",
+          "table-row-border": "#292929",
+          "table-card-shadow": "inset 0 1px 0 hsl(0 0% 100% / 0.05), inset 0 0 0 1px hsl(0 0% 100% / 0.015), inset 0 12px 18px -16px hsl(0 0% 100% / 0.035)"
+        }
+      }
+    },
+    {
+      "name": "workflow-node",
+      "type": "registry:component",
+      "title": "Workflow Node",
+      "description": "A workflow step in a dualtone shell card with a kind icon or brand logo, status lights, single or labeled handles, a model chip and a running timer.",
+      "dependencies": ["@xyflow/react", "cn", "lucide-react"],
+      "registryDependencies": ["badge"],
+      "files": [
+        {
+          "path": "registry/notra/workflow/components/workflow-block-icon.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-block-icon.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-handle.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-handle.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logo.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logo.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logos.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logos.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-node.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-node.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-shell.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-shell.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-status.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-status.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-timer.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-timer.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-ui.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-ui.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/lib/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/lib/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ],
+      "cssVars": {
+        "theme": {
+          "color-table-shell": "var(--table-shell)",
+          "color-table-shell-border": "var(--table-shell-border)",
+          "color-table-card": "var(--table-card)",
+          "color-table-card-border": "var(--table-card-border)",
+          "color-table-row-border": "var(--table-row-border)",
+          "shadow-table-card": "var(--table-card-shadow)"
+        },
+        "light": {
+          "table-shell": "#f3f3f2",
+          "table-shell-border": "#e7e7e5",
+          "table-card": "#ffffff",
+          "table-card-border": "#e5e5e5",
+          "table-row-border": "#efefee",
+          "table-card-shadow": "0 1px 2px hsl(240 10% 10% / 0.06), 0 2px 8px -2px hsl(240 10% 10% / 0.06)"
+        },
+        "dark": {
+          "table-shell": "#161616",
+          "table-shell-border": "#232323",
+          "table-card": "#1f1f1f",
+          "table-card-border": "#2c2c2c",
+          "table-row-border": "#292929",
+          "table-card-shadow": "inset 0 1px 0 hsl(0 0% 100% / 0.05), inset 0 0 0 1px hsl(0 0% 100% / 0.015), inset 0 12px 18px -16px hsl(0 0% 100% / 0.035)"
+        }
+      }
+    },
+    {
+      "name": "workflow-shell",
+      "type": "registry:component",
+      "title": "Workflow Shell",
+      "description": "The dualtone workflow card, with a grey frame, a header strip and a lifted inner card.",
+      "dependencies": ["cn"],
+      "registryDependencies": [],
+      "files": [
+        {
+          "path": "registry/notra/workflow/components/workflow-shell.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-shell.tsx"
+        }
+      ],
+      "cssVars": {
+        "theme": {
+          "color-table-shell": "var(--table-shell)",
+          "color-table-shell-border": "var(--table-shell-border)",
+          "color-table-card": "var(--table-card)",
+          "color-table-card-border": "var(--table-card-border)",
+          "color-table-row-border": "var(--table-row-border)",
+          "shadow-table-card": "var(--table-card-shadow)"
+        },
+        "light": {
+          "table-shell": "#f3f3f2",
+          "table-shell-border": "#e7e7e5",
+          "table-card": "#ffffff",
+          "table-card-border": "#e5e5e5",
+          "table-row-border": "#efefee",
+          "table-card-shadow": "0 1px 2px hsl(240 10% 10% / 0.06), 0 2px 8px -2px hsl(240 10% 10% / 0.06)"
+        },
+        "dark": {
+          "table-shell": "#161616",
+          "table-shell-border": "#232323",
+          "table-card": "#1f1f1f",
+          "table-card-border": "#2c2c2c",
+          "table-row-border": "#292929",
+          "table-card-shadow": "inset 0 1px 0 hsl(0 0% 100% / 0.05), inset 0 0 0 1px hsl(0 0% 100% / 0.015), inset 0 12px 18px -16px hsl(0 0% 100% / 0.035)"
+        }
+      }
+    },
+    {
+      "name": "workflow-edge",
+      "type": "registry:component",
+      "title": "Workflow Edge",
+      "description": "A dotted step connection with rounded corners and idle, animated, active, done and skipped states.",
+      "dependencies": ["@xyflow/react", "cn", "lucide-react"],
+      "registryDependencies": [],
+      "files": [
+        {
+          "path": "registry/notra/workflow/components/workflow-edge.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-edge.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-ui.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-ui.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/lib/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/lib/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ],
+      "css": {
+        "@keyframes workflow-dash": {
+          "to": {
+            "stroke-dashoffset": "-20"
+          }
+        }
+      },
+      "cssVars": {
+        "theme": {
+          "color-table-shell": "var(--table-shell)",
+          "color-table-shell-border": "var(--table-shell-border)",
+          "color-table-card": "var(--table-card)",
+          "color-table-card-border": "var(--table-card-border)",
+          "color-table-row-border": "var(--table-row-border)",
+          "shadow-table-card": "var(--table-card-shadow)",
+          "animate-workflow-dash": "workflow-dash 0.8s linear infinite"
+        },
+        "light": {
+          "table-shell": "#f3f3f2",
+          "table-shell-border": "#e7e7e5",
+          "table-card": "#ffffff",
+          "table-card-border": "#e5e5e5",
+          "table-row-border": "#efefee",
+          "table-card-shadow": "0 1px 2px hsl(240 10% 10% / 0.06), 0 2px 8px -2px hsl(240 10% 10% / 0.06)"
+        },
+        "dark": {
+          "table-shell": "#161616",
+          "table-shell-border": "#232323",
+          "table-card": "#1f1f1f",
+          "table-card-border": "#2c2c2c",
+          "table-row-border": "#292929",
+          "table-card-shadow": "inset 0 1px 0 hsl(0 0% 100% / 0.05), inset 0 0 0 1px hsl(0 0% 100% / 0.015), inset 0 12px 18px -16px hsl(0 0% 100% / 0.035)"
+        }
+      }
+    },
+    {
+      "name": "workflow-timer",
+      "type": "registry:component",
+      "title": "Workflow Timer",
+      "description": "A tabular timer for how long a step or run has been going.",
+      "dependencies": ["@xyflow/react", "cn", "lucide-react"],
+      "registryDependencies": [],
+      "files": [
+        {
+          "path": "registry/notra/workflow/components/workflow-timer.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-timer.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-ui.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-ui.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/lib/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/lib/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ]
+    },
+    {
+      "name": "workflow-run-button",
+      "type": "registry:component",
+      "title": "Workflow Run Button",
+      "description": "A play, stop and run-again button with a progress ring, built on the Base UI Button primitive.",
+      "dependencies": [
+        "@base-ui/react",
+        "@xyflow/react",
+        "class-variance-authority",
+        "cn",
+        "lucide-react"
+      ],
+      "registryDependencies": [],
+      "files": [
+        {
+          "path": "registry/notra/workflow/components/workflow-run-button.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-run-button.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-ui.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-ui.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ]
+    },
+    {
+      "name": "workflow-status",
+      "type": "registry:component",
+      "title": "Workflow Status",
+      "description": "Status indicators and badges for steps, plus the deterministic and non-deterministic badges.",
+      "dependencies": ["@xyflow/react", "cn", "lucide-react"],
+      "registryDependencies": ["badge"],
+      "files": [
+        {
+          "path": "registry/notra/workflow/components/workflow-status.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-status.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-ui.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-ui.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ],
+      "cssVars": {
+        "theme": {
+          "color-table-shell": "var(--table-shell)",
+          "color-table-shell-border": "var(--table-shell-border)",
+          "color-table-card": "var(--table-card)",
+          "color-table-card-border": "var(--table-card-border)",
+          "color-table-row-border": "var(--table-row-border)",
+          "shadow-table-card": "var(--table-card-shadow)"
+        },
+        "light": {
+          "table-shell": "#f3f3f2",
+          "table-shell-border": "#e7e7e5",
+          "table-card": "#ffffff",
+          "table-card-border": "#e5e5e5",
+          "table-row-border": "#efefee",
+          "table-card-shadow": "0 1px 2px hsl(240 10% 10% / 0.06), 0 2px 8px -2px hsl(240 10% 10% / 0.06)"
+        },
+        "dark": {
+          "table-shell": "#161616",
+          "table-shell-border": "#232323",
+          "table-card": "#1f1f1f",
+          "table-card-border": "#2c2c2c",
+          "table-row-border": "#292929",
+          "table-card-shadow": "inset 0 1px 0 hsl(0 0% 100% / 0.05), inset 0 0 0 1px hsl(0 0% 100% / 0.015), inset 0 12px 18px -16px hsl(0 0% 100% / 0.035)"
+        }
+      }
+    },
+    {
+      "name": "workflow-logo",
+      "type": "registry:component",
+      "title": "Workflow Logo",
+      "description": "Brand logos for models and integrations, from svgl.app.",
+      "dependencies": ["@xyflow/react", "cn"],
+      "registryDependencies": [],
+      "files": [
+        {
+          "path": "registry/notra/workflow/components/workflow-logo.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logo.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logos.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logos.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ]
+    },
+    {
+      "name": "workflow-node-palette",
+      "type": "registry:component",
+      "title": "Workflow Node Palette",
+      "description": "A searchable list of blocks you can click or drag onto the canvas.",
+      "dependencies": ["@xyflow/react", "cn", "lucide-react"],
+      "registryDependencies": ["input", "scroll-area"],
+      "files": [
+        {
+          "path": "registry/notra/workflow/components/workflow-block-icon.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-block-icon.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logo.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logo.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logos.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logos.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-node-palette.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-node-palette.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-blocks.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-blocks.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-ui.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-ui.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/lib/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/lib/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ]
+    },
+    {
+      "name": "workflow-node-sheet",
+      "type": "registry:component",
+      "title": "Workflow Node Sheet",
+      "description": "A side sheet with a step's settings, model, ports, run log and output.",
+      "dependencies": ["@xyflow/react", "cn", "lucide-react"],
+      "registryDependencies": [
+        "badge",
+        "button",
+        "https://ui.usenotra.com/r/notra-select.json",
+        "sheet",
+        "tabs"
+      ],
+      "files": [
+        {
+          "path": "registry/notra/workflow/components/workflow-block-icon.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-block-icon.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logo.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logo.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logos.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logos.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-model-select.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-model-select.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-node-sheet.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-node-sheet.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-run-log.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-run-log.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-status.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-status.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-timer.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-timer.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-ui.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-ui.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/lib/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/lib/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ],
+      "cssVars": {
+        "theme": {
+          "color-table-shell": "var(--table-shell)",
+          "color-table-shell-border": "var(--table-shell-border)",
+          "color-table-card": "var(--table-card)",
+          "color-table-card-border": "var(--table-card-border)",
+          "color-table-row-border": "var(--table-row-border)",
+          "shadow-table-card": "var(--table-card-shadow)"
+        },
+        "light": {
+          "table-shell": "#f3f3f2",
+          "table-shell-border": "#e7e7e5",
+          "table-card": "#ffffff",
+          "table-card-border": "#e5e5e5",
+          "table-row-border": "#efefee",
+          "table-card-shadow": "0 1px 2px hsl(240 10% 10% / 0.06), 0 2px 8px -2px hsl(240 10% 10% / 0.06)"
+        },
+        "dark": {
+          "table-shell": "#161616",
+          "table-shell-border": "#232323",
+          "table-card": "#1f1f1f",
+          "table-card-border": "#2c2c2c",
+          "table-row-border": "#292929",
+          "table-card-shadow": "inset 0 1px 0 hsl(0 0% 100% / 0.05), inset 0 0 0 1px hsl(0 0% 100% / 0.015), inset 0 12px 18px -16px hsl(0 0% 100% / 0.035)"
+        }
+      }
+    },
+    {
+      "name": "workflow-run-log",
+      "type": "registry:component",
+      "title": "Workflow Run Log",
+      "description": "Timestamped log lines for a run.",
+      "dependencies": ["@xyflow/react", "cn", "lucide-react"],
+      "registryDependencies": [],
+      "files": [
+        {
+          "path": "registry/notra/workflow/components/workflow-run-log.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-run-log.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-ui.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-ui.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/lib/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/lib/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ]
+    },
+    {
+      "name": "workflow-run-timeline",
+      "type": "registry:component",
+      "title": "Workflow Run Timeline",
+      "description": "A live Gantt chart of when each step ran.",
+      "dependencies": ["@xyflow/react", "cn", "lucide-react"],
+      "registryDependencies": [],
+      "files": [
+        {
+          "path": "registry/notra/workflow/components/workflow-block-icon.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-block-icon.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logo.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logo.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logos.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logos.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-run-timeline.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-run-timeline.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-ui.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-ui.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/lib/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/lib/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ]
+    },
+    {
+      "name": "workflow-run-history",
+      "type": "registry:component",
+      "title": "Workflow Run History",
+      "description": "A list of past runs with status, trigger and duration.",
+      "dependencies": ["@xyflow/react", "cn", "lucide-react"],
+      "registryDependencies": ["badge"],
+      "files": [
+        {
+          "path": "registry/notra/workflow/components/workflow-run-history.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-run-history.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-status.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-status.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-runs.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-runs.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-ui.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-ui.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/lib/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/lib/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ],
+      "cssVars": {
+        "theme": {
+          "color-table-shell": "var(--table-shell)",
+          "color-table-shell-border": "var(--table-shell-border)",
+          "color-table-card": "var(--table-card)",
+          "color-table-card-border": "var(--table-card-border)",
+          "color-table-row-border": "var(--table-row-border)",
+          "shadow-table-card": "var(--table-card-shadow)"
+        },
+        "light": {
+          "table-shell": "#f3f3f2",
+          "table-shell-border": "#e7e7e5",
+          "table-card": "#ffffff",
+          "table-card-border": "#e5e5e5",
+          "table-row-border": "#efefee",
+          "table-card-shadow": "0 1px 2px hsl(240 10% 10% / 0.06), 0 2px 8px -2px hsl(240 10% 10% / 0.06)"
+        },
+        "dark": {
+          "table-shell": "#161616",
+          "table-shell-border": "#232323",
+          "table-card": "#1f1f1f",
+          "table-card-border": "#2c2c2c",
+          "table-row-border": "#292929",
+          "table-card-shadow": "inset 0 1px 0 hsl(0 0% 100% / 0.05), inset 0 0 0 1px hsl(0 0% 100% / 0.015), inset 0 12px 18px -16px hsl(0 0% 100% / 0.035)"
+        }
+      }
+    },
+    {
+      "name": "workflow-model-select",
+      "type": "registry:component",
+      "title": "Workflow Model Select",
+      "description": "A model picker with provider logos.",
+      "dependencies": ["@xyflow/react", "cn", "lucide-react"],
+      "registryDependencies": ["https://ui.usenotra.com/r/notra-select.json"],
+      "files": [
+        {
+          "path": "registry/notra/workflow/components/workflow-logo.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logo.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logos.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logos.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-model-select.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-model-select.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ]
+    },
+    {
+      "name": "workflow-template-card",
+      "type": "registry:component",
+      "title": "Workflow Template Card",
+      "description": "A template card and a preview dialog that plays the template.",
+      "dependencies": [
+        "@base-ui/react",
+        "@xyflow/react",
+        "class-variance-authority",
+        "cn",
+        "lucide-react"
+      ],
+      "registryDependencies": ["badge", "button", "dialog"],
+      "files": [
+        {
+          "path": "registry/notra/workflow/components/workflow-block-icon.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-block-icon.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-canvas.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-canvas.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-edge.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-edge.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-handle.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-handle.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logo.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logo.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logos.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logos.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-node.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-node.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-run-button.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-run-button.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-shell.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-shell.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-status.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-status.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-template-card.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-template-card.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-timer.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-timer.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-templates.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-templates.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-ui.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-ui.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/hooks/use-workflow-run.ts",
+          "type": "registry:hook",
+          "target": "components/workflow/hooks/use-workflow-run.ts"
+        },
+        {
+          "path": "registry/notra/workflow/lib/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/lib/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ],
+      "css": {
+        "@keyframes workflow-dash": {
+          "to": {
+            "stroke-dashoffset": "-20"
+          }
+        }
+      },
+      "cssVars": {
+        "theme": {
+          "color-table-shell": "var(--table-shell)",
+          "color-table-shell-border": "var(--table-shell-border)",
+          "color-table-card": "var(--table-card)",
+          "color-table-card-border": "var(--table-card-border)",
+          "color-table-row-border": "var(--table-row-border)",
+          "shadow-table-card": "var(--table-card-shadow)",
+          "animate-workflow-dash": "workflow-dash 0.8s linear infinite"
+        },
+        "light": {
+          "table-shell": "#f3f3f2",
+          "table-shell-border": "#e7e7e5",
+          "table-card": "#ffffff",
+          "table-card-border": "#e5e5e5",
+          "table-row-border": "#efefee",
+          "table-card-shadow": "0 1px 2px hsl(240 10% 10% / 0.06), 0 2px 8px -2px hsl(240 10% 10% / 0.06)"
+        },
+        "dark": {
+          "table-shell": "#161616",
+          "table-shell-border": "#232323",
+          "table-card": "#1f1f1f",
+          "table-card-border": "#2c2c2c",
+          "table-row-border": "#292929",
+          "table-card-shadow": "inset 0 1px 0 hsl(0 0% 100% / 0.05), inset 0 0 0 1px hsl(0 0% 100% / 0.015), inset 0 12px 18px -16px hsl(0 0% 100% / 0.035)"
+        }
+      }
+    },
+    {
+      "name": "outreach-prospect-table",
+      "type": "registry:component",
+      "title": "Outreach Prospect Table",
+      "description": "Listicles that AI answers cite, with engines, competitors, domain rating and outreach status.",
+      "dependencies": ["@xyflow/react", "cn", "lucide-react"],
+      "registryDependencies": [
+        "badge",
+        "button",
+        "https://ui.usenotra.com/r/notra-table.json"
+      ],
+      "files": [
+        {
+          "path": "registry/notra/outreach/components/outreach-prospect-table.tsx",
+          "type": "registry:component",
+          "target": "components/outreach/components/outreach-prospect-table.tsx"
+        },
+        {
+          "path": "registry/notra/outreach/components/outreach-status.tsx",
+          "type": "registry:component",
+          "target": "components/outreach/components/outreach-status.tsx"
+        },
+        {
+          "path": "registry/notra/outreach/constants/outreach.ts",
+          "type": "registry:lib",
+          "target": "components/outreach/constants/outreach.ts"
+        },
+        {
+          "path": "registry/notra/outreach/types/outreach.ts",
+          "type": "registry:lib",
+          "target": "components/outreach/types/outreach.ts"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logo.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logo.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logos.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logos.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ]
+    },
+    {
+      "name": "outreach-email-dialog",
+      "type": "registry:component",
+      "title": "Outreach Email Dialog",
+      "description": "A modal that drafts, rewrites and previews a pitch to a listicle owner, with template variables.",
+      "dependencies": ["@xyflow/react", "cn", "lucide-react"],
+      "registryDependencies": ["button", "dialog", "input", "tabs", "textarea"],
+      "files": [
+        {
+          "path": "registry/notra/outreach/components/outreach-email-dialog.tsx",
+          "type": "registry:component",
+          "target": "components/outreach/components/outreach-email-dialog.tsx"
+        },
+        {
+          "path": "registry/notra/outreach/constants/outreach.ts",
+          "type": "registry:lib",
+          "target": "components/outreach/constants/outreach.ts"
+        },
+        {
+          "path": "registry/notra/outreach/lib/outreach.ts",
+          "type": "registry:lib",
+          "target": "components/outreach/lib/outreach.ts"
+        },
+        {
+          "path": "registry/notra/outreach/types/outreach.ts",
+          "type": "registry:lib",
+          "target": "components/outreach/types/outreach.ts"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logo.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logo.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logos.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logos.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-ui.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-ui.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/lib/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/lib/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ]
+    },
+    {
+      "name": "outreach-prospect-sheet",
+      "type": "registry:component",
+      "title": "Outreach Prospect Sheet",
+      "description": "A side sheet with why a listicle matters, who's on it, the owner and the email sequence.",
+      "dependencies": ["@xyflow/react", "cn", "lucide-react"],
+      "registryDependencies": ["avatar", "badge", "button", "sheet"],
+      "files": [
+        {
+          "path": "registry/notra/outreach/components/outreach-prospect-sheet.tsx",
+          "type": "registry:component",
+          "target": "components/outreach/components/outreach-prospect-sheet.tsx"
+        },
+        {
+          "path": "registry/notra/outreach/components/outreach-sequence.tsx",
+          "type": "registry:component",
+          "target": "components/outreach/components/outreach-sequence.tsx"
+        },
+        {
+          "path": "registry/notra/outreach/components/outreach-status.tsx",
+          "type": "registry:component",
+          "target": "components/outreach/components/outreach-status.tsx"
+        },
+        {
+          "path": "registry/notra/outreach/constants/outreach.ts",
+          "type": "registry:lib",
+          "target": "components/outreach/constants/outreach.ts"
+        },
+        {
+          "path": "registry/notra/outreach/lib/outreach.ts",
+          "type": "registry:lib",
+          "target": "components/outreach/lib/outreach.ts"
+        },
+        {
+          "path": "registry/notra/outreach/types/outreach.ts",
+          "type": "registry:lib",
+          "target": "components/outreach/types/outreach.ts"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logo.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logo.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logos.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logos.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-ui.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-ui.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ]
+    },
+    {
+      "name": "outreach-sequence",
+      "type": "registry:component",
+      "title": "Outreach Sequence",
+      "description": "A timeline of the emails in a follow-up sequence.",
+      "dependencies": ["@xyflow/react", "cn"],
+      "registryDependencies": [],
+      "files": [
+        {
+          "path": "registry/notra/outreach/components/outreach-sequence.tsx",
+          "type": "registry:component",
+          "target": "components/outreach/components/outreach-sequence.tsx"
+        },
+        {
+          "path": "registry/notra/outreach/constants/outreach.ts",
+          "type": "registry:lib",
+          "target": "components/outreach/constants/outreach.ts"
+        },
+        {
+          "path": "registry/notra/outreach/types/outreach.ts",
+          "type": "registry:lib",
+          "target": "components/outreach/types/outreach.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ]
+    },
+    {
+      "name": "outreach-stats",
+      "type": "registry:component",
+      "title": "Outreach Stats",
+      "description": "A row of outreach metrics.",
+      "dependencies": ["@xyflow/react", "cn"],
+      "registryDependencies": [],
+      "files": [
+        {
+          "path": "registry/notra/outreach/components/outreach-stats.tsx",
+          "type": "registry:component",
+          "target": "components/outreach/components/outreach-stats.tsx"
+        },
+        {
+          "path": "registry/notra/outreach/types/outreach.ts",
+          "type": "registry:lib",
+          "target": "components/outreach/types/outreach.ts"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-shell.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-shell.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ],
+      "cssVars": {
+        "theme": {
+          "color-table-shell": "var(--table-shell)",
+          "color-table-shell-border": "var(--table-shell-border)",
+          "color-table-card": "var(--table-card)",
+          "color-table-card-border": "var(--table-card-border)",
+          "color-table-row-border": "var(--table-row-border)",
+          "shadow-table-card": "var(--table-card-shadow)"
+        },
+        "light": {
+          "table-shell": "#f3f3f2",
+          "table-shell-border": "#e7e7e5",
+          "table-card": "#ffffff",
+          "table-card-border": "#e5e5e5",
+          "table-row-border": "#efefee",
+          "table-card-shadow": "0 1px 2px hsl(240 10% 10% / 0.06), 0 2px 8px -2px hsl(240 10% 10% / 0.06)"
+        },
+        "dark": {
+          "table-shell": "#161616",
+          "table-shell-border": "#232323",
+          "table-card": "#1f1f1f",
+          "table-card-border": "#2c2c2c",
+          "table-row-border": "#292929",
+          "table-card-shadow": "inset 0 1px 0 hsl(0 0% 100% / 0.05), inset 0 0 0 1px hsl(0 0% 100% / 0.015), inset 0 12px 18px -16px hsl(0 0% 100% / 0.035)"
+        }
+      }
+    },
+    {
+      "name": "workflow-builder",
+      "type": "registry:block",
+      "title": "Workflow Builder",
+      "description": "A workflow builder with a block palette, a playable canvas, a run log and timeline, and a node sheet.",
+      "dependencies": [
+        "@base-ui/react",
+        "@xyflow/react",
+        "class-variance-authority",
+        "cn",
+        "lucide-react"
+      ],
+      "registryDependencies": [
+        "badge",
+        "button",
+        "input",
+        "scroll-area",
+        "https://ui.usenotra.com/r/notra-select.json",
+        "sheet",
+        "tabs"
+      ],
+      "files": [
+        {
+          "path": "registry/notra/workflow/components/workflow-block-icon.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-block-icon.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-canvas.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-canvas.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-edge.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-edge.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-handle.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-handle.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logo.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logo.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logos.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logos.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-model-select.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-model-select.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-node-palette.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-node-palette.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-node-sheet.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-node-sheet.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-node.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-node.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-run-button.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-run-button.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-run-log.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-run-log.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-run-timeline.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-run-timeline.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-shell.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-shell.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-status.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-status.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-timer.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-timer.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-blocks.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-blocks.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-templates.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-templates.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-ui.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-ui.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/examples/workflow-builder.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/examples/workflow-builder.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/hooks/use-workflow-graph.ts",
+          "type": "registry:hook",
+          "target": "components/workflow/hooks/use-workflow-graph.ts"
+        },
+        {
+          "path": "registry/notra/workflow/hooks/use-workflow-run.ts",
+          "type": "registry:hook",
+          "target": "components/workflow/hooks/use-workflow-run.ts"
+        },
+        {
+          "path": "registry/notra/workflow/lib/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/lib/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ],
+      "css": {
+        "@keyframes workflow-dash": {
+          "to": {
+            "stroke-dashoffset": "-20"
+          }
+        }
+      },
+      "cssVars": {
+        "theme": {
+          "color-table-shell": "var(--table-shell)",
+          "color-table-shell-border": "var(--table-shell-border)",
+          "color-table-card": "var(--table-card)",
+          "color-table-card-border": "var(--table-card-border)",
+          "color-table-row-border": "var(--table-row-border)",
+          "shadow-table-card": "var(--table-card-shadow)",
+          "animate-workflow-dash": "workflow-dash 0.8s linear infinite"
+        },
+        "light": {
+          "table-shell": "#f3f3f2",
+          "table-shell-border": "#e7e7e5",
+          "table-card": "#ffffff",
+          "table-card-border": "#e5e5e5",
+          "table-row-border": "#efefee",
+          "table-card-shadow": "0 1px 2px hsl(240 10% 10% / 0.06), 0 2px 8px -2px hsl(240 10% 10% / 0.06)"
+        },
+        "dark": {
+          "table-shell": "#161616",
+          "table-shell-border": "#232323",
+          "table-card": "#1f1f1f",
+          "table-card-border": "#2c2c2c",
+          "table-row-border": "#292929",
+          "table-card-shadow": "inset 0 1px 0 hsl(0 0% 100% / 0.05), inset 0 0 0 1px hsl(0 0% 100% / 0.015), inset 0 12px 18px -16px hsl(0 0% 100% / 0.035)"
+        }
+      }
+    },
+    {
+      "name": "workflow-decision-tree",
+      "type": "registry:block",
+      "title": "Workflow Decision Tree",
+      "description": "A content refresh workflow that routes a visibility drop to one of four fixes, with a playable run log.",
+      "dependencies": [
+        "@base-ui/react",
+        "@xyflow/react",
+        "class-variance-authority",
+        "cn",
+        "lucide-react"
+      ],
+      "registryDependencies": ["badge", "button"],
+      "files": [
+        {
+          "path": "registry/notra/workflow/components/workflow-block-icon.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-block-icon.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-canvas.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-canvas.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-edge.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-edge.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-handle.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-handle.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logo.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logo.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logos.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logos.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-node.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-node.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-run-button.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-run-button.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-run-log.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-run-log.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-shell.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-shell.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-status.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-status.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-timer.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-timer.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-templates.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-templates.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-ui.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-ui.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/examples/workflow-decision-tree.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/examples/workflow-decision-tree.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/hooks/use-workflow-graph.ts",
+          "type": "registry:hook",
+          "target": "components/workflow/hooks/use-workflow-graph.ts"
+        },
+        {
+          "path": "registry/notra/workflow/hooks/use-workflow-run.ts",
+          "type": "registry:hook",
+          "target": "components/workflow/hooks/use-workflow-run.ts"
+        },
+        {
+          "path": "registry/notra/workflow/lib/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/lib/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ],
+      "css": {
+        "@keyframes workflow-dash": {
+          "to": {
+            "stroke-dashoffset": "-20"
+          }
+        }
+      },
+      "cssVars": {
+        "theme": {
+          "color-table-shell": "var(--table-shell)",
+          "color-table-shell-border": "var(--table-shell-border)",
+          "color-table-card": "var(--table-card)",
+          "color-table-card-border": "var(--table-card-border)",
+          "color-table-row-border": "var(--table-row-border)",
+          "shadow-table-card": "var(--table-card-shadow)",
+          "animate-workflow-dash": "workflow-dash 0.8s linear infinite"
+        },
+        "light": {
+          "table-shell": "#f3f3f2",
+          "table-shell-border": "#e7e7e5",
+          "table-card": "#ffffff",
+          "table-card-border": "#e5e5e5",
+          "table-row-border": "#efefee",
+          "table-card-shadow": "0 1px 2px hsl(240 10% 10% / 0.06), 0 2px 8px -2px hsl(240 10% 10% / 0.06)"
+        },
+        "dark": {
+          "table-shell": "#161616",
+          "table-shell-border": "#232323",
+          "table-card": "#1f1f1f",
+          "table-card-border": "#2c2c2c",
+          "table-row-border": "#292929",
+          "table-card-shadow": "inset 0 1px 0 hsl(0 0% 100% / 0.05), inset 0 0 0 1px hsl(0 0% 100% / 0.015), inset 0 12px 18px -16px hsl(0 0% 100% / 0.035)"
+        }
+      }
+    },
+    {
+      "name": "workflow-runs",
+      "type": "registry:block",
+      "title": "Workflow Runs",
+      "description": "Run history with a replayable timeline and log.",
+      "dependencies": [
+        "@base-ui/react",
+        "@xyflow/react",
+        "class-variance-authority",
+        "cn",
+        "lucide-react"
+      ],
+      "registryDependencies": ["badge"],
+      "files": [
+        {
+          "path": "registry/notra/workflow/components/workflow-block-icon.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-block-icon.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logo.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logo.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logos.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logos.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-run-button.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-run-button.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-run-history.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-run-history.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-run-log.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-run-log.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-run-timeline.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-run-timeline.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-shell.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-shell.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-status.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-status.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-timer.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-timer.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-runs.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-runs.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-templates.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-templates.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-ui.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-ui.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/examples/workflow-runs.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/examples/workflow-runs.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/hooks/use-workflow-run.ts",
+          "type": "registry:hook",
+          "target": "components/workflow/hooks/use-workflow-run.ts"
+        },
+        {
+          "path": "registry/notra/workflow/lib/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/lib/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ],
+      "cssVars": {
+        "theme": {
+          "color-table-shell": "var(--table-shell)",
+          "color-table-shell-border": "var(--table-shell-border)",
+          "color-table-card": "var(--table-card)",
+          "color-table-card-border": "var(--table-card-border)",
+          "color-table-row-border": "var(--table-row-border)",
+          "shadow-table-card": "var(--table-card-shadow)"
+        },
+        "light": {
+          "table-shell": "#f3f3f2",
+          "table-shell-border": "#e7e7e5",
+          "table-card": "#ffffff",
+          "table-card-border": "#e5e5e5",
+          "table-row-border": "#efefee",
+          "table-card-shadow": "0 1px 2px hsl(240 10% 10% / 0.06), 0 2px 8px -2px hsl(240 10% 10% / 0.06)"
+        },
+        "dark": {
+          "table-shell": "#161616",
+          "table-shell-border": "#232323",
+          "table-card": "#1f1f1f",
+          "table-card-border": "#2c2c2c",
+          "table-row-border": "#292929",
+          "table-card-shadow": "inset 0 1px 0 hsl(0 0% 100% / 0.05), inset 0 0 0 1px hsl(0 0% 100% / 0.015), inset 0 12px 18px -16px hsl(0 0% 100% / 0.035)"
+        }
+      }
+    },
+    {
+      "name": "workflow-templates",
+      "type": "registry:block",
+      "title": "Workflow Templates",
+      "description": "A filterable gallery of workflow templates with a playable preview dialog.",
+      "dependencies": [
+        "@base-ui/react",
+        "@xyflow/react",
+        "class-variance-authority",
+        "cn",
+        "lucide-react",
+        "sonner"
+      ],
+      "registryDependencies": ["badge", "button", "dialog", "tabs"],
+      "files": [
+        {
+          "path": "registry/notra/workflow/components/workflow-block-icon.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-block-icon.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-canvas.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-canvas.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-edge.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-edge.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-handle.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-handle.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logo.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logo.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logos.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logos.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-node.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-node.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-run-button.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-run-button.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-shell.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-shell.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-status.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-status.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-template-card.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-template-card.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-timer.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-timer.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-templates.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-templates.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-ui.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-ui.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/examples/workflow-templates.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/examples/workflow-templates.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/hooks/use-workflow-run.ts",
+          "type": "registry:hook",
+          "target": "components/workflow/hooks/use-workflow-run.ts"
+        },
+        {
+          "path": "registry/notra/workflow/lib/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/lib/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ],
+      "css": {
+        "@keyframes workflow-dash": {
+          "to": {
+            "stroke-dashoffset": "-20"
+          }
+        }
+      },
+      "cssVars": {
+        "theme": {
+          "color-table-shell": "var(--table-shell)",
+          "color-table-shell-border": "var(--table-shell-border)",
+          "color-table-card": "var(--table-card)",
+          "color-table-card-border": "var(--table-card-border)",
+          "color-table-row-border": "var(--table-row-border)",
+          "shadow-table-card": "var(--table-card-shadow)",
+          "animate-workflow-dash": "workflow-dash 0.8s linear infinite"
+        },
+        "light": {
+          "table-shell": "#f3f3f2",
+          "table-shell-border": "#e7e7e5",
+          "table-card": "#ffffff",
+          "table-card-border": "#e5e5e5",
+          "table-row-border": "#efefee",
+          "table-card-shadow": "0 1px 2px hsl(240 10% 10% / 0.06), 0 2px 8px -2px hsl(240 10% 10% / 0.06)"
+        },
+        "dark": {
+          "table-shell": "#161616",
+          "table-shell-border": "#232323",
+          "table-card": "#1f1f1f",
+          "table-card-border": "#2c2c2c",
+          "table-row-border": "#292929",
+          "table-card-shadow": "inset 0 1px 0 hsl(0 0% 100% / 0.05), inset 0 0 0 1px hsl(0 0% 100% / 0.015), inset 0 12px 18px -16px hsl(0 0% 100% / 0.035)"
+        }
+      }
+    },
+    {
+      "name": "listicle-outreach",
+      "type": "registry:block",
+      "title": "Listicle Outreach",
+      "description": "Track the listicles AI answers cite and pitch their owners, with stats, a prospect table, a detail sheet and an email modal.",
+      "dependencies": ["@xyflow/react", "cn", "lucide-react", "sonner"],
+      "registryDependencies": [
+        "avatar",
+        "badge",
+        "button",
+        "dialog",
+        "input",
+        "sheet",
+        "https://ui.usenotra.com/r/notra-table.json",
+        "tabs",
+        "textarea"
+      ],
+      "files": [
+        {
+          "path": "registry/notra/outreach/components/outreach-email-dialog.tsx",
+          "type": "registry:component",
+          "target": "components/outreach/components/outreach-email-dialog.tsx"
+        },
+        {
+          "path": "registry/notra/outreach/components/outreach-prospect-sheet.tsx",
+          "type": "registry:component",
+          "target": "components/outreach/components/outreach-prospect-sheet.tsx"
+        },
+        {
+          "path": "registry/notra/outreach/components/outreach-prospect-table.tsx",
+          "type": "registry:component",
+          "target": "components/outreach/components/outreach-prospect-table.tsx"
+        },
+        {
+          "path": "registry/notra/outreach/components/outreach-sequence.tsx",
+          "type": "registry:component",
+          "target": "components/outreach/components/outreach-sequence.tsx"
+        },
+        {
+          "path": "registry/notra/outreach/components/outreach-stats.tsx",
+          "type": "registry:component",
+          "target": "components/outreach/components/outreach-stats.tsx"
+        },
+        {
+          "path": "registry/notra/outreach/components/outreach-status.tsx",
+          "type": "registry:component",
+          "target": "components/outreach/components/outreach-status.tsx"
+        },
+        {
+          "path": "registry/notra/outreach/constants/outreach.ts",
+          "type": "registry:lib",
+          "target": "components/outreach/constants/outreach.ts"
+        },
+        {
+          "path": "registry/notra/outreach/examples/listicle-outreach.tsx",
+          "type": "registry:component",
+          "target": "components/outreach/examples/listicle-outreach.tsx"
+        },
+        {
+          "path": "registry/notra/outreach/lib/outreach.ts",
+          "type": "registry:lib",
+          "target": "components/outreach/lib/outreach.ts"
+        },
+        {
+          "path": "registry/notra/outreach/types/outreach.ts",
+          "type": "registry:lib",
+          "target": "components/outreach/types/outreach.ts"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logo.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logo.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-logos.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-logos.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/components/workflow-shell.tsx",
+          "type": "registry:component",
+          "target": "components/workflow/components/workflow-shell.tsx"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow-ui.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow-ui.ts"
+        },
+        {
+          "path": "registry/notra/workflow/constants/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/constants/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/lib/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/lib/workflow.ts"
+        },
+        {
+          "path": "registry/notra/workflow/types/workflow.ts",
+          "type": "registry:lib",
+          "target": "components/workflow/types/workflow.ts"
+        }
+      ],
+      "cssVars": {
+        "theme": {
+          "color-table-shell": "var(--table-shell)",
+          "color-table-shell-border": "var(--table-shell-border)",
+          "color-table-card": "var(--table-card)",
+          "color-table-card-border": "var(--table-card-border)",
+          "color-table-row-border": "var(--table-row-border)",
+          "shadow-table-card": "var(--table-card-shadow)"
+        },
+        "light": {
+          "table-shell": "#f3f3f2",
+          "table-shell-border": "#e7e7e5",
+          "table-card": "#ffffff",
+          "table-card-border": "#e5e5e5",
+          "table-row-border": "#efefee",
+          "table-card-shadow": "0 1px 2px hsl(240 10% 10% / 0.06), 0 2px 8px -2px hsl(240 10% 10% / 0.06)"
+        },
+        "dark": {
+          "table-shell": "#161616",
+          "table-shell-border": "#232323",
+          "table-card": "#1f1f1f",
+          "table-card-border": "#2c2c2c",
+          "table-row-border": "#292929",
+          "table-card-shadow": "inset 0 1px 0 hsl(0 0% 100% / 0.05), inset 0 0 0 1px hsl(0 0% 100% / 0.015), inset 0 12px 18px -16px hsl(0 0% 100% / 0.035)"
         }
       }
     }

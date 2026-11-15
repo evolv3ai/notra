@@ -1,7 +1,8 @@
 "use client";
 
-import { ArrowLeft02Icon, Delete02Icon } from "@hugeicons/core-free-icons";
+import { Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { PageHeading } from "@notra/ui/components/shared/page-heading";
 import { Badge } from "@notra/ui/components/ui/badge";
 import {
   Tooltip,
@@ -9,10 +10,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@notra/ui/components/ui/tooltip";
-import { useTranslations } from "next-intl";
-import Link from "next/link";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
+import { BackLink } from "@/components/layout/back-link";
 import type { SkillDetailHeaderProps } from "@/types/skills/page";
 import { skillDisplayName } from "@/utils/skills";
 
@@ -31,57 +32,48 @@ export function SkillDetailHeader({
   const machineName =
     label.toLowerCase().split(" ").join("-") === name ? null : name;
   return (
-    <div className="space-y-4">
-      <Link
-        className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-sm transition-colors"
-        href={`/${slug}/skills`}
-      >
-        <HugeiconsIcon className="size-4" icon={ArrowLeft02Icon} />
-        {tCommon2("labels.skills")}
-      </Link>
+    <div className="space-y-3">
+      <BackLink href={`/${slug}/skills`}>{tCommon2("labels.skills")}</BackLink>
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex max-w-full min-w-0 items-center gap-2.5">
-          <div className="min-w-0">
-            <h1
-              className="truncate text-2xl font-semibold tracking-tight"
-              title={label}
-            >
+      <PageHeading
+        description={
+          machineName ? (
+            <span className="font-mono text-xs">{machineName}</span>
+          ) : null
+        }
+        title={
+          <span className="inline-flex max-w-full items-center gap-2.5">
+            <span className="min-w-0 truncate" title={label}>
               {label}
-            </h1>
-            {machineName ? (
-              <p className="text-muted-foreground truncate font-mono text-xs">
-                {machineName}
-              </p>
+            </span>
+            {isSystem ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Badge className="whitespace-nowrap" variant="secondary">
+                        {tCommon2("labels.system")}
+                      </Badge>
+                    }
+                  />
+                  <TooltipContent>{t("detail.systemTooltip")}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             ) : null}
-          </div>
-          {isSystem ? (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <Badge className="whitespace-nowrap" variant="secondary">
-                      {tCommon2("labels.system")}
-                    </Badge>
-                  }
-                />
-                <TooltipContent>{t("detail.systemTooltip")}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          ) : null}
-        </div>
+          </span>
+        }
+      >
         {canDelete ? (
           <Button
-            className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive w-fit gap-1.5"
             disabled={deleteDisabled}
             onClick={onDelete}
-            variant="outline"
+            variant="destructive"
           >
             <HugeiconsIcon className="size-4" icon={Delete02Icon} />
             {tCommon("delete")}
           </Button>
         ) : null}
-      </div>
+      </PageHeading>
     </div>
   );
 }

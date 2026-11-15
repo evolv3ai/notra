@@ -40,18 +40,11 @@ export function createApiShutdown(
     const activeServer = server;
     const drained = await waitForPhase(
       () =>
-        Promise.all([
-          activeServer?.stop(),
-          // Disconnected clients can leave application handlers running after
-          // the transport closes. Wait for those handler promises as well.
-          Promise.allSettled([...requests]),
-        ]),
+        Promise.all([activeServer?.stop(), Promise.allSettled([...requests])]),
       timeouts.requestsMs,
       "active requests"
     );
     if (!drained && activeServer) {
-      // Force-close sockets at the deadline. A handler that ignores aborts
-      // must not prevent the telemetry phase and eventual process exit.
       void Promise.resolve()
         .then(() => activeServer.stop(true))
         .catch((error) => {

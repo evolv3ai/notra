@@ -55,12 +55,24 @@ export async function processGitHubMention(
   scheduleRepair?: PublicationRepairScheduler
 ): Promise<GitHubMentionProcessResult> {
   const startedAt = Date.now();
-  logGitHubMentionEvent(GITHUB_MENTION_LOG_EVENTS.processing, {
+  const mentionFields = {
     organizationId: context.organizationId,
     integrationId: context.integrationId,
     deliveryId: context.deliveryId,
     repository: `${context.owner}/${context.repo}`,
     issueNumber: context.issueNumber,
+  };
+  const logCompleted = (
+    fields: Record<string, unknown>,
+    level?: "warn" | "error"
+  ) =>
+    logGitHubMentionEvent(
+      GITHUB_MENTION_LOG_EVENTS.completed,
+      { ...mentionFields, ...fields, durationMs: Date.now() - startedAt },
+      level
+    );
+  logGitHubMentionEvent(GITHUB_MENTION_LOG_EVENTS.processing, {
+    ...mentionFields,
     senderLogin: context.sender.login,
     destinationMode: context.destination.mode,
     postId: context.publication?.postId ?? null,
@@ -74,18 +86,8 @@ export async function processGitHubMention(
       status: "failed" as const,
       reason: "github_token_unavailable",
     };
-    logGitHubMentionEvent(
-      GITHUB_MENTION_LOG_EVENTS.completed,
-      {
-        organizationId: context.organizationId,
-        integrationId: context.integrationId,
-        deliveryId: context.deliveryId,
-        repository: `${context.owner}/${context.repo}`,
-        issueNumber: context.issueNumber,
-        mentionStatus: result.status,
-        reason: result.reason,
-        durationMs: Date.now() - startedAt,
-      },
+    logCompleted(
+      { mentionStatus: result.status, reason: result.reason },
       "error"
     );
     return result;
@@ -93,15 +95,9 @@ export async function processGitHubMention(
   const octokit = createOctokit(token);
 
   const commentKind = context.comment.review ? "review" : "issue";
-  // Eyes on the comment while working, swapped for a thumbs up, thumbs down on
-  // a declined request, or a confused face on failure. Reactions are cosmetic,
-  // so never fail on them.
-  // Without the GitHub App the token is a personal one with its own scopes.
   const access = isGitHubAppConfigured()
     ? await getGitHubAppInstallationPublishAccess(context.installationId)
     : null;
-  // The check run shows the run on the pull request's checks list. It needs
-  // Checks: write on the App, and is as cosmetic as the reactions.
   const headSha = context.pullRequest?.headSha ?? null;
   const checksGranted = access?.checks === "write";
   if (access && headSha && !checksGranted) {
@@ -145,8 +141,6 @@ export async function processGitHubMention(
         })
       : null,
   ]);
-  // A commit on this pull request moves its head, so the result is reported
-  // on the new commit as well or the checks list shows nothing for it.
   let committedHeadSha: string | null = null;
   const finishReaction = async (content: "+1" | "-1" | "confused") => {
     if (checkRun) {
@@ -209,10 +203,6 @@ export async function processGitHubMention(
     }
   };
 
-  // Some mentions stop before the agent starts: a missing permission, a burst
-  // of mentions, an empty credit balance. Each fails the same way on a retry,
-  // so the run explains itself on the pull request and ends. If even the reply
-  // is refused, the webhook log in the dashboard still carries the reason.
   const refuse = async (params: {
     reply: string;
     logReason: string;
@@ -233,19 +223,8 @@ export async function processGitHubMention(
       // A failed reply remains retryable once the cause is corrected.
     }
     await finishReaction("confused");
-    logGitHubMentionEvent(
-      GITHUB_MENTION_LOG_EVENTS.completed,
-      {
-        organizationId: context.organizationId,
-        integrationId: context.integrationId,
-        deliveryId: context.deliveryId,
-        repository: `${context.owner}/${context.repo}`,
-        issueNumber: context.issueNumber,
-        mentionStatus: "failed",
-        reason: params.logReason,
-        ...params.fields,
-        durationMs: Date.now() - startedAt,
-      },
+    logCompleted(
+      { mentionStatus: "failed", reason: params.logReason, ...params.fields },
       "warn"
     );
     return {
@@ -278,9 +257,6 @@ export async function processGitHubMention(
     return await refuseForPermission(missingPermissions);
   }
 
-  // Every run spends credits, so a loop on the repository side must not be
-  // able to burn a month of them in a minute. A store that is down here would
-  // otherwise leave the check run in progress forever.
   const rateLimit = await consumeGitHubMentionRateLimit(
     context.organizationId
   ).catch(async (error: unknown) => {
@@ -295,8 +271,6 @@ export async function processGitHubMention(
     });
   }
 
-  // Balance is held now and settled with what the run cost, so concurrent
-  // mentions cannot both spend the last credit.
   const reservation = await reserveGitHubMentionBilling({
     organizationId: context.organizationId,
     mentionKey: context.deliveryId ?? String(context.comment.id),
@@ -326,9 +300,6 @@ export async function processGitHubMention(
     }
     billingSettled = true;
     try {
-      // The agent already ran, so a transient Autumn failure must not be what
-      // decides whether it was paid for. A hold that survives every attempt
-      // expires on Autumn's side rather than staying charged.
       if (action === "release") {
         await retryWrite(() => releaseGitHubMentionBilling(reservation));
         return;
@@ -344,7 +315,6 @@ export async function processGitHubMention(
         })
       );
     } catch (error) {
-      // Autumn being unreachable must not undo a reply GitHub already has.
       logGitHubMentionEvent(
         GITHUB_MENTION_LOG_EVENTS.billingFailed,
         {
@@ -358,9 +328,6 @@ export async function processGitHubMention(
     }
   };
 
-  // Set once the agent returns. A failure after a commit (the reply could not
-  // be posted) must not read as a failed run: the delivery claim would be
-  // released and a redelivery would commit the same change again.
   let written: {
     commitSha: string | null;
     pullRequestUrl: string | null;
@@ -372,7 +339,6 @@ export async function processGitHubMention(
       onUsage: usage.add,
       scheduleRepair,
     });
-    // The model calls happened, whatever the rest of the run does with them.
     await settleBilling("confirm", usage.get() ?? agentResult.usage);
     if (agentResult.committed) {
       written = {
@@ -396,19 +362,13 @@ export async function processGitHubMention(
         proposals: agentResult.proposals,
       });
       await finishReaction("+1");
-      logGitHubMentionEvent(GITHUB_MENTION_LOG_EVENTS.completed, {
-        organizationId: context.organizationId,
-        integrationId: context.integrationId,
-        deliveryId: context.deliveryId,
-        repository: `${context.owner}/${context.repo}`,
-        issueNumber: context.issueNumber,
+      logCompleted({
         mentionStatus: "suggested",
         suggestions: agentResult.proposals.reduce(
           (sum, proposal) => sum + proposal.suggestions.length,
           0
         ),
         pullRequestUrl: agentResult.pullRequestUrl,
-        durationMs: Date.now() - startedAt,
       });
       return {
         status: "suggested",
@@ -432,18 +392,11 @@ export async function processGitHubMention(
         changedFiles: [],
       });
       await finishReaction("confused");
-      logGitHubMentionEvent(
-        GITHUB_MENTION_LOG_EVENTS.completed,
+      logCompleted(
         {
-          organizationId: context.organizationId,
-          integrationId: context.integrationId,
-          deliveryId: context.deliveryId,
-          repository: `${context.owner}/${context.repo}`,
-          issueNumber: context.issueNumber,
           mentionStatus: "failed",
           reason: "follow_up_pull_request_failed",
           commitSha: agentResult.commitSha,
-          durationMs: Date.now() - startedAt,
         },
         "error"
       );
@@ -456,7 +409,6 @@ export async function processGitHubMention(
       };
     }
     const baseSha = context.pullRequest?.headSha ?? null;
-    // The diff is decoration: a failed compare must not lose the reply.
     const changedFiles =
       agentResult.commitSha && baseSha
         ? await getGitHubChangedFiles({
@@ -503,20 +455,13 @@ export async function processGitHubMention(
       commitSha: agentResult.commitSha,
       pullRequestUrl: agentResult.pullRequestUrl,
     };
-    logGitHubMentionEvent(GITHUB_MENTION_LOG_EVENTS.completed, {
-      organizationId: context.organizationId,
-      integrationId: context.integrationId,
-      deliveryId: context.deliveryId,
-      repository: `${context.owner}/${context.repo}`,
-      issueNumber: context.issueNumber,
+    logCompleted({
       mentionStatus: result.status,
       commitSha: result.commitSha,
       pullRequestUrl: result.pullRequestUrl,
-      durationMs: Date.now() - startedAt,
     });
     return result;
   } catch (error) {
-    // Completed model calls are payable even when a later call or tool fails.
     const paidUsage = usage.get();
     await settleBilling(paidUsage ? "confirm" : "release", paidUsage);
     const reason = error instanceof Error ? error.message : String(error);
@@ -529,20 +474,12 @@ export async function processGitHubMention(
         body: "I pushed the change, but could not post the full reply. Take a look at the latest commit and tell me if you want it worded differently.",
       }).catch(() => undefined);
       await finishReaction("+1");
-      logGitHubMentionEvent(
-        GITHUB_MENTION_LOG_EVENTS.completed,
+      logCompleted(
         {
-          organizationId: context.organizationId,
-          integrationId: context.integrationId,
-          deliveryId: context.deliveryId,
-          repository: `${context.owner}/${context.repo}`,
-          issueNumber: context.issueNumber,
           mentionStatus: "committed",
           reason: "reply_failed",
           error: reason,
-          commitSha: written.commitSha,
-          pullRequestUrl: written.pullRequestUrl,
-          durationMs: Date.now() - startedAt,
+          ...written,
         },
         "warn"
       );
@@ -567,20 +504,7 @@ export async function processGitHubMention(
       // Leave the delivery retryable when GitHub did not receive the reply.
     }
     await finishReaction("confused");
-    logGitHubMentionEvent(
-      GITHUB_MENTION_LOG_EVENTS.completed,
-      {
-        organizationId: context.organizationId,
-        integrationId: context.integrationId,
-        deliveryId: context.deliveryId,
-        repository: `${context.owner}/${context.repo}`,
-        issueNumber: context.issueNumber,
-        mentionStatus: "failed",
-        reason,
-        durationMs: Date.now() - startedAt,
-      },
-      "error"
-    );
+    logCompleted({ mentionStatus: "failed", reason }, "error");
     return {
       status: "failed",
       reason,

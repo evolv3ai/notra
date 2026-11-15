@@ -1,29 +1,25 @@
 "use client";
 
 import { Databuddy } from "@databuddy/sdk/react";
-import { isDemoModeClient } from "@notra/utils/demo-mode";
+import { useConsent } from "c15t/tanstack-start";
 
-import {
-  DATABUDDY_DASHBOARD_WEBSITE_ID,
-  DATABUDDY_DEMO_DASHBOARD_WEBSITE_ID,
-} from "@/constants/databuddy";
+import { DATABUDDY_DASHBOARD_WEBSITE_ID } from "@/constants/databuddy";
 import {
   DATABUDDY_DASHBOARD_MASK_PATTERNS,
   normalizeDatabuddyEventPath,
 } from "@/utils/databuddy";
 
-const databuddyClientId = isDemoModeClient()
-  ? DATABUDDY_DEMO_DASHBOARD_WEBSITE_ID
-  : DATABUDDY_DASHBOARD_WEBSITE_ID;
-
 export function DatabuddyAnalytics() {
-  if (!databuddyClientId) {
+  const measurementGranted = useConsent("measurement");
+
+  if (!DATABUDDY_DASHBOARD_WEBSITE_ID) {
     return null;
   }
 
   return (
     <Databuddy
-      clientId={databuddyClientId}
+      clientId={DATABUDDY_DASHBOARD_WEBSITE_ID}
+      disabled={!measurementGranted}
       filter={normalizeDatabuddyEventPath}
       maskPatterns={DATABUDDY_DASHBOARD_MASK_PATTERNS}
       trackAttributes={true}

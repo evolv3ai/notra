@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export type SitemapStatus = "queued" | "crawling" | "ready" | "failed";
+type SitemapStatus = "queued" | "crawling" | "ready" | "failed";
 
 export type SitemapPageCategory = "crawled" | "redirect" | "queued" | "failed";
 

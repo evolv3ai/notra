@@ -5,6 +5,10 @@ export const BRAND_ASSETS: BrandAssetPaths = {
     svg: "/brand/notra-mark.svg",
     png: "/brand/notra-mark.png",
   },
+  markDark: {
+    svg: "/brand/notra-mark-dark.svg",
+    png: "/brand/notra-mark-dark.png",
+  },
   wordmark: {
     svg: "/brand/notra-wordmark.svg",
     png: "/brand/notra-wordmark.png",
@@ -21,7 +25,7 @@ export const BRAND_COLORS: BrandColor[] = [
     name: "Primary",
     hex: "#8B5CF6",
     value: "oklch(0.6056 0.2189 292.7172)",
-    usage: "Accent color for links, buttons, and highlights.",
+    usage: "Accent color for links, buttons and highlights.",
   },
   {
     name: "Lavender",
@@ -66,7 +70,7 @@ export const BRAND_FONTS: BrandFont[] = [
   {
     name: "Inter",
     fontClassName: "font-sans",
-    role: "Product UI, body copy, and the wordmark.",
+    role: "Product UI, body copy and the wordmark.",
     sourceUrl: "https://fonts.google.com/specimen/Inter",
     sourceLabel: "Get Inter on Google Fonts",
   },

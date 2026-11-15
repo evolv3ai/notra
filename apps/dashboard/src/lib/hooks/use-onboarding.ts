@@ -1,6 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   useCallback,
   useEffect,
@@ -21,10 +26,13 @@ import type {
   InitialOnboardingAgentRun,
   OnboardingRunSnapshot,
   OnboardingStatus,
-  PendingOnboardingSuggestion,
   UseOnboardingStatusOptions,
   UseOnboardingSuggestionsOptions,
 } from "@/types/hooks/onboarding";
+import {
+  isOnboardingBannerDismissedFromClient,
+  setOnboardingBannerDismissedCookie,
+} from "@/utils/cookies";
 
 import { dashboardOrpc } from "../orpc/query";
 
@@ -36,21 +44,36 @@ export function useOnboardingStatus(
     dashboardOrpc.onboarding.get.queryOptions({
       input: { organizationId },
       enabled: !!organizationId,
-      refetchInterval: options?.refetchInterval,
+      refetchInterval: (query) => {
+        const status = query.state.data;
+        if (status?.onboardingCompleted || status?.onboardingDismissed) {
+          return false;
+        }
+        return options?.refetchInterval ?? false;
+      },
     })
   );
 }
 
-export function useCompanyLogo(domain: string | null, name?: string | null) {
+function companyLogoQueryOptions(domain: string | null, name?: string | null) {
   const query = domain ?? name?.trim() ?? "";
-  return useQuery(
-    dashboardOrpc.onboarding.companyLogo.queryOptions({
-      input: { query, searchByName: !domain },
-      enabled: !domain && query.length > 0,
-      staleTime: COMPANY_LOGO_STALE_TIME_MS,
-      retry: false,
-    })
-  );
+  return dashboardOrpc.onboarding.companyLogo.queryOptions({
+    input: { query, searchByName: !domain },
+    enabled: !domain && query.length > 0,
+    staleTime: COMPANY_LOGO_STALE_TIME_MS,
+    retry: false,
+  });
+}
+
+export function useCompanyLogo(domain: string | null, name?: string | null) {
+  return useQuery(companyLogoQueryOptions(domain, name));
+}
+
+/** Name lookups for many brands; shares the cache with `useCompanyLogo`. */
+export function useCompanyLogosByName(names: readonly string[]) {
+  return useQueries({
+    queries: names.map((name) => companyLogoQueryOptions(null, name)),
+  });
 }
 
 export function useOnboardingAgentRun(
@@ -132,19 +155,41 @@ function subscribeToBannerDismissal(callback: () => void) {
   };
 }
 
-export function useOnboardingAgentBannerDismissal(organizationId: string) {
-  const storageKey =
+/**
+ * The dismissal lives in a cookie the shell loader reads, so the server render
+ * already leaves the banner out. `serverDismissed` is that cookie's value.
+ */
+export function useOnboardingAgentBannerDismissal(
+  organizationId: string,
+  serverDismissed: boolean
+) {
+  const legacyKey =
     localStorageKeys.onboardingAgentBannerDismissed(organizationId);
   const dismissed = useSyncExternalStore(
     subscribeToBannerDismissal,
-    () => localStorage.getItem(storageKey) === "true",
-    () => false
+    () =>
+      isOnboardingBannerDismissedFromClient(organizationId) ||
+      localStorage.getItem(legacyKey) === "true",
+    () => serverDismissed
   );
-  const dismiss = () => {
-    localStorage.setItem(storageKey, "true");
-    for (const listener of bannerDismissListeners) {
-      listener();
+
+  useEffect(() => {
+    if (
+      localStorage.getItem(legacyKey) === "true" &&
+      !isOnboardingBannerDismissedFromClient(organizationId)
+    ) {
+      setOnboardingBannerDismissedCookie(organizationId).catch(() => undefined);
     }
+  }, [legacyKey, organizationId]);
+
+  const dismiss = () => {
+    setOnboardingBannerDismissedCookie(organizationId)
+      .catch(() => undefined)
+      .finally(() => {
+        for (const listener of bannerDismissListeners) {
+          listener();
+        }
+      });
   };
   return { dismiss, dismissed };
 }
@@ -177,56 +222,4 @@ export function useDismissOnboardingSuggestion() {
       },
     })
   );
-}
-
-export function useCreateFromSuggestion(organizationId: string | undefined) {
-  const [pending, setPending] = useState<PendingOnboardingSuggestion | null>(
-    null
-  );
-  const { mutate: dismissSuggestion } = useDismissOnboardingSuggestion();
-
-  const beginCreate = useCallback(
-    (suggestionId: string) => {
-      setPending(organizationId ? { organizationId, suggestionId } : null);
-    },
-    [organizationId]
-  );
-
-  const cancelCreate = useCallback(
-    (suggestion: PendingOnboardingSuggestion | null) => {
-      if (!suggestion) {
-        return;
-      }
-      setPending((current) =>
-        current?.organizationId === suggestion.organizationId &&
-        current.suggestionId === suggestion.suggestionId
-          ? null
-          : current
-      );
-    },
-    []
-  );
-
-  const handleCreateSuccess = useCallback(
-    (suggestion: PendingOnboardingSuggestion | null) => {
-      if (!suggestion || suggestion.organizationId !== organizationId) {
-        return;
-      }
-      dismissSuggestion(suggestion);
-      setPending((current) =>
-        current?.organizationId === suggestion.organizationId &&
-        current.suggestionId === suggestion.suggestionId
-          ? null
-          : current
-      );
-    },
-    [organizationId, dismissSuggestion]
-  );
-
-  return {
-    beginCreate,
-    cancelCreate,
-    handleCreateSuccess,
-    pendingSuggestion: pending,
-  };
 }

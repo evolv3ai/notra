@@ -49,7 +49,6 @@ export function App({
   const [lastSuiteId, setLastSuiteId] = useState(initialSuiteId);
   const homeMemory = useRef(createHomeMemory());
 
-  // The runner mutates the run in place; re-render at most every 80 ms.
   const scheduleRender = useCallback(() => {
     const now = Date.now();
     if (now - lastRender.current >= RENDER_THROTTLE_MS) {
@@ -74,8 +73,6 @@ export function App({
     []
   );
 
-  // Cancel and wait for the runner's final save so the run file is not left
-  // marked running; give up after a few seconds rather than hang on exit.
   const quit = useCallback(async () => {
     const handle = handleRef.current;
     if (handle) {
@@ -98,7 +95,6 @@ export function App({
   const launch = useCallback(
     (request: RunRequest) => {
       setLastSuiteId(request.suite.id);
-      // Only one run is tracked; an older one would keep spending unseen.
       handleRef.current?.cancel();
       const handle = startRun({
         suite: request.suite,
@@ -138,7 +134,6 @@ export function App({
     [scheduleRender]
   );
 
-  // Saved runs; any "running" one other than the live run was interrupted.
   const loadRuns = useCallback(async () => {
     const live = handleRef.current?.run;
     const activeId = live?.status === "running" ? live.id : undefined;

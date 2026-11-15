@@ -9,17 +9,21 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { dashboardOrpc } from "@/lib/orpc/query";
 import type {
+  AgentFeedbackActivityRange,
   AgentFeedbackListData,
   AgentFeedbackSetupResponse,
   AgentFeedbackStatusChange,
   AgentFeedbackStatusFilter,
 } from "@/types/agent-feedback";
-import { withFeedbackStatus } from "@/utils/agent-feedback";
+import {
+  agentFeedbackFilterStatuses,
+  withFeedbackStatus,
+} from "@/utils/agent-feedback";
 
 function toListInput(
   organizationId: string,
@@ -28,7 +32,7 @@ function toListInput(
 ) {
   return {
     organizationId,
-    status: status === "all" ? undefined : status,
+    statuses: agentFeedbackFilterStatuses(status),
     cursor,
     limit: AGENT_FEEDBACK_PAGE_SIZE,
   };
@@ -81,7 +85,12 @@ export function useAgentFeedbackUpdateStatus(organizationId: string) {
       toast.error(error.message || t("updateFailed"));
     },
     onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey: listKey });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: listKey }),
+        queryClient.invalidateQueries({
+          queryKey: dashboardOrpc.agentFeedback.activity.key(),
+        }),
+      ]);
     },
   });
 }
@@ -96,9 +105,14 @@ export function useAgentFeedbackDelete(organizationId: string) {
         feedbackId,
       }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: dashboardOrpc.agentFeedback.list.key(),
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: dashboardOrpc.agentFeedback.list.key(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: dashboardOrpc.agentFeedback.activity.key(),
+        }),
+      ]);
       toast.success(t("deleted"));
     },
     onError: (error: Error) => {
@@ -114,5 +128,20 @@ export function useAgentFeedbackSetup(organizationId: string) {
     }),
     enabled: !!organizationId,
     retry: false,
+  });
+}
+
+export function useAgentFeedbackActivity(
+  organizationId: string,
+  range: AgentFeedbackActivityRange
+) {
+  const t = useTranslations("feedback.activity");
+  return useQuery({
+    ...dashboardOrpc.agentFeedback.activity.queryOptions({
+      input: { organizationId, ...range },
+    }),
+    enabled: !!organizationId,
+    placeholderData: keepPreviousData,
+    meta: { errorMessage: t("loadFailed") },
   });
 }

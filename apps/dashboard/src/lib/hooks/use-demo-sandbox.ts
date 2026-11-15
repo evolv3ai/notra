@@ -98,7 +98,6 @@ export function useDemoRequestStream(
       );
       void client.invalidateQueries({ queryKey: QUERY_KEYS.DEMO.sandbox });
 
-      // UI actions already refresh their own queries.
       if (event.source !== "ui") {
         const keys = demoInvalidationKeys(event.path);
         if (keys) {

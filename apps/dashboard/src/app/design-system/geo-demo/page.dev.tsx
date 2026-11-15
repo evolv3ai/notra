@@ -1,3 +1,4 @@
+import { GeoResizePreview } from "@/components/design-system/geo-resize-preview";
 import { MentionRateCard } from "@/components/geo/mention-rate-card";
 import { MentionTrendCard } from "@/components/geo/mention-trend-card";
 import {
@@ -31,20 +32,22 @@ export default function GeoDemoPage() {
       <div className="mx-auto flex max-w-7xl flex-col gap-10">
         <section className="space-y-3">
           <h2 className="text-sm font-medium">Visibility activity · 30 days</h2>
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
-            <div className="lg:col-span-5">
-              <MentionRateCard
-                companyName="Notra"
-                engines={DESIGN_SYSTEM_GEO_OVERVIEW}
-                promptResults={DESIGN_SYSTEM_GEO_PROMPT_RESULTS}
-                timeseriesPoints={DESIGN_SYSTEM_GEO_POINTS}
-                trackedEngines={DESIGN_SYSTEM_GEO_TRACKED_ENGINES}
-              />
+          <GeoResizePreview>
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+              <div className="lg:col-span-5">
+                <MentionRateCard
+                  companyName="Notra"
+                  engines={DESIGN_SYSTEM_GEO_OVERVIEW}
+                  promptResults={DESIGN_SYSTEM_GEO_PROMPT_RESULTS}
+                  timeseriesPoints={DESIGN_SYSTEM_GEO_POINTS}
+                  trackedEngines={DESIGN_SYSTEM_GEO_TRACKED_ENGINES}
+                />
+              </div>
+              <div className="h-[430px] lg:col-span-7">
+                <MentionTrendCard points={DESIGN_SYSTEM_GEO_POINTS} />
+              </div>
             </div>
-            <div className="h-[430px] lg:col-span-7">
-              <MentionTrendCard points={DESIGN_SYSTEM_GEO_POINTS} />
-            </div>
-          </div>
+          </GeoResizePreview>
         </section>
         <ActivityState
           label="Visibility activity · 5 days"

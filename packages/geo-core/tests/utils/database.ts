@@ -38,7 +38,6 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import type { ScanSettingsInput } from "../types/fixtures";
 
-// Generate DDL from production tables so column/constraint changes reach tests.
 const schema = {
   users,
   geoPrompts,

@@ -16,7 +16,6 @@ const entries = await Promise.all(
   ])
 );
 
-// Commit the generated data so type checks and editors work before the first build.
 await writeFile(
   new URL("../src/constants/blog-image-placeholders.json", import.meta.url),
   `${JSON.stringify(Object.fromEntries(entries), null, 2)}\n`

@@ -14,7 +14,9 @@ import {
   TooltipTrigger,
 } from "@notra/ui/components/ui/tooltip";
 import { useIsMobile } from "@notra/ui/hooks/use-mobile";
-import { useTranslations } from "next-intl";
+import { InfiniteDataTable, type TableColumn } from "ui/table";
+import { TABLE_FRAME_INSET_PX } from "ui/table/constants";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { EmptyState } from "@/components/empty-state";
@@ -25,7 +27,6 @@ import { ShelfPlacementBadge } from "@/components/geo/shelf/shelf-placement-badg
 import { ShelfTableContextMenu } from "@/components/geo/shelf/shelf-table-context-menu";
 import { ShelfTicketAssigneeCard } from "@/components/geo/shelf/shelf-ticket-assignee-card";
 import { ShelfTicketBadge } from "@/components/geo/shelf/shelf-ticket-badge";
-import { Table, type TableColumn } from "@/components/motion/table";
 import {
   EMPTY_STATE_TABLE_COLUMNS,
   EMPTY_STATE_TABLE_ROWS,
@@ -45,7 +46,6 @@ import type { GeoShelfRow, GeoShelfTableProps } from "@/types/geo-shelf";
 import { groupShelfCitationEngines } from "@/utils/geo-shelf";
 import { toGeoShelfSortState } from "@/utils/geo-shelf-page";
 
-/** Below `md` the page, citations and presence columns carry the story. */
 const MOBILE_HIDDEN_COLUMN_KEYS: readonly string[] = ["competitors"];
 
 function PageCell({ row }: { row: GeoShelfRow }) {
@@ -108,16 +108,22 @@ function CitationsCell({ row }: { row: GeoShelfRow }) {
   );
 }
 
-function CompetitorsCell({ row }: { row: GeoShelfRow }) {
+function CompetitorsCell({
+  row,
+  competitorCount,
+}: {
+  row: GeoShelfRow;
+  competitorCount: number;
+}) {
   const logoStackLabels = useLogoStackLabels();
   const t = useTranslations("geo.shelf.shelfTable");
   const tGeoShared = useTranslations("geo.shared");
   const tStates = useTranslations("common.states");
   if (row.presentCompetitors.length === 0) {
-    const unknownCount = row.competitorPlacements.filter(
-      (placement) => placement.status === "unknown"
+    const checkedCount = row.competitorPlacements.filter(
+      (placement) => placement.status !== "unknown"
     ).length;
-    const isUnchecked = unknownCount > 0;
+    const isUnchecked = checkedCount < competitorCount;
     const label = isUnchecked ? tGeoShared("notChecked") : tStates("none");
     const description = isUnchecked
       ? t("competitorsUnchecked")
@@ -216,6 +222,8 @@ export function ShelfTable({
   pendingSourceIds,
   hasScanData,
   onAddShelf,
+  competitorCount,
+  height = GEO_SHELF_TABLE_HEIGHT,
 }: GeoShelfTableProps) {
   const t = useTranslations("geo.shelf.shelfTable");
   const tGeoShared = useTranslations("geo.shared");
@@ -264,7 +272,9 @@ export function ShelfTable({
       key: "competitors",
       header: tCommon("labels.competitors"),
       width: GEO_SHELF_TABLE_COLUMN.competitors.width,
-      cell: (row) => <CompetitorsCell row={row} />,
+      cell: (row) => (
+        <CompetitorsCell competitorCount={competitorCount} row={row} />
+      ),
       sortValue: (row) => row.presentCompetitors.length,
     },
     {
@@ -305,19 +315,17 @@ export function ShelfTable({
     : columns;
 
   return (
-    <Table
-      className="rounded-2xl"
+    <InfiniteDataTable
       columns={visibleColumns}
       data={rows}
       emptyState={tLabels("noMatches")}
       getRowId={(row) => row.id}
-      height={GEO_SHELF_TABLE_HEIGHT}
+      height={height - TABLE_FRAME_INSET_PX}
+      minHeight={height - TABLE_FRAME_INSET_PX}
       isRowPinned={(row) => pendingSourceIds.has(row.id)}
       loading={isFetchingNextPage}
       loadingMore={isFetchingNextPage}
       manualSort
-      // The table only re-arms end-of-list after `loading` settles, so it must
-      // not fire during a filter or refetch that `loadMore` would ignore.
       onEndReached={hasNextPage && !isFetching ? onLoadMore : undefined}
       onRowClick={onRowClick}
       onSortChange={(next) => onSortChange(toGeoShelfSortState(next))}

@@ -12,16 +12,18 @@ import {
   CollapsibleTrigger,
 } from "@notra/ui/components/ui/collapsible";
 import { cn } from "@notra/ui/lib/utils";
-import { useTranslations } from "next-intl";
-import Image from "next/image";
+import { googleFaviconUrl } from "@notra/utils/google-favicon";
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "use-intl";
 
 import { ChatActivityStatus } from "@/components/ai/chat-activity-status";
+import Image from "@/components/framework/image";
 import {
   ACTIVITY_AUTO_CLOSE_DELAY_MS,
   ACTIVITY_CONTENT_CLASSNAME,
   ACTIVITY_STEP_MIN_VISIBLE_MS,
   ACTIVITY_STEP_SETTLE_MS,
+  ACTIVITY_THINKING_SETTLE_MS,
   VISIBLE_SEARCH_SOURCE_COUNT,
 } from "@/constants/chat-activity";
 import { useSettledValue } from "@/lib/hooks/use-settled-value";
@@ -79,6 +81,7 @@ function useWorkedDurationSeconds(
 
 export function ChatActivityGroup({
   children,
+  defaultOpen = false,
   durationMs,
   elapsedSeconds,
   forceOpen = false,
@@ -97,16 +100,19 @@ export function ChatActivityGroup({
   );
   const durationSeconds = measuredSeconds ?? elapsedSeconds ?? null;
   const settledStep = useSettledValue(step, {
-    settleMs: ACTIVITY_STEP_SETTLE_MS,
+    settleMs:
+      step === "thinking"
+        ? ACTIVITY_THINKING_SETTLE_MS
+        : ACTIVITY_STEP_SETTLE_MS,
     minVisibleMs: ACTIVITY_STEP_MIN_VISIBLE_MS,
   });
-  // Approval prompts need an immediate answer, and leaving one must not keep
-  // the stale "waiting" label, so both transitions skip the settle delay.
   const displayedStep =
     step === "waitingForApproval" || settledStep === "waitingForApproval"
       ? step
       : settledStep;
-  const [isOpen, setIsOpen] = useState(forceOpen);
+  // A live group starts open so streamed reasoning is readable while it
+  // happens; the auto-close below folds it once the step finishes.
+  const [isOpen, setIsOpen] = useState(forceOpen || isStreaming || defaultOpen);
   const [hasInteracted, setHasInteracted] = useState(false);
 
   if (forceOpen && !isOpen) {
@@ -114,14 +120,14 @@ export function ChatActivityGroup({
   }
 
   useEffect(() => {
-    if (isLoading || forceOpen || hasInteracted) {
+    if (isLoading || forceOpen || defaultOpen || hasInteracted) {
       return;
     }
     const closeTimer = window.setTimeout(() => {
       setIsOpen(false);
     }, ACTIVITY_AUTO_CLOSE_DELAY_MS);
     return () => window.clearTimeout(closeTimer);
-  }, [forceOpen, hasInteracted, isLoading]);
+  }, [defaultOpen, forceOpen, hasInteracted, isLoading]);
 
   const workedLabel =
     durationSeconds && durationSeconds > 0
@@ -134,8 +140,6 @@ export function ChatActivityGroup({
   const label = isStreaming ? stepLabel : workedLabel;
   const active = isStreaming && step !== "waitingForApproval";
 
-  // While streaming the group starts closed so the layout stays still, but it
-  // is still a trigger: people want to peek at what is happening right now.
   if (!hasDetails) {
     return (
       <div data-activity-group={groupId}>
@@ -166,7 +170,7 @@ export function ChatActivityGroup({
           <HugeiconsIcon
             aria-hidden
             className={cn(
-              "text-muted-foreground/60 size-3.5 shrink-0 transition-transform motion-reduce:transition-none",
+              "text-muted-foreground/60 animate-in fade-in size-3.5 shrink-0 transition-transform duration-300 motion-reduce:animate-none motion-reduce:transition-none",
               isOpen ? "rotate-180" : "rotate-0"
             )}
             icon={ArrowDown01Icon}
@@ -182,9 +186,12 @@ export function ChatActivityGroup({
   );
 }
 
-function SearchFavicon({ domain }: { domain?: string }) {
+export function SearchFavicon({ domain }: { domain?: string }) {
   const [failed, setFailed] = useState(false);
-  if (!isPublicSearchDomain(domain) || failed) {
+  const src = isPublicSearchDomain(domain)
+    ? googleFaviconUrl(domain, 32)
+    : null;
+  if (!src || failed) {
     return (
       <HugeiconsIcon
         className="size-3.5 shrink-0"
@@ -200,7 +207,7 @@ function SearchFavicon({ domain }: { domain?: string }) {
       className="bg-muted size-3.5 shrink-0 rounded-full"
       height={14}
       onError={() => setFailed(true)}
-      src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32`}
+      src={src}
       unoptimized
       width={14}
     />

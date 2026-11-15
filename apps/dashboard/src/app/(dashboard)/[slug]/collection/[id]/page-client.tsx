@@ -1,12 +1,12 @@
 "use client";
 
-import { ArrowLeft02Icon, PencilEdit02Icon } from "@hugeicons/core-free-icons";
+import { PencilEdit02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
+import { PageHeading } from "@notra/ui/components/shared/page-heading";
 import { Button } from "@notra/ui/components/ui/button";
-import { useLocale, useTranslations } from "next-intl";
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useLocale, useTranslations } from "use-intl";
 
 import { ContentCard } from "@/components/content/content-card";
 import { ContentSkeletonCard } from "@/components/content/content-skeleton-card";
@@ -14,12 +14,14 @@ import { GroupContentTypes } from "@/components/content/group/group-content-type
 import { RenameCollectionDialog } from "@/components/content/group/rename-collection-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { EmptyStateCardsPreview } from "@/components/empty-state-preview";
+import Link from "@/components/framework/link";
+import { BackLink } from "@/components/layout/back-link";
 import { PageContainer } from "@/components/layout/container";
 import { EMPTY_STATE_CARD_COUNT } from "@/constants/empty-state";
 import { trackEvent } from "@/lib/analytics/posthog-client";
 import { useCollection } from "@/lib/hooks/use-collections";
 import type { CollectionDetailPageClientProps } from "@/types/content/collection";
-import { formatLongDate, getMarkdownPreview } from "@/utils/content-preview";
+import { formatLongDate } from "@/utils/content-preview";
 import { resolveImagePreviewSrc } from "@/utils/markdown-image";
 
 import { GroupDetailSkeleton } from "./skeleton";
@@ -65,11 +67,13 @@ export default function PageClient({
         <div className="w-full px-4 lg:px-6">
           <EmptyState
             action={
-              <Link href={`/${organizationSlug}/content`}>
-                <Button tabIndex={-1} variant="outline">
-                  {tDetail("backToContent")}
-                </Button>
-              </Link>
+              <Button
+                nativeButton={false}
+                render={<Link href={`/${organizationSlug}/content`} />}
+                variant="outline"
+              >
+                {tDetail("backToContent")}
+              </Button>
             }
             description={t("notFoundDescription")}
             title={t("notFoundTitle")}
@@ -99,23 +103,25 @@ export default function PageClient({
   return (
     <PageContainer className="flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
       <div className="w-full space-y-6 px-4 lg:px-6">
-        <div className="space-y-4">
-          <Link
-            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-sm transition-colors"
-            href={`/${organizationSlug}/content`}
-          >
-            <HugeiconsIcon className="size-4" icon={ArrowLeft02Icon} />
+        <div className="space-y-3">
+          <BackLink href={`/${organizationSlug}/content`}>
             {tCommon("labels.content")}
-          </Link>
-
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0 space-y-2">
-              <div className="flex items-center gap-2">
-                <h1 className="min-w-0 text-3xl font-bold tracking-tight wrap-anywhere">
-                  {collection.name}
-                </h1>
+          </BackLink>
+          <PageHeading
+            description={
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span>{postCountLabel}</span>
+                <span aria-hidden>·</span>
+                <time dateTime={collection.createdAt}>
+                  {formatLongDate(collection.createdAt, locale)}
+                </time>
+              </span>
+            }
+            title={
+              <span className="inline-flex max-w-full items-center gap-2">
+                <span className="min-w-0">{collection.name}</span>
                 <Button
-                  className="text-muted-foreground size-7 shrink-0"
+                  className="text-muted-foreground shrink-0"
                   onClick={() => setShowRenameDialog(true)}
                   size="icon-sm"
                   variant="ghost"
@@ -125,17 +131,11 @@ export default function PageClient({
                   </span>
                   <HugeiconsIcon className="size-4" icon={PencilEdit02Icon} />
                 </Button>
-              </div>
-              <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                <span>{postCountLabel}</span>
-                <span aria-hidden>·</span>
-                <time dateTime={collection.createdAt}>
-                  {formatLongDate(collection.createdAt, locale)}
-                </time>
-              </div>
-            </div>
+              </span>
+            }
+          >
             <GroupContentTypes contentTypes={collection.contentTypes} />
-          </div>
+          </PageHeading>
         </div>
 
         {hasContent && (
@@ -156,7 +156,7 @@ export default function PageClient({
                 }
                 key={post.id}
                 organizationId={organizationId}
-                preview={getMarkdownPreview(post.markdown ?? "")}
+                preview={post.preview}
                 status={post.status}
                 title={post.title}
               />

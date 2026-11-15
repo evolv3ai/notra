@@ -16,6 +16,7 @@ const repoPath = z
 
 const glob = z
   .string()
+  .max(256)
   .optional()
   .describe(
     "Optional glob relative to path, for example **/*.tsx or *.md. Use ** to match across directories."

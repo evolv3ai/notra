@@ -17,8 +17,6 @@ export function withStandaloneCodeMode(tools: Record<string, Tool>) {
       executionPolicy: { timeoutMs: CODE_MODE_TIMEOUT_MS },
     }),
   };
-  // The tool record is string-keyed, so the SDK cannot infer code_mode as a
-  // caller name from its type.
   const toolCallers = Object.fromEntries(
     STANDALONE_CODE_MODE_TOOL_NAMES.filter((toolName) => toolName in tools).map(
       (toolName) => [toolName, [CODE_MODE_TOOL_NAME]]

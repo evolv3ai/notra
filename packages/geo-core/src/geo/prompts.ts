@@ -96,16 +96,6 @@ export function toAutoTrackedPrompts(
   return prompts;
 }
 
-export function isAutoPromptScanned(
-  promptId: string,
-  pausedAutoPromptIds: ReadonlySet<string>,
-  removedAutoPromptIds: ReadonlySet<string>
-): boolean {
-  return (
-    !pausedAutoPromptIds.has(promptId) && !removedAutoPromptIds.has(promptId)
-  );
-}
-
 /**
  * Scan results are recorded under a namespaced prompt id for custom prompts
  * (`custom-<uuid>`) so they never collide with the slug ids of auto prompts.
@@ -121,11 +111,11 @@ export function trackedPromptScanId(
   return prompt.source === "custom" ? customPromptScanId(prompt.id) : prompt.id;
 }
 
-export function isCustomPromptScanId(promptId: string): boolean {
+function isCustomPromptScanId(promptId: string): boolean {
   return promptId.startsWith(CUSTOM_PROMPT_SCAN_ID_PREFIX);
 }
 
-export function isConversationScanPromptId(promptId: string): boolean {
+function isConversationScanPromptId(promptId: string): boolean {
   return promptId.startsWith(SEQUENCE_PROMPT_SCAN_ID_PREFIX);
 }
 
@@ -162,7 +152,7 @@ export function activeGapScanFilter(
 }
 
 export function promptIdFromScanId(scanId: string): string {
-  return scanId.startsWith(CUSTOM_PROMPT_SCAN_ID_PREFIX)
+  return isCustomPromptScanId(scanId)
     ? scanId.slice(CUSTOM_PROMPT_SCAN_ID_PREFIX.length)
     : scanId;
 }
@@ -202,25 +192,13 @@ const TO_VERB_REGEX =
   /\bto\s+(generate|create|send|build|track|manage|automate|write|deliver|host)\s+(.+)$/i;
 const WRAPPER_NOUN_REGEX =
   /\b(platform|tool|software|solution|service|app|product|toolkit|suite|system)\b/gi;
-/**
- * "a developer-tools startup building deployment workflows" describes the
- * company, not the category. Prefer what such a company builds or offers.
- */
 const COMPANY_CLAUSE_REGEX =
   /\b(?:startup|company|business|agency|studio|vendor|provider)\s+(?:that\s+(?:builds|makes|offers|provides)|building|making|offering|providing|developing|creating)\s+(.+)$/i;
-/**
- * "a provider that helps b2b sales teams close more deals": the audience can
- * be any length, so anchor on the action verb instead of counting words.
- */
 const HELPS_ACTION_VERBS =
   "generate|create|send|build|track|manage|automate|write|deliver|host|close|run|ship|grow|find|hire|sell|monitor|analyze|schedule|publish";
 const COMPANY_NOUNS = "startup|company|business|agency|studio|vendor|provider";
 const AUDIENCE_NOUNS =
   "teams?|companies|businesses|developers|marketers|startups|enterprises|agencies|people|users|customers|organizations|founders|engineers|designers";
-/**
- * Prefer the verb right after the audience noun ("helps track teams find …"
- * reads "find …", not "track …"); fall back to the last verb in the clause.
- */
 const COMPANY_HELPS_AUDIENCE_REGEX = new RegExp(
   `\\b(?:${COMPANY_NOUNS})\\s+that\\s+helps\\s+(?:.+?\\s+)?(?:${AUDIENCE_NOUNS})\\s+(?:to\\s+)?(${HELPS_ACTION_VERBS})\\s+(.+)$`,
   "i"
@@ -229,13 +207,6 @@ const COMPANY_HELPS_REGEX = new RegExp(
   `\\b(?:${COMPANY_NOUNS})\\s+that\\s+helps\\s+.+\\s+(?:to\\s+)?(${HELPS_ACTION_VERBS})\\s+(.+)$`,
   "i"
 );
-/**
- * "for freelancers" / "for students" are audiences even though the noun is
- * not in AUDIENCE_LIKE_REGEX: an explicit list of buyer roles. No suffix
- * heuristics, because "plants" or "variants" share endings with people
- * nouns. Anything else ("for kubernetes clusters", "for the maritime
- * logistics industry") stays part of the category.
- */
 const PEOPLE_TAIL_REGEX =
   /\b(freelancers?|students?|creators?|sellers?|merchants?|recruiters?|professionals?|consultants?|coaches|solopreneurs?|entrepreneurs?|owners?|managers?|leaders?|executives?|admins?|teachers?|educators?|schools?|universities|nonprofits?|restaurants?|hotels?|retailers?|brands?|shops?|stores?|clinics?|doctors?|dentists?|lawyers?|firms?|accountants?|realtors?|landlords?|parents?|kids|gamers?|artists?|musicians?|photographers?|writers?|bloggers?|podcasters?|influencers?|streamers?|smbs?|smes?|saas|b2b|b2c|specialists?|therapists?|dentists?|scientists?|analysts?|journalists?|accountants?|assistants?|consultants?|technicians?|physicians?|clinicians?|electricians?|musicians?|employees?|trainees?|attendees?|entrepreneurs?)\b/i;
 const COMPANY_NOUN_REGEX =
@@ -280,11 +251,6 @@ function cleanPhrase(value: string): string {
     .trim();
 }
 
-/**
- * Drop a trailing "for <audience>" but keep "for <domain>": "software for
- * marketing teams" loses the tail, "compliance software for the maritime
- * logistics industry" keeps it because that clause defines the category.
- */
 function isAudienceTail(clause: string): boolean {
   return AUDIENCE_LIKE_REGEX.test(clause) || PEOPLE_TAIL_REGEX.test(clause);
 }
@@ -429,8 +395,6 @@ export function buildGeoPrompts(
     Partial<Pick<GeoSettings, "promptLanguage">>,
   brand: GeoBrandContext | null
 ): GeoPromptDefinition[] {
-  // The templates are English. A project that picked another prompt language
-  // got its prompts written in that language by website discovery instead.
   if ((settings.promptLanguage ?? DEFAULT_LANGUAGE) !== DEFAULT_LANGUAGE) {
     return [];
   }
@@ -441,9 +405,6 @@ export function buildGeoPrompts(
   );
   const audience = deriveAudience(brand?.audience ?? null, brandTerms);
 
-  // Same slug ids as before (pause/remove state is keyed by them), but each
-  // template opens differently so the list does not read as one sentence
-  // repeated eight times.
   const prompts: GeoPromptDefinition[] = [
     {
       id: "best-tools",
@@ -501,9 +462,9 @@ export function assembleGeoScanPrompts(input: {
   const paused = new Set(input.pausedAutoPromptIds);
   const removed = new Set(input.removedAutoPromptIds);
   return [
-    ...input.autoPrompts
-      .filter((prompt) => isAutoPromptScanned(prompt.id, paused, removed))
-      .slice(0, GEO_MAX_PROMPTS),
+    ...input.autoPrompts.filter(
+      (prompt) => !paused.has(prompt.id) && !removed.has(prompt.id)
+    ),
     ...input.customRows.map((row) => ({
       id: customPromptScanId(row.id),
       text: row.prompt,

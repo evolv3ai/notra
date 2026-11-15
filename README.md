@@ -39,23 +39,23 @@ Use Notra from your own applications and agents:
 
 - **REST API:** projects, prompts, scans, visibility, content gaps, briefs, readiness, and traffic. See the [OpenAPI specification](https://api.usenotra.com/openapi.json).
 - **MCP server:** connect AI clients at [`https://mcp.usenotra.com/mcp`](https://mcp.usenotra.com/mcp).
-- **Traffic SDK:** [`@usenotra/geo`](packages/geo), with Next.js, Nuxt, TanStack Start, Astro, SvelteKit, and Netlify integrations.
+- **Traffic SDK:** [`@usenotra/geo`](https://github.com/usenotra/geo-sdk), with Next.js, Nuxt, TanStack Start, Astro, SvelteKit, React Router, and Netlify integrations.
 
 See the [product documentation](https://www.usenotra.com/docs) for setup and authentication.
 
 ## Repository
 
-Notra is a Bun and Turborepo monorepo, built with TypeScript, Next.js, React, Hono, PostgreSQL, and Drizzle ORM.
+Notra is a Bun and Turborepo monorepo, built with TypeScript, React, Hono, PostgreSQL, and Drizzle ORM. The dashboard and public website use TanStack Start, Vite, and Nitro.
 
 | Path | Purpose |
 | --- | --- |
-| `apps/dashboard` | Main product: GEO analytics, content, integrations, and workspace management |
+| `apps/dashboard` | TanStack Start product app: GEO analytics, content, integrations, and workspace management |
+| `apps/console` | Next.js companion/admin app: integrations, organizations, GEO reports, and Sites |
 | `apps/web` | Public website at [www.usenotra.com](https://www.usenotra.com) |
 | `apps/api` | Public Hono REST API |
 | `apps/docs` | Product documentation |
 | `apps/agent`, `apps/onboarding-agent` | Content and onboarding agents |
 | `apps/ui` | Blume UI app |
-| `packages/geo` | Published AI traffic capture SDK |
 | `packages/geo-core` | Shared GEO logic |
 | `packages/db` | Database schema and helpers |
 | `packages/ai`, `packages/content-generation`, `packages/tools` | Shared AI and content-generation functionality |
@@ -63,7 +63,7 @@ Notra is a Bun and Turborepo monorepo, built with TypeScript, Next.js, React, Ho
 
 ## Local development
 
-Use **Bun 1.4.0**, **Node.js 24.11.1**, and a PostgreSQL database.
+Use **Bun 1.4.4**, **Node.js 24.11.1**, and a PostgreSQL database.
 
 ```bash
 bun install
@@ -72,7 +72,7 @@ cp .env.example .env
 
 Configure the root `.env` before starting the dashboard. Set `DATABASE_URL`, the WorkOS AuthKit credentials, `INTEGRATION_ENCRYPTION_KEY`, and the application URLs. Add provider credentials for the features you want to exercise; see [`.env.example`](.env.example) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
-The dashboard needs an initialized database. The committed migration chain assumes existing base tables, so `bun run db:migrate` is not a complete bootstrap for an empty database. Schema push also has a foreign-key ordering caveat on fresh databases; the repository's [environment notes](AGENTS.md) describe the initialization workaround.
+Initialize the database with `bun run db:migrate`. The committed migration journal starts with `0000_baseline`, which creates the base tables. See [Database Workflow](CONTRIBUTING.md#database-workflow) for migration validation and append-only history requirements.
 
 ```bash
 # Main product, http://localhost:3000
@@ -80,7 +80,12 @@ bun run dev --filter=dashboard
 
 # Public website, http://localhost:3001
 bun run dev --filter=web
+
+# Companion/admin console, http://localhost:3003
+bun run dev --filter=console
 ```
+
+The dashboard's Vite development server binds to `127.0.0.1:3000`. Production builds use Nitro; run `bun run start` from `apps/dashboard` to serve the `.output` artifact. Existing `NEXT_PUBLIC_*` deployment variable names are retained for compatibility and do not imply a Next.js dashboard runtime.
 
 Useful checks from the repository root:
 
@@ -95,7 +100,7 @@ Effect-aware linting covers `packages/tools/src` and `packages/geo-core/src`. Ru
 to check for floating Effects, missing `yield*` in Effect generators, and
 outdated Effect APIs. It also runs before Ultracite in `bun run check`. The
 install hook patches Oxlint for these type-aware rules without changing the
-TypeScript compiler; use Bun 1.4.0 to install the pinned, compatible versions.
+TypeScript compiler; use Bun 1.4.4 to install the pinned, compatible versions.
 
 ## Contributing
 

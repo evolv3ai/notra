@@ -1,18 +1,18 @@
-import type { GeoCompetitor, GeoCompetitorKind } from "./geo";
+import type { z } from "zod";
+
+import type {
+  geoCompetitorImportRowSchema,
+  geoPromptImportRowSchema,
+} from "../schemas/geo-import";
+import type { GeoCompetitor } from "./geo";
 
 export type GeoImportKind = "prompts" | "competitors";
 
-export interface GeoPromptImportRow {
-  prompt: string;
-  enabled?: boolean;
-}
+export type GeoPromptImportRow = z.infer<typeof geoPromptImportRowSchema>;
 
-export interface GeoCompetitorImportRow {
-  name: string;
-  domain?: string | null;
-  kind?: GeoCompetitorKind;
-  synonyms?: string[];
-}
+export type GeoCompetitorImportRow = z.infer<
+  typeof geoCompetitorImportRowSchema
+>;
 
 export interface GeoCsvIssue {
   line: number;

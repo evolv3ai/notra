@@ -1,0 +1,52 @@
+---
+title: Select
+description: A Base UI select with a Depth button trigger and a popup that opens below it.
+---
+
+The trigger uses the same surface as the outline button. The list opens below it with a 4px gap, rounded corners, a subtle gradient and layered shadows.
+
+<Component path="select/examples/select-demo" />
+
+## Installation
+
+<RegistryInstall name="notra-select" />
+
+This installs `components/select/components/select.tsx`, which wraps shadcn's Select with a Notra button trigger and the shared dropdown styles. Your `components/ui/select.tsx` stays as it is. Use a shadcn project on Base UI and Tailwind CSS v4.
+
+## Usage
+
+Pass `items` to show option labels in the trigger rather than their raw values.
+
+```tsx
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/select/components/select";
+
+<Select
+  defaultValue="weekly"
+  items={[
+    { value: "daily", label: "Daily" },
+    { value: "weekly", label: "Weekly" },
+  ]}
+>
+  <SelectTrigger aria-label="Frequency" className="w-48">
+    <SelectValue />
+  </SelectTrigger>
+  <SelectContent>
+    <SelectItem value="daily">Daily</SelectItem>
+    <SelectItem value="weekly">Weekly</SelectItem>
+  </SelectContent>
+</Select>
+```
+
+## Positioning and variants
+
+The list is start-aligned and does not overlap the trigger or flip above it. When space below is limited, it scrolls within the available height.
+
+Use `size="sm"` for a compact trigger or `variant="ghost"` to remove the field surface for inline property editing. The popup still opens below the trigger.
+
+Arrow keys move between options, Enter selects and Escape closes the list. Disabled options are skipped. Popup motion is disabled when reduced motion is enabled.

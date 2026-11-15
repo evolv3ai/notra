@@ -1,0 +1,95 @@
+---
+title: Sub-processors
+---
+
+**Last updated: November 3, 2026**
+
+A sub-processor is a third party that Notra, Inc. engages to process personal data on behalf of our customers, for example to host the Service, store data or run AI models. This page is Annex III of our [Data Processing Agreement](/dpa) and lists every sub-processor that can receive Customer Personal Data, what it does for us, which data it handles and where it is based.
+
+We tell customers about a new or replacement sub-processor at least 14 days before it starts processing Customer Personal Data. We announce changes by updating this page. To also get each notice by email, write to support@usenotra.com and we will add you to the notification list. You can object to a change as described in section 10 of the DPA by emailing support@usenotra.com.
+
+Notra, Inc. is established in the United States, so transfers of personal data from the EU, the UK and Switzerland to Notra are covered by the Standard Contractual Clauses in our DPA. Most sub-processors below are also based in the United States.
+
+## Infrastructure and Hosting
+
+| Sub-processor | Purpose | Data processed | Location |
+| --- | --- | --- | --- |
+| Vercel Inc. | Hosting of the dashboard, website and agents, scheduled jobs and workflows | Account users, content and integration data handled by the dashboard | United States |
+| Unkey Inc. | Hosting of the Notra API and the AI traffic ingest service, and API key management | AI traffic request data, with the visitor IP address held in memory only, API requests and API key metadata | United States |
+| Cloudflare, Inc. | DNS, CDN and network proxy for Notra's domains, hosting the blogs and changelogs you publish with Notra Sites, storing site assets and uploads, bot checks, custom hostnames and delivery of outbound webhooks | All requests to Notra's domains and Notra Sites in transit, including visitor IP addresses, published site content such as posts and author names, uploads and webhook payloads | United States, with a global edge network |
+| Upstash, Inc. | Caching, IP-based rate limits, visitor session state, job scheduling, isolated sandboxes that build your Notra Sites blogs and changelogs and sandboxes for running GEO engines | IP addresses used as short-lived rate limit keys, pseudonymous visitor session state, workspace and job identifiers, site source content such as posts, author names and media and GEO scan prompts | United States |
+
+## Data Storage and Observability
+
+| Sub-processor | Purpose | Data processed | Location |
+| --- | --- | --- | --- |
+| Databricks, Inc. (Neon) | Primary database | Account users, workspace settings, content, brand data, encrypted integration tokens, GEO configuration and feedback | United States |
+| Tinybird, Inc. | Storage and analysis of AI traffic, Notra Sites visitor analytics, MCP server analytics and social media analytics | AI traffic events, Sites page views with pseudonymous visitor and session IDs, device, browser and referrer data, MCP server request logs with the user IDs and intents the Customer passes and, where the Customer opts in, tool arguments and responses, and public social post metrics | United States |
+| Pierre (code.storage) | Storage of workspace memory used by Notra's agents | Notes and context derived from your content, which can include names of team members and contributors | United States |
+| Axiom, Inc. | Application, ingest and AI request logs | Request metadata, organisation, project and user identifiers, model and cost data and error details | United States |
+| PostHog, Inc. | Error tracking and product analytics | Internal user, workspace and project IDs, browser and device data, error details and aggregated AI traffic classification events | United States |
+| The Context Company | Observability of AI agent runs | Traces of AI requests, which can include prompts, context and model output | United States |
+| Sazabi Inc. | Application log monitoring, issue detection and error investigation | Application and request logs, which can include organisation, project and user identifiers, request metadata and error details | United States |
+
+## AI Model Providers
+
+Notra sends prompts and context to AI models to generate content, run GEO visibility scans, classify feedback and evaluate results. Requests go through an AI gateway, which chooses the inference provider that serves each request and can fail over between providers for the same model. Some GEO engines call a provider directly. Requests through Vercel AI Gateway and OpenRouter are sent with prompt training disallowed. Neon AI Gateway does not offer that setting, so requests through it are covered by the API terms of Neon and the model provider. Workspaces with the zero data retention ("ZDR") add-on only use providers that keep no prompts.
+
+| Sub-processor | Purpose | Data processed | Location |
+| --- | --- | --- | --- |
+| Databricks, Inc. (Neon AI Gateway) | Default routing of AI requests to model providers | Prompts, context and model output. May be kept for up to 30 days for abuse monitoring. | United States |
+| Vercel Inc. (AI Gateway) | Routing of AI requests to model providers | Prompts, context and model output in transit | United States |
+| OpenRouter, Inc. | Fallback routing of AI requests to model providers | Prompts, context and model output in transit | United States |
+| OpenAI | GPT models for content generation, GEO scans and evaluation | Prompts, context and model output | United States |
+| Anthropic, PBC | Claude models for content generation, GEO scans and agents. Claude Fable models keep data for 30 days. | Prompts, context and model output | United States |
+| Google LLC | Gemini models for content generation and GEO scans | Prompts, context and model output | United States |
+| SpaceXAI LLC | Grok models for GEO scans | GEO scan prompts and model output | United States |
+| Perplexity AI, Inc. | Sonar models for GEO scans | GEO scan prompts and model output | United States |
+| Meta Platforms, Inc. | Muse models for GEO scans | GEO scan prompts and model output | United States |
+| Mistral AI SAS | Mistral models for content generation | Prompts, context and model output | France |
+| Cohere Inc. | Ranking brand references and workspace knowledge by relevance | Brand reference text, workspace knowledge facts and search queries | Canada |
+| Open-weight model hosts | Kimi (Moonshot AI), GLM (Z.ai) and DeepSeek models for content generation and GEO scans, served by the inference providers the gateways above select | Prompts, context and model output | Depends on the provider the gateway selects |
+| TypeSafe AI | Jev model for feedback classification, spam screening and evaluation, through Vercel AI Gateway | Feedback text, titles, related URLs and agent context | United States |
+| Anysphere, Inc. (Cursor) | Cursor model for GEO scans | GEO scan prompts and model output | United States |
+| Olostep | Running GEO scan prompts in consumer AI assistants such as ChatGPT, Perplexity, Google AI Mode and Microsoft Copilot | GEO scan prompts about your brand, market and competitors and the answers returned | United States |
+| Context.dev | Running GEO scan prompts in Google AI Overviews and Gemini, company lookups and logos, reading and searching public websites for brand analysis and research and converting brand guideline PDFs you upload to text | GEO scan prompts and answers, company domains, website URLs and search queries and the full contents of uploaded brand guideline PDFs, which can include any personal data in them | United States |
+
+## Account, Billing and Communications
+
+| Sub-processor | Purpose | Data processed | Location |
+| --- | --- | --- | --- |
+| WorkOS, Inc. | Authentication, single sign-on, user management and invitations | Names, email addresses, organisation membership and sign-in events | United States |
+| Rebase, Inc. (Autumn) | Subscription billing, plan management and usage metering | Customer and workspace IDs, billing contact name and email, plan and usage records | United States |
+| Stripe | Payment processing through Autumn. Stripe acts as an independent controller for fraud prevention and its regulatory obligations. | Billing contact details, payment method details and transaction records | United States |
+| Brew Emails Inc. | Account, notification and lifecycle emails | Name, email address, email preferences, notification content and delivery events | United States |
+| Day Moon Development LLC (Post for Me) | Publishing posts to the social accounts you connect, such as X and LinkedIn | Post content, media and connected social account identifiers | United States |
+| Slack Technologies, LLC | Internal notifications and logs for the Notra team | Content of support requests and feedback with the sender's name and email, and account activity such as workspace, site, repository and domain names | United States |
+
+## Customer-enabled Integrations
+
+The services below are activated by you. When you connect one, data flows between Notra and an account that you hold with that provider, and your own terms with that provider govern how it handles your data. Notra accesses only the data you authorise and processes it under the DPA.
+
+| Service | What Notra does with it | Data exchanged |
+| --- | --- | --- |
+| GitHub | Reads repositories, commits, pull requests and releases for content generation, and publishes content to repositories you select | Repository content and metadata, contributor names, usernames and avatars |
+| Linear | Reads issues and projects for content generation | Issue and project content, assignee and author names |
+| Slack | Runs the Notra agent in channels you choose and reads messages you connect | Messages, channel names and member names in connected channels |
+| Granola | Reads meeting notes you connect for content generation | Meeting notes and participant names |
+| Google (Search Console and Google sign-in) | Reads search performance data for sites you connect, and lets users sign in with Google | Search queries, pages and performance metrics and Google account name and email at sign-in |
+| X | Reads public metrics for posts on your connected X account | Public posts and engagement metrics |
+| Inth | Provides consent banners and consent records for Notra Sites | Visitor consent choices for your Site |
+| Your DNS provider (Domain Connect) | Configures DNS records for custom domains on Notra Sites | Domain names and DNS records |
+| skills.sh | Looks up skills from the public skills catalog | Search terms and skill names |
+| Custom MCP servers | Calls tools on MCP servers you connect | Tool arguments and results you configure |
+| Analytics tools on Notra Sites, such as PostHog, Plausible, Google Analytics and Databuddy | Loads the analytics script you configure on your Site, subject to your consent settings | Whatever your own analytics account collects from your Site's visitors |
+
+## Contact
+
+If you have questions about our sub-processors, contact us at:
+
+**Email:** support@usenotra.com
+
+Notra, Inc.<br />
+2261 Market Street STE 98632<br />
+San Francisco, CA 94114<br />
+United States

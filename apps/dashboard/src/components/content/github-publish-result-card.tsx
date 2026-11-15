@@ -3,7 +3,7 @@
 import { ArrowUpRight01Icon, GitCommitIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Notra } from "@notra/ui/components/ui/svgs/notra";
-import { useTranslations } from "next-intl";
+import { useTranslations } from "use-intl";
 
 import type { GitHubPublishResultCardProps } from "@/types/content/detail";
 
@@ -13,6 +13,7 @@ export function GitHubPublishResultCard({
   title,
 }: GitHubPublishResultCardProps) {
   const t = useTranslations("content.githubPublish");
+  const tGit = useTranslations("content.gitPublishing");
   const tCommon = useTranslations("common");
   const wasCreated = pullRequest.operation === "created";
   const prTitle = `docs: add ${title}`;
@@ -31,16 +32,25 @@ export function GitHubPublishResultCard({
             {prTitle}
           </p>
           <p className="text-muted-foreground mt-1 truncate text-xs">
-            {repositoryLabel}#{pullRequest.pullRequestNumber} ·{" "}
-            {wasCreated ? t("createdAsDraft") : tCommon("labels.updated")}
+            {pullRequest.direct ? (
+              tGit("publishedDirectly", { branch: pullRequest.branchName })
+            ) : (
+              <>
+                {repositoryLabel}#{pullRequest.pullRequestNumber} ·{" "}
+                {wasCreated ? t("createdAsDraft") : tCommon("labels.updated")}
+              </>
+            )}
           </p>
         </div>
         <a
           aria-label={t("openPullRequestAria", {
-            number: pullRequest.pullRequestNumber,
+            number: pullRequest.pullRequestNumber ?? "",
           })}
           className="text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-ring flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
-          href={pullRequest.pullRequestUrl}
+          href={
+            pullRequest.pullRequestUrl ??
+            `https://github.com/${repositoryLabel}/tree/${pullRequest.branchName}`
+          }
           rel="noopener noreferrer"
           target="_blank"
         >

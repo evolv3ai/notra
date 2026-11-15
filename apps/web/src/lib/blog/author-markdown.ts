@@ -6,7 +6,7 @@ import {
   getNotraAuthorBySlug,
   listNotraAuthors,
 } from "@/utils/authors";
-import { listNotraBlogPosts } from "@/utils/blog";
+import { listVisibleNotraBlogPosts } from "@/utils/blog";
 import { markdownSection } from "@/utils/markdown";
 import { SITE_URL } from "@/utils/urls";
 
@@ -38,7 +38,10 @@ export async function buildBlogAuthorMarkdown(
     return null;
   }
 
-  const posts = filterPostsByAuthorSlug(await listNotraBlogPosts(), slug);
+  const posts = filterPostsByAuthorSlug(
+    await listVisibleNotraBlogPosts(),
+    slug
+  );
   const socials = author.socials
     .map(resolveSocialLink)
     .filter((social) => social !== null)

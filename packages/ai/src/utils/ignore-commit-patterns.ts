@@ -1,6 +1,6 @@
 export const MAX_IGNORE_COMMIT_PATTERNS = 10;
 export const MAX_IGNORE_COMMIT_PATTERN_LENGTH = 120;
-export const IGNORE_COMMIT_PATTERN_FLAGS = "i";
+const IGNORE_COMMIT_PATTERN_FLAGS = "i";
 
 const QUANTIFIER_BRACE_PATTERN = /\{\d/;
 
@@ -93,7 +93,7 @@ export function isUnsafeIgnoreCommitPattern(pattern: string): boolean {
   return false;
 }
 
-export const IGNORE_COMMIT_PATTERNS_SEPARATOR = ", ";
+const IGNORE_COMMIT_PATTERNS_SEPARATOR = ", ";
 
 function scanTopLevelCommas(
   text: string,
@@ -140,7 +140,7 @@ export function splitIgnoreCommitPatternsText(text: string): string[] {
   return parts.map((part) => part.trim()).filter(Boolean);
 }
 
-export function escapeIgnoreCommitPatternCommas(pattern: string): string {
+function escapeIgnoreCommitPatternCommas(pattern: string): string {
   const indices: number[] = [];
   scanTopLevelCommas(pattern, (index) => indices.push(index));
   let result = pattern;

@@ -8,10 +8,6 @@ import type {
 import type { GEO_PERSONA_GENERATION_STEPS } from "@/constants/geo-personas";
 import type { GeoSequenceEngineThread } from "@/types/geo";
 
-export interface GeoPersonasPageProps {
-  params: Promise<{ slug: string }>;
-}
-
 export interface PersonaGenerationCounterProps {
   progress: PersonaGenerationProgress;
 }
@@ -63,7 +59,9 @@ export interface PersonaDetailHeaderProps {
   scans: GeoPersonaScanSummary[];
   selectedScanId: string | null;
   view: PersonaDialogView;
+  isLoading: boolean;
   isRunning: boolean;
+  runDisabled: boolean;
   onRun: () => void;
   onSelectScan: (scanId: string | null) => void;
   onEngineChange: (engine: string) => void;
@@ -78,7 +76,7 @@ export interface PersonaAvatarProps {
   className?: string;
 }
 
-export interface PersonaProfileProps {
+interface PersonaProfileProps {
   persona: GeoPersona;
 }
 

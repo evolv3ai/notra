@@ -15,8 +15,8 @@ import {
 import { Button } from "@notra/ui/components/ui/button";
 import { AI_SKIN_BUTTON_RESET } from "@notra/ui/constants/ai-skin-primitives";
 import { cn } from "@notra/ui/lib/utils";
-import { isReservedExampleDomain } from "@notra/utils/google-favicon";
-import Image from "next/image";
+import { googleFaviconUrl } from "@notra/utils/google-favicon";
+import { Image } from "@notra/ui/components/framework-provider";
 import { useState } from "react";
 
 export interface ChatgptActivitySite {
@@ -33,9 +33,6 @@ export interface ChatgptActivitySource {
   timeLabel: string;
 }
 
-function faviconSrc(domain: string) {
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`;
-}
 
 function SiteFavicon({
   domain,
@@ -44,10 +41,10 @@ function SiteFavicon({
   domain: string;
   className?: string;
 }) {
-  // Reserved `.example` domains (demo data) never have a favicon.
-  const [failed, setFailed] = useState(() => isReservedExampleDomain(domain));
+  const [failed, setFailed] = useState(false);
+  const src = googleFaviconUrl(domain, 64);
 
-  if (failed) {
+  if (failed || !src) {
     return (
       <span
         aria-hidden
@@ -62,7 +59,7 @@ function SiteFavicon({
       className={cn("rounded-full bg-muted", className)}
       height={64}
       onError={() => setFailed(true)}
-      src={faviconSrc(domain)}
+      src={src}
       unoptimized
       width={64}
     />

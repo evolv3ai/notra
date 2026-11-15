@@ -47,7 +47,6 @@ export async function fetchResumableChatStream(
   const reconnect = async () => {
     await reader.cancel().catch(() => undefined);
     reader.releaseLock();
-    // Discard any incomplete frame. The server will replay it after cursor.
     buffer = "";
     const headers = new Headers(init?.headers);
     headers.set(CHAT_STREAM_ID_HEADER, streamId);
@@ -92,7 +91,6 @@ export async function fetchResumableChatStream(
       try {
         while (true) {
           abortController.signal.throwIfAborted();
-          // Our SSE endpoint emits LF-delimited frames, one cursor per chunk.
           const end = buffer.indexOf("\n\n");
           if (end >= 0) {
             const frame = buffer.slice(0, end);

@@ -3,14 +3,13 @@
 import { GEO_WRITER_BRIEF_POLL_INTERVAL_MS } from "@notra/geo-core/constants/geo";
 import type {
   GeoContentBriefDetail,
-  GeoContentBriefsResponse,
   GeoContentGapsResponse,
   GeoWriterPlanInput,
 } from "@notra/geo-core/types/geo";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
 import { useRef } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { useGeoProjectScope } from "@/components/providers/geo-project-provider";
 import { GEO_CONTENT_GAPS_PREPARING_POLL_MS } from "@/constants/geo-content-gaps";
@@ -36,18 +35,6 @@ export function useGeoWriterGaps(organizationId: string) {
   });
 }
 
-export function useGeoWriterBriefs(organizationId: string) {
-  const tToast = useTranslations("geo.toasts");
-  const { projectId } = useGeoProjectScope();
-  return useQuery<GeoContentBriefsResponse>({
-    ...dashboardOrpc.geo.writerBriefsList.queryOptions({
-      input: { organizationId, projectId },
-    }),
-    enabled: !!organizationId,
-    meta: { errorMessage: tToast("loadBriefsFailed") },
-  });
-}
-
 export function useGeoWriterBrief(
   organizationId: string,
   briefId: string | null,
@@ -62,8 +49,6 @@ export function useGeoWriterBrief(
     }),
     enabled: !!organizationId && !!briefId,
     retry: (failureCount, error) => !isNotFoundError(error) && failureCount < 1,
-    // Poll while the writer is running. New runs skip "approved" (draft/failed
-    // go straight to "writing"), but legacy rows can still sit in "approved".
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status === "writing" || status === "approved"
@@ -125,7 +110,6 @@ export function useGeoPromptGapIgnore(organizationId: string) {
       return { removed };
     },
     onError: (error, _input, context) => {
-      // Restore only this row so concurrent ignores of other rows stay removed.
       const removed = context?.removed;
       if (removed) {
         queryClient.setQueryData<GeoContentGapsResponse>(

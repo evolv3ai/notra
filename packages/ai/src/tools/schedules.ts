@@ -10,7 +10,7 @@ import { toolDescription } from "@notra/ai/utils/description";
 import { type Tool, tool } from "ai";
 import { z } from "zod";
 
-export interface ScheduleToolContext {
+interface ScheduleToolContext {
   organizationId: string;
 }
 

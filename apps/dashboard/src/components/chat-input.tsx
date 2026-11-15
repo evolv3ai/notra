@@ -4,7 +4,7 @@ import {
   Alert02Icon,
   ArrowUp02Icon,
   AtIcon,
-  StopIcon,
+  File02Icon,
   Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -17,20 +17,19 @@ import {
   CommandItem,
   CommandList,
 } from "@notra/ui/components/ui/command";
+import { Composer } from "@notra/ui/components/ui/composer";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@notra/ui/components/ui/popover";
-import { Textarea } from "@notra/ui/components/ui/textarea";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@notra/ui/components/ui/tooltip";
-import { useTranslations } from "next-intl";
-import Link from "next/link";
 import { useId } from "react";
+import { useTranslations } from "use-intl";
 
 import { AttachmentPreviewDialog } from "@/components/chat/attachment-preview";
 import {
@@ -41,11 +40,13 @@ import {
 import { ChatContextConnectSuggestions } from "@/components/chat/chat-context-connect-suggestions";
 import { ChatContextOptionContent } from "@/components/chat/chat-context-option-content";
 import { ChatInputContextRow } from "@/components/chat/chat-input-context-row";
+import { ChatModelEffortMenu } from "@/components/chat/chat-model-effort-menu";
 import { ChatQueue } from "@/components/chat/chat-queue";
 import { ChatQuotePreview, useChatQuote } from "@/components/chat/chat-quote";
 import { ChatSkillSlashMenu } from "@/components/chat/chat-skill-slash-menu";
 import { ChatSkillTagChips } from "@/components/chat/chat-skill-tag-chips";
-import { Composer } from "@/components/composer/composer-shell";
+import Link from "@/components/framework/link";
+import { COMPOSER_STOP_ICON } from "@/constants/composer";
 import { useContentChatInput } from "@/lib/hooks/use-content-chat-input";
 import type {
   ChatInputComposerNudgeProps,
@@ -62,6 +63,7 @@ function ContentChatInputComposer(props: ChatInputProps) {
   const tChatShared = useTranslations("chat.shared");
   const quoteContext = useChatQuote();
   const slashListId = useId();
+  const editingTargetId = useId();
   const {
     acceptedFileTypesLabel,
     allowedChatMimeTypes,
@@ -152,10 +154,11 @@ function ContentChatInputComposer(props: ChatInputProps) {
         <Composer.Frame
           connectedTop={connectedTop}
           nudge={
-            showComposerNudge ? (
+            showComposerNudge || props.editingTarget ? (
               <ChatInputComposerNudge
                 attachments={attachments}
                 context={context}
+                editingTarget={props.editingTarget}
                 hasAttachmentChips={hasAttachmentChips}
                 hasContextChips={hasContextChips}
                 onClearSelection={onClearSelection}
@@ -179,6 +182,11 @@ function ContentChatInputComposer(props: ChatInputProps) {
           }
         >
           <section aria-label={tChatShared("chatInputDropArea")}>
+            {props.editingTarget ? (
+              <span className="sr-only" id={editingTargetId}>
+                {props.editingTarget.description}
+              </span>
+            ) : null}
             <ChatQuotePreview />
             <input
               accept={`${allowedChatMimeTypes.join(",")},image/heic,.heic`}
@@ -188,7 +196,7 @@ function ContentChatInputComposer(props: ChatInputProps) {
               ref={fileInputRef}
               type="file"
             />
-            <Textarea
+            <Composer.Input
               aria-activedescendant={
                 isSlashMenuOpen && filteredSkills[slashIndex]
                   ? `chat-skill-slash-option-${filteredSkills[slashIndex].name}`
@@ -196,10 +204,13 @@ function ContentChatInputComposer(props: ChatInputProps) {
               }
               aria-autocomplete={isSlashMenuOpen ? "list" : undefined}
               aria-controls={isSlashMenuOpen ? slashListId : undefined}
+              aria-describedby={
+                props.editingTarget ? editingTargetId : undefined
+              }
               aria-expanded={isSlashMenuOpen}
               aria-haspopup={isSlashMenuOpen ? "listbox" : undefined}
               aria-label={tChatShared("sendAMessage")}
-              className="text-foreground caret-foreground block field-sizing-fixed max-h-50 min-h-12 w-full min-w-0 resize-none overflow-y-auto rounded-none border-0 bg-transparent px-3 py-2 text-sm leading-6 whitespace-pre-wrap shadow-none ring-0 outline-none focus-visible:border-transparent focus-visible:ring-0 disabled:cursor-not-allowed disabled:bg-transparent disabled:opacity-50 dark:bg-transparent dark:disabled:bg-transparent"
+              className="field-sizing-fixed min-h-10 whitespace-pre-wrap"
               disabled={isInputLocked}
               onBlur={() => {
                 setIsFocused(false);
@@ -233,33 +244,43 @@ function ContentChatInputComposer(props: ChatInputProps) {
             <Composer.Toolbar>
               <ChatComposerAttachButton
                 attachmentCount={attachments.length}
-                disabled={isInputLocked || isLoading}
+                disabled={isInputLocked}
                 onAttach={onAttach}
                 pendingUploadCount={pendingUploads.length}
                 tooltip={attachmentTooltipText}
               />
-              <ChatInputContextPicker
-                contextOptions={contextOptions}
-                contextPickerId={contextPickerId}
-                disabledReason={contextPickerDisabledReason}
-                isInContext={isInContext}
-                isOpen={isContextPickerOpen}
-                onOpenChange={setIsContextPickerOpen}
-                organizationSlug={organizationSlug}
-                toggleContextItem={toggleContextItem}
-              />
-              <Composer.Send
-                disabled={sendDisabled}
-                label={sendLabel}
-                onClick={showStop ? onStop : handleSend}
-                tooltip={sendTooltip}
-              >
-                <HugeiconsIcon
-                  className="size-4"
-                  icon={showStop ? StopIcon : ArrowUp02Icon}
-                  strokeWidth={2}
-                />
-              </Composer.Send>
+              <div className="ml-auto flex min-w-0 items-center gap-1">
+                {props.onAddContext ? (
+                  <ChatInputContextPicker
+                    contextOptions={contextOptions}
+                    contextPickerId={contextPickerId}
+                    disabledReason={contextPickerDisabledReason}
+                    isInContext={isInContext}
+                    isOpen={isContextPickerOpen}
+                    onOpenChange={setIsContextPickerOpen}
+                    organizationSlug={organizationSlug}
+                    toggleContextItem={toggleContextItem}
+                  />
+                ) : null}
+                {props.modelEffort ? (
+                  <ChatModelEffortMenu
+                    {...props.modelEffort}
+                    disabled={isInputLocked}
+                  />
+                ) : null}
+                <Composer.Send
+                  disabled={sendDisabled}
+                  label={sendLabel}
+                  onClick={showStop ? onStop : handleSend}
+                  tooltip={sendTooltip}
+                >
+                  <HugeiconsIcon
+                    className="size-4"
+                    icon={showStop ? COMPOSER_STOP_ICON : ArrowUp02Icon}
+                    strokeWidth={2}
+                  />
+                </Composer.Send>
+              </div>
             </Composer.Toolbar>
           </section>
         </Composer.Frame>
@@ -280,6 +301,7 @@ function ContentChatInputComposer(props: ChatInputProps) {
 function ChatInputComposerNudge({
   attachments,
   context,
+  editingTarget,
   hasAttachmentChips,
   hasContextChips,
   onClearSelection,
@@ -301,6 +323,8 @@ function ChatInputComposerNudge({
 }: ChatInputComposerNudgeProps) {
   const tCommon = useTranslations("common");
   const tChatShared = useTranslations("chat.shared");
+  const hasChips =
+    hasContextChips || hasAttachmentChips || Boolean(editingTarget);
   return (
     <Composer.Nudge
       action={
@@ -316,18 +340,27 @@ function ChatInputComposerNudge({
         ) : null
       }
       title={
-        shouldShowLowCredits &&
-        !hasContextChips &&
-        !hasAttachmentChips &&
-        !usageLimitError
+        shouldShowLowCredits && !hasChips && !usageLimitError
           ? tChatShared("countPluralOneChatMessage", {
               count: remainingChatCredits ?? 0,
             })
           : undefined
       }
     >
-      {hasContextChips || hasAttachmentChips ? (
+      {hasChips ? (
         <>
+          {editingTarget ? (
+            <Composer.Chip
+              icon={
+                <HugeiconsIcon
+                  aria-hidden="true"
+                  className="text-muted-foreground size-3.5"
+                  icon={File02Icon}
+                />
+              }
+              label={editingTarget.title}
+            />
+          ) : null}
           <ChatQueue
             messages={queuedMessages}
             onEdit={onEditQueued}
@@ -381,109 +414,91 @@ function ChatInputContextPicker({
 }: ChatInputContextPickerProps) {
   const tChatShared = useTranslations("chat.shared");
   return (
-    <Tooltip disabled={isOpen}>
-      <TooltipTrigger
-        render={
-          disabledReason ? (
-            // biome-ignore lint/a11y/useSemanticElements: a real button would illegally nest the disabled popover trigger button.
-            <span
-              aria-disabled="true"
-              aria-label={tChatShared("addToolsOrContext")}
-              className="inline-flex size-7 shrink-0 cursor-not-allowed items-center justify-center"
-              role="button"
-              tabIndex={0}
+    <Popover modal onOpenChange={onOpenChange} open={isOpen}>
+      <Tooltip disabled={isOpen}>
+        <TooltipTrigger
+          render={
+            <PopoverTrigger
+              render={
+                <Composer.ToolbarButton
+                  aria-label={tChatShared("addToolsOrContext")}
+                  disabled={Boolean(disabledReason)}
+                  focusableWhenDisabled
+                  size="icon-sm"
+                />
+              }
             />
-          ) : (
-            <span className="inline-flex size-7 shrink-0 items-center justify-center" />
-          )
-        }
+          }
+        >
+          <HugeiconsIcon className="size-4" icon={AtIcon} />
+        </TooltipTrigger>
+        <TooltipContent>
+          {disabledReason ?? tChatShared("toolsAndContext")}
+        </TooltipContent>
+      </Tooltip>
+      <PopoverContent
+        align="start"
+        className="w-80 p-0"
+        id={contextPickerId}
+        showBackdrop
+        sideOffset={6}
       >
-        <Popover modal onOpenChange={onOpenChange} open={isOpen}>
-          <PopoverTrigger
-            render={
-              <Composer.ToolbarButton
-                aria-controls={contextPickerId}
-                aria-expanded={isOpen}
-                aria-haspopup="listbox"
-                aria-label={tChatShared("addToolsOrContext")}
-                className="size-7 justify-center px-0"
-                disabled={Boolean(disabledReason)}
-                role="combobox"
+        <Command>
+          <CommandInput placeholder={tChatShared("searchToolsAndContext")} />
+          <CommandList>
+            <CommandEmpty>
+              {contextOptions.length === 0
+                ? tChatShared("noMatchingIntegrations")
+                : tChatShared("noMatchingToolsOrContext")}
+            </CommandEmpty>
+            {contextOptions.length === 0 && organizationSlug ? (
+              <ChatContextConnectSuggestions
+                onSelect={() => onOpenChange(false)}
+                organizationSlug={organizationSlug}
               />
-            }
-          >
-            <HugeiconsIcon className="size-4" icon={AtIcon} />
-          </PopoverTrigger>
-          <PopoverContent
-            align="start"
-            className="w-80 p-0"
-            id={contextPickerId}
-            showBackdrop
-            sideOffset={6}
-          >
-            <Command>
-              <CommandInput
-                placeholder={tChatShared("searchToolsAndContext")}
-              />
-              <CommandList>
-                <CommandEmpty>
-                  {contextOptions.length === 0
-                    ? tChatShared("noMatchingIntegrations")
-                    : tChatShared("noMatchingToolsOrContext")}
-                </CommandEmpty>
-                {contextOptions.length === 0 && organizationSlug ? (
-                  <ChatContextConnectSuggestions
-                    onSelect={() => onOpenChange(false)}
-                    organizationSlug={organizationSlug}
-                  />
-                ) : null}
-                {contextOptions.length > 0 ? (
-                  <CommandGroup heading={tChatShared("context")}>
-                    {contextOptions.map((option) => {
-                      const inContext = isInContext(option.contextItem);
-                      return (
-                        <CommandItem
-                          data-checked={inContext}
-                          key={option.id}
-                          keywords={[option.searchText]}
-                          onSelect={() => {
-                            toggleContextItem(option.contextItem, inContext);
-                            onOpenChange(false);
-                          }}
-                          value={option.id}
-                        >
-                          <ChatContextOptionContent option={option} />
-                          {inContext ? (
-                            <HugeiconsIcon
-                              className="text-primary ml-auto size-3.5"
-                              icon={Tick02Icon}
-                            />
-                          ) : null}
-                        </CommandItem>
-                      );
-                    })}
-                  </CommandGroup>
-                ) : null}
-              </CommandList>
-              {organizationSlug ? (
-                <div className="border-border border-t p-1">
-                  <Link
-                    className="text-muted-foreground hover:bg-accent hover:text-accent-foreground flex items-center rounded-sm px-2 py-1.5 text-sm transition-colors outline-none"
-                    href={`/${organizationSlug}/integrations`}
-                    onClick={() => onOpenChange(false)}
-                  >
-                    {tChatShared("manageIntegrations")}
-                  </Link>
-                </div>
-              ) : null}
-            </Command>
-          </PopoverContent>
-        </Popover>
-      </TooltipTrigger>
-      <TooltipContent>
-        {disabledReason ?? tChatShared("toolsAndContext")}
-      </TooltipContent>
-    </Tooltip>
+            ) : null}
+            {contextOptions.length > 0 ? (
+              <CommandGroup heading={tChatShared("context")}>
+                {contextOptions.map((option) => {
+                  const inContext = isInContext(option.contextItem);
+                  return (
+                    <CommandItem
+                      data-checked={inContext}
+                      key={option.id}
+                      keywords={[option.searchText]}
+                      onSelect={() => {
+                        toggleContextItem(option.contextItem, inContext);
+                        onOpenChange(false);
+                      }}
+                      value={option.id}
+                    >
+                      <ChatContextOptionContent option={option} />
+                      {inContext ? (
+                        <HugeiconsIcon
+                          className="text-primary ml-auto size-3.5"
+                          icon={Tick02Icon}
+                        />
+                      ) : null}
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            ) : null}
+          </CommandList>
+          {organizationSlug ? (
+            <div className="border-border border-t p-1">
+              <Link
+                className="text-muted-foreground hover:bg-accent hover:text-accent-foreground flex items-center rounded-sm px-2 py-1.5 text-sm transition-colors outline-none"
+                href={`/${organizationSlug}/integrations`}
+                onClick={() => onOpenChange(false)}
+              >
+                {tChatShared("manageIntegrations")}
+              </Link>
+            </div>
+          ) : null}
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 

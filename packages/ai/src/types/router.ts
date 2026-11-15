@@ -4,10 +4,24 @@ import type {
   SharedV4ProviderOptions,
 } from "@ai-sdk/provider";
 import type { routerProviderOptionsSchema } from "@notra/ai/schemas/router";
+import type { OperationalContext } from "@notra/ai/types/operational-log";
 import type { ProviderMetadata } from "ai";
 import type * as z from "zod";
 
-export type GatewayId = "vercel" | "openrouter";
+export type GatewayId = "neon" | "vercel" | "openrouter";
+
+/** Neon's native endpoints: OpenAI Responses, Claude Messages, Gemini, chat completions. */
+export type NeonEndpoint = "responses" | "messages" | "gemini" | "chat";
+
+export interface ModelRoute {
+  /** Neon catalog id (default endpoint per family); only listed models route to Neon. */
+  neon?: string | { id: string; endpoint: NeonEndpoint };
+  /** OpenRouter id when it differs from the neutral id, `false` when unsupported. */
+  openrouter?: string | false;
+  vercel?: false;
+  /** Short ids Vercel reports as the served model. */
+  vercelServed?: readonly string[];
+}
 
 export type Plan = "free" | "paid";
 
@@ -23,6 +37,7 @@ export type RouteReason =
 export type FallbackReason =
   | "not-configured"
   | "unsupported-model"
+  | "unsupported-tool"
   | "no-credits"
   | "auth-failure"
   | "upstream-error"
@@ -56,6 +71,12 @@ export interface RouteRequest {
   /** Pin the request to a specific gateway (e.g. provider-defined tools). */
   gateway?: GatewayId;
   zdr?: ZdrMode;
+  logContext?: Partial<OperationalContext>;
+  /**
+   * Provider-defined tools of the call (e.g. `openai.web_search`). Routing
+   * skips gateways that cannot serve them for the model.
+   */
+  toolIds?: readonly string[];
 }
 
 export interface RouteDecision {
@@ -83,12 +104,24 @@ export interface RouteDecision {
 
 export interface RouteMetadata {
   gateway: GatewayId;
+  organizationId?: string;
   requestedModel: string;
   model: string;
   reason: RouteReason;
   plan?: Plan;
   generationId?: string;
   upstreamProvider?: string;
+  /** Customer total: gateway charge plus separately reported BYOK inference. */
+  costUsd?: number;
+  /** Gateway charge, including inference for system credentials; not just a fee. */
+  gatewayCostUsd?: number;
+  /** Separately reported upstream inference (BYOK only); not a market benchmark. */
+  upstreamInferenceCostUsd?: number;
+  /** Omitted when the provider metadata does not identify credential type. */
+  isByok?: boolean;
+  costSource?: "reported";
+  /** Provider-reported BYOK inference value, before provider credits or invoice adjustments. */
+  byokInferenceCostUsd?: number;
   fallbackFrom?: GatewayId;
   fallbackReason?: FallbackReason;
   /** Whether the call that produced this metadata ran with ZDR enforced. */
@@ -105,6 +138,20 @@ export interface GatewayHealth {
   reason?: string;
 }
 
+export type GatewayRouteMetadata = Partial<
+  Pick<
+    RouteMetadata,
+    | "upstreamProvider"
+    | "model"
+    | "costUsd"
+    | "gatewayCostUsd"
+    | "byokInferenceCostUsd"
+    | "upstreamInferenceCostUsd"
+    | "isByok"
+    | "costSource"
+  >
+>;
+
 /**
  * Adapter for a concrete gateway. Adapters are pure: no env access, no
  * logging. They receive everything through their factory config.
@@ -118,11 +165,13 @@ export interface GatewayAdapter {
    */
   readonly enforcesZdr: boolean;
   supportsModel(modelId: string): boolean;
+  /** Whether the gateway serves these provider-defined tools for the model. */
+  supportsTools(modelId: string, toolIds: readonly string[]): boolean;
   mapModelId(modelId: string): string;
   createModel(modelId: string): LanguageModelV4;
   /**
-   * Translate neutral provider options into the gateway-specific block. The
-   * router removes the other gateway's block before delegating.
+   * Translate neutral options and explicit privacy constraints into the
+   * gateway-specific block, then strip foreign gateway blocks.
    */
   buildProviderOptions(
     input: BuildProviderOptionsInput
@@ -136,33 +185,29 @@ export interface GatewayAdapter {
   extractRouteMetadata(
     providerMetadata: SharedV4ProviderMetadata | undefined,
     servedModelId?: string
-  ): Partial<
-    Pick<RouteMetadata, "generationId" | "upstreamProvider" | "model">
-  >;
+  ): GatewayRouteMetadata & Pick<Partial<RouteMetadata>, "generationId">;
   lookupRouteMetadata?(
-    generationId: string
-  ): Promise<Partial<Pick<RouteMetadata, "upstreamProvider" | "model">>>;
+    generationId: string,
+    signal?: AbortSignal
+  ): Promise<GatewayRouteMetadata>;
 }
 
 export interface BuildProviderOptionsInput {
+  organizationId?: string;
   /** Caller provider options, already stripped of the router block. */
   providerOptions: SharedV4ProviderOptions;
   router: RouterProviderOptions;
   /** When true privacy flags may be relaxed by the caller (dev only). */
   allowNonZdr: boolean;
   /**
-   * Relax privacy defaults for `zdr: "none"` or an accepted best-effort
-   * fallback from `zdr: "preferred"`. Explicit no-training options remain.
+   * Relax the ZDR default for `zdr: "none"` or an accepted best-effort
+   * fallback from `zdr: "preferred"`. No-training always stays on.
    */
   relaxZdr?: boolean;
 }
 
 /** Neutral provider options translated by the router for each gateway. */
 export type RouterProviderOptions = z.infer<typeof routerProviderOptionsSchema>;
-
-export type ReasoningEffort = NonNullable<
-  RouterProviderOptions["reasoning"]
->["effort"];
 
 export interface RouterPolicyConfig {
   defaultGateway: GatewayId;
@@ -175,6 +220,7 @@ export interface RouterPolicyConfig {
 export interface RouterLogFields {
   [key: string]:
     | string
+    | string[]
     | number
     | boolean
     | undefined
@@ -229,9 +275,30 @@ export interface UnavailableMark {
   until: number;
 }
 
-export interface TtlCacheEntry<T> {
+export interface OrganizationLookupResult<T> {
   value: T;
-  expiresAt: number;
+  source: "resolver" | "cache";
+}
+
+export interface OrganizationLookupEntry<T> {
+  value: T;
+  fromStore: boolean;
+  claimed: boolean;
+}
+
+/** Resolves to `undefined` when the lookup failed; callers pick a fallback. */
+export type OrganizationLookup<T> = (
+  organizationId: string
+) => Promise<OrganizationLookupResult<T> | undefined>;
+
+export interface OrganizationLookupOptions<T> {
+  resolve: (organizationId: string) => Promise<T>;
+  store?: TtlCacheStore<T>;
+  ttlMs: number;
+  failureTtlMs: number;
+  capacity: number;
+  now: () => number;
+  onFailure: (organizationId: string, error: unknown) => void;
 }
 
 export interface ModelRouterConfig {
@@ -255,6 +322,7 @@ export interface RoutedModelOptions {
   organizationId?: string;
   gateway?: GatewayId;
   zdr?: ZdrMode;
+  logContext?: Partial<OperationalContext>;
 }
 
 export interface ModelRouter {
@@ -264,7 +332,10 @@ export interface ModelRouter {
   getRouteMetadata(
     providerMetadata: SharedV4ProviderMetadata | undefined
   ): RouteMetadata | undefined;
-  enrichRouteMetadata(metadata: RouteMetadata): Promise<RouteMetadata>;
+  enrichRouteMetadata(
+    metadata: RouteMetadata,
+    signal?: AbortSignal
+  ): Promise<RouteMetadata>;
   readonly adapters: Partial<Record<GatewayId, GatewayAdapter>>;
   readonly policy: RouterPolicyConfig;
 }
@@ -281,14 +352,16 @@ export interface GatewayDecision {
   reason: RouteReason;
 }
 
+export type GatewayCheckContext = Pick<
+  ResolverContext,
+  "adapters" | "policy" | "logger" | "credits"
+>;
+
 export interface ResolverContext {
   adapters: Partial<Record<GatewayId, GatewayAdapter>>;
   policy: ModelRouterConfig["policy"];
-  resolvePlan: ModelRouterConfig["resolvePlan"];
-  resolveZdr: NonNullable<ModelRouterConfig["resolveZdr"]>;
-  planCache: PlanCacheStore;
-  zdrCache: ZdrCacheStore;
-  planCacheTtlMs: number;
+  lookupPlan: OrganizationLookup<Plan>;
+  lookupZdr: OrganizationLookup<ZdrMode>;
   logger: RouterLogger;
   credits: CreditTracker;
 }
@@ -335,13 +408,30 @@ export interface VercelAdapterConfig {
   fetch?: typeof fetch;
 }
 
+export interface NeonAdapterConfig {
+  apiKey: string;
+  /** Bare branch gateway host, or its /v1 chat-completions base URL. */
+  baseURL: string;
+  fetch?: typeof fetch;
+}
+
 export interface RouteUsageSummary {
   /** Route metadata of the last model call (gateway, upstream provider, ...). */
   route?: RouteMetadata;
   /** Prompt size of the largest step, for long-context pricing. */
   maxPromptTokens?: number;
-  /** Token cost of the steps, summed per call. */
+  /** Reported modeled spend when complete, otherwise estimated token cost, summed per call. */
   tokenCostUsd?: number;
+  /** Provenance of the priced steps, independent of the last call's route. */
+  costSource?: "reported" | "estimated" | "mixed";
+  reportedCostUsd?: number;
+  estimatedCostUsd?: number;
+  reportedSteps?: number;
+  estimatedSteps?: number;
+  /** Known reported gateway subtotal; may be partial when steps lack a breakdown. */
+  gatewayCostUsd?: number;
+  /** Known reported upstream subtotal; may be partial, not the full provider cost. */
+  upstreamInferenceCostUsd?: number;
 }
 
 export interface RouteUsageStep {

@@ -32,28 +32,18 @@ export const GEO_DEMO_USAGE: GeoModelTokenUsage = {
   totalUsd: 0,
 };
 
-/**
- * Engines the demo fabricates history for: the same three providers the
- * project tracks (so no history row shows greyed out), few enough to compare
- * at a glance and keep each sandbox light.
- */
 const GEO_DEMO_ENGINE_IDS: readonly string[] = [
   "openai/gpt-5.4-grounded",
   "anthropic/claude-sonnet-4.6-grounded",
   "google/gemini-3-flash-grounded",
 ];
 
-/**
- * Models the demo project tracks and scans: the catalog defaults minus Grok,
- * which the sample history has no answers for.
- */
 const GEO_DEMO_TRACKED_ENGINES: readonly string[] = [
   "openai/gpt-5.6-sol",
   "anthropic/claude-opus-5.5",
   "google/gemini-3.8-flash",
 ];
 
-/** One or two bots per AI vendor, so traffic tooltips stay short. */
 const GEO_DEMO_CRAWLERS: readonly GeoSampleCrawler[] = [
   { agent: "GPTBot", category: "training-crawler" },
   { agent: "OAI-SearchBot", category: "search-index" },
@@ -67,7 +57,6 @@ const GEO_DEMO_REFERRALS: readonly GeoSampleReferral[] = [
   { source: "claude", referer: "https://claude.ai/" },
   { source: "gemini", referer: "https://gemini.google.com/" },
 ];
-/** Tracked prompts, most telling first. */
 const GEO_DEMO_PROMPTS: GeoSampleProfile["prompts"] = [
   {
     english: "What is the best AI meeting notes app for remote teams?",
@@ -235,7 +224,6 @@ export const GEO_DEMO_PROFILE: GeoSampleProfile = {
     "docs.fieldnote.example",
     "app.fieldnote.example",
   ],
-  // A lean engine set keeps each sandbox around 5 MB instead of 13 MB.
   engines: GEO_SAMPLE_ENGINES.filter((engine) =>
     GEO_DEMO_ENGINE_IDS.includes(engine.engine)
   ),

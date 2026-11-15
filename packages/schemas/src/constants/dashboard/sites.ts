@@ -1,0 +1,1 @@
+export const SITE_BULK_IMPORT_MAX_SITES = 50;

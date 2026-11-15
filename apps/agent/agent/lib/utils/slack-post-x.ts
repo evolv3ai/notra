@@ -11,6 +11,7 @@ import {
   POST_TO_X_ACCOUNT_ACTION_PREFIX,
   POST_TO_X_CANCEL_ACTION_PREFIX,
   POST_TO_X_PENDING_TTL_SECONDS,
+  POST_TO_X_PUBLISH_ACTION_PREFIX,
 } from "../constants/slack-post-x";
 import type { PendingPostToX, PostToXOutcome } from "../types/slack";
 
@@ -20,32 +21,67 @@ function pendingKey(callId: string) {
 
 export async function savePendingPostToX(
   callId: string,
-  pending: PendingPostToX
+  pending: PendingPostToX,
+  options: { onlyIfExists?: boolean } = {}
 ): Promise<boolean> {
   if (!redis) {
     return false;
   }
-  await redis.set(pendingKey(callId), JSON.stringify(pending), {
-    ex: POST_TO_X_PENDING_TTL_SECONDS,
-  });
-  return true;
+  const value = JSON.stringify(pending);
+  const result = options.onlyIfExists
+    ? await redis.set(pendingKey(callId), value, {
+        ex: POST_TO_X_PENDING_TTL_SECONDS,
+        xx: true,
+      })
+    : await redis.set(pendingKey(callId), value, {
+        ex: POST_TO_X_PENDING_TTL_SECONDS,
+      });
+  return result !== null;
 }
 
-export async function readPendingPostToX(
-  callId: string
-): Promise<PendingPostToX | null> {
-  if (!redis) {
-    return null;
-  }
-  const raw = await redis.get<PendingPostToX>(pendingKey(callId));
+function parsePendingPostToX(
+  raw: PendingPostToX | string | null
+): PendingPostToX | null {
   if (!raw) {
     return null;
   }
   return typeof raw === "string" ? JSON.parse(raw) : raw;
 }
 
+async function readPendingPostToX(
+  callId: string
+): Promise<PendingPostToX | null> {
+  if (!redis) {
+    return null;
+  }
+  return parsePendingPostToX(
+    await redis.get<PendingPostToX>(pendingKey(callId))
+  );
+}
+
+// Reads and deletes in one step so a redelivered rejection for the same call
+// cannot publish the tweet twice.
+async function claimPendingPostToX(
+  callId: string
+): Promise<PendingPostToX | null> {
+  if (!redis) {
+    return null;
+  }
+  return parsePendingPostToX(
+    await redis.getdel<PendingPostToX>(pendingKey(callId))
+  );
+}
+
+export async function readPendingPostToXForOrganization(
+  callId: string,
+  organizationId: string
+): Promise<PendingPostToX | null> {
+  const pending = await readPendingPostToX(callId);
+  return pending?.organizationId === organizationId ? pending : null;
+}
+
 export function buildPostToXConfirmCard(input: {
-  requestId: string;
+  requestId?: string;
   callId: string;
   username: string;
   accounts: readonly LinkedTwitterAccount[];
@@ -103,16 +139,18 @@ export function buildPostToXConfirmCard(input: {
         elements: [
           {
             type: "button",
-            action_id: `eve_input:${input.requestId}:button:7`,
+            action_id: input.requestId
+              ? `eve_input:${input.requestId}:button:7`
+              : `${POST_TO_X_PUBLISH_ACTION_PREFIX}:${input.callId}`,
             text: plainText("Yes, post to X"),
             style: "danger",
-            value: "post_to_x",
+            value: input.requestId ? "post_to_x" : input.callId,
           },
           {
             type: "button",
-            action_id: `${POST_TO_X_CANCEL_ACTION_PREFIX}:${input.requestId}`,
+            action_id: `${POST_TO_X_CANCEL_ACTION_PREFIX}:${input.requestId ?? input.callId}`,
             text: plainText("Cancel"),
-            value: input.requestId,
+            value: input.requestId ?? input.callId,
           },
         ],
       },
@@ -121,7 +159,8 @@ export function buildPostToXConfirmCard(input: {
 }
 
 export async function switchPendingPostToXAccount(
-  selectedValue: string | undefined
+  selectedValue: string | undefined,
+  organizationId: string
 ): Promise<void> {
   if (!selectedValue) {
     return;
@@ -147,15 +186,20 @@ export async function switchPendingPostToXAccount(
     return;
   }
 
-  const pending = await readPendingPostToX(parsed.callId);
+  const pending = await readPendingPostToXForOrganization(
+    parsed.callId,
+    organizationId
+  );
   if (!pending) {
     return;
   }
-  await savePendingPostToX(parsed.callId, {
-    ...pending,
-    accountId: parsed.accountId,
-    username: parsed.username,
-  });
+  // Only update a post that is still pending: once publishing has claimed
+  // it, a late account switch must not bring it back for a second publish.
+  await savePendingPostToX(
+    parsed.callId,
+    { ...pending, accountId: parsed.accountId, username: parsed.username },
+    { onlyIfExists: true }
+  );
 }
 
 export async function dismissPostToXConfirmCard(
@@ -175,7 +219,7 @@ export async function dismissPostToXConfirmCard(
 
 export function parsePostToXConfirmValue(
   value: string | undefined
-): { requestId: string; callId: string; username: string } | null {
+): { requestId?: string; callId: string; username: string } | null {
   if (!value) {
     return null;
   }
@@ -184,15 +228,14 @@ export function parsePostToXConfirmValue(
     if (
       typeof parsed === "object" &&
       parsed !== null &&
-      "requestId" in parsed &&
-      typeof parsed.requestId === "string" &&
+      (!("requestId" in parsed) || typeof parsed.requestId === "string") &&
       "callId" in parsed &&
       typeof parsed.callId === "string" &&
       "username" in parsed &&
       typeof parsed.username === "string"
     ) {
       return {
-        requestId: parsed.requestId,
+        ...("requestId" in parsed ? { requestId: parsed.requestId } : {}),
         callId: parsed.callId,
         username: parsed.username,
       };
@@ -207,7 +250,7 @@ export async function publishPendingPostToX(
   callId: string,
   turnId: string
 ): Promise<PostToXOutcome | undefined> {
-  const pending = await readPendingPostToX(callId).catch(() => null);
+  const pending = await claimPendingPostToX(callId).catch(() => null);
   if (!pending) {
     return undefined;
   }
@@ -226,6 +269,13 @@ export async function publishPendingPostToX(
       })),
       Effect.catch((error) =>
         Effect.logWarning("[agent] Post to X failed", error).pipe(
+          // A rejected publish never reached X, so put the post back for the
+          // retry the completion message offers.
+          Effect.andThen(
+            Effect.tryPromise(() => savePendingPostToX(callId, pending)).pipe(
+              Effect.orElseSucceed(() => false)
+            )
+          ),
           Effect.as<PostToXOutcome>({
             turnId,
             postUrl: null,
@@ -243,10 +293,10 @@ export function getPostToXCompletionMessage(
   turnId: string
 ): string {
   if (!outcome || outcome.turnId !== turnId) {
-    return "Nice, glad that worked. Want me to save this as a reference?";
+    return "Nothing was published from Notra. If you posted it from X's composer, want me to save it as a reference?";
   }
   if (outcome.failed) {
-    return "Posting to X failed. The draft card above is still active, so you can try again or save it as a draft.";
+    return "Posting to X failed or couldn't be confirmed. Check the X account before retrying from the tweet card, so it isn't posted twice.";
   }
   if (!outcome.confirmed) {
     return "The post was sent to X, but confirmation timed out. Check the account before retrying to avoid a duplicate.";

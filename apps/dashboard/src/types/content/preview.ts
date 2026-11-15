@@ -26,7 +26,7 @@ export interface ReleasePreview {
   htmlUrl?: string;
 }
 
-export interface LinearIssuePreviewItem {
+interface LinearIssuePreviewItem {
   id: string;
   identifier: string;
   title: string;
@@ -51,7 +51,7 @@ export interface RepositoryPreview {
   releases: ReleasePreview[];
 }
 
-export type PreviewFailureStage =
+type PreviewFailureStage =
   | "repository_lookup"
   | "repository_metadata"
   | "token"
@@ -66,10 +66,6 @@ export interface RepositoryPreviewFailure {
   stage: PreviewFailureStage;
   message: string;
 }
-
-export type PreviewFailure = RepositoryPreviewFailure;
-export type LinearIssuePreview = LinearIssuePreviewItem;
-export type LinearIntegrationPreview = LinearIntegrationPreviewItem;
 
 export interface PreviewResponse {
   repositories: Array<{
@@ -95,3 +91,11 @@ export interface ReleaseSelection {
 }
 
 export type EventType = "Commit" | "PR" | "Release" | "LinearIssue";
+
+export interface ContentListPreviewInput {
+  content: string;
+  markdown: string | null;
+  contentType: string;
+}
+
+export type ContentListPreviewVariant = "dashboard" | "collection";

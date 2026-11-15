@@ -1,14 +1,10 @@
 import type { SessionContext } from "eve/context";
 
-export function getOrganizationId(ctx: SessionContext): string | null {
-  const organizationId =
-    ctx.session.auth.current?.attributes.organizationId ??
-    ctx.session.auth.initiator?.attributes.organizationId;
-  if (typeof organizationId !== "string") {
-    return null;
-  }
-  const trimmed = organizationId.trim();
-  return trimmed.length > 0 ? trimmed : null;
+import type { OrganizationContext } from "../types/organization";
+import { getSessionAttribute } from "./session";
+
+export function getOrganizationId(ctx: OrganizationContext): string | null {
+  return getSessionAttribute(ctx, "organizationId");
 }
 
 export function requireOrganizationId(ctx: SessionContext): string {

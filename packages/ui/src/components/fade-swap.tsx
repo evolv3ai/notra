@@ -46,8 +46,6 @@ export function FadeSwap({
   className,
 }: FadeSwapProps) {
   const reduceMotion = useReducedMotion();
-  // Adjusted during render ("state from previous props") so the very render
-  // that swaps the key already knows which way to move.
   const [previousValue, setPreviousValue] = useState(value);
   const [direction, setDirection] = useState(1);
   if (value !== previousValue) {

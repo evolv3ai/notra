@@ -1,7 +1,3 @@
-/*
- * OpenCode TUI palette. OpenCode renders in its dark theme in both light and
- * dark mode, like the terminal it lives in.
- */
 :root {
   --opencode-tui-background: #090909;
   --opencode-tui-panel: #191919;

@@ -1,0 +1,12 @@
+---
+title: Run Log
+description: Timestamped log lines for a run.
+---
+
+<Component path="workflow/examples/workflow-run-log" />
+
+<RegistryInstall name="workflow-run-log" />
+
+`WorkflowRunLog` prints `entries` with a run-relative timestamp and a colored dot per level. `getRunLog(nodes, schedule, phase, elapsedMs)` builds the entries from a played run, including which branch each decision took.
+
+<include>./_used-in.mdx</include>

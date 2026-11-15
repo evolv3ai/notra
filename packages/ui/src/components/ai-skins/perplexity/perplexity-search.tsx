@@ -24,6 +24,7 @@ import type {
 } from "@notra/ui/types/perplexity";
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
+import { sleep } from "@notra/utils/sleep";
 
 export type { PerplexitySearchSource } from "@notra/ui/types/perplexity";
 
@@ -124,11 +125,6 @@ const ENTER_CLASS =
 const PANEL_CLASS =
   "grid overflow-hidden outline-none transition-[grid-template-rows,opacity] duration-slow ease-emphasized data-closed:grid-rows-[0fr] data-open:grid-rows-[1fr] data-[ending-style]:grid-rows-[0fr] data-[ending-style]:opacity-0 data-[starting-style]:grid-rows-[0fr] data-[starting-style]:opacity-0 motion-reduce:transition-none";
 
-function wait(ms: number) {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}
 
 const DEFAULT_PREVIEW_COUNT = 4;
 
@@ -183,7 +179,7 @@ export function PerplexitySearch({
     let cancelled = false;
 
     async function run() {
-      await wait(PERPLEXITY_SEARCH_HEADER_MS);
+      await sleep(PERPLEXITY_SEARCH_HEADER_MS);
       if (cancelled) {
         return;
       }
@@ -193,14 +189,14 @@ export function PerplexitySearch({
           return;
         }
         setProgress((current) => ({ ...current, queries: index + 1 }));
-        await wait(PERPLEXITY_SEARCH_QUERY_MS);
+        await sleep(PERPLEXITY_SEARCH_QUERY_MS);
       }
 
       if (cancelled) {
         return;
       }
       setProgress((current) => ({ ...current, sources: true }));
-      await wait(previewSources.length * PERPLEXITY_SEARCH_STAGGER_MS + 180);
+      await sleep(previewSources.length * PERPLEXITY_SEARCH_STAGGER_MS + 180);
       if (!cancelled) {
         setProgress((current) => ({ ...current, done: true }));
       }

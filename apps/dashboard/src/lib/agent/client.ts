@@ -1,3 +1,5 @@
+import { setTimeout as delay } from "node:timers/promises";
+
 import {
   AGENT_AUTO_PUBLISH_HEADER,
   AGENT_BRAND_AGENT_TYPE_HEADER,
@@ -22,9 +24,7 @@ import { agentSessions } from "@notra/db/schema";
 import {
   AgentTaskFailedError,
   AgentTaskTimeoutError,
-  agentStreamEventSchema,
 } from "@notra/schemas/dashboard/agent";
-import { getVercelOidcToken } from "@vercel/oidc";
 import { eq } from "drizzle-orm";
 import { Client } from "eve/client";
 
@@ -40,6 +40,7 @@ import type {
   StartAgentSessionInput,
   StartAgentSessionResult,
 } from "@/types/agent";
+import { readAgentTaskStream } from "@/utils/read-agent-task-stream";
 
 function getNotraAgentUrl(): string {
   const url = process.env.EVE_NOTRA_AGENT_URL;
@@ -72,15 +73,13 @@ function buildAgentScopeHeaders(
     headers[AGENT_CONTENT_TYPE_HEADER] = scope.contentType;
   }
   if (scope.autoPublish !== undefined) {
-    headers[AGENT_AUTO_PUBLISH_HEADER] = scope.autoPublish ? "true" : "false";
+    headers[AGENT_AUTO_PUBLISH_HEADER] = String(scope.autoPublish);
   }
   if (scope.useMarkup !== undefined) {
-    headers[AGENT_USE_MARKUP_HEADER] = scope.useMarkup ? "true" : "false";
+    headers[AGENT_USE_MARKUP_HEADER] = String(scope.useMarkup);
   }
   if (scope.chargeAiCredits !== undefined) {
-    headers[AGENT_CHARGE_AI_CREDITS_HEADER] = scope.chargeAiCredits
-      ? "true"
-      : "false";
+    headers[AGENT_CHARGE_AI_CREDITS_HEADER] = String(scope.chargeAiCredits);
   }
   if (scope.voiceId) {
     headers[AGENT_VOICE_HEADER] = scope.voiceId;
@@ -99,7 +98,7 @@ function buildAgentScopeHeaders(
     );
   }
   if (scope.codeResearch !== undefined) {
-    headers[AGENT_CODE_RESEARCH_HEADER] = scope.codeResearch ? "true" : "false";
+    headers[AGENT_CODE_RESEARCH_HEADER] = String(scope.codeResearch);
   }
   return headers;
 }
@@ -113,6 +112,7 @@ export async function createNotraAgentClient(
     redirect: "error" as const,
   };
 
+  const { getVercelOidcToken } = await import("@vercel/oidc");
   const token = await getVercelOidcToken().catch(() => null);
   if (token) {
     return new Client({ ...clientOptions, auth: { vercelOidc: { token } } });
@@ -155,50 +155,16 @@ export async function startAgentSession(
 
 async function readTaskResultFromStream(
   client: Client,
-  eveSessionId: string
-): Promise<{ output: unknown } | { failed: string } | null> {
+  eveSessionId: string,
+  signal: AbortSignal,
+  deadline: number
+) {
   const response = await client.fetch(
     `${AGENT_CREATE_SESSION_PATH}/${eveSessionId}/stream`,
-    { method: "GET" }
+    { method: "GET", signal }
   );
-  if (!(response.ok && response.body)) {
-    return null;
-  }
-  const text = await response.text();
-  let output: unknown;
-  let completed = false;
-  let failed: string | null = null;
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      continue;
-    }
-    let event: { type: string; data?: Record<string, unknown> };
-    try {
-      event = agentStreamEventSchema.parse(JSON.parse(trimmed));
-    } catch {
-      continue;
-    }
-    if (event.type === "result.completed") {
-      output = event.data?.output ?? event.data?.result ?? event.data;
-    }
-    if (event.type === "session.completed") {
-      completed = true;
-    }
-    if (event.type === "session.failed") {
-      failed =
-        typeof event.data?.message === "string"
-          ? event.data.message
-          : "unknown failure";
-    }
-  }
-  if (failed) {
-    return { failed };
-  }
-  if (completed) {
-    return { output };
-  }
-  return null;
+  signal.throwIfAborted();
+  return await readAgentTaskStream(response, signal, deadline);
 }
 
 export async function runAgentTask(
@@ -209,31 +175,51 @@ export async function runAgentTask(
     startAgentSession({ ...input, mode: "task" }),
   ]);
 
+  const setSessionStatus = (status: "failed" | "completed" | "timed_out") =>
+    db
+      .update(agentSessions)
+      .set({ status })
+      .where(eq(agentSessions.id, started.agentSessionId));
+
   const deadline = Date.now() + AGENT_TASK_TIMEOUT_MS;
+  const signal = AbortSignal.timeout(AGENT_TASK_TIMEOUT_MS);
   while (Date.now() < deadline) {
-    const result = await readTaskResultFromStream(client, started.eveSessionId);
+    let result;
+    try {
+      result = await readTaskResultFromStream(
+        client,
+        started.eveSessionId,
+        signal,
+        deadline
+      );
+    } catch (error) {
+      if (signal.aborted || Date.now() >= deadline) {
+        break;
+      }
+      throw error;
+    }
     if (result && "failed" in result) {
-      await db
-        .update(agentSessions)
-        .set({ status: "failed" })
-        .where(eq(agentSessions.id, started.agentSessionId));
+      await setSessionStatus("failed");
       throw new AgentTaskFailedError(started.eveSessionId, result.failed);
     }
     if (result) {
-      await db
-        .update(agentSessions)
-        .set({ status: "completed" })
-        .where(eq(agentSessions.id, started.agentSessionId));
+      await setSessionStatus("completed");
       return { eveSessionId: started.eveSessionId, output: result.output };
     }
-    await new Promise((resolvePoll) =>
-      setTimeout(resolvePoll, AGENT_TASK_POLL_INTERVAL_MS)
-    );
+    try {
+      await delay(
+        Math.min(AGENT_TASK_POLL_INTERVAL_MS, deadline - Date.now()),
+        undefined,
+        { signal }
+      );
+    } catch (error) {
+      if (!signal.aborted) {
+        throw error;
+      }
+      break;
+    }
   }
 
-  await db
-    .update(agentSessions)
-    .set({ status: "timed_out" })
-    .where(eq(agentSessions.id, started.agentSessionId));
+  await setSessionStatus("timed_out");
   throw new AgentTaskTimeoutError(started.eveSessionId);
 }

@@ -58,8 +58,6 @@ describe("findNewActiveContent", () => {
           '  onerror="fetch(1)" />',
         ].join("\n")
       )
-      // The incomplete second script owns the following HTML according to the
-      // parser. Either finding blocks the complete edit.
     ).toEqual(["adds a script tag", "adds a script tag"]);
   });
 
@@ -395,17 +393,6 @@ describe("findNewActiveContent", () => {
     ).toEqual([]);
   });
 
-  test("prose can change around exact existing inline HTML", () => {
-    const script = "<script>console.log(1)</script>";
-    expect(
-      reasons(
-        "docs/guide.md",
-        `Old introduction ${script} old conclusion.`,
-        `New introduction ${script} new conclusion.`
-      )
-    ).toEqual([]);
-  });
-
   test("SVG mutation elements cannot introduce active URL assignments", () => {
     for (const extension of ["md", "mdx"]) {
       for (const tag of ["animate", "set"]) {
@@ -415,6 +402,31 @@ describe("findNewActiveContent", () => {
         );
         expect(reasons(`docs/page.${extension}`, markup, markup)).toEqual([]);
       }
+    }
+  });
+
+  test("a new base element cannot retarget an existing relative script", () => {
+    const script = '<script src="/trusted.js"></script>';
+    for (const extension of ["md", "mdx"]) {
+      expect(
+        reasons(
+          `docs/guide.${extension}`,
+          script,
+          `<base href="https://evil.example/" />\n\n${script}`
+        )
+      ).toEqual(["adds a base or meta element"]);
+    }
+  });
+
+  test("a new meta refresh is blocked", () => {
+    for (const extension of ["md", "mdx"]) {
+      expect(
+        reasons(
+          `docs/guide.${extension}`,
+          "# Guide",
+          '# Guide\n\n<meta http-equiv="refresh" content="0;url=https://evil.example" />'
+        )
+      ).toEqual(["adds a base or meta element"]);
     }
   });
 

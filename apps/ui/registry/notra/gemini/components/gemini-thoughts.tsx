@@ -17,7 +17,6 @@ import {
 } from "../constants/gemini";
 import type { GeminiThoughtsProps } from "../types/gemini";
 
-/** Pairs each item with a key that stays unique when steps repeat. */
 const withOccurrenceKeys = <T,>(
   items: readonly T[],
   getKey: (item: T) => string

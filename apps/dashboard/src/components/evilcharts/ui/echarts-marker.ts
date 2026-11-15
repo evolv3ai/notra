@@ -1,9 +1,6 @@
 import { withAlpha } from "@/components/evilcharts/ui/echarts-chart";
 import type { ChartMarker } from "@/types/charts";
 
-// Vertical annotation lines ("Joined Notra", …) attached to the first built
-// series. ECharts scopes markLine to a series, so the option is patched after
-// the build rather than passed through chartOptions (which replaces series).
 
 const MARKER_LINE_OPACITY = 0.55;
 const MARKER_LABEL_FONT_SIZE = 10;

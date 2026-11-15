@@ -8,7 +8,7 @@ export function getFirstPathSegment(pathname: string): string {
   return pathname.split("/").filter(Boolean)[0] ?? "";
 }
 
-export function isReservedOrganizationSlug(slug: string): boolean {
+function isReservedOrganizationSlug(slug: string): boolean {
   return reservedSlugs.has(slug);
 }
 

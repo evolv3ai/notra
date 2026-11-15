@@ -27,9 +27,6 @@ import {
 } from "@notra/ai/utils/github-pr-comments";
 
 export function clipGitHubComment(body: string) {
-  if (body.length <= GITHUB_MENTION_COMMENT_MAX_LENGTH) {
-    return body;
-  }
   return body.slice(0, GITHUB_MENTION_COMMENT_MAX_LENGTH);
 }
 
@@ -141,8 +138,6 @@ function fitProposalToReviewThread(
   ) {
     return null;
   }
-  // If the file reads differently there, the thread's numbers are stale and a
-  // suggestion would replace other text.
   const commentedLine = hunkLineAt(review.diffHunk ?? null, review.line);
   if (
     commentedLine === null ||
@@ -157,7 +152,6 @@ function fitProposalToReviewThread(
   });
 }
 
-/** Posts proposals as suggestions, falling back to a plain diff. */
 export async function postGitHubMentionProposal(params: {
   octokit: GitHubMentionOctokit;
   context: GitHubMentionContext;

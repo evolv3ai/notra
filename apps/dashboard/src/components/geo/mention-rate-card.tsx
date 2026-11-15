@@ -18,10 +18,12 @@ import {
 import { resolveGeoZdrMode } from "@notra/geo-core/utils/geo-engines";
 import { POSTHOG_EVENTS } from "@notra/posthog/events";
 import { FadeSwap } from "@notra/ui/components/fade-swap";
+import { DetailCardContent } from "@notra/ui/components/ui/detail-card";
 import {
   HoverCard,
   HoverCardTrigger,
 } from "@notra/ui/components/ui/hover-card";
+import { Spinner } from "@notra/ui/components/ui/spinner";
 import {
   Tooltip,
   TooltipContent,
@@ -29,20 +31,15 @@ import {
 } from "@notra/ui/components/ui/tooltip";
 import { FADE_SWAP_TRANSITION } from "@notra/ui/constants/fade-swap";
 import { LazyMotion, m, useReducedMotion } from "motion/react";
-import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
+import { InstrumentEmpty, InstrumentModule } from "ui/card";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { EngineFamilySheet } from "@/components/geo/engine-family-sheet";
 import { EngineIcon } from "@/components/geo/engine-icon";
 import { GeoStatDelta } from "@/components/geo/geo-stat-delta";
-import { StatusSpinner } from "@/components/geo/status-spinner";
-import { TrafficBreakdownCard } from "@/components/geo/traffic-breakdown-card";
-import {
-  InstrumentEmpty,
-  InstrumentModule,
-} from "@/components/instrument/instrument-module";
 import { trackEvent } from "@/lib/analytics/posthog-client";
 import {
   useGeoModelCatalog,
@@ -65,7 +62,7 @@ import { loadMotionFeatures } from "@/utils/load-motion-features";
 
 const ROW_STYLE = { height: `${GEO_MENTION_ROW_HEIGHT_REM}rem` } as const;
 const LIST_STYLE = {
-  maxHeight: `${GEO_MENTION_SUMMARY_VISIBLE * GEO_MENTION_ROW_HEIGHT_REM + GEO_MENTION_FADE_HEIGHT_REM}rem`,
+  height: `${GEO_MENTION_SUMMARY_VISIBLE * GEO_MENTION_ROW_HEIGHT_REM + GEO_MENTION_FADE_HEIGHT_REM}rem`,
   scrollbarWidth: "none",
 } as const;
 
@@ -139,7 +136,7 @@ function ProviderRow({
       <HoverCardTrigger render={<button {...buttonProps} />}>
         {content}
       </HoverCardTrigger>
-      <TrafficBreakdownCard
+      <DetailCardContent
         aside={
           trackEngine ? (
             <Button
@@ -151,7 +148,7 @@ function ProviderRow({
               variant="outline"
             >
               {tracking ? (
-                <StatusSpinner />
+                <Spinner className="size-3.5" />
               ) : (
                 <HugeiconsIcon
                   data-icon="inline-start"
@@ -169,7 +166,7 @@ function ProviderRow({
         <p className="text-muted-foreground px-3 py-1.5 text-xs text-pretty">
           {t("untrackedHint")}
         </p>
-      </TrafficBreakdownCard>
+      </DetailCardContent>
     </HoverCard>
   );
 }
@@ -277,7 +274,7 @@ export function MentionRateCard({
         {ranked.length === 0 || !totals ? (
           <InstrumentEmpty
             busy={isScanning}
-            className="h-40"
+            className="min-h-[20.125rem]"
             message={
               isScanning
                 ? tGeoShared("scanningEngines")
@@ -296,8 +293,6 @@ export function MentionRateCard({
                   {totals.visible.toLocaleString(locale)}
                 </FadeSwap>
               </p>
-              {/* Slides with the number's width instead of jumping under the
-                  outgoing value. */}
               <LazyMotion features={loadMotionFeatures} strict>
                 <m.span
                   className="mb-0.5 inline-flex"
@@ -345,7 +340,7 @@ export function MentionRateCard({
                 <div
                   aria-hidden="true"
                   className={cn(
-                    "from-card pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t to-transparent transition-opacity duration-200 motion-reduce:transition-none",
+                    "from-table-card pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t to-transparent transition-opacity duration-200 motion-reduce:transition-none",
                     atEnd ? "opacity-0" : "opacity-100"
                   )}
                   style={{ height: `${GEO_MENTION_FADE_HEIGHT_REM}rem` }}

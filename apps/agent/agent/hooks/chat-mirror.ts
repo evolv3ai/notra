@@ -1,12 +1,11 @@
 import { getSessionAttribute } from "@notra/tools/utils/session";
-import { Effect } from "effect";
 import { defineHook } from "eve/hooks";
 
-import { ChatMirrorError } from "../lib/schemas/chat-mirror";
 import {
   appendAndPublishMirrorMessage,
   mirrorAssistantMetadata,
   resolveMirrorChatId,
+  runMirrorEffect,
 } from "../lib/utils/chat-mirror";
 
 export default defineHook({
@@ -17,32 +16,19 @@ export default defineHook({
         return;
       }
 
-      await Effect.runPromise(
-        Effect.gen(function* () {
-          const organizationId = getSessionAttribute(ctx, "organizationId");
-          const chatId = yield* Effect.tryPromise({
-            try: () => resolveMirrorChatId(ctx),
-            catch: (cause) =>
-              new ChatMirrorError({
-                cause,
-                operation: "resolve-mirror-chat-id",
-              }),
-          });
-          if (!(organizationId && chatId)) {
-            return;
-          }
+      const organizationId = getSessionAttribute(ctx, "organizationId");
+      const chatId = resolveMirrorChatId(ctx);
+      if (!(organizationId && chatId)) {
+        return;
+      }
 
-          yield* appendAndPublishMirrorMessage(organizationId, chatId, {
-            id: `eve:${ctx.session.id}:${event.data.turnId}:${event.data.stepIndex}`,
-            role: "assistant",
-            parts: [{ type: "text", text: messageText }],
-            metadata: mirrorAssistantMetadata(event.data.turnId),
-          });
-        }).pipe(
-          Effect.catch((error) =>
-            Effect.logWarning("[agent] chat mirror failed", error)
-          )
-        )
+      await runMirrorEffect(
+        appendAndPublishMirrorMessage(organizationId, chatId, {
+          id: `eve:${ctx.session.id}:${event.data.turnId}:${event.data.stepIndex}`,
+          role: "assistant",
+          parts: [{ type: "text", text: messageText }],
+          metadata: mirrorAssistantMetadata(event.data.turnId),
+        })
       );
     },
   },

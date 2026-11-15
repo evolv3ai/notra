@@ -1,4 +1,3 @@
-// Preserve both the node and its boundary offset when locating a file drop in Firefox or Chromium.
 export function contentDropCaret(
   doc: Document,
   x: number,

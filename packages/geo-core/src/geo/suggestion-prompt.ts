@@ -12,6 +12,7 @@ import {
   GSC_SYNC_LOOKBACK_DAYS,
 } from "../constants/google-search-console";
 import type { GscSuggestionGenerationParams } from "../types/google-search-console";
+import { isQuestionQuery } from "../utils/gsc-question";
 
 function demandBand(position: number): string {
   if (position <= 3) {
@@ -28,7 +29,8 @@ function formatKeywordLine(row: GscQueryRow): string {
     row.impressions > 0
       ? `${Math.round((row.clicks / row.impressions) * 100)}%`
       : "0%";
-  return `- "${row.query}" (${demandBand(row.position)}, impressions ${row.impressions}, ctr ${ctr}, avg position ${row.position.toFixed(1)})`;
+  const asked = isQuestionQuery(row.query) ? "asked as a question, " : "";
+  return `- "${row.query}" (${asked}${demandBand(row.position)}, impressions ${row.impressions}, ctr ${ctr}, avg position ${row.position.toFixed(1)})`;
 }
 
 function formatList(values: string[]): string {
@@ -73,6 +75,7 @@ Selection rules (apply before writing anything):
 - Skip queries outside the category ${brand} sells in.
 - Keep queries that express a need ${brand} could fulfil: which tools to use for a task, how to do something in the category, what to compare, or which alternatives exist.
 - Skip queries marked "already winning" unless they hide an intent that is not tracked yet. When you must cut, keep entries higher in the list.
+- Queries marked "asked as a question" are the searcher's own question. They have fewer impressions because they are specific, not because they matter less: an AI assistant gets asked exactly these. Prefer an entry built on one over an entry built on a head term with the same intent, and keep the question's specifics in the prompt.
 
 Grouping rules:
 - One entry is one distinct buyer intent. Merge queries that share an intent into a single entry.

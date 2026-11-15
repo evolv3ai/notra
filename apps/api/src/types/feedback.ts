@@ -8,9 +8,11 @@ import type {
 import type { IngestTokenIdentity } from "@notra/utils/types/ingest-token";
 
 import type {
+  FeedbackIdempotencyConflictError,
   FeedbackNotFoundError,
   FeedbackOrganizationNotFoundError,
   FeedbackProjectNotFoundError,
+  FeedbackQuotaExceededError,
 } from "../errors/feedback";
 import type { DbClient } from "./db";
 
@@ -21,7 +23,9 @@ type SubmitFeedbackBody = z.infer<typeof submitFeedbackRequestSchema>;
 export type FeedbackDomainError =
   | FeedbackOrganizationNotFoundError
   | FeedbackProjectNotFoundError
-  | FeedbackNotFoundError;
+  | FeedbackNotFoundError
+  | FeedbackIdempotencyConflictError
+  | FeedbackQuotaExceededError;
 
 export interface ResolveOrganizationIdBySlugInput {
   db: DbClient;
@@ -35,7 +39,6 @@ interface FeedbackProgramInput {
 
 export interface SubmitFeedbackProgramInput extends FeedbackProgramInput {
   body: SubmitFeedbackBody;
-  /** Set when the request is authenticated with a project-bound ingest token. */
   ingestProjectId?: string;
   userAgent?: string | null;
 }

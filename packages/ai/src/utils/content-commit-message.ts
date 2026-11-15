@@ -6,7 +6,7 @@ import { generateText, Output } from "ai";
 // biome-ignore lint/performance/noNamespaceImport: Zod recommended way to import
 import * as z from "zod";
 
-export const CONTENT_COMMIT_HEADLINE_MAX_LENGTH = 72;
+const CONTENT_COMMIT_HEADLINE_MAX_LENGTH = 72;
 const CONTENT_COMMIT_EXCERPT_LENGTH = 1200;
 const CONTENT_COMMIT_TIMEOUT_MS = 6000;
 const CONVENTIONAL_PREFIX =
@@ -34,9 +34,10 @@ export function fallbackContentCommitHeadline(
     .trim();
 }
 
-export function sanitizeContentCommitHeadline(
+function sanitizeContentCommitHeadline(
   raw: string | null | undefined,
-  fallback: string
+  fallback: string,
+  type = "docs"
 ) {
   const line = raw?.split(/\r?\n/, 1)[0] ?? "";
   const cleaned = line
@@ -49,7 +50,7 @@ export function sanitizeContentCommitHeadline(
   }
   const withType = CONVENTIONAL_PREFIX.test(cleaned)
     ? cleaned
-    : `docs: ${cleaned}`;
+    : `${type}: ${cleaned}`;
   const headline = withType.slice(0, CONTENT_COMMIT_HEADLINE_MAX_LENGTH).trim();
   return headline.length < 8 ? fallback : headline;
 }
@@ -96,7 +97,10 @@ export async function generateContentCommitHeadline(params: {
         .filter(Boolean)
         .join("\n\n"),
       providerOptions: withRouterDefaults(
-        { gateway: { tags: ["content-commit-message"] } },
+        {
+          gateway: { tags: ["content-commit-message"] },
+          openai: { reasoningEffort: "none" },
+        },
         {
           modelId: UTILITY_MODEL_ID,
         }
@@ -108,6 +112,69 @@ export async function generateContentCommitHeadline(params: {
       }),
     });
     return sanitizeContentCommitHeadline(output.headline, params.fallback);
+  } catch {
+    return params.fallback;
+  }
+}
+
+export async function generateSiteCommitHeadline(params: {
+  organizationId: string;
+  changes: readonly {
+    path: string;
+    deleted: boolean;
+    previous?: string | null;
+    next?: string | null;
+  }[];
+  fallback: string;
+}): Promise<string> {
+  const excerptLength = Math.floor(
+    CONTENT_COMMIT_EXCERPT_LENGTH / Math.max(1, params.changes.length)
+  );
+  const describe = (change: (typeof params.changes)[number]) =>
+    [
+      `File: ${change.path}${change.deleted ? " (deleted)" : ""}`,
+      change.previous
+        ? `Previous:\n${excerpt(change.previous).slice(0, excerptLength)}`
+        : null,
+      change.next
+        ? `Updated:\n${excerpt(change.next).slice(0, excerptLength)}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+  try {
+    const { output } = await generateText({
+      model: gateway(UTILITY_MODEL_ID, {
+        organizationId: params.organizationId,
+      }),
+      output: Output.object({ schema: headlineSchema }),
+      instructions: [
+        "You write GitHub commit headlines for edits to a Notra site repository: blog posts, changelog entries, and the site config.",
+        `At most ${CONTENT_COMMIT_HEADLINE_MAX_LENGTH} characters, one line, conventional commits. Use docs: for posts and style: for design or theme changes.`,
+        "Describe the actual edit, not that files were saved. No quotes, no body, no trailing punctuation.",
+      ].join(" "),
+      prompt: params.changes.map(describe).join("\n\n"),
+      providerOptions: withRouterDefaults(
+        {
+          gateway: { tags: ["site-commit-message"] },
+          openai: { reasoningEffort: "none" },
+        },
+        {
+          modelId: UTILITY_MODEL_ID,
+        }
+      ),
+      abortSignal: AbortSignal.timeout(CONTENT_COMMIT_TIMEOUT_MS),
+      ...buildTelemetryOptions({
+        feature: "site_commit_message",
+        organizationId: params.organizationId,
+      }),
+    });
+    return sanitizeContentCommitHeadline(
+      output.headline,
+      params.fallback,
+      "chore"
+    );
   } catch {
     return params.fallback;
   }

@@ -1,3 +1,5 @@
+import { setTimeout as sleep } from "node:timers/promises";
+
 import {
   GSC_INTEGRATION_LOCK_KEY_PREFIX,
   GSC_INTEGRATION_LOCK_REDIS_TIMEOUT_MS,
@@ -6,6 +8,7 @@ import {
   GSC_INTEGRATION_LOCK_WAIT_MS,
 } from "@notra/ai/constants/google-search-console";
 import { redis } from "@notra/ai/utils/redis";
+import { logError } from "@notra/ai/utils/server-log";
 
 const RENEW_LOCK_SCRIPT = `
 if redis.call("get", KEYS[1]) == ARGV[1] then
@@ -33,10 +36,6 @@ export class GscIntegrationLockLostError extends Error {
     super("Google Search Console integration lock was lost", { cause });
     this.name = "GscIntegrationLockLostError";
   }
-}
-
-function sleep(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 /**
@@ -81,9 +80,6 @@ export async function withGscIntegrationLock<T>(
   ) => Promise<T>
 ): Promise<T> {
   const activeRedis = redis;
-  // OAuth cannot be initiated without Redis. Preserve disconnect and manual
-  // sync support in unconfigured development environments where no competing
-  // callback can be created.
   if (!activeRedis) {
     const signal = new AbortController().signal;
     return await operation(signal, async () => signal.throwIfAborted());
@@ -103,7 +99,7 @@ export async function withGscIntegrationLock<T>(
         GSC_INTEGRATION_LOCK_REDIS_TIMEOUT_MS
       );
     } catch (error) {
-      console.error("[GSC] Failed to release integration lock:", error);
+      logError("[GSC] Failed to release integration lock", error);
     }
   };
 
@@ -122,22 +118,19 @@ export async function withGscIntegrationLock<T>(
           }),
           Math.min(GSC_INTEGRATION_LOCK_REDIS_TIMEOUT_MS, remainingWaitMs),
           (value) => {
-            // The SET was applied after we stopped waiting: free the key so
-            // neither our retries nor other callers wait out the full TTL.
             if (value === "OK") {
               void releaseLock();
             }
           }
         )) === "OK";
     } catch (error) {
-      console.error("[GSC] Failed to acquire integration lock:", error);
+      logError("[GSC] Failed to acquire integration lock", error);
     }
     if (acquired) {
       // Redis starts the TTL before the HTTP response reaches us. Using the
       // request start is conservative when checking the local lease deadline.
       leaseValidUntil = acquisitionStartedAt + lockTtlMs;
-    }
-    if (!acquired) {
+    } else {
       const remainingRetryMs = deadline - Date.now();
       if (remainingRetryMs > 0) {
         await sleep(
@@ -190,7 +183,7 @@ export async function withGscIntegrationLock<T>(
     try {
       await renewLease();
     } catch (error) {
-      console.error("[GSC] Failed to verify integration lock:", error);
+      logError("[GSC] Failed to verify integration lock", error);
       loseLease(error);
     }
     controller.signal.throwIfAborted();
@@ -198,7 +191,6 @@ export async function withGscIntegrationLock<T>(
 
   let renewal: ReturnType<typeof setInterval> | null = null;
   try {
-    // Ensure a delayed acquisition response did not consume the initial TTL.
     await assertOwned();
     renewal = setInterval(() => {
       if (finished || renewalInFlight || controller.signal.aborted) {
@@ -207,7 +199,7 @@ export async function withGscIntegrationLock<T>(
       renewalInFlight = true;
       void renewLease()
         .catch((error) => {
-          console.error("[GSC] Failed to renew integration lock:", error);
+          logError("[GSC] Failed to renew integration lock", error);
           loseLease(error);
         })
         .finally(() => {
@@ -222,10 +214,7 @@ export async function withGscIntegrationLock<T>(
       }
       return result;
     } catch (error) {
-      if (leaseLossError) {
-        throw leaseLossError;
-      }
-      throw error;
+      throw leaseLossError ?? error;
     }
   } finally {
     finished = true;

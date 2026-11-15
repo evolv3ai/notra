@@ -71,39 +71,6 @@ export function withPromptLanguage(
   return [promptLanguage, ...requested];
 }
 
-function canAddGeoLanguage(
-  configuredLanguages: readonly string[],
-  language: string
-): boolean {
-  if (!SUPPORTED_LANGUAGE_SET.has(language)) {
-    return false;
-  }
-  const tracked = trackedGeoLanguages(configuredLanguages);
-  return tracked.length < GEO_MAX_LANGUAGES && !tracked.includes(language);
-}
-
-export function withAddedGeoLanguage(
-  configuredLanguages: readonly string[],
-  language: string
-): string[] | null {
-  if (!canAddGeoLanguage(configuredLanguages, language)) {
-    return null;
-  }
-  return [...trackedGeoLanguages(configuredLanguages), language];
-}
-
-/** Null when the language is not tracked or is the last one left. */
-export function withRemovedGeoLanguage(
-  configuredLanguages: readonly string[],
-  language: string
-): string[] | null {
-  const tracked = trackedGeoLanguages(configuredLanguages);
-  if (!tracked.includes(language) || tracked.length <= 1) {
-    return null;
-  }
-  return tracked.filter((item) => item !== language);
-}
-
 function toTrackedRow(
   point: GeoLanguageSharePoint
 ): LanguagePerformanceTrackedRow {

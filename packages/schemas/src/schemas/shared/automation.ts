@@ -23,6 +23,12 @@ export const cronAnchorDateSchema = z
   .string()
   .regex(SCHEDULE_ANCHOR_DATE_PATTERN, "Expected YYYY-MM-DD");
 
+export const automationNotifySchema = z.object({
+  slack: z.boolean(),
+  email: z.boolean(),
+});
+export type AutomationNotify = z.infer<typeof automationNotifySchema>;
+
 export const eventTriggerSourceConfigSchema = z.object({
   eventTypes: z.array(webhookEventTypeSchema).min(1),
   includePreReleases: z.boolean().default(true),

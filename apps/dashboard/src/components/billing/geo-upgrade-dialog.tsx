@@ -12,10 +12,9 @@ import { Badge } from "@notra/ui/components/ui/badge";
 import { Skeleton } from "@notra/ui/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@notra/ui/components/ui/tabs";
 import { useListPlans } from "autumn-js/react";
-import { useLocale, useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
+import { useLocale, useTranslations } from "use-intl";
 
 import { PlanCard } from "@/components/billing/plan-card";
 import { UPGRADE_DIALOG_EVENTS } from "@/constants/analytics-events";
@@ -27,6 +26,8 @@ import {
 import { trackEvent } from "@/lib/analytics/posthog-client";
 import { attachPlanWithAddons } from "@/lib/billing/attach-plan";
 import { useBillingCustomer } from "@/lib/hooks/use-billing-customer";
+import { usePaywallVariant } from "@/lib/hooks/use-paywall-variant";
+import { useRouter } from "@/lib/navigation";
 import type { BillingPlanGroup } from "@/types/billing/plan";
 import type { GeoUpgradeDialogProps } from "@/types/components/geo";
 import {
@@ -59,9 +60,11 @@ export function GeoUpgradeDialog({
     queryOptions: { enabled: open },
   });
   const { attach, multiAttach, refetch } = useBillingCustomer();
+  const paywall = usePaywallVariant();
   const [isYearly, setIsYearly] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
   const [includeZdr, setIncludeZdr] = useState(false);
+  const popupRef = useRef<HTMLDivElement>(null);
 
   const planGroups = groupBillingPlans(plans);
   const { kind, surface } = UPGRADE_DIALOG_EVENTS[entry];
@@ -98,22 +101,23 @@ export function GeoUpgradeDialog({
 
   async function handleSelectPlan(planId: string) {
     setLoading(planId);
-    trackEvent(
-      POSTHOG_EVENTS.PLAN_SELECTED,
-      planSelectedProperties({
+    trackEvent(POSTHOG_EVENTS.PLAN_SELECTED, {
+      ...planSelectedProperties({
         plans,
         planId,
         isYearly,
         includeZdr,
         surface,
-      })
-    );
+      }),
+      paywall_variant: paywall.variant,
+    });
     try {
       const result = await attachPlanWithAddons({
         attach,
         multiAttach,
         planId,
         includeZdr,
+        analytics: { surface, paywall_variant: paywall.variant },
         successUrl: upgradeFlow
           ? `${window.location.origin}/${slug}/settings/billing/success`
           : `${window.location.origin}/${slug}/geo`,
@@ -187,7 +191,11 @@ export function GeoUpgradeDialog({
       onOpenChangeComplete={onOpenChangeComplete}
       open={open}
     >
-      <ResponsiveDialogContent className="flex max-h-[90svh] flex-col overflow-hidden sm:max-w-5xl">
+      <ResponsiveDialogContent
+        className="flex max-h-[90svh] flex-col overflow-hidden sm:max-w-5xl"
+        initialFocus={popupRef}
+        ref={popupRef}
+      >
         <ResponsiveDialogHeader>
           <ResponsiveDialogTitle>
             {upgradeFlow ? tUpgrade("freeHeading") : t("title")}
@@ -203,15 +211,15 @@ export function GeoUpgradeDialog({
             onValueChange={handleIntervalChange}
             value={isYearly ? "yearly" : "monthly"}
           >
-            <TabsList variant="line">
+            <TabsList aria-label={tCommon2("labels.billingInterval")}>
               <TabsTrigger value="monthly">
                 {tCommon2("labels.monthly")}
               </TabsTrigger>
-              <TabsTrigger className="flex items-center gap-1.5" value="yearly">
+              <TabsTrigger value="yearly">
                 {tCommon2("labels.yearly")}
-                <span className="bg-success/10 text-success rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+                <Badge size="sm" variant="success">
                   {tCommon2("labels.savePercent", { percent: 20 })}
-                </span>
+                </Badge>
               </TabsTrigger>
             </TabsList>
           </Tabs>

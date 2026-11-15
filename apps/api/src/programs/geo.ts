@@ -20,7 +20,7 @@ import { Effect } from "effect";
 import { GeoScanNotFoundError, GeoSelectionInvalidError } from "../errors/geo";
 import { geoScanPlanSummarySelection } from "../utils/geo-scan-plan-summary";
 
-export interface ValidateGeoSelectionInput {
+interface ValidateGeoSelectionInput {
   readonly organizationId: string;
   readonly engines: readonly string[];
   readonly languages: readonly string[];
@@ -55,38 +55,20 @@ function geoSelectionErrorMessage(
   return null;
 }
 
-/**
- * Rejects engine ids and languages the storage layer would silently rewrite.
- *
- * `resolveTrackedEngines` drops ids that are not in the catalog and falls back
- * to the *full* default engine set once nothing known is left, so a single
- * typo could turn a one-engine scan into a five-engine one. `trackedGeoLanguages`
- * coerces an unknown language to English the same way. Both used to answer 200,
- * so the caller never learned its selection had been replaced.
- *
- * Engines are checked against the catalog this organization can see. That is
- * the same set `GET .../geo/settings` reports (it maps stored engines through
- * `resolveTrackedEngines`), so a read-modify-write round trip always passes.
- * Engines that are stored but currently hidden from the organization are
- * preserved by `upsertGeoSettings` itself and are deliberately not required in
- * the payload. `nonZdrApprovedEngines` is *not* validated here: the GET
- * response returns it straight from the row, hidden ids included, so rejecting
- * them would break that same round trip.
- */
-export const validateGeoSelection = Effect.fn("geo.validateSelection")(
-  function* (input: ValidateGeoSelectionInput) {
-    const catalog = yield* loadGeoModelCatalog(input.organizationId);
-    const catalogIds = catalog.models.map((model) => model.id);
-    const message = geoSelectionErrorMessage(
-      catalogIds,
-      input.engines,
-      input.languages
-    );
-    if (message) {
-      return yield* Effect.fail(new GeoSelectionInvalidError({ message }));
-    }
+const validateGeoSelection = Effect.fn("geo.validateSelection")(function* (
+  input: ValidateGeoSelectionInput
+) {
+  const catalog = yield* loadGeoModelCatalog(input.organizationId);
+  const catalogIds = catalog.models.map((model) => model.id);
+  const message = geoSelectionErrorMessage(
+    catalogIds,
+    input.engines,
+    input.languages
+  );
+  if (message) {
+    return yield* Effect.fail(new GeoSelectionInvalidError({ message }));
   }
-);
+});
 
 export const upsertGeoSettingsWithValidation = Effect.fn(
   "geo.settingsUpsertWithValidation"
@@ -99,10 +81,29 @@ export const upsertGeoSettingsWithValidation = Effect.fn(
   return yield* upsertGeoSettings(input);
 });
 
-export interface GeoProjectScopeInput {
+interface GeoProjectScopeInput {
   readonly organizationId: string;
   readonly projectId: string;
 }
+
+export const listGeoEngines = Effect.fn("geo.engines.list")(function* (
+  input: GeoProjectScopeInput
+) {
+  const scope = yield* requireGeoProject(input);
+  const catalog = yield* loadGeoModelCatalog(scope.organizationId);
+  return {
+    engines: catalog.models
+      .filter((model) => !model.hidden)
+      .map((model) => ({
+        id: model.id,
+        label: model.label,
+        provider: model.provider,
+        zdr: model.zdr,
+        default: model.default,
+        supportsGroundedChecks: model.supportsGroundedChecks,
+      })),
+  };
+});
 
 export const getGeoAgentReadiness = Effect.fn("geo.agentReadiness.get")(
   function* (input: GeoProjectScopeInput) {
@@ -118,7 +119,7 @@ export const startGeoAgentReadinessScanForProject = Effect.fn(
   return yield* startAgentReadinessScan(scope);
 });
 
-export interface ListGeoScansInput extends GeoProjectScopeInput {
+interface ListGeoScansInput extends GeoProjectScopeInput {
   readonly limit: number;
   readonly page: number;
 }
@@ -137,20 +138,18 @@ interface GeoScanRecord {
   readonly createdAt: Date;
 }
 
-function geoScanReadColumns() {
-  return {
-    id: true,
-    projectId: true,
-    status: true,
-    errorCode: true,
-    errorMessage: true,
-    failedStage: true,
-    retryable: true,
-    startedAt: true,
-    finishedAt: true,
-    createdAt: true,
-  } as const;
-}
+const GEO_SCAN_READ_COLUMNS = {
+  id: true,
+  projectId: true,
+  status: true,
+  errorCode: true,
+  errorMessage: true,
+  failedStage: true,
+  retryable: true,
+  startedAt: true,
+  finishedAt: true,
+  createdAt: true,
+} as const;
 
 interface GeoScanEngineCounts {
   readonly scanId: string;
@@ -271,7 +270,7 @@ export const listGeoScansForProject = Effect.fn("geo.scans.list")(function* (
     geoDb("list geo scans", () =>
       db.query.geoScans.findMany({
         where: scope,
-        columns: geoScanReadColumns(),
+        columns: GEO_SCAN_READ_COLUMNS,
         extras: { planSummary: geoScanPlanSummarySelection() },
         orderBy: [desc(geoScans.startedAt)],
         limit: input.limit,
@@ -305,7 +304,7 @@ export const listGeoScansForProject = Effect.fn("geo.scans.list")(function* (
   };
 });
 
-export interface GetGeoScanInput extends GeoProjectScopeInput {
+interface GetGeoScanInput extends GeoProjectScopeInput {
   readonly scanId: string;
 }
 
@@ -319,7 +318,7 @@ export const getGeoScanForProject = Effect.fn("geo.scans.get")(function* (
         eq(geoScans.projectId, input.projectId),
         eq(geoScans.organizationId, input.organizationId)
       ),
-      columns: geoScanReadColumns(),
+      columns: GEO_SCAN_READ_COLUMNS,
       extras: { planSummary: geoScanPlanSummarySelection() },
     })
   );

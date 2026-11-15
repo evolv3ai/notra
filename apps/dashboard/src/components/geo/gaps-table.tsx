@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BubbleChatQuestionIcon,
   File02Icon,
   MoreHorizontalIcon,
   Refresh03Icon,
@@ -32,11 +33,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@notra/ui/components/ui/dropdown-menu";
-import { Input } from "@notra/ui/components/ui/input";
 import {
-  PermissionOption,
-  PermissionRow,
-} from "@notra/ui/components/ui/permission-selector";
+  IconTabsList,
+  IconTabsTrigger,
+} from "@notra/ui/components/ui/icon-tabs";
+import { Input } from "@notra/ui/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -44,15 +45,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@notra/ui/components/ui/select";
+import { Spinner } from "@notra/ui/components/ui/spinner";
+import { Google } from "@notra/ui/components/ui/svgs/google";
+import { Tabs, TabsContent } from "@notra/ui/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@notra/ui/components/ui/tooltip";
-import { useLocale, useTranslations } from "next-intl";
 import { parseAsString, useQueryState } from "nuqs";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
+import { DataTable, type TableColumn } from "ui/table";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { EmptyState } from "@/components/empty-state";
@@ -61,17 +66,13 @@ import { CompetitorLogo } from "@/components/geo/competitor-logo";
 import { EngineIcon } from "@/components/geo/engine-icon";
 import { GapDetailSheet } from "@/components/geo/gap-detail-sheet";
 import { SearchGapDetailSheet } from "@/components/geo/search-gap-detail";
-import { StatusSpinner } from "@/components/geo/status-spinner";
-import { Table, type TableColumn } from "@/components/motion/table";
 import {
   EMPTY_STATE_TABLE_COLUMNS,
   EMPTY_STATE_TABLE_ROWS,
 } from "@/constants/empty-state";
-import {
-  GEO_GAPS_EMPTY_MESSAGE_KEYS,
-  GEO_GAPS_TABS,
-} from "@/constants/geo-gaps";
+import { GEO_GAPS_EMPTY_MESSAGE_KEYS } from "@/constants/geo-gaps";
 import { trackEvent } from "@/lib/analytics/posthog-client";
+import { useFillHeight } from "@/lib/hooks/use-fill-height";
 import { useLogoStackLabels } from "@/lib/i18n/use-logo-stack-labels";
 import { cn } from "@/lib/utils";
 import type {
@@ -111,69 +112,6 @@ import {
   unifySearchGaps,
   uniqueGapEngineFamilies,
 } from "@/utils/geo-gaps";
-
-function remainingTableHeight(element: HTMLElement): number {
-  const elementTop = element.getBoundingClientRect().top;
-  const page = element.closest("[data-geo-gaps-page]");
-  const pagePadding =
-    page instanceof HTMLElement
-      ? Number.parseFloat(getComputedStyle(page).paddingBottom)
-      : Number.NaN;
-  const inset = Number.isFinite(pagePadding) ? pagePadding : 24;
-
-  let pageAvailable = 0;
-  if (page instanceof HTMLElement) {
-    pageAvailable = page.getBoundingClientRect().bottom - inset - elementTop;
-  }
-
-  let scrollAvailable = 0;
-  let parent: HTMLElement | null = element.parentElement;
-  while (parent) {
-    const { overflowY } = getComputedStyle(parent);
-    if (overflowY === "auto" || overflowY === "scroll") {
-      scrollAvailable =
-        parent.getBoundingClientRect().bottom - inset - elementTop;
-      break;
-    }
-    parent = parent.parentElement;
-  }
-
-  return Math.max(element.clientHeight, pageAvailable, scrollAvailable);
-}
-
-function useFillHeight(fallback: number) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [height, setHeight] = useState(fallback);
-
-  useLayoutEffect(() => {
-    const element = ref.current;
-    if (!element) {
-      return;
-    }
-
-    const update = () => {
-      const next = Math.floor(remainingTableHeight(element));
-      if (next > 0) {
-        setHeight((current) => (current === next ? current : next));
-      }
-    };
-
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(element);
-    const page = element.closest("[data-geo-gaps-page]");
-    if (page instanceof HTMLElement) {
-      observer.observe(page);
-    }
-    window.addEventListener("resize", update);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", update);
-    };
-  }, []);
-
-  return [ref, height] as const;
-}
 
 function runGapWriteAction({
   action,
@@ -292,7 +230,7 @@ function WriteCell({
             }
           >
             {isIgnoring ? (
-              <StatusSpinner />
+              <Spinner className="size-3.5" />
             ) : (
               <HugeiconsIcon icon={ViewOffSlashIcon} size={15} />
             )}
@@ -310,7 +248,7 @@ function WriteCell({
           size="sm"
           variant="ghost"
         >
-          {isIgnoring ? <StatusSpinner /> : null}
+          {isIgnoring ? <Spinner className="size-3.5" /> : null}
           {t("ignore")}
         </Button>
       ) : null}
@@ -377,7 +315,6 @@ function SearchWriteCell({
   const topTargetUrl = targets[0]?.url ?? undefined;
   const moreLabel = t("moreActions", { query: row.prompt });
   if (compact) {
-    // The table column only fits the primary action; the rest go in a menu.
     const hasDismiss = action === "ignore";
     return (
       <span className="inline-flex items-center justify-end gap-1">
@@ -403,7 +340,7 @@ function SearchWriteCell({
             {hasDismiss ? (
               <DropdownMenuItem disabled={isDismissing} onClick={onDismiss}>
                 {isDismissing ? (
-                  <StatusSpinner />
+                  <Spinner className="size-3.5" />
                 ) : (
                   <HugeiconsIcon icon={ViewOffSlashIcon} size={15} />
                 )}
@@ -427,7 +364,7 @@ function SearchWriteCell({
           size="sm"
           variant="ghost"
         >
-          {isDismissing ? <StatusSpinner /> : null}
+          {isDismissing ? <Spinner className="size-3.5" /> : null}
           {tCommon("labels.dismiss")}
         </Button>
         <Button
@@ -632,7 +569,7 @@ function GapsEmpty({ kind, isScanning, onRunScan }: GeoGapsEmptyProps) {
   if (kind === "no-scan") {
     action = (
       <Button disabled={isScanning} onClick={onRunScan}>
-        {isScanning ? <StatusSpinner /> : null}
+        {isScanning ? <Spinner className="size-3.5" /> : null}
         {tGeoShared("runScan")}
       </Button>
     );
@@ -655,30 +592,22 @@ function GapsEmpty({ kind, isScanning, onRunScan }: GeoGapsEmptyProps) {
   );
 }
 
-function GapsTabs({ tab, onTabChange, counts }: GeoGapsTabsProps) {
+function GapsTabs({ tab }: GeoGapsTabsProps) {
   const t = useTranslations("geo.gapsTable");
-  const locale = useLocale();
   return (
-    <PermissionRow
-      className="w-fit shrink-0"
-      label={t("gapType")}
-      layout="compact"
-      onValueChange={(value) => {
-        if (isGeoGapsTab(value)) {
-          onTabChange(value);
-        }
-      }}
-      value={tab}
-    >
-      {GEO_GAPS_TABS.map((option) => (
-        <PermissionOption key={option.value} value={option.value}>
-          {t(`tabs.${option.value}`)}
-          <span className="text-xs tabular-nums opacity-70">
-            {counts[option.value].toLocaleString(locale)}
-          </span>
-        </PermissionOption>
-      ))}
-    </PermissionRow>
+    <div className="max-w-full overflow-x-auto">
+      <IconTabsList aria-label={t("gapType")} value={tab}>
+        <IconTabsTrigger
+          icon={<HugeiconsIcon icon={BubbleChatQuestionIcon} size={15} />}
+          value="prompt"
+        >
+          {t("tabs.prompt")}
+        </IconTabsTrigger>
+        <IconTabsTrigger icon={<Google className="size-3.5" />} value="search">
+          {t("tabs.search")}
+        </IconTabsTrigger>
+      </IconTabsList>
+    </div>
   );
 }
 
@@ -895,7 +824,6 @@ export function GeoGapsTable({
       <WriteCell {...aiWriteProps(aiRow)} />
     );
     if (consoleRow) {
-      // Console actions stay available; an AI-only draft is offered alongside.
       const aiDraft = searchGapAiDraft(gap);
       const consoleActions = (
         <SearchWriteCell
@@ -1249,8 +1177,7 @@ export function GeoGapsTable({
   ]);
   const tables = {
     prompt: (
-      <Table
-        className="rounded-2xl"
+      <DataTable
         columns={promptColumns}
         data={filteredPromptGaps}
         defaultSort={{ key: "opportunity", direction: "desc" }}
@@ -1260,8 +1187,8 @@ export function GeoGapsTable({
       />
     ),
     search: (
-      <Table
-        className="rounded-2xl [&_tbody_td]:align-middle"
+      <DataTable
+        className="[&_tbody_td]:align-middle"
         columns={searchColumns}
         data={filteredSearchRows}
         getRowId={({ kind, row }) => `${kind}:${row.id}`}
@@ -1279,16 +1206,17 @@ export function GeoGapsTable({
     : null;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <Tabs
+      className="min-h-0 flex-1 gap-3"
+      onValueChange={(value) => {
+        if (isGeoGapsTab(value)) {
+          setTab(value);
+        }
+      }}
+      value={tab}
+    >
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-        <GapsTabs
-          onTabChange={setTab}
-          counts={{
-            prompt: filteredPromptGaps.length,
-            search: filteredSearchRows.length,
-          }}
-          tab={tab}
-        />
+        <GapsTabs tab={tab} />
         <GapsFilters
           engine={engine}
           engineFamilies={engineFamilies}
@@ -1299,7 +1227,7 @@ export function GeoGapsTable({
         />
       </div>
 
-      <div className="min-h-0 flex-1" ref={tableRef}>
+      <TabsContent className="min-h-0 flex-1" ref={tableRef} value={tab}>
         {emptyKind !== null ? (
           <GapsEmpty
             isScanning={isScanning}
@@ -1309,7 +1237,7 @@ export function GeoGapsTable({
         ) : (
           table
         )}
-      </div>
+      </TabsContent>
       <GapDetailSheet
         actions={sheetActions}
         isScanning={isScanning}
@@ -1334,6 +1262,6 @@ export function GeoGapsTable({
         }}
         row={selectedSearchGap}
       />
-    </div>
+    </Tabs>
   );
 }

@@ -1,5 +1,6 @@
 import { db } from "@notra/db/drizzle";
 import { geoScans } from "@notra/db/schema";
+import type { GeoScanPlannedAnswer } from "@notra/db/types/geo-scan";
 import { and, eq, sql } from "drizzle-orm";
 import { Effect } from "effect";
 
@@ -52,6 +53,7 @@ export const updateGeoScanTaskStatus = Effect.fn("geo.updateScanTaskStatus")(
       task.language,
       turn
     );
+    const previousStatus = sql`${geoScans.plan}->'taskStates'->>${key}`;
     yield* geoDb("scan task status update failed", () =>
       db
         .update(geoScans)
@@ -60,7 +62,7 @@ export const updateGeoScanTaskStatus = Effect.fn("geo.updateScanTaskStatus")(
           planSummary: sql`
             case
               when ${geoScans.planSummary} is null then null
-              when ${geoScans.plan}->'taskStates'->>${key} is not distinct from ${status}::text
+              when coalesce(${previousStatus} = 'failed', false) = (${status}::text = 'failed')
                 then ${geoScans.planSummary}
               else jsonb_set(
                 ${geoScans.planSummary},
@@ -76,11 +78,8 @@ export const updateGeoScanTaskStatus = Effect.fn("geo.updateScanTaskStatus")(
                             0,
                             coalesce((counts.item->>'failedChecks')::integer, 0) +
                               case
-                                when ${geoScans.plan}->'taskStates'->>${key} = 'failed'
-                                  and ${status}::text <> 'failed' then -1
-                                when ${geoScans.plan}->'taskStates'->>${key} is distinct from 'failed'
-                                  and ${status}::text = 'failed' then 1
-                                else 0
+                                when ${status}::text = 'failed' then 1
+                                else -1
                               end
                           ))
                         )
@@ -101,7 +100,8 @@ export const updateGeoScanTaskStatus = Effect.fn("geo.updateScanTaskStatus")(
             eq(geoScans.id, context.scanId),
             eq(geoScans.organizationId, context.organizationId),
             eq(geoScans.projectId, context.projectId),
-            eq(geoScans.status, "running")
+            eq(geoScans.status, "running"),
+            sql`${previousStatus} is distinct from ${status}::text`
           )
         )
     ).pipe(
@@ -116,3 +116,24 @@ export const updateGeoScanTaskStatus = Effect.fn("geo.updateScanTaskStatus")(
     );
   }
 );
+
+/** `updateGeoScanTaskStatus` for a conversation turn taken from the plan snapshot. */
+export function updateGeoScanAnswerStatus(
+  context: Pick<
+    GeoScanProjectContext,
+    "organizationId" | "projectId" | "scanId"
+  >,
+  answer: GeoScanPlannedAnswer,
+  status: "running" | "failed"
+) {
+  return updateGeoScanTaskStatus(
+    context,
+    {
+      prompt: { id: answer.promptId, text: answer.prompt },
+      engine: answer.engine,
+      language: answer.language,
+    },
+    status,
+    answer.turn
+  );
+}

@@ -7,6 +7,7 @@ import {
   Dots,
   Edit02Icon,
   InformationCircleIcon,
+  Key01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -22,17 +23,9 @@ import {
   createApiKeySchema,
   updateApiKeySchema,
 } from "@notra/schemas/dashboard/api-keys";
+import { ConfirmDialog } from "@notra/ui/components/shared/confirm-dialog";
 import { ConnectedCards } from "@notra/ui/components/shared/connected-cards";
-import {
-  ResponsiveAlertDialog,
-  ResponsiveAlertDialogAction,
-  ResponsiveAlertDialogCancel,
-  ResponsiveAlertDialogContent,
-  ResponsiveAlertDialogDescription,
-  ResponsiveAlertDialogFooter,
-  ResponsiveAlertDialogHeader,
-  ResponsiveAlertDialogTitle,
-} from "@notra/ui/components/shared/responsive-alert-dialog";
+import { PageHeading } from "@notra/ui/components/shared/page-heading";
 import {
   ResponsiveDialog,
   ResponsiveDialogClose,
@@ -51,6 +44,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@notra/ui/components/ui/dropdown-menu";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@notra/ui/components/ui/empty";
 import { Field, FieldLabel } from "@notra/ui/components/ui/field";
 import { Input } from "@notra/ui/components/ui/input";
 import { Kbd } from "@notra/ui/components/ui/kbd";
@@ -70,11 +71,7 @@ import {
 import { useForm } from "@tanstack/react-form";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type {
-  KeyResponseData,
-  V2KeysCreateKeyResponseData,
-} from "@unkey/api/models/components";
-import { useLocale, useTranslations } from "next-intl";
+import type { V2KeysCreateKeyResponseData } from "@unkey/api/models/components";
 import {
   parseAsArrayOf,
   parseAsString,
@@ -85,34 +82,44 @@ import {
   type ComponentType,
   type ReactNode,
   useEffect,
+  useEffectEvent,
   useReducer,
 } from "react";
 import { toast } from "sonner";
+import { DataTable, type TableColumn } from "ui/table";
+import { useTranslations } from "use-intl";
 import * as z from "zod";
 
+import { ApiKeyPermissionBadge } from "@/components/api-keys/api-key-permission-badge";
 import { ApiKeyRevealField } from "@/components/api-keys/api-key-reveal-field";
+import { ApiKeyStatusBadge } from "@/components/api-keys/api-key-status-badge";
 import { ApiKeyPermissionSelector } from "@/components/api-keys/permission-selector";
 import { TrackingTokenCard } from "@/components/api-keys/tracking-token-card";
 import { Button } from "@/components/button";
 import { DemoApiCallout } from "@/components/demo/demo-api-callout";
 import { PageContainer } from "@/components/layout/container";
-import { PageHeading } from "@/components/layout/page-heading";
-import { Table, type TableColumn } from "@/components/motion/table";
 import { useOrganizationsContext } from "@/components/providers/organization-provider";
+import { SiteRelativeTime } from "@/components/sites/site-relative-time";
 import {
   API_KEY_EXPIRATION_OPTIONS,
-  type API_KEY_PERMISSION_SUMMARY,
+  API_KEYS_EMPTY_TABLE_HEIGHT,
 } from "@/constants/api-keys";
+import { inferApiKeyExpiration } from "@/lib/api-keys/expiration";
 import { API_KEY_CARD_ITEMS, API_KEY_PRESETS } from "@/lib/api-keys/presets";
 import { expandLegacyApiKeyScopes } from "@/lib/api-keys/scopes";
 import { useApiKeyExpirationItems } from "@/lib/hooks/use-api-key-expiration-items";
+import { useApiKeyStatusNow } from "@/lib/hooks/use-api-key-status-now";
+import { useHasActivePlan } from "@/lib/hooks/use-plan";
+import { useSettingsModal } from "@/lib/hooks/use-settings-modal";
 import { dashboardOrpc } from "@/lib/orpc/query";
 import type {
   ApiKeyAccessMode,
   ApiKeyCreateConfig,
   ApiKeyExpiration,
   ApiKeyFormValues,
+  ApiKeyListItem,
 } from "@/types/api-keys";
+import { apiKeyStatus } from "@/utils/api-key-status";
 
 const NEW_KEY_CONFIG_PARSERS = {
   name: parseAsString,
@@ -139,8 +146,6 @@ const EDIT_FORM_DEFAULTS: ApiKeyFormValues = {
 };
 
 interface ApiKeyEditForm {
-  // TanStack Form's Field component carries deep generics that are local to the
-  // useForm call site. The dialog only renders fields from that instance.
   Field: ComponentType<{
     name: string;
     validators?: unknown;
@@ -157,21 +162,6 @@ interface ApiKeyEditForm {
     }) => ReactNode;
   }>;
 }
-
-type ApiKeyListItem = Omit<
-  Pick<
-    KeyResponseData,
-    "keyId" | "name" | "start" | "createdAt" | "expires" | "enabled"
-  >,
-  "name" | "expires"
-> & {
-  name: string;
-  accessMode: ApiKeyAccessMode;
-  expires: number | null;
-  permission: (typeof API_KEY_PERMISSION_SUMMARY)[number];
-  permissions: string[];
-  createdBy: string | null;
-};
 
 type CreateApiKeyResponse = V2KeysCreateKeyResponseData & {
   name: string;
@@ -232,43 +222,26 @@ function apiKeysUiReducer(
   }
 }
 
-function getDefaultEditExpiration(
-  createdAt: number,
-  expires: number | null
-): ApiKeyExpiration {
-  if (expires === null) {
-    return "never";
-  }
-
-  const ttl = Math.max(0, expires - createdAt);
-  const day = 24 * 60 * 60 * 1000;
-
-  if (ttl <= 7 * day) {
-    return "7d";
-  }
-
-  if (ttl <= 30 * day) {
-    return "30d";
-  }
-
-  if (ttl <= 60 * day) {
-    return "60d";
-  }
-
-  return "90d";
-}
-
-function ApiKeysHeader({ onCreate }: { onCreate: () => void }) {
+function ApiKeysHeader({
+  createDisabled,
+  onCreate,
+}: {
+  createDisabled: boolean;
+  onCreate: () => void;
+}) {
   const t = useTranslations("apiKeys");
   const tCommon2 = useTranslations("common");
   return (
     <PageHeading
-      className="@min-[40rem]/main:items-center"
       description={t("description")}
       title={tCommon2("labels.apiKeys")}
     >
       <div className="flex items-center gap-2">
-        <Button className="gap-1.5" onClick={onCreate}>
+        <Button
+          className="gap-1.5"
+          disabled={createDisabled}
+          onClick={onCreate}
+        >
           <HugeiconsIcon className="size-4" icon={Add01Icon} />
           {t("createKey")}
           <Kbd className="ml-1 hidden sm:inline-flex">C</Kbd>
@@ -302,31 +275,25 @@ function ApiKeysHeader({ onCreate }: { onCreate: () => void }) {
 
 function ApiKeysTable({
   actionsDisabled,
+  createDisabled,
   isPending,
   keys,
+  onCreate,
   onDelete,
   onEdit,
 }: {
   actionsDisabled: boolean;
+  createDisabled: boolean;
   isPending: boolean;
   keys: ApiKeyListItem[];
+  onCreate: () => void;
   onDelete: (key: ApiKeyListItem) => void;
   onEdit: (key: ApiKeyListItem) => void;
 }) {
   const t = useTranslations("apiKeys");
   const tApiKeysShared = useTranslations("apiKeys.shared");
   const tCommon2 = useTranslations("common");
-  const locale = useLocale();
-  const formatExpiry = (expires: number | null) => {
-    if (!expires) {
-      return tCommon2("labels.never");
-    }
-    const date = new Date(expires);
-    if (date.getTime() < Date.now()) {
-      return t("expiry.expired");
-    }
-    return date.toLocaleDateString(locale);
-  };
+  const now = useApiKeyStatusNow(keys);
   const columns: TableColumn<ApiKeyListItem>[] = [
     {
       key: "name",
@@ -355,18 +322,35 @@ function ApiKeysTable({
       header: t("columns.permission"),
       width: "1fr",
       minWidth: "9rem",
-      cell: (apiKey) =>
-        t("permissionSummary", { permission: apiKey.permission }),
+      cell: (apiKey) => (
+        <ApiKeyPermissionBadge permission={apiKey.permission} />
+      ),
+    },
+    {
+      key: "status",
+      header: t("columns.status"),
+      width: "9.5rem",
+      collapsePriority: 2,
+      cell: (apiKey) => (
+        <ApiKeyStatusBadge status={apiKeyStatus(apiKey, now)} />
+      ),
     },
     {
       key: "expires",
       header: tCommon2("labels.expires"),
       width: "8.75rem",
-      cell: (apiKey) => (
-        <span className="text-muted-foreground text-sm">
-          {formatExpiry(apiKey.expires)}
-        </span>
-      ),
+      collapsePriority: 1,
+      cell: (apiKey) =>
+        apiKey.expires === null ? (
+          <span className="text-muted-foreground text-sm">
+            {tCommon2("labels.never")}
+          </span>
+        ) : (
+          <SiteRelativeTime
+            className="text-muted-foreground text-sm whitespace-nowrap"
+            date={new Date(apiKey.expires)}
+          />
+        ),
     },
     {
       key: "createdAt",
@@ -374,9 +358,10 @@ function ApiKeysTable({
       sortable: true,
       width: "9.5rem",
       cell: (apiKey) => (
-        <span className="text-muted-foreground text-sm">
-          {new Date(apiKey.createdAt).toLocaleDateString(locale)}
-        </span>
+        <SiteRelativeTime
+          className="text-muted-foreground text-sm whitespace-nowrap"
+          date={new Date(apiKey.createdAt)}
+        />
       ),
     },
     {
@@ -424,30 +409,60 @@ function ApiKeysTable({
       ),
     },
   ];
-  const visibleRows = isPending ? 3 : Math.max(keys.length, 1);
+  const visibleRows = keys.length;
+  // Loading reserves the empty state height, the common first-visit case.
+  const isEmpty = isPending || keys.length === 0;
 
   return (
-    <Table
+    <DataTable
       columns={columns}
       data={keys}
-      emptyState={t("empty")}
+      emptyState={
+        <Empty className="py-0 md:py-0">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <HugeiconsIcon icon={Key01Icon} />
+            </EmptyMedia>
+            <EmptyTitle>{t("emptyState.title")}</EmptyTitle>
+            <EmptyDescription>{t("emptyState.description")}</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button disabled={createDisabled} onClick={onCreate} size="sm">
+              <HugeiconsIcon className="size-4" icon={Add01Icon} />
+              {t("createKey")}
+            </Button>
+          </EmptyContent>
+        </Empty>
+      }
       getRowId={(apiKey) => apiKey.keyId}
-      height={(visibleRows + 1) * 48}
+      height={isEmpty ? API_KEYS_EMPTY_TABLE_HEIGHT : (visibleRows + 1) * 48}
       loading={isPending}
       rowHeight={48}
     />
   );
 }
 
-function ApiKeyQuickStart({ onSelect }: { onSelect: (id: string) => void }) {
+function ApiKeyQuickStart({
+  organizationKeys,
+  onSelect,
+}: {
+  organizationKeys: ApiKeyListItem[] | undefined;
+  onSelect: (id: string) => void;
+}) {
   const t = useTranslations("apiKeys.quickStart");
   const tCommon2 = useTranslations("common");
+  const { data: accountKeys } = useQuery(
+    dashboardOrpc.apiKeys.account.list.queryOptions()
+  );
   const items = API_KEY_CARD_ITEMS.map((item) => ({
     ...item,
     description: t("presetDescription", { id: item.id }),
     docsLabel: t("viewDocs"),
     selectLabel: t("createKey", { title: item.title }),
   }));
+  if (organizationKeys?.length !== 0 || accountKeys?.length !== 0) {
+    return null;
+  }
   return (
     <div className="space-y-3">
       <div className="space-y-1">
@@ -618,7 +633,7 @@ function CreateApiKeyDialog({
                     </Button>
                   }
                 />
-                <Button disabled={isPending} type="submit">
+                <Button data-dialog-confirm disabled={isPending} type="submit">
                   {isPending ? tCommon("actions.creating") : t("create.submit")}
                 </Button>
               </ResponsiveDialogFooter>
@@ -758,7 +773,7 @@ function EditApiKeyDialog({
                 <Button variant="outline">{tCommon("actions.cancel")}</Button>
               }
             />
-            <Button disabled={isPending} type="submit">
+            <Button data-dialog-confirm disabled={isPending} type="submit">
               {isPending
                 ? tCommon("actions.saving")
                 : tCommon("actions.saveChanges")}
@@ -783,34 +798,19 @@ function DeleteApiKeyDialog({
 }) {
   const t = useTranslations("apiKeys.delete");
   const tApiKeysShared = useTranslations("apiKeys.shared");
-  const tCommon = useTranslations("common");
   return (
-    <ResponsiveAlertDialog onOpenChange={onOpenChange} open={!!apiKey}>
-      <ResponsiveAlertDialogContent>
-        <ResponsiveAlertDialogHeader>
-          <ResponsiveAlertDialogTitle>{t("title")}</ResponsiveAlertDialogTitle>
-          <ResponsiveAlertDialogDescription className="wrap-anywhere">
-            {apiKey
-              ? t("descriptionNamed", { name: apiKey.name })
-              : t("description")}
-          </ResponsiveAlertDialogDescription>
-        </ResponsiveAlertDialogHeader>
-        <ResponsiveAlertDialogFooter>
-          <ResponsiveAlertDialogCancel disabled={isPending}>
-            {tCommon("actions.cancel")}
-          </ResponsiveAlertDialogCancel>
-          <ResponsiveAlertDialogAction
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            disabled={!apiKey || isPending}
-            onClick={onConfirm}
-          >
-            {isPending
-              ? tCommon("actions.deleting")
-              : tApiKeysShared("deleteApiKey")}
-          </ResponsiveAlertDialogAction>
-        </ResponsiveAlertDialogFooter>
-      </ResponsiveAlertDialogContent>
-    </ResponsiveAlertDialog>
+    <ConfirmDialog
+      confirmLabel={tApiKeysShared("deleteApiKey")}
+      description={
+        apiKey ? t("descriptionNamed", { name: apiKey.name }) : t("description")
+      }
+      onConfirm={onConfirm}
+      onOpenChange={onOpenChange}
+      open={!!apiKey}
+      pending={isPending}
+      title={t("title")}
+      variant="destructive"
+    />
   );
 }
 
@@ -832,9 +832,32 @@ export default function ApiKeysPage() {
     newKeyConfig.scopes !== null &&
     newKeyConfig.expiration !== null;
 
+  const { isLocked: planLocked, isLoading: planLoading } = useHasActivePlan();
+  const { openSettings } = useSettingsModal();
+  const tMembers = useTranslations("members");
+  const tBilling = useTranslations("errors.billing");
+  const openCreateDialog = () => {
+    if (planLoading) {
+      return false;
+    }
+    if (planLocked) {
+      toast.error(tBilling("subscriptionRequired"), {
+        action: {
+          label: tMembers("viewPlans"),
+          onClick: () => openSettings("billing"),
+        },
+      });
+      return false;
+    }
+    dispatchUi({ type: "createDialogChanged", open: true });
+    return true;
+  };
+
   useHotkey(
     "C",
-    () => dispatchUi({ type: "createDialogChanged", open: true }),
+    () => {
+      openCreateDialog();
+    },
     {
       enabled: !(
         dialogOpen ||
@@ -845,12 +868,13 @@ export default function ApiKeysPage() {
     }
   );
 
-  const { data: keys = [], isPending } = useQuery<ApiKeyListItem[]>({
+  const { data: loadedKeys, isPending } = useQuery<ApiKeyListItem[]>({
     ...dashboardOrpc.apiKeys.list.queryOptions({
       input: { organizationId: organizationId ?? "" },
     }),
     enabled: !!organizationId,
   });
+  const keys = loadedKeys ?? [];
 
   const newKeyName = newKeyConfig.name;
   const newKeyAccessMode =
@@ -865,11 +889,14 @@ export default function ApiKeysPage() {
     expiration: newKeyExpiration,
   };
 
+  const openPreconfiguredDialog = useEffectEvent(() => {
+    openCreateDialog();
+  });
   useEffect(() => {
-    if (hasNewKeyConfig) {
-      dispatchUi({ type: "createDialogChanged", open: true });
+    if (hasNewKeyConfig && !planLoading) {
+      openPreconfiguredDialog();
     }
-  }, [hasNewKeyConfig]);
+  }, [hasNewKeyConfig, planLoading]);
 
   const handlePresetSelect = (id: string) => {
     const preset = API_KEY_PRESETS.find((item) => item.id === id);
@@ -883,8 +910,9 @@ export default function ApiKeysPage() {
       expiration: preset.expiration,
     };
     dispatchUi({ type: "createErrorChanged", createError: null });
-    dispatchUi({ type: "createDialogChanged", open: true });
-    setNewKeyConfig(config);
+    if (openCreateDialog()) {
+      setNewKeyConfig(config);
+    }
   };
 
   const getCreateErrorMessage = (field: PropertyKey | undefined) => {
@@ -1048,7 +1076,7 @@ export default function ApiKeysPage() {
       name: key.name,
       accessMode: key.accessMode,
       scopes,
-      expiration: getDefaultEditExpiration(key.createdAt, key.expires),
+      expiration: inferApiKeyExpiration(key.createdAt, key.expires),
     });
     editForm.setFieldValue("name", key.name);
     dispatchUi({ type: "editDialogChanged", open: true });
@@ -1058,17 +1086,22 @@ export default function ApiKeysPage() {
     <PageContainer className="flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
       <div className="w-full space-y-6 px-4 lg:px-6">
         <ApiKeysHeader
-          onCreate={() =>
-            dispatchUi({ type: "createDialogChanged", open: true })
-          }
+          createDisabled={planLoading}
+          onCreate={() => {
+            openCreateDialog();
+          }}
         />
 
         <DemoApiCallout />
 
         <ApiKeysTable
           actionsDisabled={editMutation.isPending || deleteMutation.isPending}
+          createDisabled={planLoading}
           isPending={isPending}
           keys={keys}
+          onCreate={() => {
+            openCreateDialog();
+          }}
           onDelete={(key) =>
             dispatchUi({
               type: "deletingKeyChanged",
@@ -1078,11 +1111,14 @@ export default function ApiKeysPage() {
           onEdit={openEditDialog}
         />
 
-        <ApiKeyQuickStart onSelect={handlePresetSelect} />
-
         {organizationId ? (
           <TrackingTokenCard organizationId={organizationId} />
         ) : null}
+
+        <ApiKeyQuickStart
+          onSelect={handlePresetSelect}
+          organizationKeys={loadedKeys}
+        />
       </div>
 
       <CreateApiKeyDialog

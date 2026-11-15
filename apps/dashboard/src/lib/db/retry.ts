@@ -6,27 +6,6 @@ import {
   TRANSIENT_DB_RETRY_DELAYS_MS,
 } from "@/constants/db-retry";
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function getErrorCode(error: unknown): string | undefined {
-  if (!(error && typeof error === "object")) {
-    return;
-  }
-
-  const candidate = error as { code?: unknown };
-  return typeof candidate.code === "string" ? candidate.code : undefined;
-}
-
-function getErrorCause(error: unknown): unknown {
-  if (!(error && typeof error === "object")) {
-    return;
-  }
-
-  return (error as { cause?: unknown }).cause;
-}
-
 function isTransientDbError(error: unknown): boolean {
   let current: unknown = error;
   const seen = new Set<unknown>();
@@ -37,17 +16,23 @@ function isTransientDbError(error: unknown): boolean {
     }
     seen.add(current);
 
-    const message = getErrorMessage(current);
+    const message =
+      current instanceof Error ? current.message : String(current);
     if (TRANSIENT_DB_MESSAGES.some((value) => message.includes(value))) {
       return true;
     }
-
-    const code = getErrorCode(current);
-    if (code && TRANSIENT_DB_CODES.has(code)) {
+    if (typeof current !== "object") {
+      return false;
+    }
+    if (
+      "code" in current &&
+      typeof current.code === "string" &&
+      TRANSIENT_DB_CODES.has(current.code)
+    ) {
       return true;
     }
 
-    current = getErrorCause(current);
+    current = "cause" in current ? current.cause : undefined;
   }
 
   return false;

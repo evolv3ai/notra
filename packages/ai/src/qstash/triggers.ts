@@ -7,15 +7,14 @@ import {
 import { QSTASH_DESTINATION_REJECTION_PATTERN } from "../constants/qstash";
 import { CUSTOM_SCHEDULE_DEFAULT_INTERVAL_DAYS } from "../constants/schedule-interval";
 import { QstashScheduleSetupError } from "../schemas/qstash";
-import type { CreateQstashRouteScheduleProps } from "../types/qstash";
+import type {
+  CreateQstashRouteScheduleProps,
+  PublishQstashRouteMessageProps,
+} from "../types/qstash";
 import { toUtcDateString } from "../utils/schedule-interval";
-import {
-  getConfiguredAppUrl,
-  getConfiguredWorkflowUrl,
-  requireConfiguredAppUrl,
-} from "../utils/url";
+import { getConfiguredAppUrl, getConfiguredWorkflowUrl } from "../utils/url";
 
-export interface CreateQstashScheduleProps {
+interface CreateQstashScheduleProps {
   triggerId: string;
   cron: string;
   scheduleId?: string;
@@ -41,15 +40,6 @@ function getQstashToken() {
   return token;
 }
 
-function getScheduleAppUrl() {
-  const appUrl = getConfiguredAppUrl();
-  if (!appUrl) {
-    throw new QstashScheduleSetupError({ reason: "missing_app_url" });
-  }
-  return appUrl;
-}
-
-/** Classify the SDK's text-only rejection once, where the raw body lives. */
 function toScheduleCreateError(error: unknown) {
   if (
     error instanceof QStashSdkError &&
@@ -63,12 +53,34 @@ function toScheduleCreateError(error: unknown) {
   return error;
 }
 
-export function getAppUrl() {
-  return requireConfiguredAppUrl();
-}
-
 export function getBaseUrl() {
   return getConfiguredWorkflowUrl() ?? getConfiguredAppUrl();
+}
+
+/**
+ * The absolute URL QStash calls for a dashboard route. Schedules and messages
+ * are addressed with it and the receiving route verifies the signature
+ * against it, so the two always agree (`WORKFLOW_BASE_URL` wins over the app
+ * URL on both sides).
+ */
+export function qstashRouteUrl(path: string) {
+  const baseUrl = getBaseUrl();
+  if (!baseUrl) {
+    throw new QstashScheduleSetupError({ reason: "missing_app_url" });
+  }
+  return `${baseUrl}${path}`;
+}
+
+/**
+ * Every URL a delivery for `path` may have been addressed to. Schedules created
+ * before the producer switched to `qstashRouteUrl` still target the app URL, so
+ * receivers accept both bases.
+ */
+export function qstashRouteUrlCandidates(path: string) {
+  const baseUrls = [getConfiguredWorkflowUrl(), getConfiguredAppUrl()].filter(
+    (url): url is string => Boolean(url)
+  );
+  return [...new Set(baseUrls)].map((baseUrl) => `${baseUrl}${path}`);
 }
 
 function getQStashClient() {
@@ -97,8 +109,6 @@ export function buildCronExpression(config?: TriggerCronConfig) {
     return `${minute} ${hour} ${dayOfMonth} * *`;
   }
 
-  // "custom" (every N days) fires daily; the schedule workflow gates the run
-  // against the interval anchor because cron cannot express it.
   return `${minute} ${hour} * * *`;
 }
 
@@ -144,36 +154,15 @@ export async function createQstashSchedule({
   cron,
   scheduleId,
 }: CreateQstashScheduleProps) {
-  // The public demo saves schedules but never registers real callbacks.
   if (isDemoMode()) {
     return scheduleId ?? `demo-schedule-${triggerId}`;
   }
-  const client = getQStashClient();
-  const appUrl = getScheduleAppUrl();
-
-  const destination = `${appUrl}/api/workflows/schedule`;
-
-  const result = await client.schedules
-    .create({
-      ...(scheduleId && { scheduleId }),
-      destination,
-      cron,
-      body: JSON.stringify({ triggerId }),
-      headers: {
-        "Content-Type": "application/json",
-      },
-    })
-    .catch((error: unknown) => {
-      throw toScheduleCreateError(error);
-    });
-
-  const resolvedScheduleId = result.scheduleId ?? scheduleId;
-
-  if (!resolvedScheduleId) {
-    throw new Error("QStash schedule id was not returned");
-  }
-
-  return resolvedScheduleId;
+  return createQstashRouteSchedule({
+    path: "/api/workflows/schedule",
+    cron,
+    body: { triggerId },
+    scheduleId,
+  });
 }
 
 export async function createQstashRouteSchedule({
@@ -186,12 +175,12 @@ export async function createQstashRouteSchedule({
     return scheduleId ?? `demo-schedule-${crypto.randomUUID()}`;
   }
   const client = getQStashClient();
-  const appUrl = getScheduleAppUrl();
+  const destination = qstashRouteUrl(path);
 
   const result = await client.schedules
     .create({
       ...(scheduleId && { scheduleId }),
-      destination: `${appUrl}${path}`,
+      destination,
       cron,
       body: JSON.stringify(body),
       headers: {
@@ -209,6 +198,27 @@ export async function createQstashRouteSchedule({
   }
 
   return resolvedScheduleId;
+}
+
+/**
+ * Sends one message to a dashboard route, held by QStash until `notBefore`.
+ * Addressed like the schedule triggers, so the API (which only knows the
+ * dashboard as `WORKFLOW_BASE_URL`) can send it too; the route verifies the
+ * signature against the same base.
+ */
+export async function publishQstashRouteMessage({
+  path,
+  body,
+  notBefore,
+  deduplicationId,
+}: PublishQstashRouteMessageProps) {
+  const client = getQStashClient();
+  await client.publishJSON({
+    url: qstashRouteUrl(path),
+    body,
+    notBefore: Math.ceil(notBefore.getTime() / 1000),
+    deduplicationId,
+  });
 }
 
 export async function deleteQstashSchedule(scheduleId: string) {

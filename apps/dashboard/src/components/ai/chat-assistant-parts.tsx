@@ -1,7 +1,7 @@
 "use client";
 
 import { isToolUIPart } from "ai";
-import { Fragment } from "react";
+import { Children, Fragment, type ReactNode } from "react";
 
 import {
   ChatActivityGroup,
@@ -24,33 +24,44 @@ export function ChatAssistantParts({
   elapsedSeconds,
   isLoading,
   isStandaloneTool,
+  isStandalonePartVisible,
   messageId,
   parts,
   renderStandalone,
   renderTool,
 }: ChatAssistantPartsProps) {
-  const segments = groupAssistantMessageParts(parts, { isStandaloneTool });
+  const standaloneContent = new Map<number, ReactNode>();
+  const hiddenStandaloneContent: ReactNode[] = [];
+  const segments = groupAssistantMessageParts(parts, {
+    isStandaloneTool,
+    isStandalonePartVisible: (part, index) => {
+      const content = isToolUIPart(part)
+        ? renderTool(part, index)
+        : renderStandalone(part, index);
+      standaloneContent.set(index, content);
+      if (isToolUIPart(part) && isStandalonePartVisible?.(content) === false) {
+        // Keep effect-only components mounted outside the collapsible work log.
+        hiddenStandaloneContent.push(
+          <Fragment key={`${messageId}-standalone-tool-${part.toolCallId}`}>
+            {content}
+          </Fragment>
+        );
+        return false;
+      }
+      return Children.toArray(content).some((child) => child !== "");
+    },
+  });
   const hasSingleActivityGroup =
     segments.filter((segment) => segment.kind === "activity").length === 1;
   const lastActivityIndex = segments.findLastIndex(
     (segment) => segment.kind === "activity"
   );
-  const firstActivityIndex = segments.findIndex(
-    (segment) => segment.kind === "activity"
-  );
 
-  return segments.map((segment, segmentIndex) => {
+  const renderedSegments = segments.map((segment, segmentIndex) => {
     if (segment.kind === "standalone") {
-      if (isToolUIPart(segment.part)) {
-        return (
-          <Fragment key={`${messageId}-standalone-tool-${segment.index}`}>
-            {renderTool(segment.part, segment.index)}
-          </Fragment>
-        );
-      }
       return (
         <Fragment key={`${messageId}-standalone-${segment.index}`}>
-          {renderStandalone(segment.part, segment.index)}
+          {standaloneContent.get(segment.index)}
         </Fragment>
       );
     }
@@ -108,11 +119,7 @@ export function ChatAssistantParts({
           getActivityGroupDuration(segment.items, parts, activityTimings) ??
           (hasSingleActivityGroup ? durationMs : undefined)
         }
-        elapsedSeconds={
-          isStreaming && segmentIndex === firstActivityIndex
-            ? elapsedSeconds
-            : undefined
-        }
+        elapsedSeconds={isStreaming ? elapsedSeconds : undefined}
         forceOpen={forceOpen}
         groupId={`${messageId}-${segment.startIndex}`}
         hasDetails={details.length > 0}
@@ -125,4 +132,5 @@ export function ChatAssistantParts({
       </ChatActivityGroup>
     );
   });
+  return [...hiddenStandaloneContent, ...renderedSegments];
 }

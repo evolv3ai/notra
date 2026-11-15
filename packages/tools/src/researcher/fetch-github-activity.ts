@@ -13,22 +13,11 @@ import {
   githubReleaseListSchema,
 } from "../schemas/github-activity";
 import { githubRepositoryInputSchema } from "../schemas/research-tools";
+import { getPublicGithubHeaders } from "../utils/github";
 import {
   fetchWithTransientRetryEffect,
   runToolOperation,
 } from "../utils/retry";
-
-function buildGithubHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {
-    accept: "application/vnd.github+json",
-    "user-agent": "notra-onboarding-agent",
-  };
-  const token = process.env.GITHUB_TOKEN;
-  if (token) {
-    headers.authorization = `Bearer ${token}`;
-  }
-  return headers;
-}
 
 export function createFetchGithubActivityTool() {
   return defineTool({
@@ -36,7 +25,7 @@ export function createFetchGithubActivityTool() {
       "Fetch a public GitHub repository's recent activity: published releases and recent commits. Use it to learn how the team ships (release cadence, commit frequency) so the caller can suggest matching content workflows like changelog posts.",
     inputSchema: githubRepositoryInputSchema,
     async execute({ owner, repo }) {
-      const headers = buildGithubHeaders();
+      const headers = getPublicGithubHeaders();
 
       const [releasesResponse, commitsResponse] = await runToolOperation(
         Effect.all(

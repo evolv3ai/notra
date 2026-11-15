@@ -77,12 +77,10 @@ function releases() {
   }));
 }
 
-/** A stable, fake git object id so entries look like real GitHub ones. */
 function fakeSha(seed: string): string {
   return createHash("sha1").update(seed).digest("hex");
 }
 
-/** The default branch points at the newest commit; the rest get fake ids. */
 function branches(owner: string, name: string) {
   return DEMO_GITHUB_BRANCHES.map((branch, index) => {
     const sha = index === 0 ? DEMO_GITHUB_COMMITS[0].sha : fakeSha(branch);

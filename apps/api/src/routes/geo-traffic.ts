@@ -13,6 +13,7 @@ import {
   loadGeoTrafficPages,
 } from "@notra/geo-core/geo/programs";
 import { geoWindow } from "@notra/geo-core/geo/window";
+import type { GeoIngestSetupResponse } from "@notra/geo-core/types/geo";
 import { projectParamsSchema } from "@notra/schemas/api/geo-params";
 import {
   ingestSetupResponseSchema,
@@ -29,13 +30,20 @@ import {
   trafficPagesQuerySchema,
   trafficPagesResponseSchema,
 } from "@notra/schemas/api/geo-traffic";
+import type { Context } from "hono";
 
 import {
   GEO_COMMON_ERROR_RESPONSES,
   GEO_OPENAPI_TAG,
 } from "../constants/geo-openapi";
 import { runGeoEffect } from "../runtime/geo";
-import { geoErrorResponse } from "../utils/geo";
+import type { ApiEnv } from "../types/env";
+import type { GeoOutcome } from "../types/geo";
+import {
+  attachGeoOrganization,
+  geoErrorResponse,
+  geoOutcomeResponse,
+} from "../utils/geo";
 import { logError } from "../utils/logging";
 import { createOpenApiApp } from "../utils/openapi-app";
 
@@ -63,13 +71,10 @@ import { createOpenApiApp } from "../utils/openapi-app";
  */
 export const geoTrafficRoutes = createOpenApiApp();
 
-const GEO_TAG = GEO_OPENAPI_TAG;
-const commonErrors = GEO_COMMON_ERROR_RESPONSES;
-
 const trafficOverviewRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/traffic/overview",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "getGeoTrafficOverview",
   summary: "Get AI traffic totals and sources",
   description:
@@ -82,14 +87,14 @@ const trafficOverviewRoute = createRoute({
         "application/json": { schema: trafficOverviewResponseSchema },
       },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const trafficLogRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/traffic/log",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "getGeoTrafficLog",
   summary: "Get recent AI traffic events",
   description:
@@ -100,14 +105,14 @@ const trafficLogRoute = createRoute({
       description: "Traffic log fetched successfully",
       content: { "application/json": { schema: trafficLogResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const trafficJourneysRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/traffic/journeys",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "listGeoTrafficJourneys",
   summary: "List AI traffic journeys",
   description:
@@ -120,14 +125,14 @@ const trafficJourneysRoute = createRoute({
         "application/json": { schema: trafficJourneysResponseSchema },
       },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const journeyDetailRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/traffic/journeys/{journeyId}",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "getGeoTrafficJourney",
   summary: "Get one journey's events",
   request: { params: journeyParamsSchema, query: trafficOverviewQuerySchema },
@@ -136,14 +141,14 @@ const journeyDetailRoute = createRoute({
       description: "Journey fetched successfully",
       content: { "application/json": { schema: journeyDetailResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const trafficPagesRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}/geo/traffic/pages",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "listGeoTrafficPages",
   summary: "List the most visited pages",
   description:
@@ -154,14 +159,14 @@ const trafficPagesRoute = createRoute({
       description: "Pages fetched successfully",
       content: { "application/json": { schema: trafficPagesResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const ingestSetupRoute = createRoute({
   method: "get",
   path: "/geo/ingest/setup",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "getGeoIngestSetup",
   summary: "Get the install snippets",
   description:
@@ -171,14 +176,14 @@ const ingestSetupRoute = createRoute({
       description: "Setup fetched successfully",
       content: { "application/json": { schema: ingestSetupResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const issueTokenRoute = createRoute({
   method: "post",
   path: "/geo/ingest/token",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "issueGeoIngestToken",
   summary: "Issue the tracking token",
   description:
@@ -189,14 +194,14 @@ const issueTokenRoute = createRoute({
       description: "Token issued successfully",
       content: { "application/json": { schema: ingestTokenResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const rotateTokenRoute = createRoute({
   method: "post",
   path: "/geo/ingest/rotate-token",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "rotateGeoIngestToken",
   summary: "Rotate the tracking token",
   description:
@@ -209,7 +214,7 @@ const rotateTokenRoute = createRoute({
       description: "Token rotated successfully",
       content: { "application/json": { schema: ingestTokenResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
@@ -224,11 +229,7 @@ geoTrafficRoutes.openapi(trafficOverviewRoute, async (c) => {
       geoWindow(c.req.valid("query"))
     )
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json({ ...outcome.value, organization: base.organization }, 200);
+  return geoOutcomeResponse(c, outcome, 200);
 });
 
 geoTrafficRoutes.openapi(trafficLogRoute, async (c) => {
@@ -246,11 +247,7 @@ geoTrafficRoutes.openapi(trafficLogRoute, async (c) => {
       host
     )
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json({ ...outcome.value, organization: base.organization }, 200);
+  return geoOutcomeResponse(c, outcome, 200);
 });
 
 geoTrafficRoutes.openapi(trafficJourneysRoute, async (c) => {
@@ -266,11 +263,7 @@ geoTrafficRoutes.openapi(trafficJourneysRoute, async (c) => {
       query.limit
     )
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json({ ...outcome.value, organization: base.organization }, 200);
+  return geoOutcomeResponse(c, outcome, 200);
 });
 
 geoTrafficRoutes.openapi(journeyDetailRoute, async (c) => {
@@ -285,11 +278,7 @@ geoTrafficRoutes.openapi(journeyDetailRoute, async (c) => {
       geoWindow(c.req.valid("query"))
     )
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json({ ...outcome.value, organization: base.organization }, 200);
+  return geoOutcomeResponse(c, outcome, 200);
 });
 
 geoTrafficRoutes.openapi(trafficPagesRoute, async (c) => {
@@ -307,11 +296,7 @@ geoTrafficRoutes.openapi(trafficPagesRoute, async (c) => {
       query.host
     )
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json({ ...outcome.value, organization: base.organization }, 200);
+  return geoOutcomeResponse(c, outcome, 200);
 });
 
 geoTrafficRoutes.openapi(ingestSetupRoute, async (c) => {
@@ -331,46 +316,41 @@ geoTrafficRoutes.openapi(ingestSetupRoute, async (c) => {
   }
 });
 
+function ingestTokenResponse(
+  c: Context<ApiEnv>,
+  outcome: GeoOutcome<GeoIngestSetupResponse | null>
+) {
+  if (!outcome.ok) {
+    return geoErrorResponse(c, outcome.failure);
+  }
+  if (!outcome.value) {
+    return c.json({ error: "Organization not found" }, 404);
+  }
+  if (!outcome.value.token) {
+    return c.json({ error: "Traffic ingest is not configured" }, 503);
+  }
+  return c.json(
+    attachGeoOrganization(c.get("geo").organization, outcome.value),
+    200
+  );
+}
+
 geoTrafficRoutes.openapi(issueTokenRoute, async (c) => {
-  const base = c.get("geo");
+  const { organizationId } = c.get("geo");
   const { projectId } = c.req.valid("query");
   const outcome = await runGeoEffect(
     "ingestTokenIssue",
-    issueGeoIngestSetupResponse({
-      organizationId: base.organizationId,
-      projectId,
-    })
+    issueGeoIngestSetupResponse({ organizationId, projectId })
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-  if (!outcome.value) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
-  if (!outcome.value.token) {
-    return c.json({ error: "Traffic ingest is not configured" }, 503);
-  }
-  return c.json({ ...outcome.value, organization: base.organization }, 200);
+  return ingestTokenResponse(c, outcome);
 });
 
 geoTrafficRoutes.openapi(rotateTokenRoute, async (c) => {
-  const base = c.get("geo");
+  const { organizationId } = c.get("geo");
   const { projectId } = c.req.valid("query");
   const outcome = await runGeoEffect(
     "ingestTokenRotate",
-    rotateGeoIngestSetupResponse({
-      organizationId: base.organizationId,
-      projectId,
-    })
+    rotateGeoIngestSetupResponse({ organizationId, projectId })
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-  if (!outcome.value) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
-  if (!outcome.value.token) {
-    return c.json({ error: "Traffic ingest is not configured" }, 503);
-  }
-  return c.json({ ...outcome.value, organization: base.organization }, 200);
+  return ingestTokenResponse(c, outcome);
 });

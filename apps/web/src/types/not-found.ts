@@ -1,7 +1,6 @@
 interface NotFoundDitherHoverConfig {
   offsetRange: number;
   lerp: number;
-  /** Fraction of the numeral height that maps to the full Y offset. Match the fade. */
   visibleYRatio: number;
 }
 

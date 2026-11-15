@@ -25,11 +25,11 @@ const FETCH_TIMEOUT_MS = 20_000;
 const DEFAULT_CRAWL_MAX_LINKS = 100;
 const MAX_CRAWL_LINKS = 500;
 
-export const CRAWL_SITEMAP_TOOL_NAME = "crawlSitemap";
-export const GET_SITEMAP_PAGES_TOOL_NAME = "getSitemapPages";
-export const FETCH_SITEMAP_PAGE_TOOL_NAME = "fetchSitemapPage";
+const CRAWL_SITEMAP_TOOL_NAME = "crawlSitemap";
+const GET_SITEMAP_PAGES_TOOL_NAME = "getSitemapPages";
+const FETCH_SITEMAP_PAGE_TOOL_NAME = "fetchSitemapPage";
 
-export const GET_SITEMAP_PAGES_TOOL_DESCRIPTION =
+const GET_SITEMAP_PAGES_TOOL_DESCRIPTION =
   "**Sitemap**: List the brand's crawled pages with getSitemapPages before adding internal links. Fetch one listed URL with fetchSitemapPage when you need its content. If hasSitemap is false, crawlSitemap the websiteUrl from getBrandIdentity, then read pages with fetchWebpage. A query that matches nothing is not a missing sitemap.";
 
 const brandIdentityIdSchema = z
@@ -55,7 +55,7 @@ function toCrawlDomain(value: string): string {
     const lowered = trimmed.toLowerCase();
     return lowered.startsWith(BRAND_ANALYSIS_WWW_PREFIX)
       ? lowered.slice(BRAND_ANALYSIS_WWW_PREFIX.length)
-      : trimmed;
+      : lowered;
   }
 }
 
@@ -311,7 +311,7 @@ export function createCrawlSitemapTool(): Tool {
   });
 }
 
-export function createUnavailableCrawlSitemapTool(): Tool {
+function createUnavailableCrawlSitemapTool(): Tool {
   return tool({
     description: toolDescription({
       toolName: CRAWL_SITEMAP_TOOL_NAME,

@@ -24,14 +24,16 @@ import type {
   GeoZdrMode,
 } from "../types/geo";
 import type {
+  GeoConversationEngine,
+  GeoPlannedPersonaOutcome,
+} from "../types/geo-conversations";
+import type {
   GeoPersonaRunResponse,
   PersonaForScan,
 } from "../types/geo-personas";
+import { resolveGeoConversationEngine } from "../utils/geo-conversation-engine";
 import { resolveGeoGroundedZdrMode } from "../utils/geo-engines";
-import {
-  resolveGroundedEngineByKey,
-  resolveGroundedEngines,
-} from "../utils/geo-grounded-engines";
+import { resolveGroundedEngines } from "../utils/geo-grounded-engines";
 import { flushGeoLogEffect, geoLogWarn } from "../utils/geo-log";
 import { personaPromptId } from "../utils/geo-personas";
 import {
@@ -57,10 +59,17 @@ import {
 } from "./errors";
 import { toGeoSettings } from "./mappers";
 import { loadGeoModelCatalog } from "./model-catalog";
+import {
+  queueGeoOlostepConversationScan,
+  resolveGeoManualOlostepEngines,
+} from "./olostep-conversation-scan";
 import { loadGeoProjectBrand } from "./project-brand";
 import { requireGeoProject } from "./projects";
 import { buildGeoScanCheckContext } from "./scan-context";
-import { omitGeoScanTasks, updateGeoScanTaskStatus } from "./scan-task-status";
+import {
+  omitGeoScanTasks,
+  updateGeoScanAnswerStatus,
+} from "./scan-task-status";
 import { resolveScanZdrPolicy } from "./zdr-policy";
 
 function personaFailureFields(
@@ -137,7 +146,7 @@ export const runGeoPersonaConversation = Effect.fn(
 )(function* (
   context: GeoCheckContext,
   snapshot: GeoPersonaSnapshotV2,
-  grounded: GeoGroundedEngine,
+  grounded: GeoConversationEngine,
   zdr: GeoZdrMode
 ) {
   return yield* runGeoConversation(
@@ -159,9 +168,7 @@ const runPlannedPersona = Effect.fn("geo.runPlannedPersona")(function* (
   planned: GeoScanPlannedPersona
 ) {
   const tasks = geoScanPersonaTasks(planned);
-  const grounded = resolveGroundedEngineByKey(planned.groundedKey);
-  // Older persisted plans lack a snapshot and cannot reconstruct the original
-  // profile safely. Omit them rather than mix old prompts with current context.
+  const grounded = resolveGeoConversationEngine(planned);
   if (!grounded || !planned.snapshot) {
     yield* omitGeoScanTasks(
       checkContext,
@@ -187,21 +194,22 @@ const runPlannedPersona = Effect.fn("geo.runPlannedPersona")(function* (
       checkContext,
       tasks.map((task) => task.key)
     ).pipe(geoSkip("scan plan update failed"));
-    return null;
+    // Omitted turns are not failures, so a paused persona must not land in
+    // `dropped` the way a crashed run does, nor in the workflow's attempted
+    // count (a scan of only paused personas must not fail and retry).
+    const paused: GeoPlannedPersonaOutcome = {
+      rows: [],
+      usage: EMPTY_TOKEN_USAGE,
+      engineUsage: EMPTY_TOKEN_USAGE,
+      judgeUsage: EMPTY_TOKEN_USAGE,
+      droppedTurns: 0,
+      omitted: true,
+    };
+    return paused;
   }
   yield* Effect.forEach(
     tasks,
-    (task) =>
-      updateGeoScanTaskStatus(
-        checkContext,
-        {
-          prompt: { id: task.promptId, text: task.prompt },
-          engine: task.engine,
-          language: task.language,
-        },
-        "running",
-        task.turn
-      ),
+    (task) => updateGeoScanAnswerStatus(checkContext, task, "running"),
     { concurrency: GEO_SCAN_CONCURRENCY }
   );
   const outcome = yield* runGeoPersonaConversation(
@@ -210,23 +218,16 @@ const runPlannedPersona = Effect.fn("geo.runPlannedPersona")(function* (
     grounded,
     planned.zdr
   );
-  const remaining = tasks.slice(outcome.rows.length);
+  const remaining = tasks.filter(
+    (task) => !outcome.rows.some((row) => row.turn === task.turn)
+  );
   yield* Effect.forEach(
     remaining,
-    (task) =>
-      updateGeoScanTaskStatus(
-        checkContext,
-        {
-          prompt: { id: task.promptId, text: task.prompt },
-          engine: task.engine,
-          language: task.language,
-        },
-        "failed",
-        task.turn
-      ),
+    (task) => updateGeoScanAnswerStatus(checkContext, task, "failed"),
     { concurrency: GEO_SCAN_CONCURRENCY }
   );
-  return outcome;
+  const ran: GeoPlannedPersonaOutcome = outcome;
+  return ran;
 });
 
 /** Runs one batch of persona conversations; same contract as `runGeoScanSequenceBatch`. */
@@ -253,17 +254,15 @@ const runGeoScanPersonaBatchBody = Effect.fn("geo.runScanPersonaBatch.body")(
 
     const outcomes = yield* Effect.forEach(
       plannedPersonas,
-      (planned) =>
-        withGeoScanEvent(
+      (planned) => {
+        const fields = personaFailureFields(
+          checkContext,
+          planned.personaId,
+          planned.engine
+        );
+        return withGeoScanEvent(
           runPlannedPersona(checkContext, planned),
-          {
-            ...personaFailureFields(
-              checkContext,
-              planned.personaId,
-              planned.engine
-            ),
-            event: "geo.check.attempt.completed",
-          },
+          { ...fields, event: "geo.check.attempt.completed" },
           {
             scanId: context.scanId,
             runId: context.runId,
@@ -272,21 +271,14 @@ const runGeoScanPersonaBatchBody = Effect.fn("geo.runScanPersonaBatch.body")(
             taskKey: planned.personaId,
             persistSuccess: false,
           }
-        ).pipe(
-          geoSkip(
-            "persona conversation failed",
-            personaFailureFields(
-              checkContext,
-              planned.personaId,
-              planned.engine
-            )
-          )
-        ),
+        ).pipe(geoSkip("persona conversation failed", fields));
+      },
       { concurrency: GEO_SCAN_CONCURRENCY }
     );
 
     const rows: GeoCheckWrite[] = [];
     let dropped = 0;
+    let omitted = 0;
     let engineUsage = EMPTY_TOKEN_USAGE;
     let judgeUsage = EMPTY_TOKEN_USAGE;
     for (const [index, outcome] of outcomes.entries()) {
@@ -294,6 +286,9 @@ const runGeoScanPersonaBatchBody = Effect.fn("geo.runScanPersonaBatch.body")(
         const planned = plannedPersonas[index];
         dropped += planned ? geoScanPersonaTasks(planned).length : 0;
         continue;
+      }
+      if (outcome.omitted) {
+        omitted += 1;
       }
       dropped += outcome.droppedTurns;
       rows.push(...outcome.rows);
@@ -318,18 +313,17 @@ const runGeoScanPersonaBatchBody = Effect.fn("geo.runScanPersonaBatch.body")(
       mentions = inserted.mentions;
     }
 
+    const usage = addTokenUsage(engineUsage, judgeUsage);
     const result: GeoScanBatchOutcome = {
       checks,
       mentions,
       dropped,
-      usage: addTokenUsage(engineUsage, judgeUsage),
+      usage,
       engineUsage,
       judgeUsage,
       billedChecks: checks * GEO_PERSONA_BILLING_MULTIPLIER,
-      billedUsage: scaleAgentTokenUsage(
-        addTokenUsage(engineUsage, judgeUsage),
-        GEO_PERSONA_BILLING_MULTIPLIER
-      ),
+      billedUsage: scaleAgentTokenUsage(usage, GEO_PERSONA_BILLING_MULTIPLIER),
+      omitted,
     };
     return result;
   }
@@ -337,9 +331,9 @@ const runGeoScanPersonaBatchBody = Effect.fn("geo.runScanPersonaBatch.body")(
 
 /**
  * Plays one persona against every available grounded engine right away,
- * outside the scheduled scan. Mirrors `runGeoSequenceNow`: its own
- * `geo_scans` row, its own billing reservation, and the project scan slot
- * when it is free.
+ * outside the scheduled scan; consumer-app engines go to a scan scoped to
+ * this persona. Mirrors `runGeoSequenceNow`: its own `geo_scans` row, its
+ * own billing reservation, and the project scan slot when it is free.
  */
 const runGeoPersonaNowProgram = Effect.fn("geo.runPersonaNow")(function* (
   input: GeoScopeInput,
@@ -403,8 +397,36 @@ const runGeoPersonaNowProgram = Effect.fn("geo.runPersonaNow")(function* (
     }
     groundedEngines.push({ grounded, zdr });
   }
-  if (groundedEngines.length === 0) {
+  const skipFields = {
+    organizationId: scope.organizationId,
+    projectId,
+    personaId,
+  };
+  const olostepEngines = yield* resolveGeoManualOlostepEngines(
+    catalog,
+    settings.engines,
+    zdrPolicy,
+    skipFields
+  );
+  if (groundedEngines.length === 0 && olostepEngines.length === 0) {
     return yield* Effect.fail(new GeoPersonaRunUnavailableError({}));
+  }
+  const queued = yield* queueGeoOlostepConversationScan(
+    input,
+    personaPromptId(personaId),
+    olostepEngines,
+    skipFields,
+    groundedEngines.length === 0
+  );
+  if (groundedEngines.length === 0) {
+    const response: GeoPersonaRunResponse = {
+      checks: 0,
+      mentions: 0,
+      engines: [],
+      queuedScanId: queued?.scanId ?? null,
+      queuedEngines: olostepEngines,
+    };
+    return response;
   }
 
   const runId = `geo-persona-${personaId}-${crypto.randomUUID()}`;
@@ -426,6 +448,7 @@ const runGeoPersonaNowProgram = Effect.fn("geo.runPersonaNow")(function* (
         catalog,
         companyName: settings.companyName,
         aliases: settings.aliases,
+        companyDescription: brand?.companyDescription ?? null,
         websiteUrl: brand?.websiteUrl ?? null,
         domains: settings.domains,
       },
@@ -448,6 +471,11 @@ const runGeoPersonaNowProgram = Effect.fn("geo.runPersonaNow")(function* (
         { concurrency: GEO_SCAN_CONCURRENCY }
       )
   ).pipe(
+    // The consumer apps are already queued and billed on their own scan, so
+    // the run still succeeds when no API engine answered.
+    Effect.catchTag("GeoConversationNoAnswersError", (error) =>
+      queued ? Effect.succeed(null) : Effect.fail(error)
+    ),
     Effect.mapError((error) =>
       error._tag === "GeoWriterCreditsExhaustedError"
         ? error
@@ -456,9 +484,11 @@ const runGeoPersonaNowProgram = Effect.fn("geo.runPersonaNow")(function* (
   );
 
   const response: GeoPersonaRunResponse = {
-    checks: result.checks,
-    mentions: result.mentions,
-    engines: groundedEngines.map(({ grounded }) => grounded.key),
+    checks: result?.checks ?? 0,
+    mentions: result?.mentions ?? 0,
+    engines: result ? groundedEngines.map(({ grounded }) => grounded.key) : [],
+    queuedScanId: queued?.scanId ?? null,
+    queuedEngines: queued ? olostepEngines : [],
   };
   return response;
 });

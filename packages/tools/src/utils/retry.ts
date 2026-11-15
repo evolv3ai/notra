@@ -1,3 +1,4 @@
+import { parseRetryAfterMs } from "@notra/utils/retry-after";
 import { Duration, Effect, Schedule } from "effect";
 
 import {
@@ -40,18 +41,10 @@ export function isTransientError(error: unknown): boolean {
   return error instanceof TypeError;
 }
 
-function parseRetryAfterMs(response: Response) {
-  const retryAfter = response.headers.get("retry-after");
-  if (retryAfter) {
-    const seconds = Number(retryAfter);
-    if (Number.isFinite(seconds) && seconds >= 0) {
-      return seconds * 1000;
-    }
-
-    const retryAt = Date.parse(retryAfter);
-    if (Number.isFinite(retryAt)) {
-      return Math.max(0, retryAt - Date.now());
-    }
+function retryDelayMs(response: Response) {
+  const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));
+  if (retryAfterMs !== undefined) {
+    return Math.max(0, retryAfterMs);
   }
 
   const rateLimitReset = Number(response.headers.get("x-ratelimit-reset"));
@@ -98,7 +91,6 @@ function createRetrySchedule(
       )
     ),
     Schedule.upTo({ times: Math.max(0, maxAttempts - 1) }),
-    // Surface long provider cooldowns instead of blocking the caller or retrying early.
     Schedule.while(({ input }) =>
       Effect.succeed(input.retryable && (input.retryAfterMs ?? 0) <= maxDelayMs)
     ),
@@ -178,7 +170,7 @@ export function fetchWithTransientRetryEffect(
         return response;
       }
 
-      const retryAfterMs = parseRetryAfterMs(response);
+      const retryAfterMs = retryDelayMs(response);
       await response.body?.cancel();
       throw new ToolOperationError({
         cause: new Error(

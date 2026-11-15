@@ -1,16 +1,17 @@
 "use client";
 
-import { GitBranchIcon, Loading03Icon } from "@hugeicons/core-free-icons";
+import { GitBranchIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@notra/ui/components/ui/popover";
+import { Spinner } from "@notra/ui/components/ui/spinner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { dashboardOrpc } from "@/lib/orpc/query";
@@ -96,20 +97,15 @@ export function GitHubBranchPicker({
               branch: repository.defaultBranch ?? t("notSelected"),
               repository: `${repository.owner}/${repository.repo}`,
             })}
-            className="text-muted-foreground h-7 max-w-52 min-w-0 gap-1.5 px-2 font-normal"
+            className="max-w-52 min-w-0 gap-1.5 font-normal"
             disabled={isPending}
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
             size="sm"
-            variant="ghost"
+            variant="outline"
           />
         }
       >
         {isPending ? (
-          <HugeiconsIcon
-            className="size-3.5 animate-spin"
-            icon={Loading03Icon}
-          />
+          <Spinner className="size-3.5" />
         ) : (
           <HugeiconsIcon className="size-3.5" icon={GitBranchIcon} />
         )}
@@ -121,9 +117,8 @@ export function GitHubBranchPicker({
         </span>
       </PopoverTrigger>
       <PopoverContent
-        align="start"
+        align="end"
         className="h-68 w-72 gap-0 overflow-hidden p-0"
-        onClick={(event) => event.stopPropagation()}
       >
         <GitHubBranchPanelTransition
           creating={creating}

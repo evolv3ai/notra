@@ -298,5 +298,10 @@ export function TotpEnrollmentPanel({
     );
   }
 
-  return <StepTransition stepKey={step}>{content}</StepTransition>;
+  // ph-no-capture keeps the TOTP secret and QR code out of session replays.
+  return (
+    <StepTransition className="ph-no-capture" stepKey={step}>
+      {content}
+    </StepTransition>
+  );
 }

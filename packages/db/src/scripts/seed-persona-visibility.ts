@@ -40,9 +40,7 @@ interface DemoPersona {
     kind: (typeof GEO_PERSONA_MEMORY_KINDS)[number];
     content: string;
   }[];
-  /** base mention rate, 0..1 */
   baseRate: number;
-  /** trend added over the seeded window, e.g. 0.2 = +20pp */
   trend: number;
 }
 
@@ -272,7 +270,6 @@ function hasFlag(name: string) {
   return process.argv.includes(`--${name}`);
 }
 
-/** Deterministic 0..1 hash so reruns produce the same demo data. */
 function hash01(input: string): number {
   let hash = 2166136261;
   for (let index = 0; index < input.length; index += 1) {
@@ -288,16 +285,11 @@ function toDayString(date: Date): string {
 
 async function resolveTargets() {
   if (hasFlag("all")) {
-    // Backfill mode: only touch projects that already have personas but no
-    // persona activity yet. Projects without personas are left alone (seed
-    // them explicitly via --org-slug / --project-id).
-    const personaProjectRows = await db.execute(
-      sql<{ project_id: string }>`select distinct project_id from geo_personas`
+    const personaProjectRows = await db.execute<{ project_id: string }>(
+      sql`select distinct project_id from geo_personas`
     );
-    const checkProjectRows = await db.execute(
-      sql<{
-        project_id: string;
-      }>`select distinct project_id from geo_mention_checks where persona_id is not null`
+    const checkProjectRows = await db.execute<{ project_id: string }>(
+      sql`select distinct project_id from geo_mention_checks where persona_id is not null`
     );
     const withChecks = new Set(
       checkProjectRows.rows.map((row: { project_id: string }) => row.project_id)
@@ -434,8 +426,6 @@ async function ensurePersonas(
         )
       ),
     });
-    // Reuse whatever personas the project already has; derive a stable,
-    // distinct base rate per persona so the chart shows separate lines.
     return existing.map((persona, index) => ({
       ...persona,
       memories: memories
@@ -569,7 +559,6 @@ async function seedProjectActivity(
 
     const rows = [];
     for (const { persona, prompt } of personasWithPrompts) {
-      // Later days mention slightly more: gives the 30d chart a live trend.
       const progress = (days - 1 - offset) / Math.max(days - 1, 1);
       const rate = Math.min(
         0.95,

@@ -28,9 +28,8 @@ export const testBillingGate: ContentBillingReservation = {
   useMarkup: false,
 };
 
-export const testFeatureFlags = {
-  isCursorEngineEnabledForOrganization: () => Effect.succeed(false),
-  isOpenCodeEngineEnabledForOrganization: () => Effect.succeed(false),
+export const testCodingAgentAccess = {
+  hasPaidPlanForOrganization: () => Effect.succeed(false),
 };
 
 export const fakeModels: GeoModelServiceShape = {

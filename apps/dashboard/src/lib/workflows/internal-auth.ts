@@ -9,6 +9,7 @@ import {
 } from "eve/channels/auth";
 
 import { ALLOWED_VERCEL_ENVIRONMENTS } from "@/constants/internal-auth";
+import { isCrossOriginBrowserRequest } from "@/utils/local-dev-auth";
 
 function matchesInternalWorkflowSecret(token: string | null): boolean {
   const secret = process.env.INTERNAL_WORKFLOW_SECRET;
@@ -56,9 +57,15 @@ export async function verifyInternalWorkflowRequest(
     }
   }
 
-  const isVercelDeployment =
-    process.env.VERCEL === "1" && process.env.VERCEL_ENV !== "development";
-  if (isVercelDeployment) {
+  // eve's localDev() trusts the request hostname, which comes from the Host
+  // header, so it is only safe on a local dev server. Every deployed runtime
+  // (Vercel, Unkey) must authenticate with the secret or OIDC.
+  if (process.env.NODE_ENV !== "development") {
+    return false;
+  }
+  // A page in the developer's browser can reach loopback too; internal
+  // callers are server-side and never send browser origin headers.
+  if (isCrossOriginBrowserRequest(request)) {
     return false;
   }
 

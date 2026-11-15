@@ -28,6 +28,17 @@ import { formatDollars } from "@/utils/format";
 
 const MONTHS_PER_YEAR = 12;
 
+export function checkoutPlanId(value: unknown): string | null {
+  return typeof value === "string" && ACTIVE_PAID_PLAN_IDS.has(value)
+    ? value
+    : null;
+}
+
+export function requestedYearly(planParam: unknown): boolean | null {
+  const planId = checkoutPlanId(planParam);
+  return planId ? isAnnualPlanId(planId) : null;
+}
+
 export function isAnnualPlanId(planId: string | undefined): boolean {
   if (!planId) {
     return false;
@@ -74,10 +85,21 @@ export function getProductPrice(
 
 function tierFeatures(
   limits: PlanTierLimits,
-  t: BillingTranslator
+  t: BillingTranslator,
+  aiTrafficEvents: number | undefined
 ): ProductFeature[] {
   return [
     { text: t("plans.features.aiAnswers", { count: limits.aiAnswers }) },
+    ...(aiTrafficEvents
+      ? [
+          {
+            text: t("plans.features.aiTrafficEvents", {
+              count: aiTrafficEvents,
+            }),
+            overageText: t("plans.features.aiTrafficEventsDetail"),
+          },
+        ]
+      : []),
     {
       text: t("plans.features.imageGenerations", {
         count: limits.imageGenerations,
@@ -120,7 +142,12 @@ export function getProductFeatures(
   const tier = planTierId(plan?.id);
   const limits = tier ? PLAN_TIER_LIMITS[tier] : undefined;
   if (limits) {
-    return tierFeatures(limits, t);
+    return tierFeatures(
+      limits,
+      t,
+      plan?.items?.find((item) => item.featureId === FEATURES.AI_TRAFFIC_EVENTS)
+        ?.included
+    );
   }
 
   if (!plan?.items) {
@@ -287,21 +314,6 @@ export function isPlanInGroup(
   return group.monthly?.id === planId || group.annual?.id === planId;
 }
 
-export function nextPlanGroup(
-  groups: BillingPlanGroup[],
-  activePlanId: string | undefined
-): BillingPlanGroup | null {
-  if (!activePlanId) {
-    return groups[0] ?? null;
-  }
-  const tier = planTierId(activePlanId);
-  const index = groups.findIndex((group) => group.id === tier);
-  if (index === -1) {
-    return null;
-  }
-  return groups[index + 1] ?? null;
-}
-
 export function planCardClassName(
   highlighted: boolean,
   featured: boolean
@@ -355,7 +367,7 @@ export function zdrAddonPlanId(
   return isAnnualPlanId(activePlanId) ? `${base}${ANNUAL_ADDON_SUFFIX}` : base;
 }
 
-export function isZdrAddonPlanId(planId: string | undefined): boolean {
+function isZdrAddonPlanId(planId: string | undefined): boolean {
   return Boolean(planId?.startsWith(ZDR_ADDON_PREFIX));
 }
 

@@ -1,0 +1,14 @@
+---
+title: Edge
+description: Dotted step connections with rounded corners and idle, animated, active, done and skipped states.
+---
+
+<Component path="workflow/examples/workflow-edge" />
+
+<RegistryInstall name="workflow-edge" />
+
+`WorkflowFlowEdge` is the React Flow edge type behind the canvas, and `WorkflowEdge` is the stroke it draws, which you can also use in any SVG with a path from `getEdgePath`. `WorkflowConnectionLine` draws the same stroke while you drag a new connection. Edges are rows of round dots that turn at right angles with rounded corners, so a graph reads like a circuit. While a run passes through an edge it turns `active`: the dots flow towards the next step, a glowing dot travels along it, and it settles to `done` in your primary color. Edges behind a branch that wasn't taken fade out. Set `animated` on an edge to keep its dots flowing when nothing runs.
+
+The stroke uses `currentColor`, so it follows your `primary` and `muted-foreground` tokens. The dash animation is `animate-workflow-dash` and stops when the reader prefers reduced motion.
+
+<include>./_used-in.mdx</include>

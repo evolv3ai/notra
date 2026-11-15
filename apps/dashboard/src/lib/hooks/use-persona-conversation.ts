@@ -37,8 +37,6 @@ export function usePersonaConversation(
   const active =
     threads.find((thread) => thread.engine === engine) ?? threads[0] ?? null;
   const isWaitingForScan = runPersona.isPending;
-  // Only the first fetch shows the skeleton; background polls keep the
-  // current view so the empty state does not flash every interval.
   const isConversationLoading = !active && isLoading;
   return {
     runPersona,

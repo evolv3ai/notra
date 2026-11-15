@@ -11,6 +11,7 @@ import {
   GEO_MENTION_ROW_HEIGHT_REM,
   GEO_MENTION_SUMMARY_VISIBLE,
 } from "@notra/geo-core/constants/geo";
+import { DetailCardContent } from "@notra/ui/components/ui/detail-card";
 import {
   Empty,
   EmptyContent,
@@ -23,8 +24,9 @@ import {
   HoverCard,
   HoverCardTrigger,
 } from "@notra/ui/components/ui/hover-card";
-import { useLocale, useTranslations } from "next-intl";
 import { type CSSProperties, useState } from "react";
+import { InstrumentModule } from "ui/card";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { ChartColorScope } from "@/components/charts/chart-color-scope";
@@ -33,8 +35,6 @@ import { CompetitorEditDialog } from "@/components/geo/competitor-edit-dialog";
 import { CompetitorLogo } from "@/components/geo/competitor-logo";
 import { GeoStatDelta } from "@/components/geo/geo-stat-delta";
 import { ProjectLogo } from "@/components/geo/project-logo";
-import { TrafficBreakdownCard } from "@/components/geo/traffic-breakdown-card";
-import { InstrumentModule } from "@/components/instrument/instrument-module";
 import { useGeoActiveProject } from "@/lib/hooks/use-geo-active-project";
 import { useScrollOverflow } from "@/lib/hooks/use-scroll-overflow";
 import { cn } from "@/lib/utils";
@@ -171,7 +171,7 @@ function ShareOfVoiceRankingRow({
       <HoverCardTrigger render={<button {...buttonProps} />}>
         {content}
       </HoverCardTrigger>
-      <TrafficBreakdownCard
+      <DetailCardContent
         aside={
           <Button
             aria-label={tTag("trackBrand", { brand: row.brand })}
@@ -200,7 +200,7 @@ function ShareOfVoiceRankingRow({
         <p className="text-muted-foreground px-3 py-1.5 text-xs text-pretty">
           {tGeoShared("discoveredBrandsComeFromScan")}
         </p>
-      </TrafficBreakdownCard>
+      </DetailCardContent>
     </HoverCard>
   );
 }
@@ -236,7 +236,6 @@ export function ShareOfVoiceChart(props: ShareOfVoiceChartProps) {
   } = buildShareOfVoiceChartModel(props, tGeoShared("otherBrands"));
   const summary = own ?? ranking[0];
   const sliceById = new Map(slices.map((row) => [row.id, row.slice]));
-  // Brands folded into "Other" in the donut share its gray swatch.
   const otherSlice = other ? (sliceById.get(other.id) ?? "") : "";
   const donutConfig = Object.fromEntries(
     Object.entries(config).map(([key, item]) => [
@@ -251,7 +250,7 @@ export function ShareOfVoiceChart(props: ShareOfVoiceChartProps) {
   if (totalMentions === 0) {
     return (
       <>
-        <Empty className="border-border rounded-2xl border py-12 md:py-12">
+        <Empty className="border-border min-h-96 rounded-2xl border py-12 md:py-12">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <HugeiconsIcon
@@ -303,12 +302,11 @@ export function ShareOfVoiceChart(props: ShareOfVoiceChartProps) {
             hint={t("shareHint")}
             readout={`${formatChartInteger(totalMentions, locale)} ${t("totalMentions")}`}
             variant="table"
-            bodyClassName="flex flex-col items-center justify-center p-5"
+            bodyClassName="flex flex-col p-3"
           >
-            <div className="relative w-full max-w-80">
+            <div className="relative min-h-72 w-full flex-1">
               <EChartsPieChart
-                animation={false}
-                className="h-72 w-full"
+                className="absolute inset-0"
                 config={donutConfig}
                 data={slices.filter((row) => row.mentions > 0)}
                 dataKey="mentions"
@@ -318,7 +316,7 @@ export function ShareOfVoiceChart(props: ShareOfVoiceChartProps) {
                   innerRadius="76%"
                   outerRadius="88%"
                   cornerRadius={12}
-                  paddingAngle={4}
+                  paddingAngle={2.5}
                 />
                 <EChartsPieChart.Tooltip
                   roundness="xl"
@@ -363,7 +361,7 @@ export function ShareOfVoiceChart(props: ShareOfVoiceChartProps) {
                   <GeoStatDelta
                     delta={rankDelta}
                     hint={tGeoShared("vsFirstHalfOfThis")}
-                    kind="position"
+                    kind="rank"
                     label={tCommon("labels.rank")}
                   />
                 ) : null}
@@ -410,7 +408,7 @@ export function ShareOfVoiceChart(props: ShareOfVoiceChartProps) {
                 <div
                   aria-hidden="true"
                   className={cn(
-                    "from-card pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t to-transparent transition-opacity duration-200 motion-reduce:transition-none",
+                    "from-table-card pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t to-transparent transition-opacity duration-200 motion-reduce:transition-none",
                     atEnd ? "opacity-0" : "opacity-100"
                   )}
                   style={RANKING_FADE_STYLE}

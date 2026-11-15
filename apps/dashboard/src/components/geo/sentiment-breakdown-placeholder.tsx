@@ -3,10 +3,10 @@
 import { Shimmer } from "@notra/ui/components/ai-elements/shimmer";
 import { Button } from "@notra/ui/components/ui/button";
 import { Skeleton } from "@notra/ui/components/ui/skeleton";
-import { useTranslations } from "next-intl";
 import type { CSSProperties } from "react";
+import { InstrumentModule } from "ui/card";
+import { useTranslations } from "use-intl";
 
-import { InstrumentModule } from "@/components/instrument/instrument-module";
 import {
   GEO_SENTIMENT_EMPTY_LABEL_KEYS,
   SENTIMENT_PREVIEW_BARS,

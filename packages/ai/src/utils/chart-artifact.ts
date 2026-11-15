@@ -13,7 +13,6 @@ import {
 import type {
   ChartArtifact,
   ChartSegment,
-  ChartSeries,
   GeoCompetitorShareChartInput,
   GeoOverviewChartInput,
   GeoTimeseriesChartInput,
@@ -61,11 +60,6 @@ export function buildGeoOverviewChart(
     input.days,
     GEO_CHART_MENTION_RATE_SUBTITLE
   );
-  const segments = input.engines.map((engine) => ({
-    label: chartEngineLabel(engine.engine),
-    value: toMentionRatePercent(engine.mention_rate),
-  }));
-
   if (input.engines.length === 0) {
     return emptyChart(
       GEO_OVERVIEW_CHART_TITLE,
@@ -78,7 +72,10 @@ export function buildGeoOverviewChart(
     kind: "bar",
     title: GEO_OVERVIEW_CHART_TITLE,
     subtitle,
-    segments,
+    segments: input.engines.map((engine) => ({
+      label: chartEngineLabel(engine.engine),
+      value: toMentionRatePercent(engine.mention_rate),
+    })),
   };
 }
 
@@ -103,11 +100,6 @@ export function buildGeoTimeseriesChart(
     seriesByEngine.set(point.engine, series);
   }
 
-  const series: ChartSeries[] = [...seriesByEngine.values()].map((entry) => ({
-    name: entry.name,
-    points: [...entry.pointsByDay.entries()].map(([x, y]) => ({ x, y })),
-  }));
-
   if (input.points.length === 0) {
     return emptyChart(
       GEO_TIMESERIES_CHART_TITLE,
@@ -120,7 +112,10 @@ export function buildGeoTimeseriesChart(
     kind: "area",
     title: GEO_TIMESERIES_CHART_TITLE,
     subtitle,
-    series,
+    series: [...seriesByEngine.values()].map((entry) => ({
+      name: entry.name,
+      points: [...entry.pointsByDay.entries()].map(([x, y]) => ({ x, y })),
+    })),
   };
 }
 

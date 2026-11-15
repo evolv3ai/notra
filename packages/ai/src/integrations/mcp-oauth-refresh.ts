@@ -1,5 +1,6 @@
 import { refreshAuthorization } from "@modelcontextprotocol/sdk/client/auth.js";
 import type { OAuthTokens } from "@modelcontextprotocol/sdk/shared/auth.js";
+import { logError } from "@notra/ai/utils/server-log";
 import { db } from "@notra/db/drizzle";
 import { mcpOAuthCredentials, mcpServerIntegrations } from "@notra/db/schema";
 import { and, eq, isNull, lt, ne, or, sql } from "drizzle-orm";
@@ -109,9 +110,9 @@ export async function getMcpOAuthRequestAuth(
       Date.now() - stored.credential.updatedAt.getTime() <
         MCP_OAUTH_REFRESH_RETRY_DELAY_MS
     ) {
-      throw new McpOAuthAuthorizationError(
-        "OAuth token refresh is temporarily unavailable."
-      );
+      throw new McpOAuthAuthorizationError({
+        message: "OAuth token refresh is temporarily unavailable.",
+      });
     }
     return refreshMcpOAuthRequestAuth({
       organizationId,
@@ -346,7 +347,7 @@ function startMcpOAuthRefreshHeartbeat(
         )
       )
       .catch((error) => {
-        console.error("[MCP OAuth Refresh Heartbeat Error]", {
+        logError("[MCP OAuth Refresh] Heartbeat failed", undefined, {
           integrationId,
           organizationId,
           error: error instanceof Error ? error.message : String(error),
@@ -374,9 +375,9 @@ async function waitForMcpOAuthRefresh(
     }
     if (stored.credential.status !== "refreshing") {
       if (isMcpAccessTokenExpiring(stored.credential.accessTokenRefreshAt)) {
-        throw new McpOAuthAuthorizationError(
-          "OAuth token refresh did not complete."
-        );
+        throw new McpOAuthAuthorizationError({
+          message: "OAuth token refresh did not complete.",
+        });
       }
       const tokens = decryptMcpOAuthSecret(
         stored.credential.encryptedTokens,
@@ -398,7 +399,9 @@ async function waitForMcpOAuthRefresh(
       });
     }
   }
-  throw new McpOAuthAuthorizationError("OAuth token refresh timed out.");
+  throw new McpOAuthAuthorizationError({
+    message: "OAuth token refresh timed out.",
+  });
 }
 
 async function markMcpOAuthReauthorizationRequired(
@@ -450,7 +453,7 @@ async function releaseMcpOAuthRefreshClaim(
       )
     );
 
-  console.error("[MCP OAuth Refresh Error]", {
+  logError("[MCP OAuth Refresh] Refresh failed", undefined, {
     integrationId,
     organizationId,
     error: error instanceof Error ? error.message : String(error),

@@ -1,10 +1,10 @@
 "use client";
 
 import { Card, CardContent } from "@notra/ui/components/ui/card";
-import { useLocale, useTranslations } from "next-intl";
 import { useMemo } from "react";
+import { InstrumentGrid } from "ui/card/grid";
+import { useLocale, useTranslations } from "use-intl";
 
-import { InstrumentGrid } from "@/components/instrument/instrument-grid";
 import type { AnalyticsStatTile, SummaryStatsProps } from "@/types/analytics";
 import {
   buildAnalyticsHeroSummary,
@@ -57,7 +57,7 @@ export function SummaryStats({
         hint: t("interactionsHint", { posts: summary.posts, range: rangeHint }),
       },
     ];
-  }, [accounts, locale, points, rangeHint, t]);
+  }, [accounts, locale, points, rangeHint, t, tCommon, tAnalyticsShared]);
 
   return (
     <InstrumentGrid className="grid-cols-2 lg:grid-cols-4">

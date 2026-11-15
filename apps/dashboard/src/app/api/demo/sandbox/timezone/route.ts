@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 
 import { demoSandboxRoute } from "@/lib/demo/route";
 import { demoSandboxCreateInputSchema } from "@/schemas/demo";
+import { ratelimit } from "@/utils/ratelimit";
 
 /**
  * Pooled sandboxes are seeded before anyone visits; the browser reports the
@@ -18,6 +19,15 @@ export const POST = demoSandboxRoute(async (sandbox, request: Request) => {
     parsed.success ? (parsed.data.timeZone ?? null) : null
   );
   if (timeZone !== sandbox.timeZone) {
+    const { success } = await ratelimit.demoSandboxTimeZone.limit(
+      sandbox.anonymousId
+    );
+    if (!success) {
+      return Response.json(
+        { error: "Too many time zone changes" },
+        { status: 429 }
+      );
+    }
     await db
       .update(demoSandboxes)
       .set({ timeZone })

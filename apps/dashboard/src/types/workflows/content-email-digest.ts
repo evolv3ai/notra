@@ -8,34 +8,36 @@ export type ContentEmailDigestKind =
   | "scheduled_content_failed"
   | "scheduled_content_skipped";
 
-export interface ContentEmailDigestBaseEvent {
+interface ContentEmailDigestBaseEvent {
   organizationName: string;
   organizationSlug: string;
 }
 
-export interface AiCreditsDepletedDigestEvent extends ContentEmailDigestBaseEvent {
+interface AiCreditsDepletedDigestEvent extends ContentEmailDigestBaseEvent {
   kind: "ai_credits_depleted";
   automationName: string;
   limitLabel?: string;
 }
 
-export interface ScheduledContentCreatedDigestEvent extends ContentEmailDigestBaseEvent {
+interface ScheduledContentCreatedDigestEvent extends ContentEmailDigestBaseEvent {
   kind: "scheduled_content_created";
   scheduleName: string;
   createdContent: ScheduledCreatedContentItem[];
   contentType: string;
   contentOverviewLink: string;
   subject?: string;
+  /** The automation's Then notify step asked for this email. */
+  automationEmail?: boolean;
 }
 
-export interface ScheduledContentFailedDigestEvent extends ContentEmailDigestBaseEvent {
+interface ScheduledContentFailedDigestEvent extends ContentEmailDigestBaseEvent {
   kind: "scheduled_content_failed";
   scheduleName: string;
   reason: string;
   subject?: string;
 }
 
-export interface ScheduledContentSkippedDigestEvent extends ContentEmailDigestBaseEvent {
+interface ScheduledContentSkippedDigestEvent extends ContentEmailDigestBaseEvent {
   kind: "scheduled_content_skipped";
   scheduleName: string;
   reason: string;

@@ -1,14 +1,15 @@
+import { GITHUB_API_VERSION_HEADERS } from "@notra/ai/constants/github";
 import type {
   AgentDataPointSettings,
   ResolveIntegrationContext,
 } from "@notra/ai/types/agents";
 import type {
   CommitWindow,
-  ErrorWithStatus,
   GitHubSelectionFilters,
   GitHubToolRepositoryContext,
   GitHubToolsAccessConfig,
 } from "@notra/ai/types/tools";
+import { withGitHubRateLimitHandling } from "@notra/ai/utils/github-rate-limit";
 import { createOctokit } from "@notra/ai/utils/octokit";
 import { type Tool, tool } from "ai";
 // biome-ignore lint/performance/noNamespaceImport: Zod recommended way to import
@@ -16,134 +17,10 @@ import * as z from "zod";
 
 import { getAICachedTools } from "./tool-cache";
 
-const GITHUB_PRIMARY_RATE_LIMIT_MESSAGE =
-  "GitHub API rate limit reached. Please retry later.";
+// Kept for existing `@notra/ai/tools/github` importers.
+export { isGitHubRateLimitError } from "@notra/ai/utils/github-rate-limit";
+
 const LINK_HEADER_NEXT_PAGE_REGEX = /<([^>]+)>\s*;\s*rel="next"/i;
-
-function parseRetryAfterSeconds(value?: string | number) {
-  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-    return Math.floor(value);
-  }
-
-  if (typeof value !== "string") {
-    return undefined;
-  }
-
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
-}
-
-function getHeaderCaseInsensitive(
-  headers: Record<string, string | number | undefined> | undefined,
-  name: string
-) {
-  if (!headers) {
-    return undefined;
-  }
-
-  const key = Object.keys(headers).find(
-    (headerName) => headerName.toLowerCase() === name.toLowerCase()
-  );
-
-  if (!key) {
-    return undefined;
-  }
-
-  return headers[key];
-}
-
-export class GitHubRateLimitError extends Error {
-  readonly retryAfterSeconds?: number;
-
-  constructor(retryAfterSeconds?: number) {
-    super(GITHUB_PRIMARY_RATE_LIMIT_MESSAGE);
-    this.name = "GitHubRateLimitError";
-    this.retryAfterSeconds = retryAfterSeconds;
-  }
-}
-
-export function isGitHubRateLimitError(
-  error: unknown
-): error is GitHubRateLimitError {
-  if (error instanceof GitHubRateLimitError) {
-    return true;
-  }
-
-  if (!error || typeof error !== "object") {
-    return false;
-  }
-
-  const candidate = error as {
-    name?: string;
-    message?: string;
-    cause?: unknown;
-  };
-
-  if (candidate.name === "GitHubRateLimitError") {
-    return true;
-  }
-
-  if (candidate.message?.includes(GITHUB_PRIMARY_RATE_LIMIT_MESSAGE)) {
-    return true;
-  }
-
-  if (candidate.cause) {
-    return isGitHubRateLimitError(candidate.cause);
-  }
-
-  return false;
-}
-
-function toGitHubRateLimitError(error: unknown) {
-  const maybeError = error as ErrorWithStatus;
-  const status = maybeError?.status;
-  const headers = maybeError?.response?.headers;
-
-  const remaining = getHeaderCaseInsensitive(headers, "x-ratelimit-remaining");
-  const retryAfter = getHeaderCaseInsensitive(headers, "retry-after");
-  const resetAt = getHeaderCaseInsensitive(headers, "x-ratelimit-reset");
-  const retryAfterSecondsFromHeader = parseRetryAfterSeconds(retryAfter);
-
-  let retryAfterSeconds = retryAfterSecondsFromHeader;
-  if (!retryAfterSeconds) {
-    const resetEpochSeconds = parseRetryAfterSeconds(resetAt);
-    if (resetEpochSeconds) {
-      const nowEpochSeconds = Math.floor(Date.now() / 1000);
-      const diff = resetEpochSeconds - nowEpochSeconds;
-      retryAfterSeconds = diff > 0 ? diff : undefined;
-    }
-  }
-
-  const isRateLimitedByStatus = status === 429;
-  const isRateLimitedByForbidden =
-    status === 403 && String(remaining ?? "") === "0";
-  const isSecondaryRateLimit =
-    status === 403 &&
-    maybeError?.message?.toLowerCase().includes("secondary rate limit") ===
-      true;
-
-  if (
-    isRateLimitedByStatus ||
-    isRateLimitedByForbidden ||
-    isSecondaryRateLimit
-  ) {
-    return new GitHubRateLimitError(retryAfterSeconds);
-  }
-
-  return null;
-}
-
-async function withGitHubRateLimitHandling<T>(operation: () => Promise<T>) {
-  try {
-    return await operation();
-  } catch (error) {
-    const rateLimitError = toGitHubRateLimitError(error);
-    if (rateLimitError) {
-      throw rateLimitError;
-    }
-    throw error;
-  }
-}
 
 function createIntegrationContextResolver(
   config?: GitHubToolsAccessConfig,
@@ -247,6 +124,7 @@ export function createGetPullRequestsTool(
   const cached = getAICachedTools({
     organizationId: config?.organizationId,
     namespace: "github",
+    scope: config,
   });
   const resolveIntegrationContext = createIntegrationContextResolver(
     config,
@@ -287,9 +165,7 @@ export function createGetPullRequestsTool(
             owner: resolved.owner,
             repo: resolved.repo,
             pull_number,
-            headers: {
-              "X-GitHub-Api-Version": "2022-11-28",
-            },
+            headers: GITHUB_API_VERSION_HEADERS,
           })
         );
         return {
@@ -353,6 +229,7 @@ export function createGetReleaseByTagTool(
   const cached = getAICachedTools({
     organizationId: config?.organizationId,
     namespace: "github",
+    scope: config,
   });
   const resolveIntegrationContext = createIntegrationContextResolver(
     config,
@@ -418,9 +295,7 @@ export function createGetReleaseByTagTool(
             owner: resolved.owner,
             repo: resolved.repo,
             ...(isLatestRequest ? {} : { tag }),
-            headers: {
-              "X-GitHub-Api-Version": "2022-11-28",
-            },
+            headers: GITHUB_API_VERSION_HEADERS,
           })
         );
 
@@ -493,6 +368,7 @@ export function createGetCommitsByTimeframeTool(
   const cached = getAICachedTools({
     organizationId: config?.organizationId,
     namespace: "github",
+    scope: config,
   });
   const resolveIntegrationContext = createIntegrationContextResolver(
     config,
@@ -506,6 +382,23 @@ export function createGetCommitsByTimeframeTool(
             .filter((value) => value.length > 0)
         )
       : undefined;
+  const enforcedWindow = config?.enforcedCommitWindow;
+  // The enforced window bounds the request; tool arguments may only narrow it.
+  const clampToCommitWindow = (since?: string, until?: string) => {
+    if (!enforcedWindow) {
+      return { since, until };
+    }
+    return {
+      since:
+        since && Date.parse(since) > Date.parse(enforcedWindow.since)
+          ? since
+          : enforcedWindow.since,
+      until:
+        until && Date.parse(until) < Date.parse(enforcedWindow.until)
+          ? until
+          : enforcedWindow.until,
+    };
+  };
 
   return cached(
     tool({
@@ -543,14 +436,21 @@ export function createGetCommitsByTimeframeTool(
         const resolved = await resolveIntegrationContext(integrationId);
 
         const octokit = createOctokit(resolved.token);
-        const effectiveSince =
-          since ??
-          config?.enforcedCommitWindow?.since ??
-          getISODateFromDaysAgo(days ?? 7);
-        const effectiveUntil =
-          until ??
-          config?.enforcedCommitWindow?.until ??
-          new Date().toISOString();
+        const window = clampToCommitWindow(since, until);
+        const effectiveSince = window.since ?? getISODateFromDaysAgo(days ?? 7);
+        const effectiveUntil = window.until ?? new Date().toISOString();
+        // A request outside the enforced window clamps to an empty range.
+        if (Date.parse(effectiveSince) > Date.parse(effectiveUntil)) {
+          return {
+            commits: [],
+            pagination: {
+              page,
+              perPage: 100,
+              hasNextPage: false,
+              nextPage: null,
+            },
+          };
+        }
         const response = await withGitHubRateLimitHandling(() =>
           octokit.request("GET /repos/{owner}/{repo}/commits", {
             owner: resolved.owner,
@@ -560,9 +460,7 @@ export function createGetCommitsByTimeframeTool(
             ...(resolved.defaultBranch ? { sha: resolved.defaultBranch } : {}),
             until: effectiveUntil,
             per_page: 100,
-            headers: {
-              "X-GitHub-Api-Version": "2022-11-28",
-            },
+            headers: GITHUB_API_VERSION_HEADERS,
           })
         );
 
@@ -607,10 +505,9 @@ export function createGetCommitsByTimeframeTool(
           days?: number;
           page?: number;
         };
-        const cacheSince =
-          since ?? config?.enforcedCommitWindow?.since ?? "auto";
-        const cacheUntil =
-          until ?? config?.enforcedCommitWindow?.until ?? "auto";
+        const window = clampToCommitWindow(since, until);
+        const cacheSince = window.since ?? "auto";
+        const cacheUntil = window.until ?? "auto";
         return `get_commits_by_timeframe:integration=${integrationId}:since=${cacheSince}:until=${cacheUntil}:days=${String(days ?? "none")}:page=${String(page ?? 1)}`;
       },
     }

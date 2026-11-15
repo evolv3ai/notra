@@ -1,5 +1,9 @@
 import type { TooltipComponentOption } from "echarts/components";
 import {
+  TOOLTIP_MOVE_DURATION_S,
+  TOOLTIP_MOVE_EASING,
+} from "@/constants/chart-tooltip";
+import {
   getColorsCount,
   indicatorBackground,
   resolvedIndicatorBackground,
@@ -17,46 +21,18 @@ import {
   overflowTooltipPosition,
 } from "@/utils/chart-tooltip-position";
 import { echartsDatumValue } from "@/utils/echarts-datum";
+import { escapeHtml } from "@notra/utils/escape";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Tooltip — the shared HTML shell/row primitives and the chart-agnostic option
-// fields. The tooltip DOM lives inside `[data-chart={id}]`, so the injected
-// `--color-*` vars and Tailwind classes resolve directly (no color read). Each
-// chart composes its own rows but shares the shell/styling and base option.
-// ─────────────────────────────────────────────────────────────────────────────
 
 export type TooltipVariant = "default" | "frosted-glass";
 export type TooltipRoundness = "sm" | "md" | "lg" | "xl";
-// Tooltip anchoring: "variable" follows both axes (ECharts default, current
-// behavior); "fixed" sits beside the pointer's X so the hover line stays
-// visible, and stays pinned near the top (fixed Y).
 export type TooltipPosition = "fixed" | "variable";
 export type TooltipAxisPointer = "none" | "line" | "shadow" | "cross";
 
-// Hover motion — the cursor line snaps to the hovered category (an eased line
-// trails the pointer and smears); the tooltip box and its bars get a short
-// ease so values do not pop.
-export const TOOLTIP_MOVE_DURATION_S = 0.16;
-const TOOLTIP_MOVE_EASING = "cubic-bezier(0.16, 1, 0.3, 1)";
 export const TOOLTIP_BAR_MOTION_STYLE = `transition:width ${TOOLTIP_MOVE_DURATION_S}s ${TOOLTIP_MOVE_EASING}`;
 export const TOOLTIP_VALUE_MOTION_STYLE =
   "transition:opacity 0.24s ease,transform 0.24s ease";
 
-const HTML_ESCAPE_PATTERN = /[&<>"']/g;
-const HTML_ESCAPES: Record<string, string> = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;",
-};
-
-// Tooltip markup is injected as an HTML string by ECharts, so every
-// user-derived string (series labels, axis labels, formatted values) must be
-// escaped before interpolation — competitor names etc. come from user/LLM input.
-export function escapeHtml(value: string): string {
-  return value.replace(HTML_ESCAPE_PATTERN, (char) => HTML_ESCAPES[char] ?? char);
-}
 
 export const roundnessClass: Record<TooltipRoundness, string> = {
   sm: "rounded-sm",
@@ -70,21 +46,14 @@ export const tooltipVariantClass: Record<TooltipVariant, string> = {
   "frosted-glass": "bg-popover/70 backdrop-blur-md",
 };
 
-// The standard series indicator swatch — a rounded square filled with the
-// series' solid var or multi-stop gradient (indicatorBackground). A chart drops
-// this into a tooltipRow's `indicatorHtml`.
 export function tooltipIndicatorHtml(key: string, colorsCount: number): string {
-  return `<div class="h-2.5 w-2.5 shrink-0 rounded-[2px]" style="background:${indicatorBackground(key, colorsCount)}"></div>`;
+  return `<div class="h-2.5 w-2.5 shrink-0 rounded-[2px]" style="background:${escapeHtml(indicatorBackground(key, colorsCount))}"></div>`;
 }
 
-/** Swatch for tooltips mounted outside `[data-chart]`, where series CSS vars do not resolve. */
 export function tooltipColorSwatchHtml(color: string): string {
   return `<div class="h-2.5 w-2.5 shrink-0 rounded-[2px]" style="background:${escapeHtml(color)}"></div>`;
 }
 
-// One tooltip row: indicator swatch + label/value pair. `dimmed` is a class
-// fragment (e.g. " opacity-30") appended to the row so the selection/hover dim
-// stays byte-identical to the inlined markup.
 export function tooltipRow({
   indicatorHtml,
   labelText,
@@ -108,7 +77,6 @@ export function tooltipRow({
 const TOOLTIP_BAR_TRACK = 100;
 const TOOLTIP_BAR_MIN = 2;
 
-// Shared flat track + fill for every bar-style tooltip row.
 const TOOLTIP_BAR_TRACK_CLASS = "h-1 overflow-hidden rounded-full bg-muted";
 const TOOLTIP_BAR_FILL_CLASS = "ec-tooltip-bar-fill h-full rounded-full";
 
@@ -219,6 +187,114 @@ export function tooltipItemsFromRow(
   return items;
 }
 
+const MORE_ROW_KEY = "__more";
+
+function compareByValueDesc(left: TooltipBodyItem, right: TooltipBodyItem): number {
+  if (left.key === MORE_ROW_KEY) {
+    return 1;
+  }
+  if (right.key === MORE_ROW_KEY) {
+    return -1;
+  }
+  return (right.value ?? -1) - (left.value ?? -1);
+}
+
+export function capTooltipItems(
+  items: TooltipBodyItem[],
+  maxRows: number | undefined,
+  moreLabel: (count: number) => string,
+  valueFormatter?: TooltipValueFormatter
+): TooltipBodyItem[] {
+  if (maxRows === undefined || items.length <= maxRows + 1) {
+    return items;
+  }
+  const ranked = items.toSorted(compareByValueDesc);
+  const rest = ranked.slice(maxRows);
+  const sum = rest.reduce((total, item) => total + (item.value ?? 0), 0);
+  return [
+    ...ranked.slice(0, maxRows),
+    {
+      key: MORE_ROW_KEY,
+      colorsCount: 1,
+      labelText: moreLabel(rest.length),
+      value: sum,
+      valueText: formatTooltipValue(sum, valueFormatter).text,
+      dimmed: "",
+      paint: "rgba(128, 128, 128, 0.45)",
+    },
+  ];
+}
+
+const MIN_ROWS_PER_SECTION = 3;
+
+export function capTooltipGroups(
+  groups: TooltipBodyGroup[],
+  maxRows: number | undefined,
+  moreLabel: (count: number) => string,
+  valueFormatter?: TooltipValueFormatter
+): TooltipBodyGroup[] {
+  if (maxRows === undefined) {
+    return groups;
+  }
+  const total = groups.reduce((sum, group) => sum + group.items.length, 0);
+  if (total <= maxRows) {
+    return groups;
+  }
+  const rows = groups.map((group) =>
+    Math.min(group.items.length, MIN_ROWS_PER_SECTION)
+  );
+  let spare = maxRows - rows.reduce((sum, count) => sum + count, 0);
+  while (spare < 0) {
+    let worst = -1;
+    let worstScore = Number.POSITIVE_INFINITY;
+    for (const [index, group] of groups.entries()) {
+      const shown = rows[index] ?? 0;
+      if (shown <= 1) {
+        continue;
+      }
+      const score = (group.heading.value ?? 0) / shown;
+      if (score < worstScore) {
+        worst = index;
+        worstScore = score;
+      }
+    }
+    if (worst === -1) {
+      break;
+    }
+    rows[worst] = (rows[worst] ?? 0) - 1;
+    spare += 1;
+  }
+  while (spare > 0) {
+    let best = -1;
+    let bestScore = -1;
+    for (const [index, group] of groups.entries()) {
+      const shown = rows[index] ?? 0;
+      if (shown >= group.items.length) {
+        continue;
+      }
+      const score = (group.heading.value ?? 0) / Math.max(shown, 1);
+      if (score > bestScore) {
+        best = index;
+        bestScore = score;
+      }
+    }
+    if (best === -1) {
+      break;
+    }
+    rows[best] = (rows[best] ?? 0) + 1;
+    spare -= 1;
+  }
+  return groups.map((group, index) => ({
+    heading: group.heading,
+    items: capTooltipItems(
+      group.items,
+      Math.max((rows[index] ?? 0) - 1, 0),
+      moreLabel,
+      valueFormatter
+    ),
+  }));
+}
+
 export function tooltipEmptyBody(label: string): string {
   return `<span class="text-muted-foreground">${escapeHtml(label)}</span>`;
 }
@@ -238,9 +314,7 @@ function tooltipActivityRow(item: TooltipBodyItem, max: number): string {
 }
 
 function tooltipActivityBody(items: readonly TooltipBodyItem[]): string {
-  const ranked = [...items].sort(
-    (left, right) => (right.value ?? -1) - (left.value ?? -1)
-  );
+  const ranked = [...items].sort(compareByValueDesc);
   const total = ranked.reduce((sum, item) => sum + (item.value ?? 0), 0);
   return ranked.map((item) => tooltipActivityRow(item, total)).join("");
 }
@@ -257,9 +331,6 @@ export function composeTooltipBody(
     return items
       .map((item) =>
         tooltipRow({
-          // `paint` is the resolved color/gradient; prefer it over the
-          // `var(--color-*)` swatch, which only resolves while the tooltip DOM
-          // lives inside `[data-chart]` (appendTo:"body" tooltips do not).
           indicatorHtml:
             item.indicatorHtml ??
             (item.paint
@@ -283,7 +354,7 @@ export function composeTooltipBody(
   }
 
   const ranked = [...items];
-  ranked.sort((left, right) => (right.value ?? -1) - (left.value ?? -1));
+  ranked.sort(compareByValueDesc);
   return ranked
     .map((item) =>
       tooltipBarRow({
@@ -300,8 +371,6 @@ export function composeTooltipBody(
     .join("");
 }
 
-// The outer tooltip surface — border, padding, shadow, roundness + variant
-// classes — wrapping the axis label and the composed rows.
 export function tooltipShell({
   label,
   body,
@@ -321,23 +390,18 @@ export function tooltipShell({
       ? `<div class="text-[11px] font-medium text-muted-foreground">${escapeHtml(label)}</div>`
       : "";
   const surface = isRows
-    ? "min-w-32 gap-1.5 px-2.5 py-2"
-    : "min-w-52 gap-2 px-3 py-2.5";
+    ? "gap-1.5 px-2.5 py-2"
+    : "gap-2 px-3 py-2.5";
   const bodyGap =
     layout === "activity" ? "gap-1" : isRows ? "gap-1.5" : "gap-2";
-  return `<div class="grid ${surface} items-start border border-border ${tooltipVariantClass[variant]} text-xs shadow-md ${roundnessClass[roundness]}">
+  return `<div class="ec-tooltip-surface ${isRows ? "min-w-32" : "min-w-52"} overflow-hidden border border-border ${tooltipVariantClass[variant]} text-xs shadow-lift dark:shadow-md ${roundnessClass[roundness]}">
+    <div class="ec-tooltip-content grid ${surface} content-start items-start">
       ${header}
       <div class="grid ${bodyGap}" style="transition:opacity 0.24s ease">${body}</div>
+    </div>
     </div>`;
 }
 
-// Maps the TooltipPosition prop onto the ECharts tooltip `position` field.
-// "variable" + confine → undefined (ECharts default, stays inside the chart).
-// "variable" without confine → follow the pointer, clamp X so a left-edge flip
-// cannot paint outside the chart. Pair with appendTo:"body" so overflow-hidden
-// ancestors (sheet cards, rounded groups) cannot clip the box.
-// "fixed" → sit beside the pointer's X (right, or left if it does not fit),
-// pin near the top, still clamp X so the hover line stays visible.
 export function resolveTooltipPosition(
   position: TooltipPosition,
   confine = true
@@ -357,10 +421,6 @@ export function resolveTooltipPosition(
     );
 }
 
-// The chart-agnostic tooltip option fields (show, trigger, confine,
-// background/border/padding/extraCssText, axisPointer, position). The chart
-// supplies only `formatter` and spreads this in. `axisPointerColor` is the
-// pre-resolved cursor-line color, so this helper needs no live token read.
 export function tooltipBaseOption(params: {
   present: boolean;
   cursor: boolean;
@@ -371,6 +431,7 @@ export function tooltipBaseOption(params: {
   crosshair?: boolean;
   confine?: boolean;
   pointer?: TooltipAxisPointer;
+  scrub?: boolean;
 }): TooltipComponentOption {
   const {
     present,
@@ -381,6 +442,7 @@ export function tooltipBaseOption(params: {
     crosshair,
     confine = true,
     pointer = cursor ? (crosshair ? "cross" : "line") : "none",
+    scrub = false,
   } = params;
 
   const linePointer = {
@@ -401,9 +463,8 @@ export function tooltipBaseOption(params: {
     },
   };
 
-  // Custom `position` normally disables ECharts' transform transition — keep
-  // a short one so the box settles instead of teleporting.
-  const tooltipMotionCss = `box-shadow:none;pointer-events:none;will-change:transform;transition:transform ${TOOLTIP_MOVE_DURATION_S}s ${TOOLTIP_MOVE_EASING},opacity 0.28s ease;`;
+  const moveDuration = scrub ? 0 : TOOLTIP_MOVE_DURATION_S;
+  const tooltipMotionCss = `box-shadow:none;pointer-events:none;will-change:transform;transition:transform ${moveDuration}s ${TOOLTIP_MOVE_EASING},opacity 0.28s ease;`;
 
   return {
     show: present,
@@ -412,9 +473,7 @@ export function tooltipBaseOption(params: {
     enterable: false,
     showDelay: 0,
     hideDelay: 80,
-    transitionDuration: TOOLTIP_MOVE_DURATION_S,
-    // Sparklines sit in overflow-hidden cards; appending to body is what
-    // actually lets confine:false paint above a 40–48px plot.
+    transitionDuration: moveDuration,
     ...(confine ? {} : { appendTo: "body" as const }),
     backgroundColor: "transparent",
     borderWidth: 0,
@@ -433,18 +492,57 @@ export function tooltipBaseOption(params: {
   };
 }
 
-// Sectioned activity list: each group renders a heading (swatch, label, total)
-// followed by activity rows scaled to the heading value, so children read as
-// shares of it — the same rows the single-group "activity" layout uses.
+function tooltipIndicatorSlot(indicatorHtml: string): string {
+  return `<span class="flex size-3.5 shrink-0 items-center justify-center">${indicatorHtml}</span>`;
+}
+
+export function composeTooltipSectionedRows(
+  groups: readonly TooltipBodyGroup[]
+): string {
+  return groups
+    .map((group, index) => {
+      const fill =
+        group.heading.paint ??
+        indicatorBackground(group.heading.key, group.heading.colorsCount);
+      const rowsHtml = group.items
+        .toSorted(compareByValueDesc)
+        .map((item) => {
+          const indicatorHtml =
+            item.indicatorHtml ??
+            (item.paint
+              ? tooltipColorSwatchHtml(item.paint)
+              : tooltipIndicatorHtml(item.key, item.colorsCount));
+          return `<div class="flex w-full items-center gap-2 whitespace-nowrap${item.dimmed}">
+          ${tooltipIndicatorSlot(indicatorHtml)}
+          <div class="flex flex-1 items-center justify-between gap-4 leading-none">
+            <span class="text-muted-foreground">${escapeHtml(item.labelText)}</span>
+            <span class="text-foreground/80 font-mono text-[11px] tabular-nums">${escapeHtml(item.valueText)}</span>
+          </div>
+        </div>`;
+        })
+        .join("");
+      const separator =
+        index > 0
+          ? `<div class="border-border my-0.5 border-t" role="separator"></div>`
+          : "";
+      return `${separator}<div class="grid gap-1.5">
+          <div class="flex items-center justify-between gap-4 leading-none">
+            <span class="flex items-center gap-2 font-medium text-foreground">${tooltipIndicatorSlot(tooltipColorSwatchHtml(fill))}${escapeHtml(group.heading.labelText)}</span>
+            <span class="font-mono text-[11px] font-medium text-foreground tabular-nums">${escapeHtml(group.heading.valueText)}</span>
+          </div>
+          ${rowsHtml}
+        </div>`;
+    })
+    .join("");
+}
+
 export function composeTooltipGroupedBody(
   groups: readonly TooltipBodyGroup[]
 ): string {
   return groups
     .map((group, index) => {
       const headingValue = group.heading.value ?? 0;
-      const rows = group.items.toSorted(
-        (left, right) => (right.value ?? -1) - (left.value ?? -1)
-      );
+      const rows = group.items.toSorted(compareByValueDesc);
       const headingHtml = tooltipGroupHeadingRow({
         key: group.heading.key,
         colorsCount: group.heading.colorsCount,

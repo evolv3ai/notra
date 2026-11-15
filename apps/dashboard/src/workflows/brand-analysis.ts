@@ -33,11 +33,6 @@ interface BrandAnalysisLogContext {
   retentionDays: LogRetentionDays;
 }
 
-/**
- * Records the analysis outcome in the organization activity log. The progress
- * state above powers the live UI only; without a log entry there is no
- * durable record of what ran or why it failed.
- */
 async function logBrandAnalysisRun(
   context: BrandAnalysisLogContext,
   outcome:
@@ -89,45 +84,50 @@ export async function brandAnalysisWorkflow(
     ...(jobId ? { jobId } : {}),
   };
 
-  try {
-    await setBrandAnalysisProgress({
+  const setStage = (
+    status: "scraping" | "extracting" | "saving" | "completed",
+    currentStep: number
+  ) =>
+    setBrandAnalysisProgress({
       organizationId,
       jobId,
       startedAt: workflowStartedAt,
-      progress: { status: "scraping", currentStep: 1, totalSteps: STEP_COUNT },
+      progress: { status, currentStep, totalSteps: STEP_COUNT },
     });
-
-    const scrapingResult = await scrapeBrandWebsite(url);
-    if (!scrapingResult.success) {
-      await setBrandAnalysisProgress({
-        organizationId,
-        jobId,
-        startedAt: workflowStartedAt,
-        progress: {
-          status: "failed",
-          currentStep: 1,
-          totalSteps: STEP_COUNT,
-          error: scrapingResult.error,
-        },
-      });
-      await logBrandAnalysisRun(logContext, {
-        status: "failed",
-        stage: "scraping",
-        errorMessage: scrapingResult.error,
-      });
-      return { status: "scraping_failed" };
-    }
-
+  const reportFailure = async (
+    currentStep: number,
+    stage: string,
+    error: string
+  ) => {
     await setBrandAnalysisProgress({
       organizationId,
+      websiteUrl: url,
       jobId,
       startedAt: workflowStartedAt,
       progress: {
-        status: "extracting",
-        currentStep: 2,
+        status: "failed",
+        currentStep,
         totalSteps: STEP_COUNT,
+        error,
       },
     });
+    await logBrandAnalysisRun(logContext, {
+      status: "failed",
+      stage,
+      errorMessage: error,
+    });
+  };
+
+  try {
+    await setStage("scraping", 1);
+
+    const scrapingResult = await scrapeBrandWebsite(url);
+    if (!scrapingResult.success) {
+      await reportFailure(1, "scraping", scrapingResult.error);
+      return { status: "scraping_failed" };
+    }
+
+    await setStage("extracting", 2);
 
     const extractionResult = await extractBrandInfo({
       content: scrapingResult.content,
@@ -136,31 +136,11 @@ export async function brandAnalysisWorkflow(
       voiceId,
     });
     if (!extractionResult.success) {
-      await setBrandAnalysisProgress({
-        organizationId,
-        jobId,
-        startedAt: workflowStartedAt,
-        progress: {
-          status: "failed",
-          currentStep: 2,
-          totalSteps: STEP_COUNT,
-          error: extractionResult.error,
-        },
-      });
-      await logBrandAnalysisRun(logContext, {
-        status: "failed",
-        stage: "extraction",
-        errorMessage: extractionResult.error,
-      });
+      await reportFailure(2, "extraction", extractionResult.error);
       return { status: "extraction_failed" };
     }
 
-    await setBrandAnalysisProgress({
-      organizationId,
-      jobId,
-      startedAt: workflowStartedAt,
-      progress: { status: "saving", currentStep: 3, totalSteps: STEP_COUNT },
-    });
+    await setStage("saving", 3);
 
     await saveBrandSettingsFromAnalysis({
       organizationId,
@@ -169,16 +149,7 @@ export async function brandAnalysisWorkflow(
       brandInfo: extractionResult.brandInfo,
     });
 
-    await setBrandAnalysisProgress({
-      organizationId,
-      jobId,
-      startedAt: workflowStartedAt,
-      progress: {
-        status: "completed",
-        currentStep: 3,
-        totalSteps: STEP_COUNT,
-      },
-    });
+    await setStage("completed", 3);
 
     await logBrandAnalysisRun(logContext, {
       status: "success",
@@ -189,22 +160,7 @@ export async function brandAnalysisWorkflow(
 
     return { status: "completed", brandInfo: extractionResult.brandInfo };
   } catch (error) {
-    await setBrandAnalysisProgress({
-      organizationId,
-      jobId,
-      startedAt: workflowStartedAt,
-      progress: {
-        status: "failed",
-        currentStep: 0,
-        totalSteps: STEP_COUNT,
-        error: "Workflow failed unexpectedly",
-      },
-    });
-    await logBrandAnalysisRun(logContext, {
-      status: "failed",
-      stage: "unexpected",
-      errorMessage: "Workflow failed unexpectedly",
-    });
+    await reportFailure(0, "unexpected", "Workflow failed unexpectedly");
     console.error(
       `[Brand Analysis] Workflow failed for organization ${organizationId}`
     );

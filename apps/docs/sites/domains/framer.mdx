@@ -1,0 +1,58 @@
+---
+title: "Serve your site under a path on Framer"
+sidebarTitle: "Framer"
+description: "Forward acme.com/blog to Notra with Framer's Multi Site rewrites."
+authors:
+  - handle: jan
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/sites/domains/framer
+  type: how-to
+  applies_to:
+    - notra
+  language: en
+  status: stable
+---
+
+This guide forwards `acme.com/blog` to Notra with Framer's Multi Site rewrites, which proxy a path of your Framer site to an external origin. Read [the steps on every platform](/sites/domains/subpath#the-steps-on-every-platform) first, and replace `acme.notra.site` with the Notra address on your site's **Domains** page.
+
+<Note>
+  Multi Site needs Framer's **Advanced Hosting**, an add-on to the Pro plan that's included in Enterprise. It comes with 6 rewrites, and each section takes 2. Without it, **Add** opens an upgrade dialog, so use a [subdomain](/sites/domains/subdomain) instead.
+</Note>
+
+<Steps>
+  <Step title="Open Multi Site">
+    Open your Framer project's **Site Settings** and select **Hosting → Multi-site**. The list starts with the **Default** row, which is your Framer project itself.
+
+    <img src="/images/sites/domains/framer-settings-light.webp" alt="Framer's Site Settings with Hosting → Multi-site selected and only the Default row in the list" className="block dark:hidden rounded-lg border" />
+    <img src="/images/sites/domains/framer-settings-dark.webp" alt="Framer's Site Settings with Hosting → Multi-site selected and only the Default row in the list" className="hidden dark:block rounded-lg border" />
+  </Step>
+  <Step title="Add the rewrites">
+    Click **Add** once for each row, enter the path, choose the type **External**, enter the URL and click **Add**:
+
+    | Path | URL |
+    | --- | --- |
+    | `/blog` | `https://acme.notra.site/blog` |
+    | `/blog/*` | `https://acme.notra.site/blog/:1` |
+
+    <img src="/images/sites/domains/framer-multi-site-light.webp" alt="Framer's Multi-site settings with /blog and /blog/* rewritten to acme.notra.site" className="block dark:hidden rounded-lg border" />
+    <img src="/images/sites/domains/framer-multi-site-dark.webp" alt="Framer's Multi-site settings with /blog and /blog/* rewritten to acme.notra.site" className="hidden dark:block rounded-lg border" />
+
+    `/blog/*` doesn't match `/blog` itself, so each section needs both rules. `:1` inserts what `*` matched, which keeps the path as it is. Framer uses the first rule that matches, so drag these above any catch-all rule like `/*`.
+
+    If your site also has a changelog, add the same two rules for its path, for example `/changelog` and `/changelog/*`. Skip them otherwise, because a rewrite replaces any Framer page at that path.
+  </Step>
+  <Step title="Publish and check">
+    Click **Publish**, because rewrites take effect only when you publish the project. Open `https://acme.com/blog/_notra/probe.txt` to confirm the rule works, then click **Check** on the domain in Notra.
+  </Step>
+</Steps>
+
+## Limits to keep in mind
+
+- **Framer pages under `/blog`.** A rewrite wins over a Framer page at the same path, so delete or rename any Framer page under `/blog`, or it still shows up in Framer's sitemap.
+- **Sitemap.** Framer merges the sitemaps of rewrite origins into its own. If the posts don't show up in `https://acme.com/sitemap.xml`, submit `https://acme.com/blog/sitemap.xml` in Google Search Console.
+- **Custom headers** you set under **Hosting → Headers** for `/*`, such as `Content-Security-Policy` or `X-Robots-Tag`, also apply to `/blog`. Don't add `X-Robots-Tag: noindex` there, because the check fails on it.
+- **Navigation links.** Link from your Framer navigation with the full URL, for example `https://acme.com/blog`, because Framer replaces relative links to pages that aren't in the project.
+- **Analytics.** Framer's own analytics only count the main project, so visits under `/blog` show up in Notra's [site analytics](/sites/agents#ai-traffic-analytics) instead.
+- **Cookies.** Framer forwards your visitors' cookies to the rewrite target, so cookies your site sets for `/`, such as a login session, also reach Notra. Notra ignores them and doesn't store them, but scope sensitive cookies to the paths that need them.

@@ -1,0 +1,84 @@
+---
+title: "Serve your site under a path with AWS CloudFront"
+sidebarTitle: "AWS CloudFront"
+description: "Forward www.acme.com/blog to Notra with CloudFront cache behaviors and point your domain at the distribution with Route 53."
+authors:
+  - handle: jan
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/sites/domains/cloudfront
+  type: how-to
+  applies_to:
+    - notra
+  language: en
+  status: stable
+---
+
+This guide forwards `www.acme.com/blog` to Notra with an AWS CloudFront distribution in front of your website. CloudFront sends the section paths to Notra and everything else to the host that serves your website today, such as S3, a load balancer, Vercel or Webflow. Use the host that actually serves your website, so if `acme.com` redirects to `www.acme.com`, put CloudFront in front of `www.acme.com`. Read [the steps on every platform](/sites/domains/subpath#the-steps-on-every-platform) first, and replace `acme.notra.site` with the Notra address on your site's **Domains** page.
+
+If your domain already points at a CloudFront distribution, skip the first step and add the Notra origin and behaviors to that distribution.
+
+<Steps>
+  <Step title="Create the distribution">
+    In the AWS console, open **CloudFront → Create distribution** and set:
+
+    - **Origin domain**: a hostname that serves your website and isn't `www.acme.com`, for example `acme-site.vercel.app` or your load balancer's DNS name. Once `www.acme.com` points at CloudFront, using it as the origin would send CloudFront's requests back to itself. This origin keeps serving everything outside your section paths.
+    - **Viewer protocol policy**: **Redirect HTTP to HTTPS**.
+    - **Allowed HTTP methods**, **Cache policy** and **Origin request policy** of the default behavior: what your website needs. CloudFront only allows `GET` and `HEAD` by default, so include `POST` if your website has forms or an API, and see [AWS's cache behavior settings](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/DownloadDistValuesCacheBehavior.html) for the rest.
+
+    On Webflow, add a dedicated origin subdomain such as `wf.acme.com` under **Site settings → Publishing → Production**, make it the default domain and use it as the origin domain. Webflow doesn't support proxying its `*.webflow.io` staging addresses. See [Webflow's reverse proxy guide](https://help.webflow.com/hc/en-us/articles/49835650986259-Set-up-a-self-managed-reverse-proxy-in-Webflow).
+  </Step>
+  <Step title="Add Notra as an origin">
+    Open the distribution's **Origins** tab, click **Create origin** and set:
+
+    - **Origin domain**: `acme.notra.site`
+    - **Protocol**: **HTTPS only**
+    - **Origin path**: empty, so `/blog/launch` goes to `https://acme.notra.site/blog/launch`
+  </Step>
+  <Step title="Create an origin request policy">
+    Open **CloudFront → Policies → Origin request → Create origin request policy**, name it `notra-site` and set:
+
+    - **Headers**: **All viewer headers except** `Host`, `Authorization` and `X-Vercel-IP-Country`
+    - **Cookies**: **None**
+    - **Query strings**: **All**
+
+    - Leaving out `Host` lets CloudFront send `Host: acme.notra.site`, which Notra needs to find your site. Every other viewer header, including `Accept` and `User-Agent`, still reaches Notra.
+    - Notra doesn't need cookies or the `Authorization` header, so your visitors' sessions stay on your domain.
+    - Notra reads the visitor's country from `X-Vercel-IP-Country`, so dropping it stops visitors from choosing the country site analytics records.
+  </Step>
+  <Step title="Add a behavior for each section path">
+    Open the **Behaviors** tab and create two behaviors per section, `/blog` and `/blog/*`, plus `/changelog` and `/changelog/*` if the changelog is on. Give each one the same settings:
+
+    | Setting | Value |
+    | --- | --- |
+    | **Origin and origin groups** | `acme.notra.site` |
+    | **Viewer protocol policy** | Redirect HTTP to HTTPS |
+    | **Allowed HTTP methods** | GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE |
+    | **Cache policy** | `CachingDisabled` |
+    | **Origin request policy** | `notra-site` |
+
+    - Don't use a single `/blog*` pattern, because it also matches paths like `/blogroll` on your website.
+    - CloudFront uses the first behavior whose path pattern matches, in the order the behaviors are listed. If the distribution already has a behavior that matches `/blog` or `/blog/*`, such as `/blog*` or `/*`, move the Notra behaviors above it, or that behavior keeps serving the section paths from your old origin and the check fails.
+    - **Allowed HTTP methods** has to include `POST`, because site analytics sends events to `/blog/_notra/e`. CloudFront only allows `GET` and `HEAD` by default, which leaves your pages working but your analytics empty.
+    - `CachingDisabled` leaves caching to Notra, which already sends the right `Cache-Control` for every file. A CloudFront cache would also ignore the `Accept` header and could hand Markdown to browsers or HTML to AI agents.
+  </Step>
+  <Step title="Add your domain to the distribution">
+    In the **General** tab, click **Edit** and add `www.acme.com` under **Alternate domain name (CNAME)**. Under **Custom SSL certificate**, pick an AWS Certificate Manager certificate for `www.acme.com`. CloudFront only lists certificates issued in **US East (N. Virginia)** `us-east-1`, so request it there.
+  </Step>
+  <Step title="Point your domain at CloudFront with Route 53">
+    In **Route 53 → Hosted zones**, open your domain's zone and create a record for `www` with **Alias** turned on, routing traffic to **Alias to CloudFront distribution** and your distribution. Create it once as type `A` and once as `AAAA`. Replace any existing record for `www` first.
+
+    With another DNS provider, add a `CNAME` from `www` to the distribution's domain name, for example `d111111abcdef8.cloudfront.net`.
+  </Step>
+  <Step title="Check">
+    Wait until the distribution shows as deployed, open `https://www.acme.com/blog/_notra/probe.txt` to confirm it answers, then click **Check** on the domain in Notra.
+  </Step>
+</Steps>
+
+## Limits to keep in mind
+
+- **AWS WAF** and Bot Control rules can block the check and AI crawlers, so allow your section paths, or at least the user agent `NotraSitesVerifier/1.0`. Also make sure WAF doesn't block `POST` requests to `/blog/_notra/e`.
+- **Redirects** from Notra reach the browser unchanged, because CloudFront never follows an origin's redirects, so your `blog.json` redirects work without extra setup.
+- **Visitor addresses.** CloudFront adds the visitor's IP to `X-Forwarded-For`, so site analytics can tell visitors apart. Notra doesn't read CloudFront's country headers, so those visits show without a country.
+- **Webflow, Squarespace, Wix and other site builders** can't forward paths themselves. Put CloudFront in front of them with this guide, using an origin hostname the builder serves for you that isn't your public `www.acme.com`, or use a [Cloudflare Worker](/sites/domains/cloudflare) if your domain is on Cloudflare.

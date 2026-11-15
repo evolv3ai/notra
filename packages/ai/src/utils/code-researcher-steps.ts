@@ -17,7 +17,7 @@ const MAX_DEPTH = 4;
  * diffs are dropped and long values trimmed. The model never sees these; it
  * only gets the final brief.
  */
-export function compactStepValue(value: unknown, depth = 0): unknown {
+function compactStepValue(value: unknown, depth = 0): unknown {
   if (typeof value === "string") {
     return value.length > CODE_RESEARCHER_STEP_MAX_STRING_CHARS
       ? `${value.slice(0, CODE_RESEARCHER_STEP_MAX_STRING_CHARS)}…`
@@ -25,7 +25,7 @@ export function compactStepValue(value: unknown, depth = 0): unknown {
   }
   if (Array.isArray(value)) {
     if (depth >= MAX_DEPTH) {
-      return `[${String(value.length)} items]`;
+      return `[${value.length} items]`;
     }
     return value
       .slice(0, CODE_RESEARCHER_STEP_MAX_ARRAY_ITEMS)
@@ -38,7 +38,7 @@ export function compactStepValue(value: unknown, depth = 0): unknown {
     const compact: Record<string, unknown> = {};
     for (const [key, field] of Object.entries(value)) {
       compact[key] = CODE_RESEARCHER_STEP_OMITTED_KEYS.has(key)
-        ? `[${String(typeof field === "string" ? field.length : 0)} chars omitted]`
+        ? `[${typeof field === "string" ? field.length : 0} chars omitted]`
         : compactStepValue(field, depth + 1);
     }
     return compact;
@@ -116,7 +116,6 @@ export function addStepUsage(
     cacheReadTokens: total.cacheReadTokens + step.cacheReadTokens,
     cacheWriteTokens: total.cacheWriteTokens + step.cacheWriteTokens,
     reasoningTokens: (total.reasoningTokens ?? 0) + (step.reasoningTokens ?? 0),
-    // Labels the charge; the cost itself is already priced per step.
     modelId:
       total.modelId === stepModel ? stepModel : CODE_RESEARCH_MIXED_MODELS,
     maxPromptTokens: Math.max(total.maxPromptTokens ?? 0, promptTokens(step)),

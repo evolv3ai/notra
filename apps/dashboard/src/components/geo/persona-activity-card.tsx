@@ -1,17 +1,19 @@
 "use client";
 
 import { formatDayLabel } from "@notra/geo-core/utils/day-label";
-import { Skeleton } from "@notra/ui/components/ui/skeleton";
-import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
+import { InstrumentEmpty, InstrumentModule } from "ui/card";
+import { useLocale, useTranslations } from "use-intl";
 
 import { EmptyStateTrendPreview } from "@/components/empty-state-preview";
 import { EChartsAreaChart } from "@/components/evilcharts/charts/echarts-area-chart";
 import { GeoRangePicker } from "@/components/geo/geo-range-picker";
+import { GeoStatDelta } from "@/components/geo/geo-stat-delta";
+import { PersonaActivityBodySkeleton } from "@/components/geo/persona-activity-skeleton";
 import {
-  InstrumentEmpty,
-  InstrumentModule,
-} from "@/components/instrument/instrument-module";
+  GEO_PERSONA_CHART_FILL_ALPHA,
+  GEO_PERSONA_ROLLING_DAYS,
+} from "@/constants/geo-personas";
 import { useIsGeoScanning } from "@/lib/hooks/use-geo";
 import { useGeoPersonaActivity } from "@/lib/hooks/use-geo-personas";
 import { useGeoRange } from "@/lib/hooks/use-geo-range";
@@ -27,8 +29,10 @@ import {
   buildPersonaActivityRows,
   buildPersonaActivitySeries,
   personaActivityAxisMax,
+  personaActivityFetchFrom,
+  personaActivityWithin,
   personaMentionRate,
-  personaForecastKey,
+  personaMentionRateDelta,
 } from "@/utils/persona-activity";
 
 export function PersonaActivityCard({
@@ -42,10 +46,18 @@ export function PersonaActivityCard({
   const [hiddenPersonas, setHiddenPersonas] = useState<string[]>([]);
   const hiddenPersonaIds = new Set(hiddenPersonas);
   const range = useGeoRange();
-  const { data, isPending, isError, refetch } = useGeoPersonaActivity(
-    organizationId,
-    range.query
-  );
+  const {
+    data: fetched,
+    isPending,
+    isError,
+    refetch,
+  } = useGeoPersonaActivity(organizationId, {
+    ...range.query,
+    from: personaActivityFetchFrom(range.query.from),
+  });
+  const data = fetched
+    ? personaActivityWithin(fetched, range.query.from)
+    : undefined;
   const isScanning = useIsGeoScanning(organizationId);
   const series = data ? buildPersonaActivitySeries(data, personas) : [];
   const personaIndexes = new Map(
@@ -55,30 +67,14 @@ export function PersonaActivityCard({
   for (const item of series) {
     const colors = accountSeriesColors(personaIndexes.get(item.personaId) ?? 0);
     config[item.dataKey] = { label: item.label, colors };
-    if (item.isCurrent) {
-      config[personaForecastKey(item.personaId, item.snapshotVersion)] = {
-        label: t("forecastLabel", { name: item.label }),
-        colors,
-      };
-    }
   }
-  const rows = data ? buildPersonaActivityRows(data, series) : [];
-  const visibleKeys = series.flatMap((item) =>
-    hiddenPersonaIds.has(item.personaId)
-      ? []
-      : [item.dataKey, personaForecastKey(item.personaId, item.snapshotVersion)]
-  );
+  const rows = fetched
+    ? buildPersonaActivityRows(fetched, series, range.query.from)
+    : [];
+  const visibleKeys = series
+    .filter((item) => !hiddenPersonaIds.has(item.personaId))
+    .map((item) => item.dataKey);
   const axisMax = personaActivityAxisMax(rows, visibleKeys);
-  const hasForecast = series.some(
-    (item) =>
-      item.isCurrent &&
-      rows.some(
-        (row) =>
-          typeof row[
-            personaForecastKey(item.personaId, item.snapshotVersion)
-          ] === "number"
-      )
-  );
   const hasResults = data?.points.some(
     (point) =>
       point.checks > 0 &&
@@ -91,7 +87,9 @@ export function PersonaActivityCard({
       variant="table"
       bodyClassName="px-4 pb-4 pt-2"
     >
-      {isPending ? <Skeleton className="h-64 w-full" /> : null}
+      {isPending ? (
+        <PersonaActivityBodySkeleton count={personas.length} />
+      ) : null}
       {isError ? (
         <div className="flex h-64 flex-col items-center justify-center gap-3 text-sm">
           <p>{t("loadFailed")}</p>
@@ -114,6 +112,11 @@ export function PersonaActivityCard({
                 (item) => item.personaId === persona.id && item.isCurrent
               );
               const rate = personaMentionRate(
+                data,
+                persona.id,
+                currentSeries?.snapshotVersion
+              );
+              const delta = personaMentionRateDelta(
                 data,
                 persona.id,
                 currentSeries?.snapshotVersion
@@ -147,15 +150,25 @@ export function PersonaActivityCard({
                     />
                     <span className="truncate">{persona.name}</span>
                   </button>
-                  <p className="text-xl font-semibold tabular-nums">
-                    {rate === null ? "—" : `${formatOneDecimal(rate, locale)}%`}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xl font-semibold tabular-nums">
+                      {rate === null
+                        ? "—"
+                        : `${formatOneDecimal(rate, locale)}%`}
+                    </p>
+                    <GeoStatDelta
+                      delta={delta}
+                      kind="rate"
+                      label={t("changeLabel", { name: persona.name })}
+                    />
+                  </div>
                 </div>
               );
             })}
           </div>
           <EChartsAreaChart
-            className="h-72 w-full"
+            renderer="svg"
+            className="h-64 w-full cursor-crosshair"
             config={config}
             data={rows}
             xDataKey="day"
@@ -166,70 +179,42 @@ export function PersonaActivityCard({
             <EChartsAreaChart.XAxis
               dataKey="day"
               tickFormatter={(day: string) => formatDayLabel(day, locale)}
-              hideDots
             />
             <EChartsAreaChart.YAxis
               min={0}
               max={axisMax}
-              hideDots
               tickFormatter={(value) => `${value}%`}
             />
             {series.map((item) => (
               <EChartsAreaChart.Area
                 key={item.dataKey}
                 dataKey={item.dataKey}
+                fillAlpha={GEO_PERSONA_CHART_FILL_ALPHA}
                 variant={item.isCurrent ? "gradient" : "none"}
                 visible={!hiddenPersonaIds.has(item.personaId)}
                 strokeVariant={item.isCurrent ? "solid" : "dashed"}
+                connectNulls
                 gapMissing
                 strokeWidth={item.isCurrent ? 2 : 1.5}
               >
                 <EChartsAreaChart.ActiveDot variant="border" />
               </EChartsAreaChart.Area>
             ))}
-            {series
-              .filter((item) => item.isCurrent)
-              .map((item) => {
-                const key = personaForecastKey(
-                  item.personaId,
-                  item.snapshotVersion
-                );
-                return (
-                  <EChartsAreaChart.Area
-                    key={key}
-                    dataKey={key}
-                    variant="none"
-                    visible={!hiddenPersonaIds.has(item.personaId)}
-                    strokeVariant="dashed"
-                    strokeWidth={1.5}
-                    gapMissing
-                  >
-                    <EChartsAreaChart.ActiveDot variant="border" />
-                  </EChartsAreaChart.Area>
-                );
-              })}
             <EChartsAreaChart.Tooltip
+              confine={false}
               labelFormatter={(day: string) => formatFullDayLabel(day, locale)}
+              layout="activity"
+              position="fixed"
+              roundness="xl"
+              scrub={rows.length > 1}
               valueFormatter={(value) =>
                 `${formatOneDecimal(Number(value), locale)}%`
               }
             />
           </EChartsAreaChart>
-          {hasForecast ? (
-            <div className="text-muted-foreground mt-2 flex justify-end gap-4 text-xs">
-              <span className="flex items-center gap-1.5">
-                <span aria-hidden="true" className="bg-border h-px w-5" />
-                {t("actual")}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span
-                  aria-hidden="true"
-                  className="border-border w-5 border-t border-dashed"
-                />
-                {t("forecast")}
-              </span>
-            </div>
-          ) : null}
+          <p className="text-muted-foreground mt-2 text-right text-xs">
+            {t("rollingNote", { days: GEO_PERSONA_ROLLING_DAYS })}
+          </p>
         </>
       ) : null}
       {!isPending && !isError && !hasResults ? (

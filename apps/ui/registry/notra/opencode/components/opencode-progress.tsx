@@ -14,19 +14,13 @@ import type { OpencodeProgressProps } from "../types/opencode";
 
 const LAST_CELL = OPENCODE_PROGRESS_CELLS - 1;
 const TRAIL_LENGTH = OPENCODE_PROGRESS_TRAIL.length;
-/**
- * The head sweeps from the first cell to the last and back to the first,
- * then keeps moving off the left edge so the trail drains into cell 0.
- */
 const SWEEP_FRAMES = LAST_CELL * 2 + TRAIL_LENGTH;
-/** The sweep, then the same number of frames at rest as the trail is long. */
 const FRAME_COUNT = SWEEP_FRAMES + TRAIL_LENGTH;
 const CELLS = Array.from(
   { length: OPENCODE_PROGRESS_CELLS },
   (_, cell) => cell
 );
 
-/** Opacity of `cell` on `frame`, or null when the cell rests as a dot. */
 const cellOpacity = (cell: number, frame: number): number | null => {
   if (frame >= SWEEP_FRAMES) {
     return null;

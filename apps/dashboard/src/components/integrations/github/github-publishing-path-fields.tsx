@@ -6,26 +6,40 @@ import {
 } from "@notra/schemas/dashboard/integrations";
 import { Field, FieldLabel } from "@notra/ui/components/ui/field";
 import { Input } from "@notra/ui/components/ui/input";
-import { useTranslations } from "next-intl";
 import { type FormEvent, useId } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import type { GitHubPublishingPathFieldsProps } from "@/types/integrations/github";
 
 export function GitHubPublishingPathFields({
-  contentType,
   contentPath,
   directory,
   disabled = false,
   imagePath,
   isSaving = false,
+  onCancel,
+  onDirtyChange,
   onSave,
 }: GitHubPublishingPathFieldsProps) {
   const t = useTranslations("integrations.github.pathFields");
   const tCommon = useTranslations("common");
   const contentPathId = useId();
   const imagePathId = useId();
+
+  const handleChange = (event: FormEvent<HTMLFormElement>) => {
+    const formData = new FormData(event.currentTarget);
+    onDirtyChange(
+      String(formData.get("contentPath") ?? "") !== (contentPath ?? "") ||
+        String(formData.get("imagePath") ?? "") !== (imagePath ?? "")
+    );
+  };
+
+  const handleReset = () => {
+    onDirtyChange(false);
+    onCancel();
+  };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -57,7 +71,12 @@ export function GitHubPublishingPathFields({
   };
 
   return (
-    <form className="max-w-xl space-y-4" onSubmit={handleSubmit}>
+    <form
+      className="space-y-4"
+      onChange={handleChange}
+      onReset={handleReset}
+      onSubmit={handleSubmit}
+    >
       <Field>
         <FieldLabel htmlFor={contentPathId}>{t("contentPath")}</FieldLabel>
         <Input
@@ -80,16 +99,14 @@ export function GitHubPublishingPathFields({
         />
       </Field>
 
-      <Button
-        disabled={disabled || isSaving}
-        size="sm"
-        type="submit"
-        variant="outline"
-      >
-        {isSaving
-          ? tCommon("actions.saving")
-          : t("save", { type: contentType })}
-      </Button>
+      <div className="flex justify-end gap-2">
+        <Button disabled={isSaving} size="sm" type="reset" variant="ghost">
+          {tCommon("actions.cancel")}
+        </Button>
+        <Button disabled={disabled} loading={isSaving} size="sm" type="submit">
+          {tCommon("actions.save")}
+        </Button>
+      </div>
     </form>
   );
 }

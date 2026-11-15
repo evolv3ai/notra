@@ -37,7 +37,7 @@ import {
   KiboCodeBlockNode,
 } from "./nodes/kibo-code-block-node";
 
-export const CONTENT_IMAGE: ElementTransformer = {
+const CONTENT_IMAGE: ElementTransformer = {
   dependencies: [ContentImageNode],
   export: (node) => {
     if (!$isContentImageNode(node)) {
@@ -74,7 +74,7 @@ export const CONTENT_IMAGE: ElementTransformer = {
   type: "element",
 };
 
-export const CONTENT_VIDEO: ElementTransformer = {
+const CONTENT_VIDEO: ElementTransformer = {
   dependencies: [ContentVideoNode],
   export: (node) => {
     if (!$isContentVideoNode(node)) {
@@ -104,7 +104,7 @@ export const CONTENT_VIDEO: ElementTransformer = {
   type: "element",
 };
 
-export const HORIZONTAL_RULE: ElementTransformer = {
+const HORIZONTAL_RULE: ElementTransformer = {
   dependencies: [HorizontalRuleNode],
   export: (node) => {
     return $isHorizontalRuleNode(node) ? "---" : null;
@@ -112,8 +112,6 @@ export const HORIZONTAL_RULE: ElementTransformer = {
   regExp: /^(---|\*\*\*|___)\s?$/,
   replace: (parentNode, _children, _match, isImport) => {
     const hrNode = $createHorizontalRuleNode();
-    // When importing from markdown or when there's a next sibling, replace the node.
-    // Otherwise, insert before to ensure proper cursor positioning after the transformation.
     if (isImport || parentNode.getNextSibling() != null) {
       parentNode.replace(hrNode);
     } else {
@@ -124,7 +122,7 @@ export const HORIZONTAL_RULE: ElementTransformer = {
   type: "element",
 };
 
-export const KIBO_CODE_BLOCK: MultilineElementTransformer = {
+const KIBO_CODE_BLOCK: MultilineElementTransformer = {
   dependencies: [KiboCodeBlockNode],
   export: (node) => {
     if (!$isKiboCodeBlockNode(node)) {
@@ -149,7 +147,6 @@ export const KIBO_CODE_BLOCK: MultilineElementTransformer = {
   ) => {
     const language = startMatch[1] || "";
 
-    // During markdown import (linesInBetween has content)
     if (linesInBetween) {
       const code = linesInBetween.join("\n");
       const codeBlockNode = $createKiboCodeBlockNode(code, language);
@@ -157,7 +154,6 @@ export const KIBO_CODE_BLOCK: MultilineElementTransformer = {
       return;
     }
 
-    // During markdown shortcut (children exist, replace parent)
     if (children && children.length > 0) {
       const code = children.map((child) => child.getTextContent()).join("\n");
       const codeBlockNode = $createKiboCodeBlockNode(code, language);
@@ -168,7 +164,6 @@ export const KIBO_CODE_BLOCK: MultilineElementTransformer = {
         rootNode.append(codeBlockNode);
       }
     } else {
-      // Handle empty code block (just ``` with no content)
       const codeBlockNode = $createKiboCodeBlockNode("", language);
       rootNode.append(codeBlockNode);
     }
@@ -178,6 +173,9 @@ export const KIBO_CODE_BLOCK: MultilineElementTransformer = {
 
 const TABLE_ROW_REGEX = /^\|(.*)\|\s*$/;
 const TABLE_SEPARATOR_REGEX = /^\|(\s*:?-+:?\s*\|)+\s*$/;
+// Every body row gets one cell per header column, so a wide header with many
+// short rows multiplies into editor nodes. Tables past this budget stay text.
+const MAX_TABLE_CELLS = 10_000;
 const LEADING_PIPE_REGEX = /^\|/;
 const TRAILING_PIPE_REGEX = /\|\s*$/;
 
@@ -249,7 +247,7 @@ function buildTableNode(
   return tableNode;
 }
 
-export const TABLE_MARKDOWN: MultilineElementTransformer = {
+const TABLE_MARKDOWN: MultilineElementTransformer = {
   dependencies: [TableNode, TableRowNode, TableCellNode],
   export: (node) => {
     if (!$isTableNode(node)) {
@@ -292,6 +290,9 @@ export const TABLE_MARKDOWN: MultilineElementTransformer = {
     }
 
     const headerCells = parsePipeCells(headerLine);
+    if (headerCells.length > MAX_TABLE_CELLS) {
+      return null;
+    }
 
     const dataRows: string[][] = [];
     let lastLineIndex = startLineIndex + 1;
@@ -303,6 +304,9 @@ export const TABLE_MARKDOWN: MultilineElementTransformer = {
       }
       dataRows.push(parsePipeCells(line));
       lastLineIndex = i;
+      if ((dataRows.length + 1) * headerCells.length > MAX_TABLE_CELLS) {
+        return null;
+      }
     }
 
     const tableNode = buildTableNode(headerCells, dataRows);

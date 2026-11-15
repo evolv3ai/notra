@@ -1,13 +1,11 @@
 "use client";
 
+import { InstrumentEmpty, InstrumentModule } from "ui/card";
+
 import { ChartSeriesLegend } from "@/components/analytics/chart-legend";
 import { EChartsAreaChart } from "@/components/evilcharts/charts/echarts-area-chart";
 import { EChartsBarChart } from "@/components/evilcharts/charts/echarts-bar-chart";
 import { EChartsLineChart } from "@/components/evilcharts/charts/echarts-line-chart";
-import {
-  InstrumentEmpty,
-  InstrumentModule,
-} from "@/components/instrument/instrument-module";
 import type { AccountSeriesChartCardProps } from "@/types/analytics";
 
 const CHART_CLASS = "h-56 w-full";
@@ -28,9 +26,6 @@ export function AccountSeriesChartCard({
   emptyMessage,
 }: AccountSeriesChartCardProps) {
   const seriesKeys = allKeys.filter((key) => !hiddenKeys.has(key));
-  // Every day in the selected range is zero-filled by buildAccountSeriesRows,
-  // so render the chart whenever an account is selected - a quiet range shows a
-  // flat line at zero rather than an empty state.
   const hasData = rows.length > 0 && seriesKeys.length > 0;
 
   return (

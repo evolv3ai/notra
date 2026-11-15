@@ -12,28 +12,25 @@ import {
 } from "@notra/geo-core/constants/geo";
 import type { GeoSettingsUpsertInput } from "@notra/geo-core/types/geo";
 import { normalizeConversionPaths } from "@notra/geo-core/utils/geo-conversion-paths";
-import { resolveTrackedEngines } from "@notra/geo-core/utils/geo-engines";
 import { trackedGeoLanguages } from "@notra/geo-core/utils/geo-language-rows";
+import { geoDefaultEngines } from "@notra/geo-core/utils/geo-model-catalog";
 import { extraProjectDomains } from "@notra/geo-core/utils/geo-project-domains";
+import { PageHeading } from "@notra/ui/components/shared/page-heading";
 import { Badge } from "@notra/ui/components/ui/badge";
 import { Input } from "@notra/ui/components/ui/input";
 import { Label } from "@notra/ui/components/ui/label";
 import { TitleCard } from "@notra/ui/components/ui/title-card";
 import { useAsyncDebouncer } from "@tanstack/react-pacer";
-import { useTranslations } from "next-intl";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { useTranslations } from "use-intl";
 
 import { GeoEnginePicker } from "@/components/geo/geo-engine-picker";
 import { GeoLanguagePicker } from "@/components/geo/geo-language-picker";
-import {
-  GeoScanFrequencySelect,
-  GeoScanSchedule,
-} from "@/components/geo/geo-scan-schedule";
+import { GeoScanFrequencySelect } from "@/components/geo/geo-scan-schedule";
 import { GeoTagList } from "@/components/geo/geo-tag-list";
 import { GeoProjectBrandSection } from "@/components/geo/project-brand-section";
 import { useGeoSettingsUpsert } from "@/lib/hooks/use-geo";
 import { useGeoActiveProject } from "@/lib/hooks/use-geo-active-project";
-import { useGeoScanEstimate } from "@/lib/hooks/use-geo-scan-estimate";
 import { useLanguageLabel } from "@/lib/hooks/use-language-label";
 import { useHasZdrEntitlement } from "@/lib/hooks/use-plan";
 import type {
@@ -48,7 +45,6 @@ export function GeoSettingsForm({
   organizationId,
   settings,
   catalog,
-  promptCount,
   hideHeader = false,
   section,
 }: GeoSettingsFormProps) {
@@ -71,8 +67,8 @@ export function GeoSettingsForm({
   const [languages, setLanguages] = useState(() =>
     trackedGeoLanguages(settings?.languages ?? [])
   );
-  const [engines, setEngines] = useState<string[]>(() =>
-    resolveTrackedEngines(catalog, settings?.engines)
+  const [engines, setEngines] = useState<string[]>(
+    () => settings?.engines ?? geoDefaultEngines(catalog)
   );
   const [enforceZdr, setEnforceZdr] = useState(
     () => settings?.enforceZdr ?? true
@@ -107,20 +103,6 @@ export function GeoSettingsForm({
     settings,
   });
 
-  const { scanSize } = useGeoScanEstimate({
-    organizationId,
-    promptCount,
-    engines,
-    languages,
-  });
-  const scanSizeNote =
-    scanSize === null
-      ? null
-      : {
-          className: "text-muted-foreground text-xs tabular-nums",
-          text: t("scanSize", { count: scanSize }),
-        };
-
   const showBrand = section === undefined || section === "brand";
   const showLanguages = section === undefined || section === "languages";
   const showModels = section === undefined || section === "models";
@@ -128,14 +110,10 @@ export function GeoSettingsForm({
   return (
     <div className="w-full space-y-6">
       {hideHeader ? null : (
-        <header className="flex items-start justify-between gap-3">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-bold tracking-tight">
-              {tCommon("labels.geoSettings")}
-            </h1>
-            <p className="text-muted-foreground">{t("description")}</p>
-          </div>
-        </header>
+        <PageHeading
+          description={t("description")}
+          title={tCommon("labels.geoSettings")}
+        />
       )}
       <div className="space-y-6">
         {showBrand && project ? (
@@ -188,7 +166,6 @@ export function GeoSettingsForm({
             onScanIntervalHoursChange={setScanIntervalHours}
             planLoading={planLoading}
             scanIntervalHours={scanIntervalHours}
-            scanSizeNote={scanSizeNote}
           />
         ) : null}
       </div>
@@ -276,7 +253,7 @@ function useGeoSettingsAutosave({
           ),
           domains: extraProjectDomains(settings?.domains ?? [], brandDomain),
           languages: trackedGeoLanguages(settings?.languages ?? []),
-          engines: resolveTrackedEngines(catalog, settings?.engines),
+          engines: settings?.engines ?? geoDefaultEngines(catalog),
           enforceZdr: settings?.enforceZdr ?? true,
           nonZdrApprovedEngines: settings?.nonZdrApprovedEngines ?? [],
           enabled: settings?.enabled ?? true,
@@ -498,16 +475,16 @@ function GeoModelsSection({
   onScanIntervalHoursChange,
   planLoading,
   scanIntervalHours,
-  scanSizeNote,
 }: GeoModelsSectionProps) {
-  const t = useTranslations("geo.geoSettingsForm");
   const tCommon = useTranslations("common");
   return (
     <TitleCard
       action={
         <GeoScanFrequencySelect
+          enabled={enabled}
           id={id}
           intervalHours={scanIntervalHours}
+          onEnabledChange={onEnabledChange}
           onIntervalChange={onScanIntervalHoursChange}
         />
       }
@@ -515,38 +492,18 @@ function GeoModelsSection({
       heading={tCommon("labels.models")}
       headingAs="h2"
     >
-      <div className="space-y-4">
-        <div className="space-y-1">
-          <p className="text-muted-foreground text-sm text-pretty">
-            {t("models.description")}
-          </p>
-          {scanSizeNote ? (
-            <p className={scanSizeNote.className} role="note">
-              {scanSizeNote.text}
-            </p>
-          ) : null}
-        </div>
-        <GeoEnginePicker
-          canEnforceZdr={canEnforceZdr}
-          catalog={catalog}
-          enforceZdr={enforceZdr}
-          labeled={false}
-          nonZdrApproved={nonZdrApproved}
-          onChange={onEnginesChange}
-          onEnforceZdrChange={onEnforceZdrChange}
-          onNonZdrApprovedChange={onNonZdrApprovedChange}
-          planLoading={planLoading}
-          scheduleRow={
-            <GeoScanSchedule
-              enabled={enabled}
-              id={id}
-              intervalHours={scanIntervalHours}
-              onEnabledChange={onEnabledChange}
-            />
-          }
-          selected={engines}
-        />
-      </div>
+      <GeoEnginePicker
+        canEnforceZdr={canEnforceZdr}
+        catalog={catalog}
+        enforceZdr={enforceZdr}
+        labeled={false}
+        nonZdrApproved={nonZdrApproved}
+        onChange={onEnginesChange}
+        onEnforceZdrChange={onEnforceZdrChange}
+        onNonZdrApprovedChange={onNonZdrApprovedChange}
+        planLoading={planLoading}
+        selected={engines}
+      />
     </TitleCard>
   );
 }

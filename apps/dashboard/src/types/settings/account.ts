@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import type { AccountInfo } from "@/types/organizations/actions";
 
-export interface ProfileSectionUser {
+interface ProfileSectionUser {
   id: string;
   name: string;
   email: string;

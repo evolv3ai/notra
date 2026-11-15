@@ -2,8 +2,8 @@
 
 import { GEO_COMPETITOR_CONTEXT_LIMIT } from "@notra/geo-core/constants/geo";
 import type { GeoCompetitor } from "@notra/geo-core/types/geo";
-import { useTranslations } from "next-intl";
 import { useState } from "react";
+import { useTranslations } from "use-intl";
 
 import {
   CompetitorChoicesFooter,
@@ -38,8 +38,6 @@ export function WriteCompetitorChoices({
       ? t("withDomain", { detail, domain: competitor.domain })
       : detail;
   };
-  // A brief only positions against so many competitors, so "select all" is
-  // offered only while the whole list fits.
   const fitsLimit = competitors.length <= GEO_COMPETITOR_CONTEXT_LIMIT;
   const allSelected =
     competitors.length > 0 && selectedIds.length === competitors.length;

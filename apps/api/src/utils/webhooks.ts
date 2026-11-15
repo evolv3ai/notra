@@ -1,13 +1,16 @@
+import { members } from "@notra/db/schema";
 import {
   WebhookNotFound,
   WebhookValidationError,
 } from "@notra/webhooks/errors/webhooks";
 import { OrganizationId } from "@notra/webhooks/schemas/webhooks";
 import type { WebhookDatabase } from "@notra/webhooks/services/database";
+import { and, eq } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 import type { Config, ManagedRuntime } from "effect";
-import type { Context } from "hono";
+import type { Context, Next } from "hono";
 
+import { isAccountKeyAuth, isOAuthAuth } from "../types/auth";
 import type { ApiEnv } from "../types/env";
 import { getOrganizationId } from "./auth";
 import { logError } from "./logging";
@@ -45,3 +48,38 @@ export const decodeOrganizationId = (c: Context<ApiEnv>) =>
         })
     )
   );
+
+/**
+ * Mirrors the dashboard rule that only owners and admins mutate webhooks.
+ * User-bound credentials (account keys, OAuth) are checked against the user's
+ * current role; organization keys are gated when the key is issued.
+ */
+export async function requireWebhookManager(c: Context<ApiEnv>, next: Next) {
+  const auth = c.get("auth");
+  if (
+    c.req.method === "GET" ||
+    c.req.method === "HEAD" ||
+    !(auth && (isAccountKeyAuth(auth) || isOAuthAuth(auth)))
+  ) {
+    return await next();
+  }
+
+  const organizationId = getOrganizationId(c);
+  const membership = organizationId
+    ? await c.get("db").query.members.findFirst({
+        where: and(
+          eq(members.userId, auth.userId),
+          eq(members.organizationId, organizationId)
+        ),
+        columns: { role: true },
+      })
+    : undefined;
+  if (membership?.role === "owner" || membership?.role === "admin") {
+    return await next();
+  }
+
+  return c.json(
+    { error: "Only organization owners and admins can manage webhooks" },
+    403
+  );
+}

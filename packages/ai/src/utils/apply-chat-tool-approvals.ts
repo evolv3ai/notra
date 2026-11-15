@@ -28,8 +28,6 @@ export function applyChatToolApprovals(
   }
   const updated: UIMessage = {
     ...last,
-    // Advancing the stored id lets the history compare-and-swap consume this
-    // approval batch once, even when the Redis stream lock is unavailable.
     id: continuationId,
     parts: last.parts.map((part) => {
       if (!isToolUIPart(part) || part.state !== "approval-requested") {

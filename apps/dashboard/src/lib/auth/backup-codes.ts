@@ -4,7 +4,7 @@ import { db } from "@notra/db/drizzle";
 import { userBackupCodes } from "@notra/db/schema";
 import { BACKUP_CODE_LENGTH } from "@notra/schemas/constants/dashboard/auth";
 import { normalizeBackupCode } from "@notra/schemas/utils/auth";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { BACKUP_CODE_ALPHABET, BACKUP_CODE_COUNT } from "@/constants/security";
 
@@ -69,24 +69,6 @@ export async function hasBackupCodes(userId: string): Promise<boolean> {
   return Boolean(row);
 }
 
-export async function hasUnusedBackupCode(
-  userId: string,
-  code: string
-): Promise<boolean> {
-  const [row] = await db
-    .select({ id: userBackupCodes.id })
-    .from(userBackupCodes)
-    .where(
-      and(
-        eq(userBackupCodes.userId, userId),
-        eq(userBackupCodes.codeHash, hashBackupCode(code)),
-        isNull(userBackupCodes.usedAt)
-      )
-    )
-    .limit(1);
-  return Boolean(row);
-}
-
 export async function consumeBackupCode(
   userId: string,
   code: string
@@ -103,4 +85,21 @@ export async function consumeBackupCode(
     )
     .returning({ id: userBackupCodes.id });
   return rows.length > 0;
+}
+
+/** Undoes a claim when the change it was claimed for did not go through. */
+export async function releaseBackupCode(
+  userId: string,
+  code: string
+): Promise<void> {
+  await db
+    .update(userBackupCodes)
+    .set({ usedAt: null })
+    .where(
+      and(
+        eq(userBackupCodes.userId, userId),
+        eq(userBackupCodes.codeHash, hashBackupCode(code)),
+        isNotNull(userBackupCodes.usedAt)
+      )
+    );
 }

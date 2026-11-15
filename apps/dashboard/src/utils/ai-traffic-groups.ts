@@ -13,6 +13,7 @@ import {
   formatGeoSource,
   isCitedTrafficSource,
   trafficDayKey,
+  trafficVisitDelta,
 } from "@notra/geo-core/utils/ai-traffic";
 import { resolveEngineIconKey } from "@notra/geo-core/utils/geo-engine-icon";
 
@@ -30,7 +31,7 @@ export function trafficGroupKey(
   return `${band}:${groupKey}`;
 }
 
-export function resolveTrafficSourceBand(
+function resolveTrafficSourceBand(
   source: Pick<GeoTrafficSource, "visitorType" | "category">
 ): GeoTrafficSourceBand {
   if (source.visitorType === "ai_referral") {
@@ -42,7 +43,7 @@ export function resolveTrafficSourceBand(
   return "crawler";
 }
 
-export function resolveTrafficSourceGroup(
+function resolveTrafficSourceGroup(
   source: string,
   band: GeoTrafficSourceBand
 ): GeoTrafficSourceGroupDefinition {
@@ -94,16 +95,18 @@ export function groupTrafficSources(
         band,
         visits: source.visits,
         markdownVisits: source.markdownVisits,
-        paths: source.paths,
+        paths: source.visits > 0 ? source.paths : 0,
         lastSeenAt: source.lastSeenAt,
-        categories: source.category ? [source.category] : [],
+        categories: [],
         members: [source],
       });
       continue;
     }
     existing.visits += source.visits;
     existing.markdownVisits += source.markdownVisits;
-    existing.paths = Math.max(existing.paths, source.paths);
+    if (source.visits > 0) {
+      existing.paths = Math.max(existing.paths, source.paths);
+    }
     existing.lastSeenAt = laterTrafficTimestamp(
       existing.lastSeenAt,
       source.lastSeenAt
@@ -111,11 +114,11 @@ export function groupTrafficSources(
     existing.members.push(source);
   }
 
-  const result = [...groups.values()];
+  const result = [...groups.values()].filter((group) => group.visits > 0);
   for (const group of result) {
     group.members.sort(byVisitsDesc);
     const categories = new Set<string>();
-    for (const member of group.members) {
+    for (const member of trafficGroupCurrentMembers(group)) {
       if (member.category.length > 0) {
         categories.add(member.category);
       }
@@ -123,6 +126,18 @@ export function groupTrafficSources(
     group.categories = [...categories];
   }
   return result;
+}
+
+export function trafficGroupCurrentMembers(
+  group: GeoTrafficSourceGroup
+): GeoTrafficSource[] {
+  return group.members.filter((member) => member.visits > 0);
+}
+
+export function trafficGroupPathsAreLowerBound(
+  group: GeoTrafficSourceGroup
+): boolean {
+  return trafficGroupCurrentMembers(group).length > 1;
 }
 
 export function buildTrafficGroupSeries(
@@ -164,7 +179,7 @@ export function trafficGroupPurposeTotals(
   group: GeoTrafficSourceGroup
 ): GeoTrafficPurposeTotal[] {
   const totals = new Map<string, GeoTrafficPurposeTotal>();
-  for (const member of group.members) {
+  for (const member of trafficGroupCurrentMembers(group)) {
     if (member.category.length === 0) {
       continue;
     }
@@ -228,4 +243,71 @@ export function trafficGroupPreviousVisits(
     previous += member.previousVisits;
   }
   return previous;
+}
+
+export function trafficGroupPreviousMarkdownVisits(
+  group: GeoTrafficSourceGroup
+): number | null {
+  let previous = 0;
+  for (const member of group.members) {
+    if (member.previousMarkdownVisits === undefined) {
+      return null;
+    }
+    previous += member.previousMarkdownVisits;
+  }
+  return previous;
+}
+
+/**
+ * Percent change of distinct pages. A group spanning several bots only knows
+ * the busiest member's page count, a lower bound that can move against the real
+ * total, so the trend is limited to single-bot groups in both periods.
+ */
+export function trafficGroupPathsDelta(
+  group: GeoTrafficSourceGroup
+): number | null {
+  if (trafficGroupPathsAreLowerBound(group)) {
+    return null;
+  }
+  let previous = 0;
+  let previousMembers = 0;
+  for (const member of group.members) {
+    if (member.previousPaths === undefined) {
+      return null;
+    }
+    if ((member.previousVisits ?? 0) > 0) {
+      previousMembers += 1;
+      previous = member.previousPaths;
+    }
+  }
+  return previousMembers > 1 ? null : trafficVisitDelta(group.paths, previous);
+}
+
+/**
+ * Copies distinct page counts from the slower sources query onto the fast
+ * one, so rows render before their counts arrive.
+ */
+export function withSourcePaths(
+  sources: readonly GeoTrafficSource[],
+  withPaths: readonly GeoTrafficSource[] | undefined
+): readonly GeoTrafficSource[] {
+  if (!withPaths) {
+    return sources;
+  }
+  const byKey = new Map(
+    withPaths.map((row) => [`${row.visitorType}:${row.source}`, row])
+  );
+  return sources.map((row) => {
+    const match = byKey.get(`${row.visitorType}:${row.source}`);
+    if (!match) {
+      return row;
+    }
+    return {
+      ...row,
+      paths: match.paths,
+      ...(match.previousPaths === undefined
+        ? {}
+        : { previousPaths: match.previousPaths }),
+    };
+  });
 }

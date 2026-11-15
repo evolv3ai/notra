@@ -37,7 +37,7 @@ function stem(token: string): string {
   return token.replace(S_SUFFIX_RE, "");
 }
 
-export function collisionTokens(text: string): string[] {
+function collisionTokens(text: string): string[] {
   const tokens: string[] = [];
   const words = text
     .toLowerCase()

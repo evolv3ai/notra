@@ -1,0 +1,115 @@
+:root {
+  --claude-bg: #fcfcfb;
+  --claude-fg: #0b0b0b;
+  --claude-border: #e3e3e2;
+  --claude-muted: #898781;
+  --claude-subtle: #898781;
+  --claude-faint: #9d9d9d;
+  --claude-hover: #e8e8e7;
+  --claude-bubble: #f0f0ef;
+  --claude-input: #ffffff;
+  --claude-input-border: #e0e0df;
+  --claude-input-shadow: rgb(0 0 0 / 3%);
+  --claude-send: #0b0b0b;
+  --claude-send-hover: #000000;
+  --claude-send-fg: #ffffff;
+  --claude-accent: #d97757;
+  --claude-check: #2c84db;
+  --claude-rail: #e3e3e2;
+  --claude-text: #52514e;
+  --claude-meta: #898781;
+  --claude-card: #f0f0ef;
+  --claude-card-border: #e3e3e2;
+  --claude-card-divider: #e3e3e2;
+  --claude-step: #52514e;
+  --claude-danger: #b53333;
+  --claude-pill: #f0f0ef;
+  --claude-pill-border: rgb(0 0 0 / 6%);
+  --claude-pill-fg: #52514e;
+  --claude-popover: #ffffff;
+  --claude-popover-border: rgb(0 0 0 / 8%);
+  --claude-popover-shadow: rgb(0 0 0 / 10%);
+  --claude-tooltip: #0b0b0b;
+  --claude-tooltip-fg: #fcfcfb;
+  --claude-usage: #009300;
+}
+
+.dark,
+[data-theme="dark"],
+.dark {
+  --claude-bg: #262624;
+  --claude-fg: #faf9f5;
+  --claude-border: #3d3d3a;
+  --claude-muted: #9c9a92;
+  --claude-subtle: #9c9a92;
+  --claude-faint: #85837c;
+  --claude-hover: #3a3a37;
+  --claude-bubble: #141413;
+  --claude-input: #30302e;
+  --claude-input-border: #44433f;
+  --claude-input-shadow: transparent;
+  --claude-send: #faf9f5;
+  --claude-send-hover: #ffffff;
+  --claude-send-fg: #141413;
+  --claude-accent: #d97757;
+  --claude-check: #5a9ee6;
+  --claude-rail: #3d3d3a;
+  --claude-text: #c2c0b6;
+  --claude-meta: #9c9a92;
+  --claude-card: #1f1e1d;
+  --claude-card-border: #3d3d3a;
+  --claude-card-divider: #3d3d3a;
+  --claude-step: #c2c0b6;
+  --claude-danger: #e5776b;
+  --claude-pill: #1f1e1d;
+  --claude-pill-border: rgb(255 255 255 / 8%);
+  --claude-pill-fg: #c2c0b6;
+  --claude-popover: #30302e;
+  --claude-popover-border: rgb(222 220 209 / 15%);
+  --claude-popover-shadow: rgb(0 0 0 / 40%);
+  --claude-tooltip: #faf9f5;
+  --claude-tooltip-fg: #141413;
+  --claude-usage: #3fb950;
+}
+
+@theme inline {
+  --color-claude-bg: var(--claude-bg);
+  --color-claude-fg: var(--claude-fg);
+  --color-claude-border: var(--claude-border);
+  --color-claude-muted: var(--claude-muted);
+  --color-claude-subtle: var(--claude-subtle);
+  --color-claude-faint: var(--claude-faint);
+  --color-claude-hover: var(--claude-hover);
+  --color-claude-bubble: var(--claude-bubble);
+  --color-claude-input: var(--claude-input);
+  --color-claude-input-border: var(--claude-input-border);
+  --color-claude-input-shadow: var(--claude-input-shadow);
+  --color-claude-send: var(--claude-send);
+  --color-claude-send-hover: var(--claude-send-hover);
+  --color-claude-send-fg: var(--claude-send-fg);
+  --color-claude-accent: var(--claude-accent);
+  --color-claude-check: var(--claude-check);
+  --color-claude-rail: var(--claude-rail);
+  --color-claude-text: var(--claude-text);
+  --color-claude-meta: var(--claude-meta);
+  --color-claude-card: var(--claude-card);
+  --color-claude-card-border: var(--claude-card-border);
+  --color-claude-card-divider: var(--claude-card-divider);
+  --color-claude-step: var(--claude-step);
+  --color-claude-danger: var(--claude-danger);
+  --color-claude-pill: var(--claude-pill);
+  --color-claude-pill-border: var(--claude-pill-border);
+  --color-claude-pill-fg: var(--claude-pill-fg);
+  --color-claude-popover: var(--claude-popover);
+  --color-claude-popover-border: var(--claude-popover-border);
+  --color-claude-popover-shadow: var(--claude-popover-shadow);
+  --color-claude-tooltip: var(--claude-tooltip);
+  --color-claude-tooltip-fg: var(--claude-tooltip-fg);
+  --color-claude-usage: var(--claude-usage);
+  --font-claude:
+    "Anthropic Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;
+  --font-claude-serif:
+    "Anthropic Serif", ui-serif, Georgia, Cambria, "Times New Roman", Times,
+    serif;
+}

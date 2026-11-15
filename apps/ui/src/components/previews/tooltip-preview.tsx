@@ -1,8 +1,8 @@
 import { BoldIcon, ItalicIcon, LinkIcon, UnderlineIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
-import { tooltipContentClassName } from "@/components/ui/tooltip";
+import { Button } from "@/registry/notra/button/components/button";
+import { tooltipContentClassName } from "@/registry/notra/tooltip/components/tooltip";
 
 export default function TooltipPreview() {
   return (

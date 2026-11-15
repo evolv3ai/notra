@@ -1,22 +1,14 @@
 import { GEO_WRITER_TRIGGER_ID } from "@notra/geo-core/constants/geo";
-import type { GeoContentBriefSummary } from "@notra/geo-core/types/geo";
 import { sourceMetadataSchema } from "@notra/schemas/dashboard/content";
 
 import type {
+  ContentArticleLoadingInput,
   GeoGapsWriteEntry,
   WriteDialogInitialState,
 } from "@/types/components/geo-writer";
 import { normalizeGeoProjectId } from "@/utils/geo-hydration";
 import { isNotFoundError } from "@/utils/orpc-errors";
 
-/**
- * GEO write entry helpers.
- *
- * Gaps Write opens `WriteDialog` with `writeDialogStateFromGap`, then
- * navigates to `geoContentPath(slug, postId)` after plan.
- * Do not `router.push("/${slug}/geo/write?brief=")`. Topic is resolved
- * server-side from `geo_prompts` via `sourceKind` + `sourceId`.
- */
 export function geoContentPath(
   organizationSlug: string,
   postId: string
@@ -44,13 +36,6 @@ export function emptyWriteDialogState(): WriteDialogInitialState {
   return { sourceKind: "manual" };
 }
 
-export function briefDisplayTitle(
-  brief: Pick<GeoContentBriefSummary, "workingTitle" | "topic">
-): string {
-  const title = brief.workingTitle.trim();
-  return title || brief.topic;
-}
-
 export function parseGeoWriterDraft(sourceMetadata: unknown): {
   briefId: string;
   projectId?: string;
@@ -68,7 +53,7 @@ export function parseGeoWriterDraft(sourceMetadata: unknown): {
   };
 }
 
-export function isGeoWriterPlanReviewable(status: string | undefined): boolean {
+function isGeoWriterPlanReviewable(status: string | undefined): boolean {
   return status === "draft" || status === "failed";
 }
 
@@ -81,18 +66,47 @@ export function getGeoWriterDocumentState(
   const hasBriefError = briefError !== null && briefError !== undefined;
   const isBriefMissing = hasBriefError && isNotFoundError(briefError);
   const isBriefError = hasBriefError && !isBriefMissing;
-  const isPlanReviewable = isGeoWriterPlanReviewable(briefStatus);
+  const isBriefReviewable = isGeoWriterPlanReviewable(briefStatus);
   return {
     isBriefError,
     isBriefMissing,
     isChatLocked:
       hasDraft &&
       !isBriefMissing &&
-      !isPlanReviewable &&
+      !isBriefReviewable &&
       briefStatus !== "completed",
     isPlanMode:
       hasDraft &&
-      (isPostStillPlan || (!isBriefMissing && briefStatus !== "completed")),
-    isPlanReviewable,
+      (isPostStillPlan ||
+        (!isBriefMissing &&
+          (briefStatus === undefined ||
+            briefStatus === "approved" ||
+            briefStatus === "writing"))),
+    // An article saved over the outline (e.g. through the API) leaves the
+    // brief in draft; it must be edited as an article, not as a plan.
+    isPlanReviewable: isBriefReviewable && isPostStillPlan,
+  };
+}
+
+export function getContentArticleLoadingState(
+  input: ContentArticleLoadingInput
+) {
+  const completedArticleStale =
+    input.briefStatus === "completed" &&
+    input.isPostStillPlan &&
+    input.loadedArticleBriefId !== input.briefId;
+  return {
+    shouldLoadArticle: Boolean(
+      input.briefId &&
+      input.briefStatus &&
+      (input.briefStatus !== "completed" || completedArticleStale) &&
+      input.pendingArticleBriefId !== input.briefId
+    ),
+    isGeoArticleLoading: Boolean(
+      input.hasDraft &&
+      input.briefStatus === "completed" &&
+      input.pendingArticleBriefId === input.briefId &&
+      input.loadedArticleBriefId !== input.briefId
+    ),
   };
 }

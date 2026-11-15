@@ -23,10 +23,6 @@ export function createCreatePostTool(contentType: ContentType) {
     inputSchema: withSlug
       ? createPostWithSlugInputSchema
       : createPostInputSchema,
-    approval: (ctx) =>
-      getSessionAttribute(ctx, "surface") === "task"
-        ? "approved"
-        : "user-approval",
     async execute(input, ctx) {
       const organizationId = requireOrganizationId(ctx);
       const surface = getSessionAttribute(ctx, "surface");
@@ -35,9 +31,10 @@ export function createCreatePostTool(contentType: ContentType) {
           "Creating new posts is not available in the content editor. Edit the current document instead."
         );
       }
-      const slug = withSlug
-        ? (createPostWithSlugInputSchema.parse(input).slug ?? null)
+      const siteFields = withSlug
+        ? createPostWithSlugInputSchema.parse(input)
         : null;
+      const slug = siteFields?.slug ?? null;
       const chatId = getSessionAttribute(ctx, "chatId");
       const collectionId = await ensureChatPostCollection({
         organizationId,
@@ -53,6 +50,8 @@ export function createCreatePostTool(contentType: ContentType) {
         markdown: input.markdown,
         recommendations: input.recommendations ?? null,
         sourceMetadata: chatId ? { chatId } : null,
+        tags: siteFields?.tags,
+        excerpt: siteFields?.excerpt,
         postId: deriveDeterministicPostId(
           ctx,
           `create_post:${parsedContentType}:${input.title} ${input.markdown}`

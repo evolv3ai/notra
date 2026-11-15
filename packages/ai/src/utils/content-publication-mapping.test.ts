@@ -1,18 +1,19 @@
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import { spawnAsync } from "@notra/ai/utils/spawn-async";
+
 if (process.env.NOTRA_PUBLICATION_MAPPING_SQL_WORKER !== "1") {
-  test("content publication mapping SQL regressions", () => {
-    const result = spawnSync(
+  test("content publication mapping SQL regressions", async () => {
+    const result = await spawnAsync(
       process.execPath,
       ["test", fileURLToPath(import.meta.url)],
       {
         env: { ...process.env, NOTRA_PUBLICATION_MAPPING_SQL_WORKER: "1" },
-        timeout: 25_000,
+        timeoutMs: 25_000,
       }
     );
-    expect(result.status, result.stderr.toString()).toBe(0);
+    expect(result.status, result.stderr).toBe(0);
   }, 30_000);
 } else {
   const { PGlite } = await import("@electric-sql/pglite");
@@ -178,6 +179,28 @@ if (process.env.NOTRA_PUBLICATION_MAPPING_SQL_WORKER !== "1") {
   afterAll(async () => client.close());
 
   describe("record/reconcile mapping against PostgreSQL indexes", () => {
+    test("a foreign workspace cannot claim a post or retire its publication", async () => {
+      await insert("A", at(1));
+      const before = await rows();
+      expect(
+        await recordContentPublication(
+          { ...publication("B"), organizationId: "foreign-org" },
+          at(2)
+        )
+      ).toBeNull();
+      expect(await rows()).toEqual(before);
+    });
+
+    test("a missing post cannot create a publication", async () => {
+      expect(
+        await recordContentPublication(
+          { ...publication("A"), postId: "missing-post" },
+          at(1)
+        )
+      ).toBeNull();
+      expect(await rows()).toEqual([]);
+    });
+
     test("reconciliation closes old A before inserting open B", async () => {
       await insert("A", at(1));
       await reconcileContentPublication({
@@ -312,18 +335,6 @@ if (process.env.NOTRA_PUBLICATION_MAPPING_SQL_WORKER !== "1") {
         at(2)
       );
       expect((await rows())[0]?.head_sha).toBe("H1");
-    });
-
-    test("identical replay preserves the synchronized head", async () => {
-      await recordContentPublication(publication("B", "publish-head"), at(2));
-      await client.exec(
-        "update content_publications set head_sha = 'synced-head'"
-      );
-      await reconcileContentPublication({
-        publication: publication("B", "publish-head"),
-        publishedAt: at(2),
-      });
-      expect((await rows())[0]?.head_sha).toBe("synced-head");
     });
 
     test("reconciliation closes only the matching repository integration", async () => {

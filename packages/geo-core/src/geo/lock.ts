@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { advisoryXactLock } from "@notra/db/utils/advisory-xact-lock";
 import type { Effect } from "effect";
 
 import type { DbTransaction } from "../types/db";
@@ -18,9 +18,7 @@ export async function lockGeoProjectInTransaction(
   tx: DbTransaction,
   projectId: string
 ): Promise<void> {
-  await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtextextended(${`geo-project:${projectId}`}, 0))`
-  );
+  await advisoryXactLock(tx, `geo-project:${projectId}`);
 }
 
 /**
@@ -36,8 +34,6 @@ export function lockGeoOrganization(
   organizationId: string
 ): Effect.Effect<void, GeoDatabaseError> {
   return geoDb("organization lock failed", async () => {
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`geo-organization:${organizationId}`}, 0))`
-    );
+    await advisoryXactLock(tx, `geo-organization:${organizationId}`);
   });
 }

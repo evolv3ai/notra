@@ -9,7 +9,7 @@ import { toolDescription } from "@notra/ai/utils/description";
 import { type Tool, tool } from "ai";
 import z from "zod";
 
-export interface SkillsToolContext {
+interface SkillsToolContext {
   organizationId: string;
 }
 

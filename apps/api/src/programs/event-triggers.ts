@@ -4,8 +4,9 @@ import {
   hashTrigger,
   normalizeTriggerConfig,
 } from "@notra/ai/utils/trigger-hash";
-import { contentTriggers, githubIntegrations } from "@notra/db/schema";
-import { and, desc, eq, inArray, ne } from "drizzle-orm";
+import { contentTriggers } from "@notra/db/schema";
+import { isPgUniqueViolation } from "@notra/db/utils/pg-errors";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { DateTime, Effect } from "effect";
 
 import {
@@ -21,11 +22,13 @@ import type {
   UpdateEventTriggerProgramInput,
 } from "../types/event-triggers";
 import {
-  ensureEventTriggerTargetsExist,
   filterEventTriggersByRepositoryIds,
   safeSerializeEventTrigger,
 } from "../utils/event-triggers";
-import { isPgUniqueViolation } from "../utils/pg-errors";
+import {
+  ensureTriggerTargetsExist,
+  getRepositoryLabels,
+} from "../utils/triggers";
 
 const GITHUB_WEBHOOK_SOURCE = "github_webhook" as const;
 
@@ -51,7 +54,7 @@ const ensureTargets = (
 ) =>
   Effect.gen(function* () {
     const missingTargets = yield* database(() =>
-      ensureEventTriggerTargetsExist(
+      ensureTriggerTargetsExist(
         input.db,
         input.organizationId,
         repositoryIds,
@@ -66,16 +69,32 @@ const ensureTargets = (
     }
   });
 
+const githubWebhookTriggerScope = (input: NamedEventTriggerProgramInput) =>
+  and(
+    eq(contentTriggers.id, input.triggerId),
+    eq(contentTriggers.organizationId, input.organizationId),
+    eq(contentTriggers.sourceType, GITHUB_WEBHOOK_SOURCE)
+  );
+
 const findGithubWebhookTrigger = (input: NamedEventTriggerProgramInput) =>
   database(() =>
     input.db.query.contentTriggers.findFirst({
-      where: and(
-        eq(contentTriggers.id, input.triggerId),
-        eq(contentTriggers.organizationId, input.organizationId),
-        eq(contentTriggers.sourceType, GITHUB_WEBHOOK_SOURCE)
-      ),
+      where: githubWebhookTriggerScope(input),
     })
   );
+
+const prepareTrigger = (body: CreateEventTriggerProgramInput["body"]) => ({
+  normalized: normalizeTriggerConfig({
+    sourceConfig: body.sourceConfig,
+    targets: body.targets,
+  }),
+  dedupeHash: hashTrigger({
+    sourceType: body.sourceType,
+    sourceConfig: body.sourceConfig,
+    targets: body.targets,
+    outputType: body.outputType,
+  }),
+});
 
 export const listEventTriggers = Effect.fn("eventTriggers.list")(function* (
   input: ListEventTriggersProgramInput
@@ -105,30 +124,8 @@ export const listEventTriggers = Effect.fn("eventTriggers.list")(function* (
     ),
   ];
 
-  const repositories =
-    allRepositoryIds.length > 0
-      ? yield* database(() =>
-          input.db
-            .select({
-              id: githubIntegrations.id,
-              owner: githubIntegrations.owner,
-              repo: githubIntegrations.repo,
-              defaultBranch: githubIntegrations.defaultBranch,
-            })
-            .from(githubIntegrations)
-            .where(inArray(githubIntegrations.id, allRepositoryIds))
-        )
-      : [];
-
-  const repositoryMap = Object.fromEntries(
-    repositories
-      .filter((repository) => repository.owner && repository.repo)
-      .map((repository) => [
-        repository.id,
-        repository.defaultBranch?.trim()
-          ? `${repository.owner}/${repository.repo} · ${repository.defaultBranch.trim()}`
-          : `${repository.owner}/${repository.repo}`,
-      ])
+  const repositoryMap = yield* database(() =>
+    getRepositoryLabels(input.db, allRepositoryIds)
   );
 
   return { eventTriggers, repositoryMap };
@@ -138,16 +135,7 @@ export const createEventTrigger = Effect.fn("eventTriggers.create")(function* (
   input: CreateEventTriggerProgramInput
 ) {
   const { body } = input;
-  const normalized = normalizeTriggerConfig({
-    sourceConfig: body.sourceConfig,
-    targets: body.targets,
-  });
-  const dedupeHash = hashTrigger({
-    sourceType: body.sourceType,
-    sourceConfig: body.sourceConfig,
-    targets: body.targets,
-    outputType: body.outputType,
-  });
+  const { normalized, dedupeHash } = prepareTrigger(body);
 
   const existing = yield* database(() =>
     input.db.query.contentTriggers.findFirst({
@@ -210,16 +198,7 @@ export const updateEventTrigger = Effect.fn("eventTriggers.update")(function* (
   input: UpdateEventTriggerProgramInput
 ) {
   const { body } = input;
-  const normalized = normalizeTriggerConfig({
-    sourceConfig: body.sourceConfig,
-    targets: body.targets,
-  });
-  const dedupeHash = hashTrigger({
-    sourceType: body.sourceType,
-    sourceConfig: body.sourceConfig,
-    targets: body.targets,
-    outputType: body.outputType,
-  });
+  const { normalized, dedupeHash } = prepareTrigger(body);
 
   const existing = yield* findGithubWebhookTrigger(input);
 
@@ -285,13 +264,7 @@ export const deleteEventTrigger = Effect.fn("eventTriggers.delete")(function* (
   const [deleted] = yield* database(() =>
     input.db
       .delete(contentTriggers)
-      .where(
-        and(
-          eq(contentTriggers.id, input.triggerId),
-          eq(contentTriggers.organizationId, input.organizationId),
-          eq(contentTriggers.sourceType, GITHUB_WEBHOOK_SOURCE)
-        )
-      )
+      .where(githubWebhookTriggerScope(input))
       .returning({ id: contentTriggers.id })
   );
 

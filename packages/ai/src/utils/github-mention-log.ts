@@ -10,7 +10,7 @@ import type {
   GitHubMentionWebhookLog,
 } from "@notra/ai/types/github-mention";
 
-export function snippetForGitHubMentionLog(value: string | null | undefined) {
+function snippetForGitHubMentionLog(value: string | null | undefined) {
   if (!value) {
     return null;
   }

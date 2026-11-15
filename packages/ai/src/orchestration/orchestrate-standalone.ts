@@ -1,3 +1,7 @@
+import {
+  CODE_MODE_TOOL_NAME,
+  STANDALONE_CODE_MODE_TOOL_NAMES,
+} from "@notra/ai/constants/code-mode";
 import { CODE_RESEARCHER_TOOL_NAME } from "@notra/ai/constants/code-research";
 import { getEnabledMcpServerCount } from "@notra/ai/integrations/mcp-tool-index";
 import { createModel } from "@notra/ai/model";
@@ -6,6 +10,7 @@ import { withRouterDefaults } from "@notra/ai/provider-options";
 import { STANDALONE_SKILL_CATALOG_LIMIT } from "@notra/ai/skills/constants";
 import { listSkillSummaries } from "@notra/ai/skills/functions/service";
 import { createLazyMcpRuntime } from "@notra/ai/tools/mcp-lazy";
+import { UPDATE_TODOS_TOOL_NAME } from "@notra/ai/tools/todos";
 import type {
   IntegrationFetchers,
   ValidatedIntegration,
@@ -22,6 +27,7 @@ import { withStandaloneCodeMode } from "@notra/ai/utils/code-mode";
 import { normalizeMarkdownFileAttachments } from "@notra/ai/utils/message-attachments";
 import { resolveConversationRoute } from "@notra/ai/utils/resolve-conversation-route";
 import { summarizeRouteUsage } from "@notra/ai/utils/route-usage";
+import { logError, logInfo } from "@notra/ai/utils/server-log";
 import { buildTelemetryOptions } from "@notra/ai/utils/tcc";
 import { getToolApprovalSecret } from "@notra/ai/utils/tool-approval-secret";
 import { withToolErrorPayloads } from "@notra/ai/utils/tool-error-payload";
@@ -41,7 +47,7 @@ import {
   hasEnabledGitHubIntegration,
   hasEnabledLinearIntegration,
 } from "./integration-validator";
-import { routeMessage, selectAutoModel } from "./router";
+import { routeAutoModel } from "./router";
 import {
   buildStandaloneToolSet,
   getLinearContextFromIntegrations,
@@ -99,40 +105,23 @@ export async function orchestrateStandaloneChat(
   const hasMcp = mcpServerCount > 0;
   const mcpContext = context.filter((item) => item.type === "mcp-server");
 
-  const lastUserMessage = getLastUserMessage(messages);
-  const hasNonTextPartsOnLatestTurn = lastUserMessageHasNonTextParts(messages);
-
   const routingDecision = await resolveConversationRoute(
     messages,
     requestedModel,
-    async () => {
-      const decision = await routeMessage(
-        lastUserMessage,
+    () =>
+      routeAutoModel(
+        messages,
         hasGitHub || hasLinear || hasMcp,
         log,
-        hasNonTextPartsOnLatestTurn,
         telemetryMetadata
-      );
-      const auto = selectAutoModel(decision);
-      return {
-        model: auto.model,
-        thinkingLevel: auto.thinkingLevel,
-        complexity: decision.complexity,
-        requiresTools: true,
-        reasoning: decision.requiresTools
-          ? `auto → ${auto.model}: ${decision.reasoning}`
-          : `auto → ${auto.model}: ${decision.reasoning} (tools available by default)`,
-      };
-    }
+      ),
+    input.thinkingLevel
   );
-  const autoThinkingLevel = routingDecision.thinkingLevel;
+  routingDecision.thinkingLevel = enableThinking
+    ? (routingDecision.thinkingLevel ?? thinkingLevel)
+    : "off";
 
-  const modelWithMemory = createModel(
-    organizationId,
-    routingDecision.model,
-    { supermemory: { customId: chatId } },
-    log
-  );
+  const model = createModel(organizationId, routingDecision.model, log);
 
   const postResult: PostToolsResult = {};
 
@@ -146,6 +135,7 @@ export async function orchestrateStandaloneChat(
       codeResearch: input.codeResearch,
       validatedIntegrations,
       postResult,
+      previousTodoCalls: countReplyTodoCalls(messages),
     },
     {
       resolveContext: deps?.resolveContext,
@@ -178,9 +168,23 @@ export async function orchestrateStandaloneChat(
     surface === "dashboard-agent"
       ? `${NOTRA_TOOLING_DESCRIPTION} This is the GEO dashboard: call the GEO chart tools directly for AI Traffic, visibility, trend, engine, and competitor questions, and use code_mode for prompt-level results and project context.`
       : NOTRA_TOOLING_DESCRIPTION;
+  // Naming the direct tools stops the model from first trying them inside
+  // code_mode, which fails with "Unknown tool" and costs a full extra step.
+  const codeModeOnlyToolNames = new Set<string>(
+    STANDALONE_CODE_MODE_TOOL_NAMES
+  );
+  const directToolNames = notraToolNames.filter(
+    (toolName) =>
+      toolName !== CODE_MODE_TOOL_NAME && !codeModeOnlyToolNames.has(toolName)
+  );
+  const directToolsDescription = `Call these tools directly; they are not available inside code_mode: ${directToolNames.join(", ")}.`;
   const descriptions = lazyMcpRuntime
-    ? [toolingDescription, ...lazyMcpRuntime.descriptions]
-    : [toolingDescription];
+    ? [
+        toolingDescription,
+        directToolsDescription,
+        ...lazyMcpRuntime.descriptions,
+      ]
+    : [toolingDescription, directToolsDescription];
 
   const hasGitHubToolsActive = notraToolNames.some(isGitHubToolName);
   const hasLinearToolsActive = notraToolNames.some(isLinearToolName);
@@ -204,16 +208,12 @@ export async function orchestrateStandaloneChat(
     workspace,
   });
 
-  const effectiveThinkingLevel = autoThinkingLevel ?? thinkingLevel;
-  const effectiveEnableThinking =
-    enableThinking && (autoThinkingLevel ? autoThinkingLevel !== "off" : true);
-
   const providerOptions = withRouterDefaults(
     {
       ...getThinkingProviderOptions(
         routingDecision.model,
-        effectiveEnableThinking,
-        effectiveThinkingLevel
+        enableThinking,
+        routingDecision.thinkingLevel
       ),
       gateway: { tags: ["standalone-chat"] },
     },
@@ -225,6 +225,7 @@ export async function orchestrateStandaloneChat(
   );
 
   const modelMessages = await convertToModelMessages(messagesForModel, {
+    tools,
     ignoreIncompleteToolCalls: true,
   });
   const getActiveToolNames = async (
@@ -241,7 +242,7 @@ export async function orchestrateStandaloneChat(
 
   let firstChunkFired = false;
   const stream = streamText({
-    model: modelWithMemory,
+    model,
     instructions: systemPrompt,
     messages: modelMessages,
     tools,
@@ -265,11 +266,6 @@ export async function orchestrateStandaloneChat(
     experimental_toolApprovalSecret: approvalSecret,
     stopWhen: isStepCount(maxSteps),
     experimental_transform: smoothStream(),
-    // Without this, a tool call whose inputs fail schema validation throws an
-    // `InvalidToolInputError` that surfaces as a fatal stream error and bricks
-    // the chat. Instead, re-derive valid inputs from the schema so the agent
-    // can carry on. Unknown tool names can't be repaired this way, so we let
-    // them fall through to `onError` where they become a readable message.
     repairToolCall: async ({
       toolCall,
       tools: availableTools,
@@ -286,17 +282,21 @@ export async function orchestrateStandaloneChat(
       }
 
       try {
+        abortSignal?.throwIfAborted();
+        const schema = await inputSchema({ toolName: toolCall.toolName });
+        abortSignal?.throwIfAborted();
         const { output: repairedInput } = await generateText({
-          model: modelWithMemory,
+          model: createModel(organizationId, routingDecision.model, log),
+          abortSignal,
           providerOptions: {
             gateway: { tags: ["standalone-chat-tool-repair"] },
           },
           output: Output.object({ schema: brokenTool.inputSchema }),
           prompt: [
             `The assistant called the tool "${toolCall.toolName}" with inputs that failed validation:`,
-            JSON.stringify(toolCall.input),
+            toolCall.input,
             "The tool expects inputs matching this JSON schema:",
-            JSON.stringify(await inputSchema({ toolName: toolCall.toolName })),
+            JSON.stringify(schema),
             `Validation error: ${error.message}`,
             "Return corrected inputs that satisfy the schema.",
           ].join("\n"),
@@ -305,13 +305,9 @@ export async function orchestrateStandaloneChat(
 
         return { ...toolCall, input: JSON.stringify(repairedInput) };
       } catch (repairError) {
-        console.error("[Standalone Chat] Tool call repair failed", {
+        logError("[Standalone Chat] Tool call repair failed", repairError, {
           organizationId,
           toolName: toolCall.toolName,
-          error:
-            repairError instanceof Error
-              ? repairError.message
-              : String(repairError),
         });
         return null;
       }
@@ -329,7 +325,7 @@ export async function orchestrateStandaloneChat(
       }
     },
     onAbort({ steps }) {
-      console.log("[Standalone Chat Stream Aborted]", {
+      logInfo("[Standalone Chat] Stream aborted", {
         organizationId,
         model: routingDecision.model,
         completedSteps: steps.length,
@@ -346,10 +342,9 @@ export async function orchestrateStandaloneChat(
     },
     onError({ error }) {
       lazyMcpRuntime?.cleanup().catch(() => undefined);
-      console.error("[Standalone Chat Stream Error]", {
+      logError("[Standalone Chat] Stream failed", error, {
         organizationId,
         model: routingDecision.model,
-        error: error instanceof Error ? error.message : String(error),
       });
     },
   });
@@ -378,45 +373,6 @@ function isLinearToolName(toolName: string) {
   );
 }
 
-function lastUserMessageHasNonTextParts(messages: UIMessage[]): boolean {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i];
-    if (!message || message.role !== "user") {
-      continue;
-    }
-    if (!Array.isArray(message.parts)) {
-      return false;
-    }
-    return message.parts.some((part) => part.type !== "text");
-  }
-  return false;
-}
-
-function getLastUserMessage(messages: UIMessage[]): string {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i];
-    if (!message || message.role !== "user") {
-      continue;
-    }
-    const parts = message.parts;
-    if (!Array.isArray(parts)) {
-      continue;
-    }
-    for (const part of parts) {
-      if (part.type === "text") {
-        return part.text;
-      }
-    }
-  }
-  return "";
-}
-
-// Tool-part states that are "complete" from the user's perspective and must
-// survive history trimming before `convertToModelMessages` runs. Missing
-// `approval-responded` here previously dropped the user's approval payload,
-// leaving the conversation ending on an assistant turn — which Bedrock-routed
-// Anthropic (Sonnet 4.6 / Opus 4.7 via AI Gateway) rejects with
-// "This model does not support assistant message prefill".
 const TERMINAL_TOOL_STATES = new Set([
   "output-available",
   "output-error",
@@ -549,9 +505,10 @@ async function validateStandaloneIntegrations(
           repositories: enabledRepos,
         });
       } catch (error) {
-        console.error(
-          `[Standalone Chat] Error validating GitHub integration ${integrationId}:`,
-          error
+        logError(
+          "[Standalone Chat] Error validating GitHub integration",
+          error,
+          { organizationId, integrationId }
         );
       }
     }
@@ -585,9 +542,10 @@ async function validateStandaloneIntegrations(
           linearTeamName: integration.linearTeamName,
         });
       } catch (error) {
-        console.error(
-          `[Standalone Chat] Error validating Linear integration ${integrationId}:`,
-          error
+        logError(
+          "[Standalone Chat] Error validating Linear integration",
+          error,
+          { organizationId, integrationId }
         );
       }
     }
@@ -626,10 +584,9 @@ async function getEnabledGitHubIntegrations(
       }))
       .filter((integration) => integration.repositories.length > 0);
   } catch (error) {
-    console.error(
-      `[Standalone Chat] Error listing GitHub integrations for org ${organizationId}:`,
-      error
-    );
+    logError("[Standalone Chat] Error listing GitHub integrations", error, {
+      organizationId,
+    });
     return [];
   }
 }
@@ -656,10 +613,19 @@ async function getEnabledLinearIntegrations(
         linearTeamName: integration.linearTeamName,
       }));
   } catch (error) {
-    console.error(
-      `[Standalone Chat] Error listing Linear integrations for org ${organizationId}:`,
-      error
-    );
+    logError("[Standalone Chat] Error listing Linear integrations", error, {
+      organizationId,
+    });
     return [];
   }
+}
+
+function countReplyTodoCalls(messages: StandaloneChatInput["messages"]) {
+  const last = messages.at(-1);
+  if (last?.role !== "assistant") {
+    return 0;
+  }
+  return last.parts.filter(
+    (part) => part.type === `tool-${UPDATE_TODOS_TOOL_NAME}`
+  ).length;
 }

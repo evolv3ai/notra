@@ -1,20 +1,29 @@
+import { logError } from "@notra/ai/utils/server-log";
 import { db } from "@notra/db/drizzle";
-import { members, organizations } from "@notra/db/schema";
+import {
+  autopilotNamespaceDeletions,
+  members,
+  organizations,
+} from "@notra/db/schema";
 import {
   deleteWithTransfersSchema,
   organizationMembershipActionSchema,
 } from "@notra/schemas/dashboard/api-params";
+import { deleteOrganizationSites } from "@notra/sites-server/organization";
 import { and, count, eq, inArray, ne } from "drizzle-orm";
 import { Effect } from "effect";
-import { getTranslations } from "next-intl/server";
 
+import { purgeDeletedAnalytics } from "@/lib/analytics/deleted-analytics-purge";
 import { deleteAutumnCustomer } from "@/lib/billing/delete-autumn-customer";
+import { getTranslations } from "@/lib/i18n/server";
 import {
   deleteOrganizationFromWorkOS,
   removeMembershipFromWorkOS,
   updateMembershipRoleInWorkOS,
 } from "@/lib/organizations/workos-sync";
 import { authorizedProcedure } from "@/lib/orpc/base";
+import { revokeSitePreviewAccess } from "@/lib/sites/preview-revocation";
+import { notifyInfoChannel } from "@/lib/slack/info-channel";
 import {
   deleteOrganizationChatFiles,
   deleteOrganizationFiles,
@@ -24,10 +33,35 @@ import type {
   NextOwnerCandidate,
   OwnedOrganizationSummary,
 } from "@/types/user";
+import { recordAuthorizedOrganization } from "@/utils/rpc-telemetry";
 
 import { badRequest, forbidden, notFound } from "../utils/errors";
+import { userAccountRouter, userSecurityRouter } from "./user-account";
+
+async function cleanupDeletedOrganization(organizationId: string) {
+  await Promise.all([
+    deleteOrganizationFiles(organizationId).catch((error) => {
+      logError("[Delete Org] Failed to cleanup R2 files", error, {
+        organizationId,
+      });
+    }),
+    deleteOrganizationChatFiles(organizationId).catch((error) => {
+      logError("[Delete Org] Failed to cleanup chat files", error, {
+        organizationId,
+      });
+    }),
+    purgeDeletedAnalytics({ organizationId }),
+    deleteAutumnCustomer(organizationId).catch((error) => {
+      logError("[Delete Org] Failed to cancel Autumn subscription", error, {
+        organizationId,
+      });
+    }),
+  ]);
+}
 
 export const userRouter = {
+  account: userAccountRouter,
+  security: userSecurityRouter,
   organizations: {
     listOwned: authorizedProcedure.handler(async ({ context }) => {
       const ownedMemberships = await db.query.members.findMany({
@@ -47,6 +81,13 @@ export const userRouter = {
       const organizationIds = ownedMemberships.map(
         (membership) => membership.organizationId
       );
+      for (const organizationId of organizationIds) {
+        recordAuthorizedOrganization(
+          context.headers,
+          organizationId,
+          context.user.id
+        );
+      }
       const [memberCountRows, ownerCandidates] = await Promise.all([
         db
           .select({
@@ -120,8 +161,6 @@ export const userRouter = {
     applyAction: authorizedProcedure
       .input(organizationMembershipActionSchema)
       .handler(async ({ context, input }) => {
-        let shouldCleanupDeletedOrganization = false;
-
         const result = await db.transaction(async (tx) => {
           await tx
             .select({ id: members.id })
@@ -144,6 +183,11 @@ export const userRouter = {
             const tErrors = await getTranslations("errors.user");
             throw forbidden(tErrors("notMember"));
           }
+          recordAuthorizedOrganization(
+            context.headers,
+            input.organizationId,
+            context.user.id
+          );
 
           const [membershipCountResult] = await tx
             .select({ count: count() })
@@ -164,20 +208,28 @@ export const userRouter = {
             }
 
             const organization = await tx.query.organizations.findFirst({
-              columns: { workosOrgId: true },
+              columns: { name: true, slug: true, workosOrgId: true },
               where: eq(organizations.id, input.organizationId),
             });
 
+            await deleteOrganizationSites(input.organizationId, tx);
+            await tx
+              .insert(autopilotNamespaceDeletions)
+              .values({
+                organizationId: input.organizationId,
+              })
+              .onConflictDoNothing();
             await tx
               .delete(organizations)
               .where(eq(organizations.id, input.organizationId));
-
-            shouldCleanupDeletedOrganization = true;
 
             return {
               action: "delete" as const,
               success: true,
               workosOrgId: organization?.workosOrgId ?? null,
+              workspace: organization
+                ? `${organization.name} (${organization.slug})`
+                : input.organizationId,
             };
           }
 
@@ -205,33 +257,20 @@ export const userRouter = {
           await Effect.runPromise(
             deleteOrganizationFromWorkOS(result.workosOrgId)
           );
+          await cleanupDeletedOrganization(input.organizationId);
+          notifyInfoChannel({
+            emoji: ":wastebasket:",
+            title: "Workspace deleted",
+            fields: {
+              Workspace: result.workspace,
+              "Deleted by": context.user.email,
+            },
+          });
         } else {
           await Effect.runPromise(
             removeMembershipFromWorkOS(input.organizationId, context.user.id)
           );
-        }
-
-        if (shouldCleanupDeletedOrganization) {
-          await Promise.all([
-            deleteOrganizationFiles(input.organizationId).catch((error) => {
-              console.error(
-                `[Delete Org] Failed to cleanup R2 files for ${input.organizationId}:`,
-                error
-              );
-            }),
-            deleteOrganizationChatFiles(input.organizationId).catch((error) => {
-              console.error(
-                `[Delete Org] Failed to cleanup chat files for ${input.organizationId}:`,
-                error
-              );
-            }),
-            deleteAutumnCustomer(input.organizationId).catch((error) => {
-              console.error(
-                `[Delete Org] Failed to cancel Autumn subscription for ${input.organizationId}:`,
-                error
-              );
-            }),
-          ]);
+          await revokeSitePreviewAccess(input.organizationId, context.user.id);
         }
 
         return result;
@@ -256,6 +295,11 @@ export const userRouter = {
             const tErrors = await getTranslations("errors.user");
             throw forbidden(tErrors("notOwner", { orgId: transfer.orgId }));
           }
+          recordAuthorizedOrganization(
+            context.headers,
+            transfer.orgId,
+            context.user.id
+          );
 
           if (transfer.action === "transfer") {
             let newOwner = await tx.query.members.findFirst({
@@ -303,7 +347,7 @@ export const userRouter = {
           }
 
           const existingOrganization = await tx.query.organizations.findFirst({
-            columns: { id: true, workosOrgId: true },
+            columns: { name: true, slug: true, workosOrgId: true },
             where: eq(organizations.id, transfer.orgId),
           });
 
@@ -311,6 +355,13 @@ export const userRouter = {
             throw notFound(`Organization ${transfer.orgId} not found`);
           }
 
+          await deleteOrganizationSites(transfer.orgId, tx);
+          await tx
+            .insert(autopilotNamespaceDeletions)
+            .values({
+              organizationId: transfer.orgId,
+            })
+            .onConflictDoNothing();
           await tx
             .delete(organizations)
             .where(eq(organizations.id, transfer.orgId));
@@ -320,6 +371,7 @@ export const userRouter = {
           return {
             kind: "delete" as const,
             workosOrgId: existingOrganization.workosOrgId,
+            workspace: `${existingOrganization.name} (${existingOrganization.slug})`,
           };
         });
 
@@ -334,41 +386,28 @@ export const userRouter = {
           await Effect.runPromise(
             removeMembershipFromWorkOS(transfer.orgId, context.user.id)
           );
+          await revokeSitePreviewAccess(transfer.orgId, context.user.id);
         } else {
           await Effect.runPromise(
             deleteOrganizationFromWorkOS(outcome.workosOrgId)
           );
+          notifyInfoChannel({
+            emoji: ":wastebasket:",
+            title: "Workspace deleted",
+            fields: {
+              Workspace: outcome.workspace,
+              "Deleted by": context.user.email,
+            },
+          });
         }
       }
 
-      await Promise.all(
-        organizationsToCleanup.flatMap((orgId) => [
-          deleteOrganizationFiles(orgId).catch((error) => {
-            console.error(
-              `[Delete Org] Failed to cleanup R2 files for ${orgId}:`,
-              error
-            );
-          }),
-          deleteOrganizationChatFiles(orgId).catch((error) => {
-            console.error(
-              `[Delete Org] Failed to cleanup chat files for ${orgId}:`,
-              error
-            );
-          }),
-          deleteAutumnCustomer(orgId).catch((error) => {
-            console.error(
-              `[Delete Org] Failed to cancel Autumn subscription for ${orgId}:`,
-              error
-            );
-          }),
-        ])
-      );
+      await Promise.all(organizationsToCleanup.map(cleanupDeletedOrganization));
 
       await deleteUserFiles(context.user.id).catch((error) => {
-        console.error(
-          `[Delete User] Failed to cleanup R2 files for user ${context.user.id}:`,
-          error
-        );
+        logError("[Delete User] Failed to cleanup R2 files", error, {
+          userId: context.user.id,
+        });
       });
 
       return {

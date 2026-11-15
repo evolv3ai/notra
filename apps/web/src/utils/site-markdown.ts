@@ -63,6 +63,10 @@ function renderPlanPrice(
     return "Contact us";
   }
 
+  if (plan.pricing.monthly === 0) {
+    return "Free";
+  }
+
   return `$${plan.pricing.monthly}/month`;
 }
 
@@ -92,23 +96,23 @@ export function buildFeaturesMarkdown() {
     "",
     SITE_DESCRIPTION,
     "",
-    "Every answer is kept, so you can read what each engine actually said. A crawler fetch and a citation are not the same thing, and Notra keeps them apart.",
+    "Notra keeps every answer, so you can read what each engine said. It counts crawler fetches and citations separately.",
     "",
     markdownSection("What Notra tracks", [
       "### Prompts",
       "The buyer questions you want to show up for, in the words a buyer would use. Write them yourself, let Notra pull them from your website or import a CSV. Connect Google Search Console and Notra turns your real search queries into prompt suggestions every week.",
       "",
       "### Engines and models",
-      "ChatGPT, Claude, Gemini and Perplexity with web search, plus Google AI Overview and coding agents that research live. You pick which ones run and the list refreshes as new releases ship.",
+      "ChatGPT, Claude, Gemini and Perplexity with web search, plus Google AI Overview and coding agents that research live. Models from Moonshot, Z.AI, DeepSeek, Meta and Grok run without web search. You pick which ones run and the list refreshes as new releases ship.",
       "",
       "### Languages",
       "Run the same prompts in up to five languages. Each language gets its own mention rate, so you can see where you win in English and lose in German.",
       "",
       "### Conversations",
-      "Multi-turn chats of up to five turns, replayed against every engine with web search. The follow-up question is usually where the recommendation happens.",
+      "Notra replays multi-turn chats of up to five turns on every engine with web search. Engines often make their recommendation in a follow-up answer.",
       "",
       "### Scans",
-      "Scans run daily by default, or every 48 hours, 3 days, week, 2 weeks or 30 days. Every answer is stored in full with the searches the engine ran and the pages it cited. Zero data retention is available as an add-on for teams that need it.",
+      "Scans run daily by default, or every 48 hours, 3 days, week, 2 weeks or 30 days. Every answer is stored in full with the searches the engine ran and the pages it cited. Zero data retention is available as an add-on.",
     ]),
     markdownSection("What the dashboard shows", [
       `### ${FEATURES_ENGINES_COPY.title}`,
@@ -129,7 +133,7 @@ export function buildFeaturesMarkdown() {
     markdownSection("AI traffic, attributed", [
       FEATURES_TRAFFIC_COPY.description,
       "",
-      "No script tag. You add the @usenotra/geo package as a proxy or middleware in your Next.js, Nuxt, TanStack Start, Astro or SvelteKit site. It sends a small request envelope to Notra, matching happens on our side and anything human is dropped before it is stored.",
+      "You don't need a script tag. Add the @usenotra/geo package as a proxy or middleware in your Next.js, Nuxt, TanStack Start, Astro or SvelteKit site. It sends a small request envelope to Notra, matching happens on our side and anything human is dropped before it is stored.",
       "",
       "Every hit is labelled by purpose: model training, search index, cited in answer (an assistant read the page while answering someone) or referral (a person clicked through from an AI answer).",
     ]),
@@ -221,7 +225,6 @@ function buildPromptCalculatorMarkdown() {
       ? `| ${plan.name} | more than ${PRICING_CARD_PLANS.at(-2)?.answersPerMonth?.toLocaleString("en-US") ?? ""} | ${plan.price.monthly} |`
       : `| ${plan.name} | ${plan.answersPerMonth.toLocaleString("en-US")} | ${plan.price.monthly}/month or ${plan.price.yearly}/year |`
   );
-  // Exact scans per month, so an agent's arithmetic matches the calculator.
   const frequencies = PROMPT_CALCULATOR_FREQUENCIES.map((option) => {
     if (option.intervalDays === 1) {
       return `\`${option.id}\` (${PROMPT_CALCULATOR_DAYS_PER_MONTH})`;
@@ -285,7 +288,7 @@ function buildPromptCalculatorMarkdown() {
     "",
     "Params you leave out fall back to their default, and the page updates the URL as the user changes inputs, so the link always matches what they see.",
     "",
-    "Good to know: the estimate covers the prompts in the project's main language. Each extra language re-runs up to the first 5 prompts, multi-turn conversations add one answer per turn, and persona conversations count two answers per turn, so leave headroom when a customer plans to use any of them. When an organization uses up its monthly AI answers, scheduled scans run on its AI credits instead and are skipped only when no credits are left either. Zero data retention adds 20% to Starter, Growth and Scale and is included on Enterprise; only add it when the customer asks for it.",
+    "Good to know: the estimate covers the prompts in the project's main language. Each extra language re-runs up to the first 5 prompts, multi-turn conversations add one answer per turn and persona conversations count two answers per turn, so leave headroom when a customer plans to use any of them. When an organization uses up its monthly AI answers, scheduled scans run on its AI credits instead and are skipped only when no credits are left either. Zero data retention adds 20% to Starter, Growth and Scale and is included on Enterprise; only add it when the customer asks for it.",
     "",
     "### Models",
     "",
@@ -339,7 +342,7 @@ export function buildPricingMarkdown() {
     "",
     "Choose the right Notra plan for your team.",
     "",
-    "Upgrade when you need more images, posts, or projects.",
+    "Upgrade when you need more images, posts or projects.",
     "",
     planSections,
     buildPromptCalculatorMarkdown(),
@@ -437,12 +440,13 @@ export function buildBrandMarkdown() {
     markdownSection("Assets", [
       `- [Brand kit (zip)](${SITE_URL}${BRAND_ASSETS.zip})`,
       `- Logo: [SVG](${SITE_URL}${BRAND_ASSETS.mark.svg}) / [PNG](${SITE_URL}${BRAND_ASSETS.mark.png})`,
+      `- Logo for dark surfaces: [SVG](${SITE_URL}${BRAND_ASSETS.markDark.svg}) / [PNG](${SITE_URL}${BRAND_ASSETS.markDark.png})`,
       `- Wordmark: [SVG](${SITE_URL}${BRAND_ASSETS.wordmark.svg}) / [PNG](${SITE_URL}${BRAND_ASSETS.wordmark.png})`,
       `- Wordmark for dark surfaces: [SVG](${SITE_URL}${BRAND_ASSETS.wordmarkDark.svg}) / [PNG](${SITE_URL}${BRAND_ASSETS.wordmarkDark.png})`,
     ]),
     markdownSection("Logo", [
       "The Notra mark is a feather with a lavender fill and ink strokes.",
-      "Keep it on a light surface and give it room to breathe. On dark surfaces, place the mark on a cream tile.",
+      "Keep it on a light surface with clear space around it. On dark surfaces, place the mark on a cream tile.",
     ]),
     markdownSection("Colors", colorLines),
     markdownSection("Typography", [

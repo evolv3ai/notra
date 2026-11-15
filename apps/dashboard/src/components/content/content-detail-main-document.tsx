@@ -3,13 +3,14 @@
 import type { TextSelection } from "@notra/ai/types/chat";
 import { Button } from "@notra/ui/components/ui/button";
 import { Skeleton } from "@notra/ui/components/ui/skeleton";
-import { useTranslations } from "next-intl";
+import { useTranslations } from "use-intl";
 
 import { ContentPlanView } from "@/components/content/content-plan-view";
 import { ContentEditorSwitch } from "@/components/content/editors";
 import { useOrganizationsContext } from "@/components/providers/organization-provider";
 import type { ContentDetailDocument } from "@/lib/hooks/use-content-detail-document";
 import type { ContentApiResponse } from "@/types/hooks/content";
+import { resolveOrganizationLogo } from "@/utils/avatar";
 
 interface ContentDetailMainDocumentProps {
   contentId: string;
@@ -219,7 +220,7 @@ export function ContentDetailMainDocument({
       imageExportRef={imageExportRef}
       organization={{
         name: activeOrganization?.name ?? t("yourOrganization"),
-        logo: activeOrganization?.logo ?? null,
+        logo: resolveOrganizationLogo(activeOrganization?.logo) ?? null,
       }}
       organizationId={organizationId}
       readOnly={false}

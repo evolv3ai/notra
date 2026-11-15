@@ -5,15 +5,12 @@ import { useState } from "react";
 
 import { cn } from "@notra/ui/lib/utils";
 
-// Each dot rises in a beat after the label starts leaving, then bounces in turn.
 const LOADING_DOTS = [
   { bounce: "[animation-delay:0ms]", enter: "[animation-delay:70ms]" },
   { bounce: "[animation-delay:140ms]", enter: "[animation-delay:110ms]" },
   { bounce: "[animation-delay:280ms]", enter: "[animation-delay:150ms]" },
 ] as const;
 
-/* True from the first `loading` change until the swap back has finished, so
-   buttons don't animate on mount and stop clipping once they're idle again. */
 function useLoadingSwap(loading: boolean) {
   const [previousLoading, setPreviousLoading] = useState(loading);
   const [isSwapping, setIsSwapping] = useState(false);
@@ -24,7 +21,6 @@ function useLoadingSwap(loading: boolean) {
   return { finishSwap: () => setIsSwapping(false), isSwapping };
 }
 
-/* Clearing `progress` keeps the bar mounted at 100% until it has faded out. */
 function useProgressCompletion(hasProgress: boolean) {
   const [previousHasProgress, setPreviousHasProgress] = useState(hasProgress);
   const [isCompleting, setIsCompleting] = useState(false);
@@ -45,9 +41,6 @@ function ButtonProgress({
   value: number;
 }) {
   return (
-    // Decorative: a button's content only feeds its accessible name, so the
-    // progressbar role (and Base UI's hidden "x") would just garble it.
-    // `Button` describes the percentage through `aria-describedby` instead.
     <ProgressPrimitive.Root
       aria-hidden
       className={cn(
@@ -127,11 +120,6 @@ interface ButtonContentProps {
   progressTextId: string;
 }
 
-/* The animated inside of `Button`: the label, the loading dots and the
-   progress fill. Kept in its own client module so `button.tsx` stays importable
-   from server components that only call `buttonVariants`. The label is only
-   wrapped while a state is showing, so idle buttons keep their children as
-   direct children and `[&>svg]`-style selectors keep working. */
 function ButtonContent({
   children,
   loading,
@@ -168,7 +156,6 @@ function ButtonContent({
                 ? "animate-button-swap-out"
                 : "animate-button-swap-in [animation-delay:70ms]")
           )}
-          // Tells the button to clip the swapping layers to its shape.
           data-clip=""
           data-slot="button-label"
         >

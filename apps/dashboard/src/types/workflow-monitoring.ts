@@ -23,7 +23,7 @@ export interface WorkflowTelemetryEvent extends Record<string, unknown> {
     | "geo.scan.alert.failed"
     | "workflow.alert.failed"
     | "geo.scan.watchdog.failed";
-  outcome?: "success" | "error";
+  outcome?: "success" | "warning" | "error";
   runId?: string;
   organizationId?: string | null;
   projectId?: string | null;

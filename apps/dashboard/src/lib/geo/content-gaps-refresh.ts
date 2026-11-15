@@ -1,3 +1,4 @@
+import { logError } from "@notra/ai/utils/server-log";
 import { db } from "@notra/db/drizzle";
 import { geoContentGapSnapshots, geoSettings } from "@notra/db/schema";
 import { refreshGeoContentGaps } from "@notra/geo-core/geo/gaps";
@@ -27,8 +28,6 @@ export async function refreshDueGeoContentGaps() {
         lt(geoContentGapSnapshots.updatedAt, cutoff)
       )
     )
-    // Prepare new projects first, then serve the oldest due snapshots first.
-    // Shuffle new projects and snapshots with equal timestamps to avoid a fixed retry order.
     .orderBy(
       sql`case when ${geoContentGapSnapshots.projectId} is null then 0 else 1 end`,
       asc(geoContentGapSnapshots.updatedAt),
@@ -45,10 +44,9 @@ export async function refreshDueGeoContentGaps() {
       refreshed++;
     } catch (error) {
       failed++;
-      console.error(
-        `[GEO] Content gaps refresh failed for ${project.projectId}:`,
-        error
-      );
+      logError("[GEO] Content gaps refresh failed", error, {
+        projectId: project.projectId,
+      });
     }
   }
   return { refreshed, failed };

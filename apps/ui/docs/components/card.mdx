@@ -1,0 +1,38 @@
+---
+title: Card
+description: The card from the Notra dashboard, with an eyebrow title, a hint, a readout, an action slot and an empty state.
+---
+
+Every chart and list on the Notra GEO pages sits in this card. The dualtone variants put the title on a grey shell and the content on a lifted white body, the same frame as the [Table](/components/table).
+
+<Component path="card/examples/card-demo" />
+
+## Installation
+
+<RegistryInstall name="card" />
+
+This installs the card into `components/card/` and pulls in [Tooltip](/components/tooltip), [Shimmer](/components/shimmer) and shadcn's Card and Spinner.
+
+## Usage
+
+```tsx
+import { InstrumentModule } from "@/components/card/components/instrument-module";
+
+<InstrumentModule eyebrow="Mention rate" readout="Last 7 days" variant="table">
+  {children}
+</InstrumentModule>;
+```
+
+| Prop | Default | Description |
+| --- | --- | --- |
+| `eyebrow` | | Title of the card. |
+| `hint` | | Adds an info icon with a tooltip next to the title. |
+| `description` | | Line under the title. |
+| `readout` | | Small muted text on the right of the header. |
+| `action` | | Button or menu on the right of the header. |
+| `variant` | `"flat"` | `"flat"`, `"panel"`, `"table"` or `"table-compact"`. |
+| `bareBody` | `false` | Drops the shell and body chrome around the content. |
+
+`InstrumentSection` takes the same props and renders the header above the content without a card. `InstrumentEmpty` fills a card with a message, an optional action and a faded `preview`; set `busy` to show a spinner. `InstrumentGrid` lays cards out in a grid.
+
+Wrap your app in `CardLabelsProvider` to translate the hint's label.

@@ -105,7 +105,9 @@ const trafficSourceSchema = z.object({
   visits: z.number().int(),
   previousVisits: z.number().int().optional(),
   markdownVisits: z.number().int(),
+  previousMarkdownVisits: z.number().int().optional(),
   paths: z.number().int(),
+  previousPaths: z.number().int().optional(),
   lastSeenAt: z.string(),
 });
 
@@ -253,7 +255,17 @@ const ingestSetupFieldsSchema = z.object({
     tanstack: z.string(),
     astro: z.string(),
     sveltekit: z.string(),
+    reactRouter: z.string(),
   }),
+  drainUrls: z
+    .object({
+      vercel: z.string(),
+      cloudflare: z.string(),
+    })
+    .openapi({
+      description:
+        "Endpoints a Vercel log drain or Cloudflare Logpush job posts request logs to, authenticated with the tracking token.",
+    }),
   organization: organizationResponseSchema,
 });
 

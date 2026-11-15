@@ -23,8 +23,10 @@ import { orchestrateChat } from "@notra/ai/orchestration/orchestrate";
 import type { ChatUsageSnapshot } from "@notra/ai/types/chat";
 import { buildChatFinishMetadata } from "@notra/ai/utils/chat";
 import { createChatActivityTimingTracker } from "@notra/ai/utils/chat-activity-timing";
+import { getContentImageContext } from "@notra/ai/utils/content-image-context";
 import { preserveConversationSelection } from "@notra/ai/utils/resolve-conversation-route";
 import { routeUsageProperties } from "@notra/ai/utils/route-usage";
+import { logError, logWarn } from "@notra/ai/utils/server-log";
 import { toAgentTokenUsage } from "@notra/ai/utils/token-usage";
 import { db } from "@notra/db/drizzle";
 import { posts } from "@notra/db/schema";
@@ -33,8 +35,6 @@ import { chatRequestSchema } from "@notra/schemas/dashboard/content";
 import { createUIMessageStreamResponse, toUIMessageStream } from "ai";
 import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
 
 import { AI_CREDITS_SOURCE_CONTENT_CHAT } from "@/constants/studio-analytics";
 import { trackServerEvent } from "@/lib/analytics/posthog-server";
@@ -43,10 +43,8 @@ import { withOrganizationAuth } from "@/lib/auth/organization";
 import type { RouteContext } from "@/types/api/routes";
 import { enforceChatGenerationRatelimit } from "@/utils/chat-ratelimit";
 
-export const maxDuration = 60;
-
 export async function GET(
-  request: NextRequest,
+  request: Request,
   { params }: RouteContext<{ organizationId: string; contentId: string }>
 ) {
   const { organizationId, contentId } = await params;
@@ -64,15 +62,15 @@ export async function GET(
     columns: { id: true },
   });
   if (!contentExists) {
-    return NextResponse.json({ error: "Content not found" }, { status: 404 });
+    return Response.json({ error: "Content not found" }, { status: 404 });
   }
 
   const sessions = await listContentChatSessions(organizationId, contentId);
-  return NextResponse.json({ sessions });
+  return Response.json({ sessions });
 }
 
 export const POST = withEvlog(async function POST(
-  request: NextRequest,
+  request: Request,
   { params }: RouteContext<{ organizationId: string; contentId: string }>
 ) {
   const log = getLogger();
@@ -81,11 +79,7 @@ export const POST = withEvlog(async function POST(
   try {
     const { organizationId, contentId } = await params;
 
-    log.set({
-      feature: "content_chat",
-      organizationId,
-      contentId,
-    });
+    log.set({ feature: "content_chat" });
 
     const auth = await withOrganizationAuth(request, organizationId);
 
@@ -93,11 +87,13 @@ export const POST = withEvlog(async function POST(
       return auth.response;
     }
 
+    log.set({ organizationId: auth.context.organizationId, contentId });
+
     const body = await request.json().catch(() => null);
     const parseResult = chatRequestSchema.safeParse(body);
 
     if (!parseResult.success) {
-      return NextResponse.json(
+      return Response.json(
         { error: "Invalid request body", details: parseResult.error.issues },
         { status: 400 }
       );
@@ -111,70 +107,68 @@ export const POST = withEvlog(async function POST(
       return rateLimited;
     }
 
-    let useMarkup = false;
-    let chargeAiCredits = false;
-    if (autumn || allowUnmeteredAiInDevelopment) {
-      let billing: Awaited<ReturnType<typeof checkChatBilling>>;
-      try {
-        billing = await checkChatBilling(organizationId);
-      } catch (checkError) {
-        console.error("[Autumn] Check error:", {
-          requestId,
-          customerId: organizationId,
-          error: checkError,
-        });
-        return NextResponse.json(
-          { error: "Failed to check usage limits", code: "BILLING_ERROR" },
-          { status: 500 }
-        );
-      }
-
-      if (!billing.allowed) {
-        console.log("[Autumn] Usage limit reached:", {
-          requestId,
-          customerId: organizationId,
-          balance: billing.balanceRemaining ?? 0,
-        });
-        return NextResponse.json(
-          {
-            error: "Usage limit reached",
-            code: "USAGE_LIMIT_REACHED",
-            balance: billing.balanceRemaining ?? 0,
-          },
-          { status: 403 }
-        );
-      }
-
-      useMarkup = billing.useMarkup;
-      chargeAiCredits = billing.chargeAiCredits;
-    } else {
-      return NextResponse.json(
+    if (!(autumn || allowUnmeteredAiInDevelopment)) {
+      return Response.json(
         { error: "Billing service is unavailable", code: "BILLING_ERROR" },
         { status: 503 }
       );
     }
+    let billing: Awaited<ReturnType<typeof checkChatBilling>>;
+    try {
+      billing = await checkChatBilling(organizationId);
+    } catch (checkError) {
+      log.error(checkError instanceof Error ? checkError : String(checkError), {
+        billingCheck: "failed",
+      });
+      return Response.json(
+        { error: "Failed to check usage limits", code: "BILLING_ERROR" },
+        { status: 500 }
+      );
+    }
+    if (!billing.allowed) {
+      log.set({
+        usageLimitReached: true,
+        balance: billing.balanceRemaining ?? 0,
+      });
+      return Response.json(
+        {
+          error: "Usage limit reached",
+          code: "USAGE_LIMIT_REACHED",
+          balance: billing.balanceRemaining ?? 0,
+        },
+        { status: 403 }
+      );
+    }
+    const { useMarkup, chargeAiCredits } = billing;
 
     const {
       chatId,
       messages: inputMessages,
       currentMarkdown,
-      contentType,
       documentMode,
       selection,
       context,
+      model,
+      thinkingLevel,
       timezone,
     } = parseResult.data;
 
-    const contentExists = await db.query.posts.findFirst({
+    const post = await db.query.posts.findFirst({
       where: and(
         eq(posts.id, contentId),
         eq(posts.organizationId, organizationId)
       ),
-      columns: { id: true },
+      columns: {
+        id: true,
+        title: true,
+        contentType: true,
+        sourceMetadata: true,
+      },
     });
-    if (!contentExists) {
-      return NextResponse.json({ error: "Content not found" }, { status: 404 });
+    if (!post) {
+      return Response.json({ error: "Content not found" }, { status: 404 });
     }
+    const contentType = post.contentType;
 
     const messages = preserveConversationSelection(
       inputMessages,
@@ -187,7 +181,7 @@ export const POST = withEvlog(async function POST(
       messages
     );
     if (!historySaved) {
-      return NextResponse.json({ error: "Chat not found" }, { status: 404 });
+      return Response.json({ error: "Chat not found" }, { status: 404 });
     }
 
     trackServerEvent({
@@ -205,24 +199,11 @@ export const POST = withEvlog(async function POST(
       },
     });
 
-    const autumnClient = autumn;
     const streamStartedAt = Date.now();
     let firstChunkAt: number | null = null;
     const usageSnapshot: ChatUsageSnapshot = {};
-    const imageDefaults =
-      contentType === "image"
-        ? await getImageDefaults({ organizationId, contentId }).catch(
-            (error) => {
-              console.warn("[Content Chat] Failed to load image defaults", {
-                requestId,
-                organizationId,
-                contentId,
-                error,
-              });
-              return undefined;
-            }
-          )
-        : undefined;
+    const imageContext =
+      contentType === "image" ? getContentImageContext(post) : undefined;
 
     const { stream, routingDecision } = await orchestrateChat(
       {
@@ -234,14 +215,17 @@ export const POST = withEvlog(async function POST(
         documentMode,
         currentPostId: contentId,
         userId: auth.context.user.id,
-        imageDefaults,
+        imageContext,
         selection,
         context,
+        requestedModel: model,
+        thinkingLevel,
         maxSteps: 50,
         abortSignal: request.signal,
         log,
         timezone,
         useMarkup,
+        chargeAiCredits,
         telemetryMetadata: {
           contentId,
           contentType: contentType ?? "unknown",
@@ -274,19 +258,13 @@ export const POST = withEvlog(async function POST(
           usageSnapshot.cacheWriteTokens =
             usage.inputTokenDetails?.cacheWriteTokens ?? 0;
 
-          if (
-            !autumnClient ||
-            allowUnmeteredAiInDevelopment ||
-            !chargeAiCredits
-          ) {
+          if (!autumn || allowUnmeteredAiInDevelopment || !chargeAiCredits) {
             return;
           }
 
           const cost = calculateAiCreditCostCents(
             {
               ...toAgentTokenUsage(usage),
-              // This usage sums every step, and prices can depend on how big
-              // each single request was, so bill the per-step cost.
               maxPromptTokens: routeUsage?.maxPromptTokens,
               tokenCostUsd: routeUsage?.tokenCostUsd,
             },
@@ -295,7 +273,7 @@ export const POST = withEvlog(async function POST(
           );
 
           try {
-            await autumnClient.track({
+            await autumn.track({
               customerId: organizationId,
               featureId: FEATURES.AI_CREDITS,
               value: cost.costCents,
@@ -331,10 +309,9 @@ export const POST = withEvlog(async function POST(
               },
             });
           } catch (trackError) {
-            console.error("[Autumn] Track error after chat completion:", {
+            logError("[Autumn] Track error after chat completion", trackError, {
               requestId,
               customerId: organizationId,
-              error: trackError,
             });
           }
         },
@@ -342,10 +319,7 @@ export const POST = withEvlog(async function POST(
       }
     );
 
-    console.log("[Content Chat] Routing decision:", {
-      requestId,
-      decision: routingDecision,
-    });
+    log.set({ routingDecision });
 
     const activityTiming = createChatActivityTimingTracker(messages.at(-1));
     const uiStream = toUIMessageStream({
@@ -390,7 +364,7 @@ export const POST = withEvlog(async function POST(
           responseMessages
         );
         if (!saved) {
-          console.warn("[Content Chat] Skipped saving response", {
+          logWarn("[Content Chat] Skipped saving response", {
             requestId,
             organizationId,
             contentId,
@@ -399,7 +373,7 @@ export const POST = withEvlog(async function POST(
         }
       },
       onError: (error) => {
-        console.error("[Content Chat] Stream error:", { requestId, error });
+        logError("[Content Chat] Stream error", error, { requestId });
         return "An error occurred while processing your request.";
       },
     });
@@ -409,80 +383,10 @@ export const POST = withEvlog(async function POST(
       stream: uiStream,
     });
   } catch (e) {
-    console.error("[Content Chat] Error:", {
-      requestId,
-      error: e instanceof Error ? e.message : String(e),
-    });
-    return NextResponse.json(
+    log.error(e instanceof Error ? e : String(e));
+    return Response.json(
       { error: "Failed to process chat request" },
       { status: 500 }
     );
   }
 });
-
-async function getImageDefaults(params: {
-  organizationId: string;
-  contentId: string;
-}) {
-  const post = await db.query.posts.findFirst({
-    where: and(
-      eq(posts.id, params.contentId),
-      eq(posts.organizationId, params.organizationId)
-    ),
-    columns: {
-      title: true,
-      sourceMetadata: true,
-    },
-  });
-
-  const metadata = post?.sourceMetadata;
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
-    return;
-  }
-
-  const integrationId =
-    "integrationId" in metadata && typeof metadata.integrationId === "string"
-      ? metadata.integrationId
-      : null;
-  const branch =
-    "branch" in metadata && typeof metadata.branch === "string"
-      ? metadata.branch
-      : null;
-  const brandIdentityId = getStoredBrandIdentityId(metadata);
-  const sandbox =
-    "sandbox" in metadata &&
-    metadata.sandbox &&
-    typeof metadata.sandbox === "object"
-      ? metadata.sandbox
-      : null;
-  const snapshotId =
-    sandbox && "snapshotId" in sandbox && typeof sandbox.snapshotId === "string"
-      ? sandbox.snapshotId
-      : null;
-
-  if (!(integrationId && branch && snapshotId && post?.title)) {
-    return;
-  }
-
-  return {
-    integrationId,
-    branch,
-    title: post.title,
-    brandIdentityId,
-  };
-}
-
-function getStoredBrandIdentityId(metadata: object) {
-  if (
-    "brandIdentityId" in metadata &&
-    typeof metadata.brandIdentityId === "string"
-  ) {
-    return metadata.brandIdentityId;
-  }
-
-  if ("brandVoiceId" in metadata && typeof metadata.brandVoiceId === "string") {
-    return metadata.brandVoiceId;
-  }
-
-  return undefined;
-}

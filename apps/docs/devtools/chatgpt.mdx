@@ -1,0 +1,85 @@
+---
+title: "ChatGPT Plugin"
+description: "Install the Notra plugin in ChatGPT and use its GEO, AEO and content tools without setting up a custom connector or API key."
+authors:
+  - handle: dominik
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/devtools/chatgpt
+  type: how-to
+  applies_to:
+    - notra
+    - notra-mcp
+    - chatgpt
+  language: en
+  difficulty: beginner
+  time_estimate: 5m
+  status: stable
+  aliases:
+    - ChatGPT plugin
+    - ChatGPT app
+    - Notra in ChatGPT
+  prev: ./claude.mdx
+  next: ./composio.mdx
+---
+
+Notra is available as a plugin in ChatGPT, so you can add it to your ChatGPT account the same way you add any other plugin, without setting up a custom connector or creating an API key.
+
+<img
+  src="/images/devtools/chatgpt-plugin-notra-light.png"
+  alt="Notra's plugin page in ChatGPT with its description, starter prompts and Install plugin button."
+  className="block dark:hidden"
+/>
+<img
+  src="/images/devtools/chatgpt-plugin-notra-dark.png"
+  alt="Notra's plugin page in ChatGPT with its description, starter prompts and Install plugin button."
+  className="hidden dark:block"
+/>
+
+<Card
+  title="View in ChatGPT"
+  icon="plug"
+  href="https://chatgpt.com/plugins/plugin_asdk_app_6ad054bf08248191a320ed1334e3ffde"
+  horizontal
+>
+  Install the Notra plugin in your ChatGPT account.
+</Card>
+
+## Setup
+
+<Steps>
+  <Step title="Open Notra's plugin page">
+    Open [Notra's plugin page in ChatGPT](https://chatgpt.com/plugins/plugin_asdk_app_6ad054bf08248191a320ed1334e3ffde) and click **Install plugin**.
+  </Step>
+
+  <Step title="Sign in to Notra">
+    ChatGPT sends you to Notra to sign in, where you pick the organization you want to use and an access level of Read only, Write only or Full access.
+  </Step>
+
+  <Step title="Start using Notra in ChatGPT">
+    ChatGPT stores the session and refreshes it in the background, so you only sign in once. Ask ChatGPT about your AI visibility or ask it to draft content, and it calls the Notra tools for you.
+  </Step>
+</Steps>
+
+If your workspace can't install plugins, you can still add `https://mcp.usenotra.com/mcp` as a custom connector, as described on the [MCP server](/devtools/mcp#with-oauth) page.
+
+## What you can do
+
+The plugin has the same tools as the [MCP server](/devtools/mcp), which covers GEO, AEO and content. Here are a few prompts to start with:
+
+- "Run a GEO scan for our tracked prompts and tell me where we dropped since last week."
+- "Which competitors show up in AI answers for prompts where we don't?"
+- "Find our biggest content gaps and draft a blog post for the first one in our brand voice."
+- "How much traffic did AI crawlers and agents send to our docs this month?"
+
+ChatGPT saves each draft as a post in Notra, where you review and publish it from the dashboard.
+
+<Warning>
+  Some tools use credits or can't be undone, such as running scans, approving briefs and deleting data, so ask ChatGPT to show you what it plans to do and confirm before it runs them.
+</Warning>
+
+## Notes
+
+- The access level you pick when you sign in limits what ChatGPT can do, so pick Read only if you only want ChatGPT to report on your data.
+- You can disconnect Notra from your ChatGPT settings at any time, and you sign in again the next time you connect it.

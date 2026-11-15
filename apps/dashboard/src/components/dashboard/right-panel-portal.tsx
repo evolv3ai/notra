@@ -6,9 +6,7 @@ import { createPortal } from "react-dom";
 import { RIGHT_PANEL_PORTAL_ID } from "@/constants/right-panel";
 import type { RightPanelPortalProps } from "@/types/components/right-panel-portal";
 
-const subscribeToPortalTarget = () => () => {
-  // the portal outlet is rendered by the dashboard shell and never swapped
-};
+const subscribeToPortalTarget = () => () => {};
 
 const getPortalTarget = () =>
   document.getElementById(RIGHT_PANEL_PORTAL_ID) ?? null;

@@ -5,7 +5,6 @@ import { REPO_ROOT } from "../constants/paths";
 
 const LINE_REGEX = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)?\s*$/;
 
-/** Loads the monorepo root .env without overriding variables that are already set. */
 export function loadRepoEnv(): string | undefined {
   const file = join(REPO_ROOT, ".env");
   if (!existsSync(file)) {

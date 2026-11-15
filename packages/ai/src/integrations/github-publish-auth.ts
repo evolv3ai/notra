@@ -56,12 +56,12 @@ export const getGitHubPublishTokenEffect = Effect.fn(
         })
         .from(githubIntegrations)
         .where(
-          options?.organizationId
-            ? and(
-                eq(githubIntegrations.id, integrationId),
-                eq(githubIntegrations.organizationId, options.organizationId)
-              )
-            : eq(githubIntegrations.id, integrationId)
+          and(
+            eq(githubIntegrations.id, integrationId),
+            options?.organizationId
+              ? eq(githubIntegrations.organizationId, options.organizationId)
+              : undefined
+          )
         )
         .limit(1)
         .$withCache(false)

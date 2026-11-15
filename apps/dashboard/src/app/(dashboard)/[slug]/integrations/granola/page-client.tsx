@@ -1,7 +1,8 @@
 "use client";
 
-import { PlusSignIcon } from "@hugeicons/core-free-icons";
+import { MoreHorizontalIcon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { PageHeading } from "@notra/ui/components/shared/page-heading";
 import { Badge } from "@notra/ui/components/ui/badge";
 import {
   Card,
@@ -20,9 +21,9 @@ import {
 import { Kbd } from "@notra/ui/components/ui/kbd";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { DeleteIntegrationDialog } from "@/components/delete-integration-dialog";
@@ -30,7 +31,6 @@ import { EmptyState } from "@/components/empty-state";
 import { EmptyStateCardsPreview } from "@/components/empty-state-preview";
 import { AddGranolaIntegrationDialog } from "@/components/integrations/add-granola-integration-dialog";
 import { PageContainer } from "@/components/layout/container";
-import { PageHeading } from "@/components/layout/page-heading";
 import { useOrganizationsContext } from "@/components/providers/organization-provider";
 import { formatGranolaIntegrationDate } from "@/lib/granola/format";
 import { dashboardOrpc } from "@/lib/orpc/query";
@@ -142,22 +142,16 @@ function GranolaIntegrationCard({
               <DropdownMenu>
                 <DropdownMenuTrigger
                   render={
-                    <Button disabled={isLoading} size="icon-sm" variant="ghost">
-                      <svg
-                        aria-label={tIntegrationsShared("moreOptions")}
-                        fill="none"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        viewBox="0 0 24 24"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <title>{tIntegrationsShared("moreOptions")}</title>
-                        <circle cx="12" cy="12" r="1" />
-                        <circle cx="12" cy="5" r="1" />
-                        <circle cx="12" cy="19" r="1" />
-                      </svg>
+                    <Button
+                      aria-label={tIntegrationsShared("moreOptions")}
+                      disabled={isLoading}
+                      size="icon-sm"
+                      variant="ghost"
+                    >
+                      <HugeiconsIcon
+                        className="size-4"
+                        icon={MoreHorizontalIcon}
+                      />
                     </Button>
                   }
                 />
@@ -233,11 +227,8 @@ export default function PageClient({ organizationSlug }: PageClientProps) {
   return (
     <PageContainer className="flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
       <div className="w-full space-y-6 px-4 lg:px-6">
-        <PageHeading
-          description={t("description")}
-          title={tIntegrationsShared("granolaIntegrations")}
-        >
-          <Button className="gap-1.5" onClick={() => setDialogOpen(true)}>
+        <PageHeading description={t("description")} title="Granola">
+          <Button onClick={() => setDialogOpen(true)}>
             <HugeiconsIcon className="size-4" icon={PlusSignIcon} />
             {t("connect")}
             <Kbd className="ml-1 hidden sm:inline-flex">C</Kbd>
@@ -250,7 +241,7 @@ export default function PageClient({ organizationSlug }: PageClientProps) {
           {!showLoading && isError ? (
             <EmptyState
               action={
-                <Button onClick={() => refetch()} size="sm" variant="outline">
+                <Button onClick={() => refetch()} variant="outline">
                   {tCommon("actions.retry")}
                 </Button>
               }
@@ -263,11 +254,8 @@ export default function PageClient({ organizationSlug }: PageClientProps) {
           (!integrations || integrations.length === 0) ? (
             <EmptyState
               action={
-                <Button
-                  onClick={() => setDialogOpen(true)}
-                  size="sm"
-                  variant="outline"
-                >
+                <Button onClick={() => setDialogOpen(true)} variant="outline">
+                  <HugeiconsIcon className="size-4" icon={PlusSignIcon} />
                   {t("connect")}
                 </Button>
               }

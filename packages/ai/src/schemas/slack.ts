@@ -68,3 +68,34 @@ export const slackCreateChannelResponseSchema = z.looseObject({
     })
     .optional(),
 });
+
+const slackNextCursorSchema = z
+  .looseObject({ next_cursor: z.string().optional() })
+  .optional();
+
+export const slackConversationsListResponseSchema = z.looseObject({
+  ok: z.boolean(),
+  error: z.string().optional(),
+  channels: z
+    .array(z.looseObject({ id: z.string(), name: z.string() }))
+    .optional(),
+  response_metadata: slackNextCursorSchema,
+});
+
+export const slackConversationMembersResponseSchema = z.looseObject({
+  ok: z.boolean(),
+  error: z.string().optional(),
+  members: z.array(z.string()).optional(),
+  response_metadata: slackNextCursorSchema,
+});
+
+export const slackUserInfoResponseSchema = z.looseObject({
+  ok: z.boolean(),
+  error: z.string().optional(),
+  user: z
+    .looseObject({
+      is_bot: z.boolean().optional(),
+      profile: z.looseObject({ email: z.string().optional() }).optional(),
+    })
+    .optional(),
+});

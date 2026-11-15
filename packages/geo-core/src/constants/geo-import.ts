@@ -25,14 +25,14 @@ export const GEO_COMPETITORS_CSV_COLUMNS = {
   synonyms: "synonyms",
 } as const;
 
-export const GEO_PROMPTS_CSV_TEMPLATE = [
+const GEO_PROMPTS_CSV_TEMPLATE = [
   "prompt,enabled",
   "what tools should I use for automating changelogs,true",
   "best AI visibility platforms for B2B SaaS,true",
   "how do I track brand mentions in ChatGPT,false",
 ].join("\n");
 
-export const GEO_COMPETITORS_CSV_TEMPLATE = [
+const GEO_COMPETITORS_CSV_TEMPLATE = [
   "name,domain,kind,synonyms",
   "Acme Analytics,acme.com,direct,Acme|Acme Inc",
   "Globex,globex.io,indirect,",

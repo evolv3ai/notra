@@ -8,9 +8,9 @@ import { hasGeoPersonaDetailsChanged } from "@notra/geo-core/utils/geo-personas"
 import { Badge } from "@notra/ui/components/ui/badge";
 import { Input } from "@notra/ui/components/ui/input";
 import { Textarea } from "@notra/ui/components/ui/textarea";
-import { useTranslations } from "next-intl";
 import { useId, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { GEO_PERSONA_PROFILE_SECTIONS } from "@/constants/geo-personas";
@@ -21,11 +21,6 @@ import {
 import type { PersonaProfileEditorProps } from "@/types/geo-personas-ui";
 import { groupPersonaMemories, personaPointsText } from "@/utils/geo-personas";
 
-/**
- * The editor splits glued points onto their own lines for display. An
- * untouched field goes back as stored, so saving without edits does not
- * count as a change (and regenerate prompts) or push it past the length cap.
- */
 function unsplitPoints(value: FormDataEntryValue | null, stored: string) {
   return value === personaPointsText(stored) ? stored : value;
 }

@@ -3,10 +3,9 @@ import { members } from "@notra/db/schema";
 import { organizationIdSchema } from "@notra/schemas/dashboard/auth/organization";
 import { ORPCError } from "@orpc/server";
 import { and, eq } from "drizzle-orm";
-import { getTranslations } from "next-intl/server";
-import { type NextRequest, NextResponse } from "next/server";
 
 import { retryTransientDbError } from "@/lib/db/retry";
+import { getTranslations } from "@/lib/i18n/server";
 import { getORPCRequestMemo } from "@/lib/orpc/context";
 import type {
   AuthenticatedUser,
@@ -14,6 +13,7 @@ import type {
   OrganizationAuth,
   OrganizationAuthDependencies,
 } from "@/types/auth/organization";
+import { recordAuthorizedOrganization } from "@/utils/rpc-telemetry";
 
 import { getServerSession } from "./session";
 
@@ -35,7 +35,7 @@ const organizationAuthDependencies: OrganizationAuthDependencies = {
   hasDatabaseUrl: () => Boolean(process.env.DATABASE_URL),
 };
 
-export async function assertAuthenticatedWithDeps(
+export async function assertAuthenticated(
   { headers }: { headers: Headers },
   deps: Pick<
     OrganizationAuthDependencies,
@@ -62,18 +62,12 @@ export async function assertAuthenticatedWithDeps(
     });
   }
 
+  if (memo) {
+    memo.authenticatedUserId = user.id;
+  }
   return { session, user };
 }
 
-export async function assertAuthenticated(args: { headers: Headers }) {
-  return assertAuthenticatedWithDeps(args);
-}
-
-/**
- * Batched oRPC calls arrive as one HTTP request, so every procedure in the
- * batch would otherwise repeat the same membership SELECT. The memo lives in a
- * WeakMap keyed by that request's `Headers`, so it cannot outlive the request.
- */
 async function findMembershipMemoized(
   deps: Pick<OrganizationAuthDependencies, "findMembership">,
   headers: Headers,
@@ -123,7 +117,7 @@ export async function assertOrganizationAccessWithDeps(
   }
 
   const authenticatedUser =
-    user ?? (await assertAuthenticatedWithDeps({ headers }, deps)).user;
+    user ?? (await assertAuthenticated({ headers }, deps)).user;
 
   const membership = await findMembershipMemoized(deps, headers, {
     userId: authenticatedUser.id,
@@ -137,6 +131,11 @@ export async function assertOrganizationAccessWithDeps(
     });
   }
 
+  recordAuthorizedOrganization(
+    headers,
+    safeOrganizationId.data,
+    authenticatedUser.id
+  );
   return {
     user: authenticatedUser,
     organizationId: safeOrganizationId.data,
@@ -144,24 +143,16 @@ export async function assertOrganizationAccessWithDeps(
   };
 }
 
-export async function assertOrganizationAccess({
-  headers,
-  organizationId,
-  user,
-}: {
+export function assertOrganizationAccess(args: {
   headers: Headers;
   organizationId: string;
   user?: AuthenticatedUser;
 }) {
-  return assertOrganizationAccessWithDeps({
-    headers,
-    organizationId,
-    user,
-  });
+  return assertOrganizationAccessWithDeps(args);
 }
 
 export async function withOrganizationAuth(
-  request: NextRequest,
+  request: Request,
   organizationId: string
 ): Promise<OrganizationAuth> {
   try {
@@ -178,7 +169,7 @@ export async function withOrganizationAuth(
     if (error instanceof ORPCError) {
       return {
         success: false,
-        response: NextResponse.json(
+        response: Response.json(
           {
             error: error.message,
             ...(error.data ? { details: error.data } : {}),

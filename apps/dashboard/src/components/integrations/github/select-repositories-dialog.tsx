@@ -12,9 +12,9 @@ import {
   ResponsiveDialogTrigger,
 } from "@notra/ui/components/shared/responsive-dialog";
 import { Field, FieldLabel } from "@notra/ui/components/ui/field";
-import { useTranslations } from "next-intl";
 import type React from "react";
 import { isValidElement, useState } from "react";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import type { SelectRepositoriesDialogProps } from "@/types/integrations/github";
@@ -126,6 +126,7 @@ export function SelectRepositoriesDialog({
           <Button
             disabled={isSaving || isLoading || Boolean(error)}
             onClick={() => onSave(selected)}
+            data-dialog-confirm
           >
             {isSaving ? tCommon("actions.saving") : t("save")}
           </Button>

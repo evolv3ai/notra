@@ -1,5 +1,5 @@
 /** Groups product and company names that represent the same visible brand. */
-export function promptBrandName(name: string): string {
+function promptBrandName(name: string): string {
   switch (name.trim().toLowerCase()) {
     case "chatgpt":
     case "openai":

@@ -1,21 +1,19 @@
 import { getChatSession } from "@notra/ai/chat/history";
 import { chatIdSchema } from "@notra/ai/schemas/chat";
 import { relaySlackApprovalSchema } from "@notra/schemas/dashboard/slack-relay";
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
 
 import { withOrganizationAuth } from "@/lib/auth/organization";
 import {
   parseSlackExternalChannelKey,
   postSlackApprovalInteraction,
 } from "@/lib/slack/relay";
+import type { RouteContext } from "@/types/api/routes";
 import { ratelimit } from "@/utils/ratelimit";
 
-interface RouteContext {
-  params: Promise<{ organizationId: string; chatId: string }>;
-}
-
-export async function POST(request: NextRequest, { params }: RouteContext) {
+export async function POST(
+  request: Request,
+  { params }: RouteContext<{ organizationId: string; chatId: string }>
+) {
   const { organizationId, chatId } = await params;
   const auth = await withOrganizationAuth(request, organizationId);
 
@@ -25,12 +23,14 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
   const chatIdParse = chatIdSchema.safeParse(chatId);
   if (!chatIdParse.success) {
-    return NextResponse.json({ error: "Invalid chat ID" }, { status: 400 });
+    return Response.json({ error: "Invalid chat ID" }, { status: 400 });
   }
 
-  const bodyParse = relaySlackApprovalSchema.safeParse(await request.json());
+  const bodyParse = relaySlackApprovalSchema.safeParse(
+    await request.json().catch(() => null)
+  );
   if (!bodyParse.success) {
-    return NextResponse.json(
+    return Response.json(
       { error: "Invalid approval", details: bodyParse.error.issues },
       { status: 400 }
     );
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     `${organizationId}:${auth.context.user.id}`
   );
   if (!withinLimit) {
-    return NextResponse.json(
+    return Response.json(
       { error: "Rate limit exceeded", reset },
       { status: 429 }
     );
@@ -48,12 +48,12 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
   const session = await getChatSession(organizationId, chatIdParse.data);
   if (!session) {
-    return NextResponse.json({ error: "Chat not found" }, { status: 404 });
+    return Response.json({ error: "Chat not found" }, { status: 404 });
   }
 
   const externalChannelId = session.externalChannelId;
   if (externalChannelId?.source !== "slack" || !externalChannelId.id) {
-    return NextResponse.json(
+    return Response.json(
       { error: "Chat is not mirrored from Slack" },
       { status: 409 }
     );
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
   const target = parseSlackExternalChannelKey(externalChannelId.id);
   if (!target) {
-    return NextResponse.json(
+    return Response.json(
       { error: "Chat has an invalid Slack thread reference" },
       { status: 409 }
     );
@@ -76,14 +76,15 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     requestId: bodyParse.data.requestId,
     approved: bodyParse.data.approved,
     userName,
+    organizationId,
   });
 
   if (!delivered) {
-    return NextResponse.json(
+    return Response.json(
       { error: "Approval card was not found in the Slack thread" },
       { status: 409 }
     );
   }
 
-  return NextResponse.json({ ok: true });
+  return Response.json({ ok: true });
 }

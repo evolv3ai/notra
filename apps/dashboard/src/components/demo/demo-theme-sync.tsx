@@ -13,10 +13,6 @@ import {
 import { demoThemeParser } from "@/lib/demo/theme-param";
 import { demoThemeMessageSchema } from "@/schemas/demo";
 
-/**
- * Applies `?theme=light|dark` once, then drops it from the URL, and follows
- * theme messages from the embedding landing page.
- */
 export function DemoThemeSync() {
   const [theme, setThemeParam] = useQueryState(
     DEMO_THEME_PARAM,

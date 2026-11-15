@@ -1,11 +1,15 @@
 import { Effect, Schema } from "effect";
 
+import { MAX_ENDPOINTS_PER_ORGANIZATION } from "../constants/delivery";
 import { WebhookNotFound, WebhookValidationError } from "../errors/webhooks";
 import { Endpoint, EndpointInput, IdentifierRow } from "../schemas/webhooks";
 import { WebhookCrypto } from "../services/crypto";
-import { queryRows } from "../services/database";
+import { decodeRows, queryRows, WebhookDatabase } from "../services/database";
 import type { EndpointId, OrganizationId } from "../types/webhooks";
+import { isoTimestamp } from "../utils/sql";
 import { validateEndpointUrl } from "../utils/url";
+
+const ENDPOINT_COLUMNS = `id, organization_id AS "organizationId", url, events, enabled, ${isoTimestamp("created_at")} AS "createdAt"`;
 
 export const createEndpoint = Effect.fn("webhooks.createEndpoint")(function* (
   input: unknown
@@ -21,15 +25,34 @@ export const createEndpoint = Effect.fn("webhooks.createEndpoint")(function* (
   const id = yield* Effect.sync(() => `whe_${crypto.randomUUID()}`);
   const secret = yield* cryptography.createSecret();
   const encrypted = yield* cryptography.encrypt(secret, id);
-  const [endpoint] = yield* queryRows(
-    Endpoint,
-    `INSERT INTO webhook_endpoints (id, organization_id, url, events, secret)
-    VALUES ($1, $2, $3, $4, $5)
-    RETURNING id, organization_id AS "organizationId", url, events, enabled, to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "createdAt"`,
-    [id, body.organizationId, url, [...new Set(body.events)], encrypted]
-  );
+  const database = yield* WebhookDatabase;
+  // The lock makes concurrent creates for one organization wait, so the count
+  // (a fresh snapshot per statement) can't let both past the limit.
+  const [, inserted] = yield* database.transaction([
+    {
+      sql: "SELECT pg_advisory_xact_lock(hashtext('webhook_endpoints:' || $1))",
+      parameters: [body.organizationId],
+    },
+    {
+      sql: `INSERT INTO webhook_endpoints (id, organization_id, url, events, secret)
+    SELECT $1::text, $2::text, $3::text, $4::text[], $5::text
+    WHERE (SELECT count(*) FROM webhook_endpoints WHERE organization_id = $2 AND deleted_at IS NULL) < $6
+    RETURNING ${ENDPOINT_COLUMNS}`,
+      parameters: [
+        id,
+        body.organizationId,
+        url,
+        [...new Set(body.events)],
+        encrypted,
+        MAX_ENDPOINTS_PER_ORGANIZATION,
+      ],
+    },
+  ]);
+  const [endpoint] = yield* decodeRows(Endpoint, inserted);
   if (!endpoint) {
-    return yield* new WebhookNotFound({ resource: "endpoint" });
+    return yield* new WebhookValidationError({
+      message: `An organization can have at most ${MAX_ENDPOINTS_PER_ORGANIZATION} webhook subscriptions`,
+    });
   }
   return { endpoint, secret };
 });
@@ -39,7 +62,7 @@ export const listEndpoints = Effect.fn("webhooks.listEndpoints")(function* (
 ) {
   return yield* queryRows(
     Endpoint,
-    `SELECT id, organization_id AS "organizationId", url, events, enabled, to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "createdAt"
+    `SELECT ${ENDPOINT_COLUMNS}
     FROM webhook_endpoints WHERE organization_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC, id DESC`,
     [organizationId]
   );

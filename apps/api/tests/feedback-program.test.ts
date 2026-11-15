@@ -4,14 +4,10 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { Effect } from "effect";
 
 import {
-  FeedbackOrganizationNotFoundError,
+  FeedbackIdempotencyConflictError,
   FeedbackProjectNotFoundError,
 } from "../src/errors/feedback";
-import {
-  listFeedback,
-  resolveOrganizationIdBySlug,
-  submitFeedback,
-} from "../src/programs/feedback";
+import { listFeedback, submitFeedback } from "../src/programs/feedback";
 import type { AgentFeedbackRow } from "../src/types/feedback";
 
 mock.module("@notra/ai/jobs/feedback-classifier", () => ({
@@ -53,38 +49,6 @@ function feedbackRow(
 }
 
 describe("feedback programs", () => {
-  test("resolveOrganizationIdBySlug returns id for a matching slug", async () => {
-    const db = {
-      query: {
-        organizations: {
-          findFirst: mock(async () => ({ id: "org_a" })),
-        },
-      },
-    };
-
-    const organizationId = await Effect.runPromise(
-      resolveOrganizationIdBySlug({ db, slug: "Acme" })
-    );
-
-    expect(organizationId).toBe("org_a");
-  });
-
-  test("resolveOrganizationIdBySlug fails when the organization is missing", async () => {
-    const db = {
-      query: {
-        organizations: {
-          findFirst: mock(async () => undefined),
-        },
-      },
-    };
-
-    const failure = await Effect.runPromise(
-      Effect.flip(resolveOrganizationIdBySlug({ db, slug: "missing-org" }))
-    );
-
-    expect(failure).toBeInstanceOf(FeedbackOrganizationNotFoundError);
-  });
-
   test("submitFeedback returns an existing row for a repeated idempotency key", async () => {
     const existing = feedbackRow();
     const db = {
@@ -106,7 +70,7 @@ describe("feedback programs", () => {
         db,
         organizationId: "org_a",
         body: {
-          message: "New message",
+          message: "Already filed",
           source: "api",
           idempotencyKey: "idem-1",
           kind: "bug",
@@ -117,6 +81,42 @@ describe("feedback programs", () => {
     );
 
     expect(result).toEqual({ feedback: existing, deduplicated: true });
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  test("submitFeedback does not return another submission for a reused idempotency key", async () => {
+    const db = {
+      query: {
+        agentFeedback: {
+          findFirst: mock(async () => feedbackRow()),
+        },
+        projects: {
+          findFirst: mock(async () => undefined),
+        },
+      },
+      insert: mock(() => {
+        throw new Error("insert should not run");
+      }),
+    };
+
+    const failure = await Effect.runPromise(
+      Effect.flip(
+        submitFeedback({
+          db,
+          organizationId: "org_a",
+          body: {
+            message: "Guessing someone else's key",
+            source: "api",
+            idempotencyKey: "idem-1",
+            kind: "bug",
+            sentiment: "negative",
+            title: "Provided title",
+          },
+        })
+      )
+    );
+
+    expect(failure).toBeInstanceOf(FeedbackIdempotencyConflictError);
     expect(db.insert).not.toHaveBeenCalled();
   });
 

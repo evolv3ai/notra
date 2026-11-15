@@ -15,13 +15,6 @@ import {
   shiftDay,
 } from "../utils/demo-pipe";
 
-/**
- * The public demo has no Tinybird. Its AI traffic is generated per request
- * and the GEO traffic endpoints are answered by these TypeScript mirrors of
- * the pipes in `pipes/geo-traffic.ts`, so charts are always current to the
- * hour and nothing is ever ingested.
- */
-
 const LOG_LOOKBACK_DAYS = 90;
 const AI_VISITOR_TYPES = new Set(["crawler", "ai_referral"]);
 
@@ -51,7 +44,6 @@ function windowOf(params: DemoTrafficParams, now: Date) {
   return {
     isCurrent: (day: string) => day >= from && (to === null || day <= to),
     isPrevious: (day: string) => day >= previousFrom && day < from,
-    /** GEO_CAPTURED_WINDOW_SQL compares the timestamp, not the day. */
     inCapturedWindow: (event: DemoTrafficEvent) => {
       const day = utcDay(event.captured_at);
       if (!params.date_from) {
@@ -98,6 +90,8 @@ async function scopedEvents(
   return events.filter(
     (event) =>
       (!params.project_id || event.project_id === params.project_id) &&
+      (!params.site_id || event.site_id === params.site_id) &&
+      (!params.path || event.path === params.path) &&
       !excluded?.has(event.source)
   );
 }
@@ -125,6 +119,8 @@ function overview(
       markdown_visits: number;
       paths: Set<string>;
       last_seen_at: string | null;
+      previous_markdown_visits: number;
+      previous_paths: Set<string>;
     }
   >();
   for (const event of events) {
@@ -147,6 +143,8 @@ function overview(
         markdown_visits: 0,
         paths: new Set(),
         last_seen_at: null,
+        previous_markdown_visits: 0,
+        previous_paths: new Set(),
       };
       groups.set(key, group);
     }
@@ -157,6 +155,8 @@ function overview(
       group.last_seen_at = maxTime(group.last_seen_at, event.captured_at);
     } else {
       group.previous_visits++;
+      group.previous_markdown_visits += event.wants_markdown ? 1 : 0;
+      group.previous_paths.add(event.path);
     }
   }
   return [...groups.values()]
@@ -165,6 +165,7 @@ function overview(
     .map((group) => ({
       ...group,
       paths: group.paths.size,
+      previous_paths: group.previous_paths.size,
       last_seen_at: group.last_seen_at ?? "",
     }));
 }
@@ -577,7 +578,6 @@ export async function queryDemoPipe<TRow>(
   if (!handler) {
     return null;
   }
-  // Every caller passes the pipe's typed params (`InferParams`).
   const parsed = params as DemoTrafficParams;
   const events = await scopedEvents(parsed);
   return demoQueryResult(handler(events, parsed, new Date()) as TRow[]);

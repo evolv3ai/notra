@@ -1,3 +1,4 @@
+import { logError } from "@notra/ai/utils/server-log";
 import { Effect } from "effect";
 
 import {
@@ -15,7 +16,9 @@ export function analyticsQuery<A>(
     catch: (cause) => new AnalyticsTinybirdError({ label, cause }),
   }).pipe(
     Effect.catch((error) => {
-      console.error(`[Analytics] ${error.label}:`, error.cause);
+      logError("[Analytics] Request failed", error.cause, {
+        label: error.label,
+      });
       return Effect.succeed(null);
     })
   );
@@ -45,14 +48,5 @@ export function analyticsSideEffect(
   label: string,
   run: () => Promise<unknown>
 ): Effect.Effect<void> {
-  return Effect.tryPromise({
-    try: run,
-    catch: (cause) => new AnalyticsRequestError({ label, cause }),
-  }).pipe(
-    Effect.map(() => undefined),
-    Effect.catch((error) => {
-      console.error(`[Analytics] ${error.label}:`, error.cause);
-      return Effect.succeed(undefined);
-    })
-  );
+  return analyticsQuery(label, run).pipe(Effect.asVoid);
 }

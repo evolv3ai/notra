@@ -5,6 +5,7 @@ import {
   randomBytes,
 } from "node:crypto";
 
+import { GITHUB_API_VERSION } from "@notra/ai/constants/github";
 import { deleteCookie, getCookie } from "@tanstack/react-start/server";
 
 import {
@@ -129,7 +130,7 @@ export async function fetchGithubLogin(token: string): Promise<string | null> {
       headers: {
         Accept: "application/vnd.github+json",
         Authorization: `Bearer ${token}`,
-        "X-GitHub-Api-Version": "2022-11-28",
+        "X-GitHub-Api-Version": GITHUB_API_VERSION,
         "User-Agent": "notra-star-video",
       },
       cache: "no-store",

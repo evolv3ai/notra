@@ -16,7 +16,7 @@ export function resolveSettingsSection(
   return section;
 }
 
-export function settingsQuery(
+function settingsQuery(
   section: SettingsSectionId,
   extra?: Record<string, string | undefined>
 ): string {

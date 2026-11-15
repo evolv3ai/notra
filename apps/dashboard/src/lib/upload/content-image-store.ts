@@ -1,4 +1,4 @@
-import "server-only";
+import "@tanstack/react-start/server-only";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -31,10 +31,6 @@ export interface StoredContentImage {
   mimeType: ContentMediaMimeType;
 }
 
-function extensionForMime(mimeType: ContentMediaMimeType) {
-  return CONTENT_MEDIA_MIME_EXTENSIONS[mimeType];
-}
-
 function mimeForKey(key: string): ContentMediaMimeType | null {
   const extension = key.split(".").pop()?.toLowerCase();
   for (const [mimeType, candidate] of Object.entries(
@@ -50,7 +46,6 @@ function mimeForKey(key: string): ContentMediaMimeType | null {
   return null;
 }
 
-// ponytail: tmp dir when R2 is unset. Images vanish on reboot; set CLOUDFLARE_* to keep them.
 function diskRoot() {
   return path.join(os.tmpdir(), "notra-content-images");
 }
@@ -168,7 +163,7 @@ export async function saveContentImage(params: {
   mimeType: ContentMediaMimeType;
   organizationId: string;
 }) {
-  const key = `organization/${params.organizationId}/content/${nanoid()}.${extensionForMime(params.mimeType)}`;
+  const key = `organization/${params.organizationId}/content/${nanoid()}.${CONTENT_MEDIA_MIME_EXTENSIONS[params.mimeType]}`;
   if (!isSafeContentImageKey(key)) {
     throw new Error("Invalid content image key");
   }
@@ -179,8 +174,6 @@ export async function saveContentImage(params: {
     await writeDisk(key, params.bytes);
   }
 
-  // ponytail: app URL only, so a draft is as private as the post. A public R2
-  // bucket still serves a key that already leaked; use a private bucket then.
   return { key, url: `${CONTENT_IMAGE_ROUTE}/${key}` };
 }
 

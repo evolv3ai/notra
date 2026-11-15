@@ -5,5 +5,4 @@ export interface GeoEntitlementCheckInput {
 
 export interface SubscriptionAccessInput {
   organizationId: string;
-  secretKey: string;
 }

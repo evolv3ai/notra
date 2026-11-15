@@ -26,6 +26,7 @@ import {
 } from "@notra/ui/components/ui/avatar";
 import { Input } from "@notra/ui/components/ui/input";
 import { Label } from "@notra/ui/components/ui/label";
+import { Spinner } from "@notra/ui/components/ui/spinner";
 import { XVerifiedBadge } from "@notra/ui/components/ui/svgs/twitter";
 import { Textarea } from "@notra/ui/components/ui/textarea";
 import {
@@ -33,10 +34,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@notra/ui/components/ui/tooltip";
-import { Loader2Icon } from "lucide-react";
-import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import { useBillingCustomer } from "@/lib/hooks/use-billing-customer";
@@ -312,7 +312,10 @@ function TweetUrlStep({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !isPending) {
+    if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) {
+      return;
+    }
+    if (e.key === "Enter" && !(e.metaKey || e.ctrlKey) && !isPending) {
       e.preventDefault();
       handleSubmit();
     }
@@ -346,6 +349,7 @@ function TweetUrlStep({
           disabled={!url.trim() || remaining === 0}
           loading={isPending}
           onClick={handleSubmit}
+          data-dialog-confirm
         >
           {tBrandShared("addReference")}
         </Button>
@@ -479,7 +483,7 @@ function ImportXStep({
 
         {isLoading && (
           <div className="flex justify-center py-8">
-            <Loader2Icon className="text-muted-foreground size-6 animate-spin" />
+            <Spinner className="text-muted-foreground size-6" />
           </div>
         )}
 
@@ -565,7 +569,7 @@ function ImportXStep({
           >
             <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-full">
               {isConnecting ? (
-                <Loader2Icon className="size-4 animate-spin" />
+                <Spinner />
               ) : (
                 <HugeiconsIcon className="size-4" icon={Add01Icon} />
               )}
@@ -740,6 +744,7 @@ function CustomTextStep({
         <Button
           disabled={createReference.isPending || !content.trim()}
           onClick={handleSave}
+          data-dialog-confirm
         >
           {createReference.isPending ? tCommon("saving") : t("custom.submit")}
         </Button>

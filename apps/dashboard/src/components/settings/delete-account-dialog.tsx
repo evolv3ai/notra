@@ -24,21 +24,22 @@ import {
   RadioGroupItem,
 } from "@notra/ui/components/ui/radio-group";
 import { Skeleton } from "@notra/ui/components/ui/skeleton";
+import { Spinner } from "@notra/ui/components/ui/spinner";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2Icon } from "lucide-react";
-import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
 import type { ReactElement } from "react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
 import { authClient } from "@/lib/auth/client";
+import { useRouter } from "@/lib/navigation";
 import { dashboardOrpc } from "@/lib/orpc/query";
 import type {
   DeleteAccountDialogProps,
   OwnedOrganization,
   TransferDecision,
 } from "@/types/settings/delete-account";
+import { resolveOrganizationLogo } from "@/utils/avatar";
 
 export function DeleteAccountDialog({
   trigger,
@@ -187,7 +188,7 @@ export function DeleteAccountDialog({
                           <AvatarImage
                             alt={org.name}
                             className="rounded-lg"
-                            src={org.logo ?? undefined}
+                            src={resolveOrganizationLogo(org.logo)}
                           />
                           <AvatarFallback className="rounded-lg text-sm">
                             {org.name.charAt(0).toUpperCase()}
@@ -274,7 +275,7 @@ export function DeleteAccountDialog({
                         <AvatarImage
                           alt={org.name}
                           className="rounded"
-                          src={org.logo ?? undefined}
+                          src={resolveOrganizationLogo(org.logo)}
                         />
                         <AvatarFallback className="rounded text-xs">
                           {org.name.charAt(0).toUpperCase()}
@@ -314,7 +315,7 @@ export function DeleteAccountDialog({
           >
             {isDeleting ? (
               <>
-                <Loader2Icon className="size-4 animate-spin" />
+                <Spinner />
                 {tCommon("deleting")}
               </>
             ) : (

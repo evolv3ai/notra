@@ -5,7 +5,7 @@ How AI traffic flows from a customer's site into the journeys you see on the GEO
 ## The pipeline
 
 ```
-customer middleware (@usenotra/geo)          ai-traffic-ingest service (Railway)
+customer middleware (@usenotra/geo)          ai-traffic-ingest service (Bun)
   every GET page request                       POST /api/geo/ingest
   -> request envelope ------------------------> token auth (orgId.hmac bearer)
      url, ip, geo headers, referer,            allowlist host (brand + extras)
@@ -14,9 +14,9 @@ customer middleware (@usenotra/geo)          ai-traffic-ingest service (Railway)
                                                -> Tinybird geo_traffic_events
 ```
 
-The ingest route is a thin adapter: every step (auth, rate limit, payload validation, event build, Tinybird write) is an Effect composed into one program in `pipeline.ts` (`runGeoIngest`), and each way it can fail is a tagged error in `errors.ts`. The service runs the program with `Effect.result` and maps the failure channel to a status in `response.ts`. The pipeline takes a standard `Request` and a background-task scheduler. Bun tracks pending tasks until shutdown; the dashboard's compatibility handler uses Next.js `after`.
+The ingest route is a thin adapter: every step (auth, rate limit, payload validation, event build, Tinybird write) is an Effect composed into one program in `pipeline.ts` (`runGeoIngest`), and each way it can fail is a tagged error in `errors.ts`. `handler.ts` runs the program with `Effect.result` and maps the failure channel to a status in `response.ts`. The pipeline takes a standard `Request`, a background-task scheduler, and an optional write buffer (`batcher.ts`). Bun tracks pending tasks until shutdown; the dashboard's compatibility route uses `afterResponse`.
 
-Deployment and endpoint migration are documented in `apps/ai-traffic-ingest/README.md`. Without `GEO_INGEST_URL`, the dashboard still executes the shared pipeline locally. Setting that variable forwards the old endpoint to Railway and gives new installs the direct service URL.
+Deployment and endpoint migration are documented in `apps/ai-traffic-ingest/README.md`, including Unkey Compute setup. Without `GEO_INGEST_URL`, the dashboard still executes the shared pipeline locally. Setting that variable forwards the old endpoint to the dedicated service and gives new installs its URL. The SDK's stable default is `https://ingest.usenotra.com`; changing the provider behind that domain needs no customer endpoint change. Tracking-token authentication, Redis limits and Tinybird writes remain in this pipeline, not a gateway API-key policy.
 
 A valid token is not enough to write an event. After the URL parses, ingest loads the project's brand website plus `geo_settings.domains` and drops the request (same silent 202 as an untracked visitor) when the host is not on that list. Legacy org-scoped tokens use only the oldest project's hosts; other projects need their own tokens. An empty allowlist drops everything. A host lookup outage fails open for project tokens, but returns an error for legacy org tokens to avoid attributing sibling traffic to the oldest project. Saving GEO settings clears the cached allowlist immediately. The token stays an HMAC of org/project/generation — binding hosts in the signature would rotate on every settings edit.
 
@@ -44,7 +44,7 @@ Customers serving Markdown to agents rewrite internal links with `?ntr=<id>` (`t
 
 ### `f_<hash>` — fingerprint (fuzzy fallback)
 
-For untagged traffic, computed ONLY for `crawler`-classified events (humans are never fingerprinted):
+For untagged traffic, computed ONLY for `crawler`-classified events (no journey fingerprint is computed for humans):
 
 ```
 HMAC-SHA256(secret + "|" + utcDay, source + "|" + ipKey + "|" + timeBucket)[:16]
@@ -58,7 +58,9 @@ HMAC-SHA256(secret + "|" + utcDay, source + "|" + ipKey + "|" + timeBucket)[:16]
 
 ## Privacy posture (why legal is fine with this)
 
-Server-side observation only (no device access, so no consent banner under ePrivacy), legitimate-interest basis, raw IP transient, fingerprints salted + rotating + crawler-only, identifiers expire in minutes. See `~/Documents/notra-dpa-briefing.md` for the DPA context.
+Server-side observation only (no device access, so no consent banner under ePrivacy), legitimate-interest basis, raw IP transient, journey fingerprints salted + rotating + crawler-only, identifiers expire in minutes.
+
+Human visitors on Sites are counted with a visitor id of `HMAC-SHA256(secret + "|web|" + utcDay, scope + "|" + ip + "|" + userAgent)`: salted with the ingest secret and rotated daily, so it cannot link a visitor across days or sites. No visitor id is computed and no web page view is stored when the ingest secret is unset. Visits sent with `visitorConsent: false` are not counted, and AI referral clicks from those visitors are dropped. AI referral rows in `geo_traffic_events` never store the user agent.
 
 ## Where data lands
 

@@ -1,11 +1,11 @@
 "use client";
 
 import { GeoBar } from "@notra/ui/components/geo/geo-bar";
-import { useTranslations } from "next-intl";
 import { useMemo } from "react";
+import { DataTable, type TableColumn } from "ui/table";
+import { useTranslations } from "use-intl";
 
 import { EngineIcon } from "@/components/geo/engine-icon";
-import { Table, type TableColumn } from "@/components/motion/table";
 import { GEO_DIRECTIONS_ENGINES } from "@/constants/geo-directions";
 import { TABLE_ROW_HEIGHT } from "@/constants/table";
 import { cn } from "@/lib/utils";
@@ -54,7 +54,7 @@ export function DirectionEngineBars({ className }: DirectionBlockProps) {
         ),
       },
     ],
-    [t]
+    [t, tGeoShared]
   );
 
   return (
@@ -64,8 +64,7 @@ export function DirectionEngineBars({ className }: DirectionBlockProps) {
           {t("enginesCount", { count: GEO_DIRECTIONS_ENGINES.length })}
         </span>
       </div>
-      <Table
-        className="rounded-2xl"
+      <DataTable
         columns={columns}
         data={[...GEO_DIRECTIONS_ENGINES]}
         defaultSort={{ key: "rate", direction: "desc" }}

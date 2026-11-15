@@ -9,15 +9,19 @@ export function getThinkingProviderOptions(
   thinkingLevel: AutoThinkingLevel
 ): StreamProviderOptions | undefined {
   if (!enableThinking || thinkingLevel === "off") {
-    return undefined;
+    return modelId.startsWith("openai/")
+      ? { openai: { reasoningEffort: "none" } }
+      : undefined;
   }
 
   if (modelId.startsWith("anthropic/")) {
     if (usesAdaptiveThinking(modelId)) {
       return {
         anthropic: {
-          thinking: { type: "adaptive" },
-          output_config: { effort: thinkingLevel },
+          // Claude 4.7+ omits thinking text by default, which leaves the chat
+          // on a bare "Thinking" label until the first answer token.
+          thinking: { type: "adaptive", display: "summarized" },
+          effort: thinkingLevel,
         },
       } satisfies StreamProviderOptions;
     }

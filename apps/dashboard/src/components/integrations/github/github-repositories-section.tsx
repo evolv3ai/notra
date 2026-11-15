@@ -1,6 +1,6 @@
 import { PlusSignIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useTranslations } from "next-intl";
+import { useTranslations } from "use-intl";
 
 import { GitHubRepositoriesSkeleton } from "@/app/(dashboard)/[slug]/integrations/github/skeleton";
 import { Button } from "@/components/button";
@@ -28,10 +28,15 @@ function RepositoryList({
   }
   if (repositoriesDb.isError && !repositoriesDb.hasData) {
     return (
-      <div role="alert" className="py-6">
-        <p className="text-sm">{t("repositoriesSection.loadFailed")}</p>
+      <div
+        role="alert"
+        className="border-destructive/50 bg-destructive/10 flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <p className="text-destructive text-sm">
+          {t("repositoriesSection.loadFailed")}
+        </p>
         <Button
-          className="mt-2"
+          size="sm"
           variant="outline"
           onClick={() => repositoriesDb.refetch()}
         >
@@ -48,7 +53,8 @@ function RepositoryList({
           {t("repositoriesSection.emptyTitle")}
         </h3>
         <Button
-          className="mt-5 gap-1.5"
+          className="mt-5"
+          variant="outline"
           onClick={
             isConnected ? () => handleOpenRepositories() : handleOpenConnect
           }
@@ -85,51 +91,32 @@ export function GitHubRepositoriesSection(
 ) {
   const t = useTranslations("integrations.github.repositoriesSection");
   const tCommon = useTranslations("common");
-  const { githubIntegrations, isLoadingLegacyIntegrations, repositoriesDb } =
-    props;
+  const { githubIntegrations, repositoriesDb } = props;
   useRepositoryHashScroll(githubIntegrations);
-  const empty =
-    !isLoadingLegacyIntegrations &&
-    !repositoriesDb.isError &&
-    githubIntegrations.length === 0;
   return (
     <section
       aria-labelledby="github-repositories-heading"
-      className={
-        githubIntegrations.length > 0
-          ? "grid items-start gap-6 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1.7fr)] 2xl:gap-12"
-          : ""
-      }
+      className="min-w-0 space-y-4"
     >
-      <div className={`space-y-1 pb-2 ${empty ? "sr-only" : ""}`}>
-        <h2
-          className="text-base font-semibold"
-          id="github-repositories-heading"
+      <h2 className="sr-only" id="github-repositories-heading">
+        {tCommon("labels.repositories")} ({githubIntegrations.length})
+      </h2>
+      {repositoriesDb.isError && repositoriesDb.hasData ? (
+        <div
+          role="alert"
+          className="border-destructive/50 bg-destructive/10 flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
         >
-          {tCommon("labels.repositories")}{" "}
-          <span className="text-muted-foreground bg-muted ml-1 rounded-md px-1.5 py-0.5 text-xs font-normal tabular-nums">
-            {githubIntegrations.length}
-          </span>
-        </h2>
-      </div>
-      <div className="min-w-0 space-y-4">
-        {repositoriesDb.isError && repositoriesDb.hasData ? (
-          <div
-            role="alert"
-            className="flex items-center justify-between gap-3 text-sm"
+          <p className="text-destructive text-sm">{t("refreshFailed")}</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => repositoriesDb.refetch()}
           >
-            <p>{t("refreshFailed")}</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => repositoriesDb.refetch()}
-            >
-              {tCommon("actions.retry")}
-            </Button>
-          </div>
-        ) : null}
-        <RepositoryList {...props} />
-      </div>
+            {tCommon("actions.retry")}
+          </Button>
+        </div>
+      ) : null}
+      <RepositoryList {...props} />
     </section>
   );
 }

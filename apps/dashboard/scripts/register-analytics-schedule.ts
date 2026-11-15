@@ -1,4 +1,4 @@
-import { getAppUrl } from "@notra/ai/qstash/triggers";
+import { qstashRouteUrl } from "@notra/ai/qstash/triggers";
 import { Client as QStashClient } from "@upstash/qstash";
 
 const TWICE_DAILY_CRON = "0 6,18 * * *";
@@ -10,7 +10,7 @@ if (!token) {
 }
 
 const client = new QStashClient({ token });
-const destination = `${getAppUrl()}/api/workflows/social-analytics-sync`;
+const destination = qstashRouteUrl("/api/workflows/social-analytics-sync");
 
 const result = await client.schedules.create({
   scheduleId: SCHEDULE_ID,

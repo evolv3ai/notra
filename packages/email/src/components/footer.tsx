@@ -29,7 +29,7 @@ export const EmailFooter = ({
       ) : null}
       <Text className="mt-4 text-center text-xs" style={{ color: "#717175" }}>
         <Link
-          href="https://usenotra.com"
+          href="https://www.usenotra.com/home"
           style={{ color: "#717175", textDecoration: "underline" }}
         >
           Website

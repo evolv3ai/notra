@@ -37,10 +37,7 @@ export const getGeoOverviewInputSchema = z.object({
   days: daysSchema,
 });
 
-export const getGeoTimeseriesInputSchema = z.object({
-  projectId: projectIdSchema,
-  days: daysSchema,
-});
+export const getGeoTimeseriesInputSchema = getGeoOverviewInputSchema;
 
 export const getGeoPromptResultsInputSchema = z.object({
   projectId: projectIdSchema,

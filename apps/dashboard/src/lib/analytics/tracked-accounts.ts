@@ -12,10 +12,6 @@ const TWITTER_RESOLVE_USER_FIELDS =
   "name,profile_image_url,public_metrics,verified,verified_type";
 const LEADING_AT_REGEX = /^@/;
 
-/**
- * The demo never calls X: any handle resolves to a fictional account whose
- * stats the demo generates, so tracking can be tried with any name.
- */
 function resolveDemoTwitterAccount(handle: string): ResolvedTwitterAccount {
   const providerAccountId = `demo-x-${handle.toLowerCase()}`;
   const now = new Date();

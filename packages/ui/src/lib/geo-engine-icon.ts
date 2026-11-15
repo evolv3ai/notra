@@ -2,6 +2,11 @@ import type { EngineIconKey, EngineIconRule } from "@notra/ui/types/geo";
 
 const ENGINE_ICON_RULES: readonly EngineIconRule[] = [
   {
+    key: "fx",
+    patterns: ["fx/"],
+    exact: ["fx"],
+  },
+  {
     key: "tencent",
     patterns: ["tencent", "hunyuan", "hy3"],
   },
@@ -40,6 +45,8 @@ const ENGINE_ICON_RULES: readonly EngineIconRule[] = [
   {
     key: "google",
     patterns: [
+      "ai-overview",
+      "ai-mode",
       "google-agent",
       "google-cloudvertex",
       "googleother",
@@ -99,6 +106,11 @@ const ENGINE_ICON_RULES: readonly EngineIconRule[] = [
     key: "exa",
     patterns: ["exabot", "exasearchbot"],
     exact: ["exa"],
+  },
+  {
+    key: "parallel",
+    patterns: ["shapbot", "shap-user"],
+    exact: ["parallel"],
   },
   {
     key: "commoncrawl",

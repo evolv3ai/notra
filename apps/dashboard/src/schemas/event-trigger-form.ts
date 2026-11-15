@@ -5,6 +5,7 @@ import {
   SUPPORTED_AUTOMATION_OUTPUT_TYPES,
   WEBHOOK_EVENT_TYPES,
 } from "@notra/schemas/dashboard/integrations";
+import { automationNotifySchema } from "@notra/schemas/shared/automation";
 import { z } from "zod";
 
 import type { EventTriggerFormTranslator } from "@/types/automation/schedule-i18n";
@@ -19,6 +20,7 @@ export function createEventTriggerFormSchema(t: EventTriggerFormTranslator) {
       autoPublish: z.boolean(),
       includePreReleases: z.boolean(),
       ignoreCommitPatternsText: z.string(),
+      notify: automationNotifySchema,
     })
     .superRefine((value, ctx) => {
       if (value.eventType !== "push") {

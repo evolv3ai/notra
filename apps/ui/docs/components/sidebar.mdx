@@ -1,0 +1,88 @@
+---
+title: Sidebar
+description: The sidebar from the Notra dashboard, a shadcn-compatible sidebar on Base UI that collapses to an icon rail and resizes from its edge.
+---
+
+The sidebar keeps the shadcn API (`SidebarProvider`, `Sidebar`, `SidebarMenuButton` and the rest) on Base UI primitives. On top of that it collapses to an icon rail without the rows jumping, resizes from its edge, and reveals sub-rows with a Base UI Collapsible. Tooltips on the rail glide between rows with the Notra [Tooltip](/components/tooltip).
+
+<Component path="app-sidebar/examples/app-sidebar-demo" />
+
+## Installation
+
+<RegistryInstall name="app-sidebar" />
+
+This installs the Notra sidebar into `components/sidebar/components/sidebar.tsx`, next to shadcn's own sidebar rather than over it, and the dashboard parts (switcher, search, grouped navigation and user menu) into `components/app-sidebar/`. It pulls in [Button](/components/button), [Tooltip](/components/tooltip) and [Dropdown Menu](/components/dropdown-menu), plus shadcn's Avatar, Collapsible, Input, Kbd, Separator, Sheet and Skeleton.
+
+To install only the primitives, run `bunx shadcn@latest add @notra/notra-sidebar`. Both need a shadcn project on Base UI and Tailwind CSS v4.
+
+## Usage
+
+Describe the navigation once. A row opens its `href`, and its `items` show underneath while the row or one of them is active. Pass `linkRender` to render your router's link.
+
+```tsx
+import { Link } from "@tanstack/react-router";
+import { HouseIcon, NotebookPenIcon } from "lucide-react";
+
+import { SidebarNav } from "@/components/app-sidebar/components/sidebar-nav";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarInset,
+  SidebarProvider,
+  SidebarRail,
+} from "@/components/sidebar/components/sidebar";
+
+const groups = [
+  {
+    title: "Overview",
+    href: "/",
+    icon: HouseIcon,
+    items: [{ title: "Traffic", href: "/traffic" }],
+  },
+  { title: "Content", href: "/content", icon: NotebookPenIcon },
+];
+
+<SidebarProvider>
+  <Sidebar collapsible="icon" variant="inset">
+    <SidebarContent>
+      <SidebarGroup>
+        <SidebarNav
+          groups={groups}
+          activeHref={pathname}
+          linkRender={({ href, ...props }) => <Link {...props} to={href} />}
+        />
+      </SidebarGroup>
+    </SidebarContent>
+    <SidebarRail />
+  </Sidebar>
+  <SidebarInset>{children}</SidebarInset>
+</SidebarProvider>;
+```
+
+## Icon rail
+
+With `collapsible="icon"` the sidebar shrinks to a 48px rail. Rows keep their width animation: everything after the leading icon fades out instead of being removed, so nothing reflows mid-transition. Wrap deeper text in `SidebarLabel` to get the same fade.
+
+On the rail, rows show their title as a tooltip, sub-rows fold away, and rows with sub-pages open them in a flyout menu once the collapse has finished.
+
+<Component path="app-sidebar/examples/app-sidebar-collapsed" />
+
+## Resizing
+
+`SidebarRail` is the resize handle. Drag it between `minWidth` and `maxWidth` (240 to 400px by default), drag it past the minimum to collapse, and double-click it to restore `defaultWidth`. With focus, the arrow keys resize in 8px steps and Enter toggles the sidebar. Pass `width` and `onWidthChange` to `SidebarProvider` to store the width, for example in a cookie. Pass `resizable={false}` for shadcn's click-to-toggle rail.
+
+⌘B or Ctrl+B toggles the sidebar. Change it with `keyboardShortcut`, or pass `null` to turn it off.
+
+## Building blocks
+
+| Component | What it does |
+| --- | --- |
+| `SidebarSwitcher` | The project switcher, a radio menu with optional actions. |
+| `SidebarHeaderRow` | Places the trigger beside the switcher, and under it on the rail. |
+| `SidebarSearch` | A search row styled like a field, with a shortcut hint. |
+| `SidebarNav` | Grouped navigation with sub-rows, badges and the rail flyout. |
+| `SidebarUserMenu` | The account row with an avatar, a plan badge and a menu. |
+| `SidebarMenuCollapsible`, `SidebarMenuSubPanel` | Build your own expandable rows on the Base UI Collapsible. |
+
+When the provider is narrower than `mobileBreakpoint` (768px by default), the sidebar opens as a sheet from its side. The width is measured on the provider rather than the viewport, so an embedded layout switches as well.

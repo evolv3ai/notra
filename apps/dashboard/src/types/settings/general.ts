@@ -13,11 +13,7 @@ export interface ConnectedAccountsGroupProps {
   isConnecting: boolean;
 }
 
-export interface GeneralSettingsPageProps {
-  params: Promise<{ slug: string }>;
-}
-
-export interface OrganizationDetails {
+interface OrganizationDetails {
   id: string;
   logo?: string | null;
   name: string;

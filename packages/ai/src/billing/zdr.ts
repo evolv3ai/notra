@@ -28,12 +28,16 @@ export async function resolveZdrEntitlement(
 /**
  * Router default for callers that do not pick a ZDR mode. Entitled
  * organizations fail closed; organizations without the add-on do not get
- * the ZDR flag at all. A billing outage keeps ZDR strict so a paying
- * organization never loses it to a blip.
+ * the ZDR flag at all. A billing outage rejects: the router then keeps ZDR
+ * strict so a paying organization never loses it to a blip, and retries
+ * the lookup soon instead of caching the fallback for the full TTL.
  */
 export async function resolveOrganizationZdrMode(
   organizationId: string
 ): Promise<ZdrMode> {
   const entitlement = await resolveZdrEntitlement(organizationId);
+  if (entitlement === "unknown") {
+    throw new Error("ZDR entitlement unavailable");
+  }
   return entitlement === "not_entitled" ? "none" : "required";
 }

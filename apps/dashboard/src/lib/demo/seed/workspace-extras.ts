@@ -161,7 +161,6 @@ export async function seedDemoGeoExtras(
     id: crypto.randomUUID(),
     organizationId: context.organizationId,
     projectId: context.projectId,
-    // Must match how the page resolves the brand website.
     targetUrl: normalizeWebsiteUrl(website) ?? website,
     status: "completed",
     ...personalizedReadinessReport(context.companyName),
@@ -171,7 +170,6 @@ export async function seedDemoGeoExtras(
   });
 }
 
-/** The readiness findings name the brand's own domain and pages. */
 function personalizedReadinessReport(
   companyName: string
 ): typeof GEO_DEMO_AGENT_READINESS_REPORT {
@@ -189,7 +187,6 @@ export async function seedDemoSocial(context: DemoSeedContext) {
   const clock = createDemoClock(context.now, context.timeZone);
   const handle = demoCompanyHandle(context.companyName);
   const rows = DEMO_SEED_SOCIAL_ACCOUNTS.map((account) => {
-    // LinkedIn gets its own handle so legends tell the two accounts apart.
     const username =
       account.username ??
       (account.provider === "linkedin" ? `${handle}-hq` : handle);
@@ -198,8 +195,6 @@ export async function seedDemoSocial(context: DemoSeedContext) {
       id: crypto.randomUUID(),
       organizationId: context.organizationId,
       provider: account.provider,
-      // Own and tracked accounts never share an id, even when the visitor
-      // names their company after a seeded rival.
       providerAccountId: `demo-${account.provider}-${account.kind}-${username}`,
       username,
       displayName: account.displayName ?? context.companyName,

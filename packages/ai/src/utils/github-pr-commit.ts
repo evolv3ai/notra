@@ -1,18 +1,17 @@
-import { GITHUB_API_VERSION_HEADER } from "@notra/ai/constants/autonomy-poll";
 import {
   GITHUB_CONTENT_POST_TRAILER,
   GITHUB_CREATE_COMMIT_ON_BRANCH_MUTATION,
+  GITHUB_API_VERSION_HEADERS,
 } from "@notra/ai/constants/github";
-import { GITHUB_MENTION_FILE_CONTENT_MAX_BYTES } from "@notra/ai/constants/github-mention";
+import {
+  GITHUB_MENTION_FILE_CONTENT_MAX_BYTES,
+  GITHUB_MENTION_IMAGE_MAX_BYTES,
+} from "@notra/ai/constants/github-mention";
 import { getGitHubAppBotLogin } from "@notra/ai/integrations/github";
 import type {
   CommitFilesToPullRequestParams,
   GitHubCreateCommitOnBranchResult,
 } from "@notra/ai/types/github-mention";
-
-const GITHUB_API_VERSION_HEADERS = {
-  "X-GitHub-Api-Version": GITHUB_API_VERSION_HEADER,
-} as const;
 
 async function getTrustedParentCommitBody(
   params: CommitFilesToPullRequestParams
@@ -46,10 +45,16 @@ async function getTrustedParentCommitBody(
     .slice(1)
     .join("\n\n")
     .split(/\r?\n/)
-    // Only the exported snapshot may suppress a webhook import, not its edits.
     .filter((line) => !line.startsWith(GITHUB_CONTENT_POST_TRAILER))
     .join("\n");
   return body || undefined;
+}
+
+/** Binary files arrive base64-encoded; text is committed as UTF-8. */
+function fileBytes(file: CommitFilesToPullRequestParams["files"][number]) {
+  return file.encoding === "base64"
+    ? Buffer.from(file.contents, "base64")
+    : Buffer.from(file.contents, "utf8");
 }
 
 export async function commitFilesToPullRequest(
@@ -61,10 +66,14 @@ export async function commitFilesToPullRequest(
   }
 
   for (const file of params.files) {
-    const bytes = Buffer.byteLength(file.contents, "utf8");
-    if (bytes > GITHUB_MENTION_FILE_CONTENT_MAX_BYTES) {
+    const bytes = fileBytes(file).length;
+    const limit =
+      file.encoding === "base64"
+        ? GITHUB_MENTION_IMAGE_MAX_BYTES
+        : GITHUB_MENTION_FILE_CONTENT_MAX_BYTES;
+    if (bytes > limit) {
       throw new Error(
-        `File ${file.path} is ${bytes} bytes and exceeds the ${GITHUB_MENTION_FILE_CONTENT_MAX_BYTES} byte limit`
+        `File ${file.path} is ${bytes} bytes and exceeds the ${limit} byte limit`
       );
     }
   }
@@ -87,7 +96,7 @@ export async function commitFilesToPullRequest(
         fileChanges: {
           additions: params.files.map((file) => ({
             path: file.path,
-            contents: Buffer.from(file.contents).toString("base64"),
+            contents: fileBytes(file).toString("base64"),
           })),
           deletions: deletions.map((path) => ({ path })),
         },
@@ -128,6 +137,7 @@ export async function getPullRequestHead(params: {
     baseRef: data.base.ref,
     defaultBranch: data.base.repo?.default_branch ?? null,
     draft: Boolean(data.draft),
+    authorLogin: data.user?.login ?? null,
     state: data.state,
     merged: Boolean(data.merged),
   };
@@ -156,7 +166,6 @@ export async function getRepositoryFileContents(params: {
   return Buffer.from(data.content, "base64").toString("utf8");
 }
 
-/** Files changed between two commits, with GitHub's unified patch per file. */
 export async function getGitHubChangedFiles(params: {
   octokit: CommitFilesToPullRequestParams["octokit"];
   owner: string;
@@ -208,10 +217,9 @@ export async function getGitHubPullRequestFilePatch(params: {
   }
 }
 
-function githubStatus(error: unknown) {
+export function githubStatus(error: unknown) {
   if (typeof error === "object" && error !== null && "status" in error) {
-    const status = (error as { status?: unknown }).status;
-    return typeof status === "number" ? status : null;
+    return typeof error.status === "number" ? error.status : null;
   }
   return null;
 }

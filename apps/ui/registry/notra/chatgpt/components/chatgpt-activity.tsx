@@ -90,8 +90,6 @@ export const ChatgptActivity = ({
   websites,
   ...props
 }: ChatgptActivityProps) => (
-  // trap-focus keeps focus inside without locking page scroll, so the page
-  // behind the sheet does not jump when the scrollbar disappears.
   <Sheet modal="trap-focus" {...props}>
     <SheetTrigger
       className={className}

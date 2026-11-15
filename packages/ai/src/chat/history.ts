@@ -1,8 +1,9 @@
+import { logError } from "@notra/ai/utils/server-log";
 import { db } from "@notra/db/drizzle";
 import { chatSessions } from "@notra/db/schema";
 import { projectScopeFilter } from "@notra/db/utils/projects";
 import { generateText, type UIMessage } from "ai";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
 import {
   CHAT_ABORT_FLAG_TTL_SECONDS,
@@ -72,7 +73,7 @@ function toExternalChannelId(
     return null;
   }
   if (source === "dashboard" || source === "agent") {
-    return { source };
+    return id ? { source, id } : { source };
   }
   if ((source === "discord" || source === "slack") && id) {
     return { source, id };
@@ -114,35 +115,10 @@ function toSessionSummary(row: ChatSessionSummaryRow): ChatSessionSummary {
   };
 }
 
-export async function isChatDeleted(
-  organizationId: string,
-  chatId: string
-): Promise<boolean> {
-  const row = await db
-    .select({ deletedAt: chatSessions.deletedAt })
-    .from(chatSessions)
-    .where(
-      and(
-        eq(chatSessions.id, chatId),
-        eq(chatSessions.organizationId, organizationId),
-        isNull(chatSessions.contentId)
-      )
-    )
-    .limit(1)
-    .then((rows) => rows[0]);
-
-  if (!row) {
-    return false;
-  }
-
-  return row.deletedAt !== null;
-}
-
 async function upsertChatSession(
   organizationId: string,
   chatId: string,
   messages: UIMessage[],
-  mode: "append" | "replace",
   externalChannelId?: ExternalChannelId | null,
   expectedLastMessageId?: string | null,
   contentId?: string,
@@ -164,7 +140,6 @@ async function upsertChatSession(
     expectedHistory
   );
 
-  // A response may only replace the turn it started from, never create a chat.
   if (expectedLastMessageId) {
     const updated = await db
       .update(chatSessions)
@@ -191,25 +166,12 @@ async function upsertChatSession(
     })
     .onConflictDoUpdate({
       target: chatSessions.id,
-      set: {
-        messages:
-          mode === "append"
-            ? sql`${chatSessions.messages} || ${serializedMessages}`
-            : serializedMessages,
-      },
+      set: { messages: serializedMessages },
       setWhere: writableSession,
     })
     .returning({ id: chatSessions.id });
 
   return insertedOrUpdated.length > 0;
-}
-
-export async function saveChatMessage(
-  organizationId: string,
-  chatId: string,
-  message: UIMessage
-): Promise<boolean> {
-  return upsertChatSession(organizationId, chatId, [message], "append");
 }
 
 export async function appendChatMessageIfMissing(
@@ -309,14 +271,6 @@ export async function upsertChatMessageById(
   return updated.length > 0;
 }
 
-export async function saveChatMessages(
-  organizationId: string,
-  chatId: string,
-  messages: UIMessage[]
-): Promise<boolean> {
-  return upsertChatSession(organizationId, chatId, messages, "append");
-}
-
 export async function replaceChatHistory(
   organizationId: string,
   chatId: string,
@@ -329,7 +283,6 @@ export async function replaceChatHistory(
     organizationId,
     chatId,
     messages,
-    "replace",
     externalChannelId,
     expectedLastMessageId,
     undefined,
@@ -347,17 +300,16 @@ export async function replaceContentChatHistory(
     organizationId,
     chatId,
     messages,
-    "replace",
     undefined,
     undefined,
     contentId
   );
 }
 
-export async function loadChatHistory(
+export async function loadChatHistory<TMessage extends UIMessage = UIMessage>(
   organizationId: string,
   chatId: string
-): Promise<UIMessage[]> {
+): Promise<TMessage[]> {
   const row = await db
     .select({
       messages: chatSessions.messages,
@@ -378,7 +330,39 @@ export async function loadChatHistory(
     return [];
   }
 
-  return row.messages as UIMessage[];
+  return row.messages as TMessage[];
+}
+
+export async function getChatHistorySnapshot<
+  TMessage extends UIMessage = UIMessage,
+>(organizationId: string, chatId: string) {
+  const [row] = await db
+    .select({
+      messages: chatSessions.messages,
+      deletedAt: chatSessions.deletedAt,
+      externalChannelSource: chatSessions.externalChannelSource,
+      externalChannelId: chatSessions.externalChannelId,
+    })
+    .from(chatSessions)
+    .where(
+      and(
+        eq(chatSessions.id, chatId),
+        eq(chatSessions.organizationId, organizationId),
+        isNull(chatSessions.contentId)
+      )
+    )
+    .limit(1);
+
+  if (row?.deletedAt) {
+    return null;
+  }
+
+  return {
+    messages: (row?.messages ?? []) as TMessage[],
+    externalChannelId: row
+      ? toExternalChannelId(row.externalChannelSource, row.externalChannelId)
+      : null,
+  };
 }
 
 export async function getChatSessionState(
@@ -431,38 +415,6 @@ export async function loadContentChatHistory(
   }
 
   return row.messages as UIMessage[];
-}
-
-export async function createChatSession(
-  organizationId: string,
-  options?: {
-    id?: string;
-    title?: string;
-    externalChannelId?: ExternalChannelId | null;
-    projectId?: string | null;
-  }
-): Promise<ChatSessionSummary> {
-  const id = options?.id ?? generateChatId();
-  const title = normalizeChatTitle(options?.title ?? "New chat") || "New chat";
-
-  const [row] = await db
-    .insert(chatSessions)
-    .values({
-      id,
-      organizationId,
-      projectId: options?.projectId ?? null,
-      title,
-      messages: [] as unknown as Record<string, unknown>,
-      externalChannelSource: options?.externalChannelId?.source ?? null,
-      externalChannelId: options?.externalChannelId?.id ?? null,
-    })
-    .returning();
-
-  if (!row) {
-    throw new Error("Failed to create chat session");
-  }
-
-  return toSessionSummary(row);
 }
 
 /**
@@ -537,7 +489,7 @@ export async function claimChatSessionForExternalChannel(
       id: newChatId,
       organizationId,
       title: "New chat",
-      messages: [] as unknown as Record<string, unknown>,
+      messages: [],
       externalChannelSource: source,
       externalChannelId: id,
     })
@@ -580,6 +532,7 @@ export async function getChatSessionByExternalChannel(
         isNull(chatSessions.deletedAt)
       )
     )
+    .orderBy(desc(chatSessions.updatedAt))
     .limit(1)
     .then((rows) => rows[0]);
 
@@ -896,7 +849,7 @@ export async function deleteChatSession(
     .update(chatSessions)
     .set({
       deletedAt: new Date(),
-      messages: [] as unknown as Record<string, unknown>,
+      messages: [],
     })
     .where(
       and(
@@ -1042,6 +995,9 @@ export async function generateAndSetChatTitle(
         )
       );
   } catch (err) {
-    console.error("[Chat Title] Generation failed:", err);
+    logError("[Chat Title] Generation failed", err, {
+      chatId,
+      organizationId,
+    });
   }
 }

@@ -1,10 +1,6 @@
-import type {
-  members,
-  organizations,
-  socialConnections,
-} from "@notra/db/schema";
+import type { members, organizations } from "@notra/db/schema";
 
-export interface ActionError {
+interface ActionError {
   message: string;
   code?: string;
 }
@@ -14,8 +10,7 @@ export type ActionResult<T> =
   | { data: null; error: ActionError };
 
 export type OrganizationRow = typeof organizations.$inferSelect;
-export type MemberRow = typeof members.$inferSelect;
-export type SocialConnectionRow = typeof socialConnections.$inferSelect;
+type MemberRow = typeof members.$inferSelect;
 
 export interface InvitationSummary {
   id: string;
@@ -24,7 +19,6 @@ export interface InvitationSummary {
   status: "pending" | "accepted" | "expired" | "revoked";
   expiresAt: Date;
   createdAt: Date;
-  acceptInvitationUrl: string;
 }
 
 export interface MemberWithUser extends MemberRow {
@@ -41,6 +35,7 @@ export interface FullOrganization extends OrganizationRow {
 }
 
 export interface CreateOrganizationInput {
+  websiteUrl?: string;
   name: string;
   slug: string;
   logo?: string;
@@ -80,6 +75,14 @@ export interface UpdateMemberRoleInput {
 export interface RemoveMemberInput {
   memberIdOrEmail: string;
   organizationId?: string;
+}
+
+export interface OrganizationLookupInput {
+  query?: { organizationId?: string; organizationSlug?: string };
+}
+
+export interface OrganizationScopedQueryInput {
+  query?: { organizationId?: string };
 }
 
 export interface ListMembersInput {

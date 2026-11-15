@@ -1,3 +1,4 @@
+import { onboardingSuggestionPresetSchema } from "@notra/ai/schemas/onboarding-agent";
 import { toneProfileSchema } from "@notra/ai/schemas/tone";
 import {
   applicablePlatformEnum,
@@ -8,8 +9,8 @@ import {
 import { z } from "zod";
 
 import { BRAND_PROFILE_FIELDS, MAX_BRAND_COLORS } from "../constants/brand";
+import { MEMORY_SEARCH_DEFAULT_LIMIT } from "../constants/knowledge";
 import { SHA256_HEX_REGEX } from "../constants/reference-snapshot";
-import { MEMORY_SEARCH_DEFAULT_LIMIT } from "../constants/supermemory";
 
 export const referenceInputSchema = z
   .object({
@@ -54,6 +55,7 @@ export const addSuggestionInputSchema = z.object({
   title: z.string().min(1),
   description: z.string().min(1).optional(),
   evidence: z.string().min(1).optional(),
+  preset: onboardingSuggestionPresetSchema.optional(),
   data: z.record(z.string(), z.unknown()).optional(),
 });
 

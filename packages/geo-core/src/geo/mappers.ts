@@ -60,6 +60,7 @@ export function toGeoSettings(
     trackWithoutSearch: row.trackWithoutSearch,
     pausedAutoPromptIds: row.pausedAutoPromptIds,
     removedAutoPromptIds: row.removedAutoPromptIds,
+    ignoredCompetitors: row.ignoredCompetitors,
     enabled: row.enabled,
     scanIntervalHours: row.scanIntervalHours,
     scanStartedAt,
@@ -119,13 +120,6 @@ export function toGeoTrafficLogEntry(
     journeyId: row.journey_id,
     wantsMarkdown: row.wants_markdown,
   };
-}
-
-function toNullableNumber(value: number | bigint | null): number | null {
-  if (value === null) {
-    return null;
-  }
-  return Number(value);
 }
 
 export function toGeoPersona(

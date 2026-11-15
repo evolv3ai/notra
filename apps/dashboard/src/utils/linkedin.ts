@@ -25,7 +25,7 @@ export function createLinkedInPostUrl(text?: string): string {
   return url.toString();
 }
 
-export async function copyLinkedInPostToClipboard(text: string) {
+async function copyLinkedInPostToClipboard(text: string) {
   if (!navigator.clipboard?.writeText) {
     return false;
   }

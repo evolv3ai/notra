@@ -3,7 +3,7 @@
 import { ArrowRightIcon, SendIcon } from "lucide-react";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "../../button/components/button";
 
 const LOADING_DURATION_MS = 2000;
 

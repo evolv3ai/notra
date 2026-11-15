@@ -2,8 +2,7 @@ import type { Redis } from "@upstash/redis";
 import { Effect } from "effect";
 
 import {
-  EXTERNAL_CACHE_KEY_PREFIX,
-  EXTERNAL_CACHE_TTL_SECONDS,
+  GEO_TRAFFIC_FLUSH_INTERVAL_MS,
   GEO_TRAFFIC_FLUSH_SETTLE_MS,
   GLOBAL_SCOPE_ID,
   INITIAL_CACHE_VERSION,
@@ -15,7 +14,6 @@ import {
   VERSIONED_CACHE_SCOPES,
 } from "../constants/cache";
 import type { AnalyticsCacheScope, CachedQueryOptions } from "../types/cache";
-import { getGeoTrafficFlushIntervalMs } from "../utils/geo-flush-interval";
 import { getAnalyticsRedis } from "./redis";
 
 function versionKey(
@@ -36,8 +34,6 @@ function queryCacheKey(
   options: CachedQueryOptions<unknown>,
   version: number | "live"
 ): string {
-  // The org segment keys global-scope entries and keeps per-org debugging
-  // and eviction possible.
   return `${QUERY_CACHE_KEY_PREFIX}:${options.scope}:${version}:${options.organizationId ?? GLOBAL_SCOPE_ID}:${options.pipe}:${stableParams(options.params)}`;
 }
 
@@ -59,18 +55,14 @@ function stableParams(params: Record<string, unknown>): string {
 /**
  * Seconds until the next geo flush window has settled. Entries cached right
  * after a boundary but before the batch is readable expire at the settle
- * point, so the new batch is never hidden for a whole window. Without
- * batching, entries keep the plain live TTL.
+ * point, so the new batch is never hidden for a whole window.
  */
-export function geoLiveTtlSeconds(
-  now: number = Date.now(),
-  intervalMs: number = getGeoTrafficFlushIntervalMs()
-): number {
-  if (intervalMs <= 0) {
-    return LIVE_QUERY_CACHE_TTL_SECONDS;
-  }
-  const boundary = now - (now % intervalMs) + GEO_TRAFFIC_FLUSH_SETTLE_MS;
-  const expiresAt = boundary > now ? boundary : boundary + intervalMs;
+function geoLiveTtlSeconds(): number {
+  const now = Date.now();
+  const boundary =
+    now - (now % GEO_TRAFFIC_FLUSH_INTERVAL_MS) + GEO_TRAFFIC_FLUSH_SETTLE_MS;
+  const expiresAt =
+    boundary > now ? boundary : boundary + GEO_TRAFFIC_FLUSH_INTERVAL_MS;
   return Math.max(1, Math.ceil((expiresAt - now) / 1000));
 }
 
@@ -98,9 +90,6 @@ export function cachedQuery<TResult>(
   if (!redis) {
     return options.fetch();
   }
-  // Versioned scopes pay one extra round trip for the version so ingest can
-  // invalidate on demand. Live scopes expire on a short TTL and carry the
-  // org's purge generation inside the entry instead (see liveQuery).
   const program = VERSIONED_CACHE_SCOPES.has(options.scope)
     ? versionedQuery(redis, options)
     : liveQuery(redis, options);
@@ -149,10 +138,6 @@ function liveQuery<TResult>(
     options.organizationId
   );
   return Effect.gen(function* () {
-    // Entry and purge generation travel in the same round trip. Entries from
-    // before this deploy (or from racing pre-purge writers) don't carry the
-    // current generation and are treated as misses; they age out within the
-    // TTL.
     const [hit, storedGeneration] = yield* Effect.tryPromise(() =>
       redis
         .pipeline()
@@ -170,9 +155,6 @@ function liveQuery<TResult>(
     }
     const fresh = yield* Effect.tryPromise(() => options.fetch());
     if (fresh !== null) {
-      // Stamp the entry with the generation read above: if a purge bumps it
-      // before this write lands, readers reject the entry, so a racing
-      // pre-purge fetch can never make deleted rows readable again.
       yield* Effect.tryPromise(() =>
         redis.set(key, toJsonSafe({ generation, value: fresh }), {
           ex: liveTtlSeconds(options.scope),
@@ -202,12 +184,6 @@ export function bumpAnalyticsVersions(
   return Effect.runPromise(program);
 }
 
-// Live scopes carry no version to bump and expire on a short TTL, so purges
-// advance a per-org generation instead of scanning for keys. Every cached
-// entry is stamped with the generation at write time and only served while
-// it matches, which makes the bump O(1) and race-free: an in-flight
-// pre-purge fetch writes the old generation and readers reject it after the
-// bump.
 export async function advancePurgeGeneration(
   scope: AnalyticsCacheScope,
   organizationId: string | null
@@ -233,32 +209,4 @@ export function bumpPurgeGeneration(
       Effect.ignore
     )
   );
-}
-
-export function cachedExternalFetch<TResult>(
-  key: string,
-  fetchFresh: () => Promise<TResult>,
-  ttlSeconds: number = EXTERNAL_CACHE_TTL_SECONDS
-): Promise<TResult> {
-  const redis = getAnalyticsRedis();
-  if (!redis) {
-    return fetchFresh();
-  }
-  const cacheKey = `${EXTERNAL_CACHE_KEY_PREFIX}:${key}`;
-  const program = Effect.gen(function* () {
-    const hit = yield* Effect.tryPromise(() =>
-      redis.get<TResult>(cacheKey)
-    ).pipe(Effect.orElseSucceed(() => null));
-    if (hit !== null) {
-      return hit;
-    }
-    const fresh = yield* Effect.tryPromise(() => fetchFresh());
-    if (fresh !== null) {
-      yield* Effect.tryPromise(() =>
-        redis.set(cacheKey, toJsonSafe(fresh), { ex: ttlSeconds })
-      ).pipe(Effect.ignore);
-    }
-    return fresh;
-  });
-  return Effect.runPromise(program);
 }

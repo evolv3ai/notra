@@ -28,14 +28,17 @@ export const AGENT_FEEDBACK_API_PATH = "/v1/feedback";
 export const AGENT_FEEDBACK_API_URL_ENV = "FEEDBACK_API_URL";
 export const AGENT_FEEDBACK_PACKAGE = "@usenotra/geo";
 export const AGENT_FEEDBACK_PACKAGE_ENTRY = `${AGENT_FEEDBACK_PACKAGE}/feedback`;
+export const AGENT_FEEDBACK_DEFAULT_STATUS_FILTER: AgentFeedbackStatusFilter =
+  "open";
+
 export const AGENT_FEEDBACK_STATUS_FILTERS: {
   value: AgentFeedbackStatusFilter;
+  statuses?: readonly AgentFeedbackStatus[];
 }[] = [
+  { value: "open", statuses: ["new", "triaged"] },
+  { value: "resolved", statuses: ["resolved"] },
+  { value: "archived", statuses: ["archived"] },
   { value: "all" },
-  { value: "new" },
-  { value: "triaged" },
-  { value: "resolved" },
-  { value: "archived" },
 ];
 
 export const AGENT_FEEDBACK_KIND_ICONS: Record<
@@ -78,9 +81,6 @@ export const AGENT_FEEDBACK_SNIPPET_FILENAMES: Record<
   fetch: "server.ts",
   curl: "terminal",
 };
-
-export const AGENT_FEEDBACK_UNSPECIFIED_LABEL = "Unspecified";
-
 export const AGENT_FEEDBACK_STATUS_ICON_CLASS: Record<
   AgentFeedbackStatus,
   string
@@ -103,6 +103,15 @@ export const AGENT_FEEDBACK_KIND_PILL_CLASS: Record<AgentFeedbackKind, string> =
     other: "border-border bg-muted/50 text-muted-foreground dark:bg-muted/30",
   };
 
+export const AGENT_FEEDBACK_SENTIMENT_ICON_CLASS: Record<
+  AgentFeedbackSentiment,
+  string
+> = {
+  negative: "text-destructive",
+  neutral: "text-muted-foreground",
+  positive: "text-success",
+};
+
 export const AGENT_FEEDBACK_SENTIMENT_PILL_CLASS: Record<
   AgentFeedbackSentiment,
   string
@@ -116,7 +125,7 @@ export const AGENT_FEEDBACK_CLIENT_BRAND_RULES: readonly AgentFeedbackClientBran
   [
     { brand: "claude", aliases: ["claude", "anthropic"] },
     { brand: "cursor", aliases: ["cursor"] },
-    { brand: "openai", aliases: ["openai", "chatgpt"] },
+    { brand: "openai", aliases: ["openai", "chatgpt", "gpt"] },
     { brand: "vercel", aliases: ["vercel"] },
     { brand: "windsurf", aliases: ["windsurf", "cascade"] },
     { brand: "amp", aliases: ["amp", "sourcegraph"] },
@@ -128,7 +137,6 @@ export const AGENT_FEEDBACK_CLIENT_BRAND_RULES: readonly AgentFeedbackClientBran
     { brand: "gemini", aliases: ["gemini"] },
   ];
 
-/** Words that don't title-case cleanly when formatting slug client names. */
 export const AGENT_FEEDBACK_CLIENT_WORD_LABELS: Record<string, string> = {
   ai: "AI",
   api: "API",

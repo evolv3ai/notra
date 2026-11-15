@@ -1,18 +1,20 @@
 import type { ChartColorPair } from "@/types/charts";
 
-/** Matches `--geo-search`. Light stays on `--primary`; dark is lifted. */
 export const CHART_PRIMARY_COLOR: ChartColorPair = {
   light: "#8B5CF6",
   dark: "#9C87E3",
 };
 
-/** Matches `--geo-memory`. Same lightness as Search; teal near sRGB max. */
 export const CHART_SECONDARY_COLOR: ChartColorPair = {
   light: "#18929F",
   dark: "#20ABBA",
 };
 
-/** Series gold: 3:1 on white. Not a Search or Memory hue. */
+export const CHART_REFERRAL_COLOR: ChartColorPair = {
+  light: "#E89A1C",
+  dark: "#FFB547",
+};
+
 const SERIES_GOLD: ChartColorPair = {
   light: "#B68F3C",
   dark: "#DAB15E",
@@ -35,13 +37,10 @@ export const ACCOUNT_SERIES_COLORS: readonly ChartColorPair[] = [
   SERIES_GOLD,
   { light: "#6B6B75", dark: "#9A9AA4" },
 ];
-
-export const CHART_OTHER_SLICE_LABEL = "Other";
 export const SHARE_OF_VOICE_AGGREGATE_ID = "aggregate:other";
 export const SHARE_OF_VOICE_AGGREGATE_LABEL = "Other brands";
 export const SHARE_OF_VOICE_RANKING_LIMIT = 4;
 export const CHART_PERCENT_SCALE = 100;
-export const CHART_MIN_BAR_PERCENT = 2;
 export const CHART_SCRUB_POSITION_LERP = 0.35;
 export const SPARKLINE_SERIES_KEY = "value";
 
@@ -57,6 +56,8 @@ export const CHAT_TOOL_RANK_TRACK_CLASS = "bg-muted";
 
 export const DONUT_INNER_RADIUS = "58%";
 export const DONUT_OUTER_RADIUS = "82%";
+export const DONUT_CORNER_RADIUS = 6;
+export const DONUT_PADDING_ANGLE = 2;
 
 export const COMPETITOR_SWATCHES: readonly string[] = [
   CHART_PRIMARY_COLOR.light,
@@ -69,7 +70,6 @@ export const COMPETITOR_SWATCHES: readonly string[] = [
   "#6B6B75",
 ];
 
-/** Rivals skip Search (brand) and Memory hues so those roles stay exclusive. */
 export const RIVAL_SWATCHES: readonly string[] = COMPETITOR_SWATCHES.slice(2);
 
 export const GEO_TRAFFIC_PROVIDER_COLORS: readonly ChartColorPair[] = [

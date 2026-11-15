@@ -7,7 +7,6 @@ export interface AgentContentTaskType {
   brandAgentType: string;
 }
 
-/** Same labels and brand agent types as the background content agents. */
 export const AGENT_CONTENT_TASK_TYPES: Record<
   string,
   AgentContentTaskType | undefined

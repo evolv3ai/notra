@@ -1,12 +1,3 @@
-/**
- * Ad-hoc model bench for sentiment analysis: runs the real agent call
- * (schema, prompt, token cap, reasoning effort) against candidate models via
- * the Vercel AI Gateway (VERCEL_OIDC_TOKEN from .env.local), then validates
- * output with the production validator.
- *
- *   bun run packages/geo-core/scripts/bench-sentiment-models.ts
- *   BENCH_ROUNDS=4 BENCH_ONLY="zai/glm-5.3-flash,openai/gpt-4.1-mini" BENCH_DUMP=1 bun run ...
- */
 import { gateway } from "@notra/ai/gateway";
 import { generateText, Output, type LanguageModel } from "ai";
 

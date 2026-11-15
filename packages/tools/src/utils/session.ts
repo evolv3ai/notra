@@ -1,7 +1,9 @@
 import type { SessionContext } from "eve/context";
 
+import type { OrganizationContext } from "../types/organization";
+
 export function getSessionAttribute(
-  ctx: Pick<SessionContext, "session">,
+  ctx: OrganizationContext,
   name: string
 ): string | null {
   const value =
@@ -12,19 +14,6 @@ export function getSessionAttribute(
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
-}
-
-export function requireSessionAttribute(
-  ctx: SessionContext,
-  name: string
-): string {
-  const value = getSessionAttribute(ctx, name);
-  if (!value) {
-    throw new Error(
-      `The "${name}" session attribute is missing. It must be provided by the trusted caller when the session is created.`
-    );
-  }
-  return value;
 }
 
 export function getBooleanSessionAttribute(

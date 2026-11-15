@@ -1,6 +1,6 @@
 import { SparklesIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useTranslations } from "next-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@/components/button";
 import type { PersonaPromptsProps } from "@/types/geo-personas-ui";
@@ -13,7 +13,6 @@ export function PersonaPrompts({
 }: PersonaPromptsProps) {
   const t = useTranslations("geo.personaPrompts");
   const tGeoShared = useTranslations("geo.shared");
-  // Two turns can share the same text, so number repeats to keep keys unique.
   const occurrences = new Map<string, number>();
   const items = prompts.map((prompt) => {
     const occurrence = (occurrences.get(prompt) ?? 0) + 1;

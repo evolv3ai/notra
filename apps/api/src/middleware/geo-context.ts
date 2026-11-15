@@ -1,23 +1,13 @@
+import { isProjectInOrganization } from "@notra/db/utils/projects";
 import type { Context, Next } from "hono";
 
-import {
-  GEO_PROJECT_NOT_FOUND_ERROR,
-  ORGANIZATION_SCOPED_API_KEY_ERROR,
-} from "../constants/geo";
+import { GEO_PROJECT_NOT_FOUND_ERROR } from "../constants/geo";
+import { ORGANIZATION_SCOPED_API_KEY_ERROR } from "../constants/skills";
 import type { ApiEnv } from "../types/env";
-import type {
-  GeoContextMiddlewareOptions,
-  GeoProjectContextMiddlewareOptions,
-} from "../types/geo-context";
 import { getOrganizationId } from "../utils/auth";
-import { projectBelongsToOrganization } from "../utils/geo";
 import { getOrganizationResponse } from "../utils/organizations";
 
-export function geoContextMiddleware(
-  options: GeoContextMiddlewareOptions = {}
-) {
-  const loadOrganization = options.loadOrganization ?? getOrganizationResponse;
-
+export function geoContextMiddleware() {
   return async (c: Context<ApiEnv>, next: Next) => {
     const organizationId = getOrganizationId(c);
     if (!organizationId) {
@@ -25,7 +15,7 @@ export function geoContextMiddleware(
     }
 
     const db = c.get("db");
-    const organization = await loadOrganization(db, organizationId);
+    const organization = await getOrganizationResponse(db, organizationId);
     if (!organization) {
       return c.json({ error: "Organization not found" }, 404);
     }
@@ -35,16 +25,14 @@ export function geoContextMiddleware(
   };
 }
 
-export function geoProjectContextMiddleware(
-  options: GeoProjectContextMiddlewareOptions = {}
-) {
-  const ownsProject =
-    options.projectBelongsToOrganization ?? projectBelongsToOrganization;
-
+export function geoProjectContextMiddleware() {
   return async (c: Context<ApiEnv>, next: Next) => {
     const projectId = c.req.param("projectId");
     const { db, organizationId } = c.get("geo");
-    if (!projectId || !(await ownsProject(db, organizationId, projectId))) {
+    if (
+      !projectId ||
+      !(await isProjectInOrganization(organizationId, projectId, db))
+    ) {
       return c.json({ error: GEO_PROJECT_NOT_FOUND_ERROR }, 404);
     }
 

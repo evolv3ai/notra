@@ -2,8 +2,6 @@ import { gateway } from "@notra/ai/gateway";
 import { generateText, Output } from "ai";
 import { array, boolean, enum as enumType, number, object, string } from "zod";
 
-// Mirrors packages/geo-core/src/geo/scan.ts (ask + judge) and
-// packages/geo-core/src/constants/geo.ts. Re-sync by hand if either changes.
 const ENGINE = "google/gemini-3-flash";
 const GEO_JUDGE_MODEL = "openai/gpt-5.4-nano";
 const GEO_ANSWER_MAX_TOKENS = 4096;

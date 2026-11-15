@@ -10,10 +10,10 @@ export function getLogDestination(
   }
   const base = `/${encodeURIComponent(slug)}`;
   if (source === "schedule") {
-    return { href: `${base}/automation/schedules`, labelKey: "openSchedules" };
+    return { href: `${base}/automation`, labelKey: "openSchedules" };
   }
   if (source === "events") {
-    return { href: `${base}/automation/events`, labelKey: "openEventTriggers" };
+    return { href: `${base}/automation`, labelKey: "openEventTriggers" };
   }
   if (source === "geo") {
     return { href: `${base}/geo`, labelKey: "openGeo" };

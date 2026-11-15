@@ -1,5 +1,4 @@
-import { GEO_WRITER_NAV_LINK } from "@notra/geo-core/constants/geo";
-
+import { AUTOPILOT_NAV_LINK } from "@/constants/autopilot";
 import {
   ANALYTICS_NAV_LINK,
   DEFAULT_NAV_VISIBILITY,
@@ -11,14 +10,17 @@ import {
   SIDEBAR_DEFAULT_MODE,
   STUDIO_ROUTE_SECTIONS,
 } from "@/constants/nav";
+import { SITES_NAV_LINK } from "@/constants/sites";
 import type {
+  NavGroup,
+  NavGroupRowState,
   NavMainItem,
   NavVisibility,
   SidebarMode,
 } from "@/types/components/nav";
+import type { SettingsUrlSearchParams } from "@/types/settings/modal";
 
 import { geoNavHref } from "./geo-paths";
-import { filterIrisNavItems } from "./iris-flag";
 
 const NAV_ITEMS_BY_LINK = new Map(
   NAV_MAIN_ITEMS.map((item) => [item.link, item])
@@ -32,14 +34,9 @@ export function resolveSidebarMode(
   route: string | undefined,
   storedMode: SidebarMode | null
 ): SidebarMode {
-  // Org root is both Studio home and the dashboard entry URL. Keep a stored
-  // GEO pick so opening `/{slug}` can restore that mode instead of writing
-  // studio over it.
   if (route === undefined) {
     return storedMode ?? "studio";
   }
-  // Shared destinations keep the current mode. Without a stored choice, match
-  // the org root's visible Studio default instead of switching on navigation.
   if (
     SHARED_ROUTE_PREFIXES.some(
       (prefix) => route === prefix || route.startsWith(`${prefix}/`)
@@ -70,21 +67,49 @@ export function isOrgRootPath(pathname: string, slug: string): boolean {
 export function resolveOrgRootRedirect(
   slug: string,
   storedMode: SidebarMode | null,
-  projectId?: string
+  projectId?: string,
+  searchParams: SettingsUrlSearchParams = {}
 ): string | null {
   if (storedMode !== "geo") {
     return null;
   }
-  return geoNavHref(slug, GEO_OVERVIEW_NAV_LINK, projectId);
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(searchParams)) {
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (item !== undefined) {
+        query.append(key, item);
+      }
+    }
+  }
+  if (projectId) {
+    query.set("project", projectId);
+  }
+  const path = geoNavHref(slug, GEO_OVERVIEW_NAV_LINK);
+  return query.size ? `${path}?${query}` : path;
 }
 
-/**
- * Studio home is the org root. Prefetching `/{slug}` while the sidebar cookie
- * is still `geo` follows `resolveOrgRootRedirect` and can cache GEO as that
- * URL, so the next Studio switch lands back on GEO.
- */
-export function canPrefetchSidebarModeHome(next: SidebarMode): boolean {
-  return next === "geo";
+export function resolveNavGroupRow(
+  group: NavGroup,
+  first: NavMainItem,
+  rest: readonly NavMainItem[],
+  activeLink: string | null
+): NavGroupRowState {
+  const listsOwnPage = group.listsOwnPage || first.link !== group.links[0];
+  const subRows = listsOwnPage
+    ? [first, ...rest].toSorted(
+        (a, b) => group.links.indexOf(a.link) - group.links.indexOf(b.link)
+      )
+    : [...rest];
+  const groupActive =
+    first.link === activeLink || rest.some((item) => item.link === activeLink);
+  return {
+    subRows,
+    groupActive,
+    ownPageActive: first.link === activeLink && !listsOwnPage,
+    showSubRows: groupActive && subRows.length > 0,
+    // A row with one page is that page, so it carries the page's badge.
+    showOwnBadge: rest.length === 0 && !listsOwnPage,
+  };
 }
 
 export function resolveNavItems(
@@ -101,16 +126,12 @@ export function resolveNavItems(
   const withAnalytics = visibility.analytics
     ? items
     : items.filter((item) => item.link !== ANALYTICS_NAV_LINK);
-  return filterIrisNavItems(withAnalytics, visibility.iris);
-}
-
-export function resolveGeoImproveLinks(
-  writeAsPrimaryAction: boolean
-): readonly string[] {
-  if (!writeAsPrimaryAction) {
-    return NAV_GEO_IMPROVE_LINKS;
-  }
-  return NAV_GEO_IMPROVE_LINKS.filter((link) => link !== GEO_WRITER_NAV_LINK);
+  const withSites = visibility.sites
+    ? withAnalytics
+    : withAnalytics.filter((item) => item.link !== SITES_NAV_LINK);
+  return visibility.autopilot
+    ? withSites
+    : withSites.filter((item) => item.link !== AUTOPILOT_NAV_LINK);
 }
 
 export function resolveActiveNavLink(

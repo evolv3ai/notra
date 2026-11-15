@@ -5,12 +5,15 @@ import {
   updateBrandAnalysisJob,
 } from "@notra/ai/jobs/brand-analysis";
 import { redis } from "@notra/ai/utils/redis";
+import { logError } from "@notra/ai/utils/server-log";
 import { db } from "@notra/db/drizzle";
 import { brandSettings } from "@notra/db/schema";
+import { isPgUniqueViolation } from "@notra/db/utils/pg-errors";
 import { eq } from "drizzle-orm";
-import { getTranslations } from "next-intl/server";
-import { after } from "next/server";
 
+import { DEFAULT_BRAND_CONSTRAINT } from "@/constants/brand";
+import { afterResponse } from "@/lib/framework/after-response";
+import { getTranslations } from "@/lib/i18n/server";
 import { startBrandAnalysisRun } from "@/lib/workflows/start";
 import type {
   DispatchBrandAnalysisInput,
@@ -18,7 +21,6 @@ import type {
   QueueBrandAnalysisInput,
   QueueBrandAnalysisResult,
 } from "@/types/brand-analysis";
-import { isDefaultBrandConstraintViolation } from "@/utils/brand-settings";
 
 async function insertBrandIdentity({
   organizationId,
@@ -46,7 +48,7 @@ async function insertBrandIdentity({
       return row;
     }
   } catch (error) {
-    if (!isDefaultBrandConstraintViolation(error)) {
+    if (!isPgUniqueViolation(error, DEFAULT_BRAND_CONSTRAINT)) {
       throw error;
     }
   }
@@ -104,21 +106,18 @@ async function dispatchBrandAnalysisWorkflow({
     const message =
       error instanceof Error ? error.message : "Failed to trigger workflow";
 
-    console.error("[Onboarding] Brand analysis workflow dispatch failed", {
+    logError("[Onboarding] Brand analysis workflow dispatch failed", error, {
       organizationId,
       brandIdentityId,
       jobId,
-      error: message,
     });
 
-    if (redis) {
-      await setBrandAnalysisJobStatus(redis, jobId, "failed", {
-        step: null,
-        currentStep: 0,
-        totalSteps: 3,
-        error: message,
-      });
-    }
+    await setBrandAnalysisJobStatus(redis, jobId, "failed", {
+      step: null,
+      currentStep: 0,
+      totalSteps: 3,
+      error: message,
+    });
   }
 }
 
@@ -138,18 +137,16 @@ export async function queueBrandAnalysisForOnboarding({
     websiteUrl,
   });
 
-  if (!redis) {
-    return { jobId, brandIdentityId: brandIdentity.id };
+  if (redis) {
+    afterResponse(() =>
+      dispatchBrandAnalysisWorkflow({
+        organizationId,
+        websiteUrl,
+        brandIdentityId: brandIdentity.id,
+        jobId,
+      })
+    );
   }
-
-  after(() =>
-    dispatchBrandAnalysisWorkflow({
-      organizationId,
-      websiteUrl,
-      brandIdentityId: brandIdentity.id,
-      jobId,
-    })
-  );
 
   return { jobId, brandIdentityId: brandIdentity.id };
 }

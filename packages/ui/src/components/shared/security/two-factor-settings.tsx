@@ -252,7 +252,8 @@ export function TwoFactorSettings({
         }}
         open={enrollment !== null}
       >
-        <ResponsiveDialogContent className="dialog-stacked sm:max-w-md">
+        {/* ph-no-capture keeps the TOTP secret and QR code out of session replays. */}
+        <ResponsiveDialogContent className="ph-no-capture dialog-stacked sm:max-w-md">
           <ResponsiveDialogHeader>
             <ResponsiveDialogTitle>{l.dialogTitle}</ResponsiveDialogTitle>
             <ResponsiveDialogDescription>

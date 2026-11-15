@@ -12,16 +12,11 @@ interface GeoSampleEngine {
   mentionRate: number;
 }
 
-export interface GeoSampleSequence {
+interface GeoSampleSequence {
   name: string;
   steps: readonly string[];
 }
 
-/**
- * Everything brand-specific about generated GEO sample data. Local dev uses
- * the default profile; the public demo passes a fictional brand so no real
- * company is shown as a competitor.
- */
 export interface GeoSampleCrawler {
   agent: string;
   category: string;
@@ -32,6 +27,11 @@ export interface GeoSampleReferral {
   referer: string;
 }
 
+/**
+ * Everything brand-specific about generated GEO sample data. Local dev uses
+ * the default profile; the public demo passes a fictional brand so no real
+ * company is shown as a competitor.
+ */
 export interface GeoSampleProfile {
   /**
    * Brand aliases for the seeded project. Defaults to the organization slug,

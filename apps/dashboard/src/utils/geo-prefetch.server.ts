@@ -1,11 +1,11 @@
+import { runWithGeoRequestMemo } from "@notra/geo-core/utils/request-memo";
 import { createRouterClient } from "@orpc/server";
 import { dehydrate } from "@tanstack/react-query";
 
 import { assertOrganizationAccess } from "@/lib/auth/organization";
-import { resolveGeoEntitlement } from "@/lib/billing/subscription";
 import { createORPCContext } from "@/lib/orpc/context";
 import { dashboardOrpc } from "@/lib/orpc/query";
-import { contentRouter } from "@/lib/orpc/routers/content";
+import { contentRecentsProcedure } from "@/lib/orpc/routers/content-recents";
 import { geoRouter } from "@/lib/orpc/routers/geo";
 import { prefetchRecentPostsQuery } from "@/utils/content-recents-prefetch.server";
 import {
@@ -14,38 +14,28 @@ import {
 } from "@/utils/geo-hydration";
 import { getGeoServerQueryClient } from "@/utils/geo-query-client.server";
 
-async function canPrefetchGeoQueries(organizationId: string, headers: Headers) {
-  await createORPCContext({ headers });
-  // Authorization is mandatory even when the optional billing prefetch fails.
-  await assertOrganizationAccess({ organizationId, headers });
-  try {
-    return (await resolveGeoEntitlement(organizationId, headers)) !== "denied";
-  } catch (error) {
-    console.warn("[geo] Skipping prefetch: entitlement lookup unavailable", {
-      organizationId,
-      error: error instanceof Error ? error.name : "UnknownError",
-    });
-    return false;
-  }
-}
-
 /**
  * Starts the GEO overview queries on the server and returns the dehydrated
  * cache. The queries are intentionally not awaited: the query client dehydrates
  * pending queries, so the shell streams while they resolve.
  */
-export async function dehydrateGeoOverviewQueries(
+export function dehydrateGeoOverviewQueries(
+  ...args: Parameters<typeof dehydrateGeoOverview>
+) {
+  return runWithGeoRequestMemo(() => dehydrateGeoOverview(...args));
+}
+
+async function dehydrateGeoOverview(
   organizationId: string,
   projectId: string | undefined,
   search: Record<string, string | string[] | undefined>,
   requestHeaders: Headers
 ) {
-  if (!(await canPrefetchGeoQueries(organizationId, requestHeaders))) {
-    return dehydrate(getGeoServerQueryClient());
-  }
+  await createORPCContext({ headers: requestHeaders });
+  await assertOrganizationAccess({ organizationId, headers: requestHeaders });
   const input = geoHydrationInputs(organizationId, projectId, search);
   const client = createRouterClient(
-    { content: contentRouter, geo: geoRouter },
+    { content: { recents: contentRecentsProcedure }, geo: geoRouter },
     { context: () => createORPCContext({ headers: requestHeaders }) }
   );
   const queryClient = getGeoServerQueryClient();
@@ -71,8 +61,6 @@ export async function dehydrateGeoOverviewQueries(
     queryFn: () => client.geo.competitors(input.competitors),
   });
 
-  // The remaining queries only mount on specific tabs (see
-  // `useGeoOverviewPage`); prefetching them for another tab would be wasted.
   if (input.activeTab === "journeys") {
     void queryClient.prefetchQuery({
       ...dashboardOrpc.geo.trafficJourneys.queryOptions({
@@ -122,19 +110,26 @@ export async function dehydrateGeoOverviewQueries(
 }
 
 /**
- * Same non-blocking prefetch for the GEO traffic page: settings, the AI
- * traffic overview, top pages, the live log and the ingest setup all start on
- * the server so the page hydrates instead of cascading skeletons.
+ * Prefetch for the GEO traffic page, limited to what the first paint needs:
+ * settings, the AI traffic summary, the web analytics summary and the ingest
+ * setup. The streamed document stays open until every dehydrated query
+ * settles and hydration waits for it, so the slower tables (top pages, log,
+ * per-source page counts, web breakdowns) load from the client instead.
  */
-export async function dehydrateGeoTrafficQueries(
+export function dehydrateGeoTrafficQueries(
+  ...args: Parameters<typeof dehydrateGeoTraffic>
+) {
+  return runWithGeoRequestMemo(() => dehydrateGeoTraffic(...args));
+}
+
+async function dehydrateGeoTraffic(
   organizationId: string,
   projectId: string | undefined,
   search: Record<string, string | string[] | undefined>,
   requestHeaders: Headers
 ) {
-  if (!(await canPrefetchGeoQueries(organizationId, requestHeaders))) {
-    return dehydrate(getGeoServerQueryClient());
-  }
+  await createORPCContext({ headers: requestHeaders });
+  await assertOrganizationAccess({ organizationId, headers: requestHeaders });
   const input = geoTrafficHydrationInputs(organizationId, projectId, search);
   const client = createRouterClient(
     { geo: geoRouter },
@@ -151,14 +146,10 @@ export async function dehydrateGeoTrafficQueries(
     queryFn: () => client.geo.aiTraffic(input.aiTraffic),
   });
   void queryClient.prefetchQuery({
-    ...dashboardOrpc.geo.trafficPages.queryOptions({
-      input: input.trafficPages,
+    ...dashboardOrpc.geo.webAnalytics.queryOptions({
+      input: input.webAnalytics,
     }),
-    queryFn: () => client.geo.trafficPages(input.trafficPages),
-  });
-  void queryClient.prefetchQuery({
-    ...dashboardOrpc.geo.trafficLog.queryOptions({ input: input.trafficLog }),
-    queryFn: () => client.geo.trafficLog(input.trafficLog),
+    queryFn: () => client.geo.webAnalytics(input.webAnalytics),
   });
   void queryClient.prefetchQuery({
     ...dashboardOrpc.geo.ingestSetup.queryOptions({ input: input.ingestSetup }),

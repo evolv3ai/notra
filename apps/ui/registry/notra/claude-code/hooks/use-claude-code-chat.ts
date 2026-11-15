@@ -14,7 +14,6 @@ const WORD_PATTERN = /(\s+)/;
 
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
-/** Rough English average, close enough for the spinner's token count. */
 const CHARS_PER_TOKEN = 4;
 
 const wait = (ms: number) =>
@@ -30,11 +29,6 @@ const settle = (turn: ClaudeCodeSessionTurn): ClaudeCodeChatTurn => ({
   status: "done",
 });
 
-/**
- * Runs the demo conversation: `send` appends your prompt, spins, runs the
- * reply's tool calls one by one, streams the answer and closes the turn with
- * a summary line. `stop` interrupts the running turn like Escape does.
- */
 export const useClaudeCodeChat = (
   history: readonly ClaudeCodeSessionTurn[],
   replies: readonly ClaudeCodeReply[]

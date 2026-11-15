@@ -1,0 +1,262 @@
+name: Sites E2E
+
+# Runs only when production is built: production-deploy.yml calls it with the
+# selected release commit and deploys only if the lifecycle and browser jobs
+# pass (real Upstash Box builds). It does not run on pull requests or on a
+# timer; start it on a branch with `gh workflow run sites-e2e.yml --ref
+# <branch>`. The live vendor-script job runs alongside and never blocks a
+# release: vendors change their scripts on their own schedule.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to test
+        type: string
+        required: true
+    outputs:
+      lifecycle-failures:
+        description: Failed lifecycle suites and checks, one per line
+        value: ${{ jobs.lifecycle.outputs.failures }}
+      browser-failures:
+        description: Failed browser checks, one per line
+        value: ${{ jobs.browser.outputs.failures }}
+  workflow_dispatch:
+
+concurrency:
+  group: sites-e2e-${{ inputs.ref || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  lifecycle:
+    name: Lifecycle (PostgreSQL + Upstash Box)
+    runs-on: depot-ubuntu-24.04-4
+    timeout-minutes: 30
+    outputs:
+      failures: ${{ steps.summary.outputs.failures }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.4
+
+      - name: Install dependencies
+        run: bun --no-env-file install --frozen-lockfile --ignore-scripts
+
+      # The Box emulator runs the guest build with Node, as a Box does.
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+
+      - name: Verify isolated Redis transport, snapshot and GitHub bootstrap guards
+        run: |
+          SITES_TEST_ENABLED=true bun --no-env-file test scripts/testing/dashboard/tests/redis-rest.test.ts
+          bun --no-env-file test scripts/testing/dashboard/tests/box-snapshot.test.ts scripts/testing/cloud/cleanup.test.ts
+          bun --no-env-file scripts/testing/dashboard/tests/github-bootstrap-guard.ts
+
+      # Builds a snapshot of this commit's toolchain and runs every lifecycle
+      # build in a real Upstash Box (snapshot deleted afterwards).
+      - name: Run Dashboard, PostgreSQL regressions and the lifecycle
+        env:
+          UPSTASH_BOX_API_KEY: ${{ secrets.UPSTASH_BOX_API_KEY }}
+        run: |
+          mkdir -p artifacts
+          bun --no-env-file run sites:e2e:dashboard --database-regressions --box --report "$PWD/artifacts/dashboard.json"
+
+      - name: Collect failures
+        id: summary
+        if: always()
+        env:
+          BUILDER: real Upstash Boxes from a snapshot of this commit
+        run: |
+          {
+            echo "failures<<EOF"
+            if [ -f artifacts/dashboard.json ]; then
+              jq -r '.errors[] | "• lifecycle: \(split("\n")[0])"' artifacts/dashboard.json
+            elif [ "${{ job.status }}" != "success" ]; then
+              echo "• lifecycle: failed before writing a report"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo '### Lifecycle: PostgreSQL regressions'
+            echo "The PostgreSQL suites (no skips), Dashboard HTTP/session checks and the connected lifecycle, every build in ${BUILDER}. GitHub, R2, Cloudflare for SaaS, Vercel DNS and DNS are emulators (apps/sites-e2e/emulators); only name moderation is stubbed."
+            echo
+            if [ -f artifacts/dashboard.json ]; then
+              bun --no-env-file apps/sites-e2e/scripts/summary.ts lifecycle artifacts/dashboard.json
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: sites-e2e-lifecycle-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: warn
+
+  browser:
+    name: Browser (Playwright)
+    runs-on: depot-ubuntu-24.04-4
+    timeout-minutes: 20
+    outputs:
+      failures: ${{ steps.summary.outputs.failures }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.4
+
+      - name: Install dependencies
+        run: bun --no-env-file install --frozen-lockfile --ignore-scripts
+
+      # wrangler dev (the Worker in workerd) and the R2 seeder run on Node.
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+
+      - name: Install isolated Chromium
+        run: bun --no-env-file apps/sites-e2e/node_modules/playwright/cli.js install --with-deps chromium
+
+      - name: Check browser harness types
+        run: |
+          bun --no-env-file run --cwd apps/sites-e2e check-types
+          bun --no-env-file test apps/sites-e2e/tests/csp.test.ts apps/sites-e2e/tests/analytics.test.ts apps/sites-e2e/tests/compiler-isolation.test.ts
+
+      - name: Run simulated-provider browser E2E
+        run: |
+          mkdir -p artifacts
+          bun --no-env-file apps/sites-e2e/src/run.ts --repetitions 3 --report "$PWD/artifacts/benchmarks.json" --screenshot "$PWD/artifacts/site.png"
+
+      - name: Verify cleanup and orphan isolation
+        run: |
+          bun --no-env-file apps/sites-e2e/tests/processes.ts
+          bun --no-env-file apps/sites-e2e/tests/cleanup.ts
+
+      - name: Collect failures
+        id: summary
+        if: always()
+        run: |
+          {
+            echo "failures<<EOF"
+            if [ -f artifacts/benchmarks.json ] && [ "$(jq -r .status artifacts/benchmarks.json)" != "passed" ]; then
+              jq -r '"• browser: after \(.failedAfter // "startup"): \(.error | tostring | split("\n")[0])"' artifacts/benchmarks.json
+            elif [ "${{ job.status }}" != "success" ]; then
+              echo "• browser: failed (see the job log)"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo '### Browser: simulated providers'
+            echo 'The production Worker runs in workerd (wrangler dev) with local R2, Cache API and rate limiter. Provider scripts (Databuddy, GA4, Plausible, PostHog, Umami) and ingestion are simulated; vendor reception and Cloudflare edge behaviour are not covered.'
+            echo
+            if [ -f artifacts/benchmarks.json ]; then
+              bun --no-env-file apps/sites-e2e/scripts/summary.ts browser artifacts/benchmarks.json
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: sites-e2e-browser-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: warn
+
+  # The vendors' real analytics scripts against the Worker: catches a vendor
+  # renaming the attributes Notra renders or sending to a host the CSP does
+  # not allow. Collection requests are still answered locally. A failure
+  # alerts Slack but does not block the release.
+  vendor-scripts:
+    name: Vendor analytics scripts (live)
+    continue-on-error: true
+    runs-on: depot-ubuntu-24.04-4
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.4
+
+      - name: Install dependencies
+        run: bun --no-env-file install --frozen-lockfile --ignore-scripts
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24
+
+      - name: Install isolated Chromium
+        run: bun --no-env-file apps/sites-e2e/node_modules/playwright/cli.js install --with-deps chromium
+
+      - name: Run with the vendors' scripts
+        run: |
+          mkdir -p artifacts
+          bun --no-env-file apps/sites-e2e/src/run.ts --repetitions 1 --vendor-scripts live --report "$PWD/artifacts/vendor-scripts.json" --screenshot "$PWD/artifacts/site.png"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo '### Vendor analytics scripts (live)'
+            echo "Databuddy, GA4, Plausible, PostHog and Umami load their real scripts; each must report every page with the ID Notra rendered, through the site's CSP."
+            echo
+            if [ -f artifacts/vendor-scripts.json ]; then
+              bun --no-env-file apps/sites-e2e/scripts/summary.ts browser artifacts/vendor-scripts.json
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Alert Slack
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.GEO_SCAN_ALERT_WEBHOOK_URL || secrets.SLACK_DEPLOY_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "::warning::GEO_SCAN_ALERT_WEBHOOK_URL is not set; no Slack alert sent."
+            exit 0
+          fi
+          reason="see the run"
+          if [ -f artifacts/vendor-scripts.json ]; then
+            reason=$(jq -r '.error // "see the run" | split("\n")[0]' artifacts/vendor-scripts.json)
+          fi
+          jq -n --arg reason "$reason" --arg url "$RUN_URL" '{
+            text: ":warning: A vendor analytics script no longer matches Notra Sites (release not blocked)",
+            blocks: [
+              { type: "section", text: { type: "mrkdwn", text: "*:warning: A vendor analytics script no longer matches Notra Sites* (release not blocked)\n\($reason)" } },
+              { type: "actions", elements: [ { type: "button", text: { type: "plain_text", text: "Open run" }, url: $url } ] }
+            ]
+          }' | curl -fsS -X POST -H "Content-Type: application/json" --data @- "$SLACK_WEBHOOK_URL" > /dev/null
+
+      - name: Save report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: sites-e2e-vendor-scripts-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: warn

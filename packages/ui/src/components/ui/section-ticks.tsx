@@ -8,7 +8,7 @@ import {
 } from "@notra/ui/components/ui/tooltip";
 import { useUiLabels } from "@notra/ui/components/shared/ui-labels-provider";
 import { cn } from "@notra/ui/lib/utils";
-import Link from "next/link";
+import { Link } from "@notra/ui/components/framework-provider";
 import type { MouseEvent } from "react";
 import { useLayoutEffect, useRef, useState } from "react";
 
@@ -21,10 +21,6 @@ export interface SectionTickItem {
   level?: SectionTickLevel;
 }
 
-/**
- * The tick number is the item's position in the list, so it is derived from the
- * index rather than stored on every item.
- */
 function tickNumber(index: number) {
   return String(index + 1).padStart(2, "0");
 }

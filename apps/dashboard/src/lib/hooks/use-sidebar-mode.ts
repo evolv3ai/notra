@@ -13,8 +13,6 @@ import { isSidebarMode, resolveSidebarMode } from "@/utils/nav";
 
 const SIDEBAR_MODE_EVENT = "notra:sidebar-mode-change";
 
-// Module-level so a pick made outside the sidebar (e.g. dismissing the GEO
-// paywall) reaches the nav's mode resolution before the route changes.
 let pendingMode: PendingSidebarMode | null = null;
 
 function readStoredMode(): SidebarMode | null {
@@ -54,9 +52,7 @@ function persistMode(mode: SidebarMode): void {
     // Private browsing can block localStorage; the cookie still restores
     // the next dashboard open.
   }
-  setSidebarModeCookie(mode).catch(() => {
-    // Cookie write is best-effort, same as localStorage.
-  });
+  setSidebarModeCookie(mode).catch(() => {});
   notifyModeChange();
 }
 
@@ -97,15 +93,9 @@ export function useSidebarMode(
   );
   const routeMode = resolveSidebarMode(route, storedMode);
 
-  // Picking a mode navigates, so `route` — which outranks the stored mode —
-  // only catches up once the new route commits. Deriving the mode from the route
-  // alone leaves the switch frozen for the whole navigation and then snaps
-  // everything at once. The pending pick wins until the route agrees with it.
   const mode =
     pending !== null && pending.route === route ? pending.mode : routeMode;
 
-  // Read the store again during unmount instead of closing over `pending`: a pick
-  // can be followed by navigation before React commits the snapshot update.
   useEffect(
     () => () => {
       const pendingAtUnmount = readPendingMode();
@@ -116,9 +106,6 @@ export function useSidebarMode(
     []
   );
 
-  // Drop a pick once the route has moved past it, so returning to where it was
-  // made does not resurrect it. Comparing by identity prevents this effect from
-  // clearing a newer pick made before it runs.
   useEffect(() => {
     if (pending !== null && pending.route !== route) {
       clearPendingMode(pending);
@@ -126,8 +113,6 @@ export function useSidebarMode(
   }, [pending, route]);
 
   useEffect(() => {
-    // The org root is an entry URL, not a mode signal. Persisting studio
-    // here would erase a GEO pick before the restore can send you back.
     if (route === undefined) {
       return;
     }

@@ -4,15 +4,9 @@ import { getConversationalLinkedInPrompt } from "../prompts/linkedin/conversatio
 import { getConversationalTwitterPrompt } from "../prompts/twitter/conversational";
 import { UNSLOP_DESCRIPTION } from "./constants";
 import { HUMANIZER_CONTENT } from "./humanizer-content";
+import type { SystemSkillDefinition } from "./types";
 import { UNSLOP_CONTENT } from "./unslop-content";
 
-export interface SystemSkillDefinition {
-  name: string;
-  description: string;
-  content: string;
-}
-
-/** The six skills every organization is seeded with (no DB access). */
 export function buildSystemSkills(): SystemSkillDefinition[] {
   return [
     {

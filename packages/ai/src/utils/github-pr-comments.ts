@@ -1,13 +1,10 @@
-import { GITHUB_API_VERSION_HEADER } from "@notra/ai/constants/autonomy-poll";
+import { GITHUB_API_VERSION_HEADERS } from "@notra/ai/constants/github";
 import { GITHUB_MENTION_TRUSTED_AUTHOR_ASSOCIATIONS } from "@notra/ai/constants/github-mention";
 import type {
   CommitFilesToPullRequestParams,
   GitHubCommentKind,
 } from "@notra/ai/types/github-mention";
 
-const GITHUB_API_VERSION_HEADERS = {
-  "X-GitHub-Api-Version": GITHUB_API_VERSION_HEADER,
-} as const;
 const TRUSTED_AUTHOR_ASSOCIATIONS = new Set<string>(
   GITHUB_MENTION_TRUSTED_AUTHOR_ASSOCIATIONS
 );
@@ -42,14 +39,14 @@ export async function listGitHubIssueComments(params: {
       .map(async (page) => (page === 1 ? first : await fetchPage(page)).data)
   );
   return pages.flat().map((comment) => ({
-    id: comment.id,
+    id: Number(comment.id),
     kind: "issue" as const,
     createdAt: comment.created_at,
     threadRootId: null,
     authorLogin: comment.user?.login ?? "unknown",
     authorIsBot: comment.user?.type === "Bot",
     authorIsTrusted: TRUSTED_AUTHOR_ASSOCIATIONS.has(
-      comment.author_association
+      comment.author_association ?? ""
     ),
     body: comment.body ?? "",
   }));
@@ -141,10 +138,10 @@ export async function listGitHubReviewComments(params: {
     }
   );
   return data.map((comment) => ({
-    id: comment.id,
+    id: Number(comment.id),
     kind: "review" as const,
     createdAt: comment.created_at,
-    threadRootId: comment.in_reply_to_id ?? comment.id,
+    threadRootId: Number(comment.in_reply_to_id ?? comment.id),
     authorLogin: comment.user?.login ?? "unknown",
     authorIsBot: comment.user?.type === "Bot",
     authorIsTrusted: TRUSTED_AUTHOR_ASSOCIATIONS.has(

@@ -50,12 +50,9 @@ export interface UsageSectionBodyProps {
   chartData: UsageBreakdownPoint[];
   chartLoading: boolean;
   hasAiAnswers: boolean;
-  hasRetentionFeature: boolean;
-  limitedFeatures: FeatureData[];
+  meteredFeatures: FeatureData[];
   onOpenTopup: () => void;
   onRangeChange: (range: UsageRangeOption) => void;
   pullRequestCreditsFeature: FeatureData | undefined;
   range: UsageRangeOption;
-  retentionDays: number;
-  unlimitedFeatures: FeatureData[];
 }

@@ -757,6 +757,258 @@
       "when": 1790880594298,
       "tag": "0107_geo_content_gaps_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1791129447857,
+      "tag": "0108_marketing_opt_in",
+      "breakpoints": true
+    },
+    {
+      "idx": 109,
+      "version": "7",
+      "when": 1791244800000,
+      "tag": "0109_webhook_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "7",
+      "when": 1791301957805,
+      "tag": "0110_scheduled_publications",
+      "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "7",
+      "when": 1791372497523,
+      "tag": "0111_scheduled_publication_attempt_outcome",
+      "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1791459297113,
+      "tag": "0112_sites",
+      "breakpoints": true
+    },
+    {
+      "idx": 113,
+      "version": "7",
+      "when": 1791486349850,
+      "tag": "0113_site_preview_comments",
+      "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1791532800000,
+      "tag": "0114_site_smart_deployments",
+      "breakpoints": true
+    },
+    {
+      "idx": 115,
+      "version": "7",
+      "when": 1791784257718,
+      "tag": "0115_sites_required_project",
+      "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "7",
+      "when": 1791800218256,
+      "tag": "0116_brand_guidelines_source_pdf",
+      "breakpoints": true
+    },
+    {
+      "idx": 117,
+      "version": "7",
+      "when": 1791804537449,
+      "tag": "0117_blog_post_metadata",
+      "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1791888032345,
+      "tag": "0118_geo_ignored_competitors",
+      "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "7",
+      "when": 1791897041544,
+      "tag": "0119_post_hidden",
+      "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1791908375659,
+      "tag": "0120_post_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "7",
+      "when": 1792409461951,
+      "tag": "0121_chat_shares",
+      "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1792415304589,
+      "tag": "0122_automation_runs",
+      "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1792425034842,
+      "tag": "0123_remove_iris",
+      "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1792436127252,
+      "tag": "0124_autopilot",
+      "breakpoints": true
+    },
+    {
+      "idx": 125,
+      "version": "7",
+      "when": 1792517716871,
+      "tag": "0125_inth_integrations",
+      "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "7",
+      "when": 1792528244223,
+      "tag": "0126_dashboard_index_cleanup",
+      "breakpoints": true
+    },
+    {
+      "idx": 127,
+      "version": "7",
+      "when": 1792594782377,
+      "tag": "0127_site_deployment_repository",
+      "breakpoints": true
+    },
+    {
+      "idx": 128,
+      "version": "7",
+      "when": 1792600609279,
+      "tag": "0128_sites_branch_workflow",
+      "breakpoints": true
+    },
+    {
+      "idx": 129,
+      "version": "7",
+      "when": 1792600878219,
+      "tag": "0129_content_git_publishing",
+      "breakpoints": true
+    },
+    {
+      "idx": 130,
+      "version": "7",
+      "when": 1792600878220,
+      "tag": "0130_remove_autopilot_rules",
+      "breakpoints": true
+    },
+    {
+      "idx": 131,
+      "version": "7",
+      "when": 1792600878221,
+      "tag": "0131_autopilot_namespace_deletions",
+      "breakpoints": true
+    },
+    {
+      "idx": 132,
+      "version": "7",
+      "when": 1792663899619,
+      "tag": "0132_autopilot_commit_filters",
+      "breakpoints": true
+    },
+    {
+      "idx": 133,
+      "version": "7",
+      "when": 1792736479145,
+      "tag": "0133_brand_og_designs",
+      "breakpoints": true
+    },
+    {
+      "idx": 134,
+      "version": "7",
+      "when": 1792925760300,
+      "tag": "0134_sites_suspension_slug_retirement",
+      "breakpoints": true
+    },
+    {
+      "idx": 135,
+      "version": "7",
+      "when": 1792964175555,
+      "tag": "0135_geo_check_surfaces",
+      "breakpoints": true
+    },
+    {
+      "idx": 136,
+      "version": "7",
+      "when": 1793012520960,
+      "tag": "0136_system_skill_registry",
+      "breakpoints": true
+    },
+    {
+      "idx": 137,
+      "version": "7",
+      "when": 1793303482632,
+      "tag": "0137_encrypt_social_connection_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "7",
+      "when": 1793303482633,
+      "tag": "0138_geo_traffic_embeds",
+      "breakpoints": true
+    },
+    {
+      "idx": 139,
+      "version": "7",
+      "when": 1793379712883,
+      "tag": "0139_workflow_engine",
+      "breakpoints": true
+    },
+    {
+      "idx": 140,
+      "version": "7",
+      "when": 1793475951969,
+      "tag": "0140_free_scan_claims",
+      "breakpoints": true
+    },
+    {
+      "idx": 141,
+      "version": "7",
+      "when": 1793560163575,
+      "tag": "0141_clear_plaintext_social_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 142,
+      "version": "7",
+      "when": 1793560867685,
+      "tag": "0142_drop_plaintext_social_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1793567130657,
+      "tag": "0143_abuse_actions",
+      "breakpoints": true
     }
   ]
 }

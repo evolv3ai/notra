@@ -5,10 +5,10 @@ import type {
   EngineId,
 } from "@/types/landing/geo";
 
-export const ANSWER_EXAMPLE_HEADING = "See exactly what the engine said.";
+export const ANSWER_EXAMPLE_HEADING = "Read what each engine said.";
 
 export const ANSWER_EXAMPLE_SUBCOPY =
-  "Every scan keeps the whole answer. Open a prompt and read what each engine wrote, where you show up, and which pages it pulled to get there.";
+  "Every scan keeps the whole answer. Open a prompt and read what each engine wrote, where you show up and which pages it pulled to get there.";
 
 export const ANSWER_EXAMPLE_PROMPT =
   "What are good Quillbase alternatives for startups?";
@@ -16,6 +16,8 @@ export const ANSWER_EXAMPLE_PROMPT =
 export const ANSWER_EXAMPLE_DEFAULT_ENGINE: EngineId = "chatgpt";
 
 export const ANSWER_EXAMPLE_TIMESTAMP = "Aug 26, 9:41 AM";
+
+export const ANSWER_EXAMPLE_EXPAND_LABEL = "Read the full answer";
 
 export const ANSWER_EXAMPLE_RESULTS_TITLE = "Across engines";
 
@@ -72,7 +74,7 @@ I would trial two of them against a real launch before committing.`,
     position: null,
     sentiment: "neutral",
     excerpt:
-      "Popular Quillbase alternatives for startups include Draftly, Penfold and Copyhaus. Draftly is often chosen for its templates, Penfold for price, and Copyhaus for agency style workflows. Consider trialing each with a real campaign before choosing.",
+      "Popular Quillbase alternatives for startups include Draftly, Penfold and Copyhaus. Draftly is often chosen for its templates, Penfold for price and Copyhaus for agency style workflows. Consider trialing each with a real campaign before choosing.",
   },
 ];
 
@@ -95,27 +97,26 @@ export const ANSWER_EXAMPLE_OUTCOME_LABELS = {
 
 export const ANSWER_EXAMPLE_POSITION_NONE = "None";
 
-/** Same bands as the dashboard directions table: 1–2 top, 3–4 mid. */
 export const ANSWER_EXAMPLE_POSITION_TOP = 2;
 export const ANSWER_EXAMPLE_POSITION_MID = 4;
 
 export const ANSWER_EXAMPLE_POSITION_CLASS: Record<AnswerPositionTone, string> =
   {
-    top: "border-geo-up/40 bg-geo-up/10 text-geo-up",
-    mid: "border-geo-mid/40 bg-geo-mid/10 text-geo-mid",
+    top: "border-geo-up/40 bg-geo-up/10 text-[color-mix(in_oklab,var(--color-geo-up)_80%,black)] dark:text-geo-up",
+    mid: "border-geo-mid/40 bg-geo-mid/10 text-[color-mix(in_oklab,var(--color-geo-mid)_80%,black)] dark:text-geo-mid",
     low: "border-border bg-muted text-muted-foreground",
   };
 
 export const ANSWER_EXAMPLE_FACTS = [
   {
     id: "f-1",
-    title: "Full answers, not scores",
-    text: "Read the actual sentence. The position you got, and the names listed next to yours.",
+    title: "Full answers",
+    text: "Read the sentence the engine wrote, the position you got and the names listed next to yours.",
   },
   {
     id: "f-2",
     title: "Live search, cited",
-    text: "Every prompt runs with live retrieval. You see the searches the engine made and the pages it cited.",
+    text: "Engines with web search run every prompt with live retrieval. You see the searches the engine made and the pages it cited.",
   },
   {
     id: "f-3",

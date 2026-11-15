@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 export type SettingsSectionId =
   | "account"
+  | "account-api-keys"
   | "appearance"
   | "general"
   | "members"
@@ -25,14 +26,14 @@ export type StandardSettingsSectionId = Exclude<
   "geo" | "geo-brand" | "geo-languages" | "geo-models"
 >;
 
-export type SettingsNavGroupId =
+type SettingsNavGroupId =
   | "account"
   | "organization"
   | "billing"
   | "geo"
   | "dev";
 
-export interface SettingsSectionLabels {
+interface SettingsSectionLabels {
   label: string;
   description: string;
   modalDescription: string;
@@ -58,10 +59,7 @@ export interface SettingsNavGroup {
   items: readonly SettingsNavItem[];
 }
 
-export type SettingsNavItemConfig = Omit<
-  SettingsNavItem,
-  "label" | "description"
->;
+type SettingsNavItemConfig = Omit<SettingsNavItem, "label" | "description">;
 
 export interface SettingsNavGroupConfig {
   id: SettingsNavGroupId;
@@ -83,6 +81,13 @@ export interface SettingsPaneProps {
   titleAccessory?: ReactNode;
 }
 
+export interface SettingsTableEmptyProps {
+  icon: IconSvgElement;
+  title: ReactNode;
+  description?: ReactNode;
+  children?: ReactNode;
+}
+
 export interface SettingsModalSessionProps {
   closeSettings: () => void;
   descriptionId: string;
@@ -101,10 +106,6 @@ export interface SettingsModalBodyProps {
   isOpen: boolean;
   section: SettingsSectionId | null;
   titleId: string;
-}
-
-export interface LogsRetentionHintProps {
-  days: number;
 }
 
 export interface SettingsHeaderContextValue {

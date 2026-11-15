@@ -14,7 +14,7 @@ const optionalArraySchema = z.preprocess(
   z.array(z.unknown()).optional()
 );
 
-export const STRING_TOOL_FIELDS = [
+const STRING_TOOL_FIELDS = [
   "containerTag",
   "content",
   "description",

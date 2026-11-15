@@ -7,7 +7,6 @@ import {
   ArrowUp02Icon,
   AtIcon,
   File02Icon,
-  StopIcon,
   Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -32,6 +31,7 @@ import {
   CommandItem,
   CommandList,
 } from "@notra/ui/components/ui/command";
+import { Composer } from "@notra/ui/components/ui/composer";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,6 +45,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@notra/ui/components/ui/popover";
+import { Spinner } from "@notra/ui/components/ui/spinner";
 import { ClaudeAiIcon } from "@notra/ui/components/ui/svgs/claudeAiIcon";
 import { Github } from "@notra/ui/components/ui/svgs/github";
 import { Linear } from "@notra/ui/components/ui/svgs/linear";
@@ -57,10 +58,6 @@ import {
   TooltipTrigger,
 } from "@notra/ui/components/ui/tooltip";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2Icon } from "lucide-react";
-import { useTranslations } from "next-intl";
-import Image from "next/image";
-import Link from "next/link";
 import {
   type Dispatch,
   type KeyboardEvent,
@@ -77,17 +74,22 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "use-intl";
 
+import { ChatAnnotationsPreview } from "@/components/chat/chat-annotations-preview";
 import { ChatQuotePreview, useChatQuote } from "@/components/chat/chat-quote";
-import { Composer } from "@/components/composer/composer-shell";
+import Image from "@/components/framework/image";
+import Link from "@/components/framework/link";
 import { McpIcon } from "@/components/integrations/mcp-icon";
 import { CHAT_COMPOSER_DRAFT_PERSIST_MS } from "@/constants/chat-composer";
 import { AVAILABLE_MODELS, LEGACY_CHAT_MODELS } from "@/constants/chat-models";
+import { COMPOSER_STOP_ICON } from "@/constants/composer";
 import { MAX_CHAT_HEIC_INPUT_BYTES } from "@/constants/content-image";
 import { useAutumnRefreshListener } from "@/lib/hooks/use-autumn-refresh-listener";
 import { useBillingCustomer } from "@/lib/hooks/use-billing-customer";
 import { useChatModelLabels } from "@/lib/hooks/use-chat-model-labels";
 import { useChatSkillSlash } from "@/lib/hooks/use-chat-skill-slash";
+import { useOutputTypeLabel } from "@/lib/hooks/use-output-type-label";
 import { dashboardOrpc } from "@/lib/orpc/query";
 import { dragEventHasFiles } from "@/lib/upload/chat";
 import {
@@ -100,20 +102,38 @@ import {
   isImageMimeType,
 } from "@/lib/upload/mime";
 import type { ChatMessageAuthor } from "@/types/chat";
+import type { ChatAnnotation } from "@/types/chat-annotations";
+import type { ChatPostMention } from "@/types/chat-posts";
 import type {
   ChatContextOption,
+  ChatMentionOption,
   ChatModelOption,
 } from "@/types/components/chat-input";
 import type { GitHubRepository } from "@/types/integrations";
 import type { SkillSlashOption } from "@/types/skills/slash";
+import {
+  buildComposerPrefix,
+  parseChatAnnotations,
+  prependComposerPrefix,
+  toChatDisplayLabel,
+} from "@/utils/chat-annotations";
+import {
+  attachedContentHashes,
+  splitDuplicateChatFiles,
+} from "@/utils/chat-attachment-dedupe";
 import { hasIncludedChatPlan } from "@/utils/chat-billing";
-import { contextItemKey, contextItemsEqual } from "@/utils/chat-input";
-import { prependChatQuote } from "@/utils/chat-quote";
+import {
+  contextItemKey,
+  contextItemsEqual,
+  mergeChatAttachments,
+} from "@/utils/chat-input";
+import { getPostReferenceValue } from "@/utils/chat-posts";
 import {
   extractIntegrationReferences,
   getIntegrationReferenceValue,
   getReferenceDisplay,
 } from "@/utils/integration-reference";
+import { OutputTypeIcon } from "@/utils/output-types";
 import { prepareChatImage } from "@/utils/prepare-chat-image";
 import {
   extractSkillDraftTokens,
@@ -135,7 +155,9 @@ import { ChatQueue, type QueuedMessage } from "./chat-queue";
 import { ChatSkillSlashMenu } from "./chat-skill-slash-menu";
 import { ChatSkillTagChips } from "./chat-skill-tag-chips";
 import {
+  createPostReferenceElement,
   serializeEditorWithReferences,
+  setEditorTextWithPostReferences,
   serializeFragmentWithReferences,
 } from "./integration-reference";
 
@@ -251,13 +273,13 @@ function getComposerSendState({
 }) {
   const hasAnyContent =
     !isEmpty || attachmentCount > 0 || pendingUploadCount > 0;
-  const canQueue =
-    isLoading && !isEmpty && attachmentCount === 0 && pendingUploadCount === 0;
+  const canQueue = isLoading && hasAnyContent && !hasUnsupportedAttachments;
+  const showStop = isLoading && !hasAnyContent;
 
   let disabled = hasUnsupportedAttachments || !hasAnyContent;
   if (isQueued || canQueue) {
     disabled = false;
-  } else if (isLoading && isEmpty) {
+  } else if (showStop) {
     disabled = !onStop || isStopping;
   } else if (isUsageBlocked) {
     disabled = true;
@@ -266,14 +288,14 @@ function getComposerSendState({
   let onClick = onSend;
   if (isQueued) {
     onClick = onCancelQueue;
-  } else if (isLoading && isEmpty && onStop) {
+  } else if (showStop && onStop) {
     onClick = onStop;
   }
 
   let icon: "send" | "stop" | "queued" = "send";
   if (isQueued) {
     icon = "queued";
-  } else if (isLoading && isEmpty) {
+  } else if (showStop) {
     icon = "stop";
   }
 
@@ -281,11 +303,11 @@ function getComposerSendState({
     busy: Boolean(isLoading && isStopping),
     disabled,
     icon,
-    labelKey: getSendLabelKey({ canQueue, isEmpty, isLoading }),
+    labelKey: getSendLabelKey({ canQueue, isEmpty: !hasAnyContent, isLoading }),
     onClick,
     tooltipKey: getSubmitTooltipText({
       canQueue,
-      isEmpty,
+      isEmpty: !hasAnyContent,
       isLoading,
       isQueued,
       isStopping,
@@ -343,11 +365,11 @@ function ChatComposerSendButton({
       tooltip={t(send.tooltipKey)}
     >
       {send.icon === "queued" ? (
-        <Loader2Icon className="size-4 animate-spin" />
+        <Spinner />
       ) : (
         <HugeiconsIcon
           className="size-4"
-          icon={send.icon === "stop" ? StopIcon : ArrowUp02Icon}
+          icon={send.icon === "stop" ? COMPOSER_STOP_ICON : ArrowUp02Icon}
           strokeWidth={send.icon === "send" ? 2 : undefined}
         />
       )}
@@ -449,7 +471,31 @@ interface PendingUploadItem {
   filename: string;
 }
 
+function getMentionGroup(option: ChatMentionOption | undefined) {
+  if (option?.kind === "post") {
+    return "post";
+  }
+  return option?.kind === "mcp" ? "mcp" : "context";
+}
+
+function ChatPostMentionContent({ post }: { post: ChatPostMention }) {
+  const getOutputTypeLabel = useOutputTypeLabel();
+  return (
+    <>
+      <OutputTypeIcon
+        className="size-3.5 shrink-0"
+        outputType={post.contentType}
+      />
+      <span className="min-w-0 flex-1 truncate">{post.title}</span>
+      <span className="text-muted-foreground shrink-0 text-xs">
+        {getOutputTypeLabel(post.contentType)}
+      </span>
+    </>
+  );
+}
+
 function ChatMentionMenu({
+  hasPostMentions,
   contextOptionsCount,
   filteredMentionItems,
   insertMention,
@@ -459,9 +505,10 @@ function ChatMentionMenu({
   mentionListRef,
   organizationSlug,
 }: {
+  hasPostMentions: boolean;
   contextOptionsCount: number;
-  filteredMentionItems: ChatContextOption[];
-  insertMention: (option: ChatContextOption) => void;
+  filteredMentionItems: ChatMentionOption[];
+  insertMention: (option: ChatMentionOption) => void;
   isInContext: (item: ContextItem) => boolean;
   listboxId: string;
   mentionIndex: number;
@@ -488,19 +535,26 @@ function ChatMentionMenu({
           role="listbox"
         >
           {filteredMentionItems.map((option, idx) => {
-            const inContext = isInContext(option.contextItem);
+            const inContext =
+              option.kind !== "post" && isInContext(option.contextItem);
             const previousOption = filteredMentionItems[idx - 1];
             const startsGroup =
               idx === 0 ||
-              (previousOption?.kind === "mcp") !== (option.kind === "mcp");
+              getMentionGroup(previousOption) !== getMentionGroup(option);
             const selected = idx === mentionIndex;
             return (
               <div key={option.id}>
                 {startsGroup ? (
                   <div className="px-2 py-1.5 text-xs font-semibold">
-                    {option.kind === "mcp"
+                    {getMentionGroup(option) === "post"
+                      ? t("mention.postsGroup")
+                      : null}
+                    {getMentionGroup(option) === "mcp"
                       ? t("contextPicker.mcpGroup")
-                      : tChatShared("context")}
+                      : null}
+                    {getMentionGroup(option) === "context"
+                      ? tChatShared("context")
+                      : null}
                   </div>
                 ) : null}
                 <button
@@ -518,7 +572,11 @@ function ChatMentionMenu({
                   role="option"
                   type="button"
                 >
-                  <ChatContextOptionContent option={option} />
+                  {option.kind === "post" ? (
+                    <ChatPostMentionContent post={option.post} />
+                  ) : (
+                    <ChatContextOptionContent option={option} />
+                  )}
                   {inContext ? (
                     <span className="text-success shrink-0 text-xs">
                       {tCommon2("labels.added")}
@@ -545,11 +603,13 @@ function ChatMentionMenu({
         {filteredMentionItems.length === 0 ? (
           <div className="flex flex-col items-center gap-1 px-3 py-4 text-center">
             <span className="text-muted-foreground text-xs">
-              {contextOptionsCount === 0
+              {contextOptionsCount === 0 && !hasPostMentions
                 ? t("mention.noneConnected")
                 : t("mention.noMatches")}
             </span>
-            {contextOptionsCount === 0 && organizationSlug ? (
+            {contextOptionsCount === 0 &&
+            !hasPostMentions &&
+            organizationSlug ? (
               <Link
                 className="text-primary text-xs hover:underline"
                 href={`/${organizationSlug}/integrations`}
@@ -567,6 +627,7 @@ function ChatMentionMenu({
 function ChatComposerNudge({
   attachments,
   authorsById,
+  formatQueuedLabel,
   context,
   isQueued,
   onEditQueued,
@@ -587,6 +648,7 @@ function ChatComposerNudge({
 }: {
   attachments: ChatAttachment[];
   authorsById?: Map<string, ChatMessageAuthor>;
+  formatQueuedLabel?: (text: string) => string;
   context: ContextItem[];
   isQueued: boolean;
   onEditQueued?: (message: QueuedMessage) => void;
@@ -642,6 +704,7 @@ function ChatComposerNudge({
         <>
           <ChatQueue
             authorsById={authorsById}
+            formatLabel={formatQueuedLabel}
             messages={queuedMessages}
             onEdit={onEditQueued}
             onRemove={onRemoveQueued}
@@ -704,7 +767,7 @@ function ChatComposerNudge({
           ))}
           {pendingUploads.map((pending) => (
             <Composer.Chip
-              icon={<Loader2Icon className="size-3 animate-spin" />}
+              icon={<Spinner className="size-3" />}
               key={pending.id}
               label={pending.filename}
               pending
@@ -894,136 +957,118 @@ function ChatComposerContextPicker({
   const t = useTranslations("chat.input.contextPicker");
   const tChatShared = useTranslations("chat.shared");
   return (
-    <Tooltip disabled={isContextPickerOpen}>
-      <TooltipTrigger
-        render={
-          contextPickerDisabledReason ? (
-            // biome-ignore lint/a11y/useSemanticElements: a real button would illegally nest the disabled popover trigger button.
-            <span
-              aria-disabled="true"
-              aria-label={tChatShared("addToolsOrContext")}
-              className="inline-flex size-7 shrink-0 cursor-not-allowed items-center justify-center"
-              role="button"
-              tabIndex={0}
+    <Popover onOpenChange={setIsContextPickerOpen} open={isContextPickerOpen}>
+      <Tooltip disabled={isContextPickerOpen}>
+        <TooltipTrigger
+          render={
+            <PopoverTrigger
+              render={
+                <Composer.ToolbarButton
+                  aria-label={tChatShared("addToolsOrContext")}
+                  disabled={isLoading || isQueued}
+                  focusableWhenDisabled
+                  size="icon-sm"
+                />
+              }
             />
-          ) : (
-            <span className="inline-flex size-7 shrink-0 items-center justify-center" />
-          )
-        }
-      >
-        <Popover
-          onOpenChange={setIsContextPickerOpen}
-          open={isContextPickerOpen}
+          }
         >
-          <PopoverTrigger
-            render={
-              <Composer.ToolbarButton
-                aria-controls={contextPickerId}
-                aria-expanded={isContextPickerOpen}
-                aria-haspopup="listbox"
-                aria-label={tChatShared("addToolsOrContext")}
-                className="size-7 justify-center px-0"
-                disabled={isLoading || isQueued}
-                role="combobox"
+          <HugeiconsIcon className="size-4" icon={AtIcon} />
+        </TooltipTrigger>
+        <TooltipContent>
+          {contextPickerDisabledReason ?? tChatShared("toolsAndContext")}
+        </TooltipContent>
+      </Tooltip>
+      <PopoverContent
+        align="start"
+        className="w-80 p-0"
+        id={contextPickerId}
+        sideOffset={6}
+      >
+        <Command>
+          <CommandInput placeholder={tChatShared("searchToolsAndContext")} />
+          <CommandList>
+            <CommandEmpty>
+              {contextOptions.length === 0
+                ? tChatShared("noMatchingIntegrations")
+                : tChatShared("noMatchingToolsOrContext")}
+            </CommandEmpty>
+            {contextOptions.length === 0 && organizationSlug ? (
+              <ChatContextConnectSuggestions
+                onSelect={() => setIsContextPickerOpen(false)}
+                organizationSlug={organizationSlug}
               />
-            }
-          >
-            <HugeiconsIcon className="size-4" icon={AtIcon} />
-          </PopoverTrigger>
-          <PopoverContent
-            align="start"
-            className="w-80 p-0"
-            id={contextPickerId}
-            sideOffset={6}
-          >
-            <Command>
-              <CommandInput
-                placeholder={tChatShared("searchToolsAndContext")}
-              />
-              <CommandList>
-                <CommandEmpty>
-                  {contextOptions.length === 0
-                    ? tChatShared("noMatchingIntegrations")
-                    : tChatShared("noMatchingToolsOrContext")}
-                </CommandEmpty>
-                {contextOptions.length === 0 && organizationSlug ? (
-                  <ChatContextConnectSuggestions
-                    onSelect={() => setIsContextPickerOpen(false)}
-                    organizationSlug={organizationSlug}
-                  />
-                ) : null}
-                {integrationContextOptions.length > 0 ? (
-                  <CommandGroup heading={tChatShared("context")}>
-                    {integrationContextOptions.map((option) => {
-                      const inContext = isInContext(option.contextItem);
-                      return (
-                        <CommandItem
-                          data-checked={inContext}
-                          key={option.id}
-                          keywords={[option.searchText]}
-                          onSelect={() => {
-                            if (inContext) {
-                              removeContext(option.contextItem);
-                            } else {
-                              addContext(option);
-                            }
-                            setIsContextPickerOpen(false);
-                          }}
-                          value={option.id}
-                        >
-                          <ChatContextOptionContent option={option} />
-                        </CommandItem>
-                      );
-                    })}
-                  </CommandGroup>
-                ) : null}
-                {mcpToolOptions.length > 0 ? (
-                  <CommandGroup heading={t("mcpGroup")}>
-                    {mcpToolOptions.map((option) => {
-                      const inContext = isInContext(option.contextItem);
-                      return (
-                        <CommandItem
-                          data-checked={inContext}
-                          key={option.id}
-                          keywords={[option.searchText]}
-                          onSelect={() => {
-                            if (inContext) {
-                              removeContext(option.contextItem);
-                            } else {
-                              addContext(option);
-                            }
-                            setIsContextPickerOpen(false);
-                          }}
-                          value={option.id}
-                        >
-                          <ChatContextOptionContent option={option} />
-                        </CommandItem>
-                      );
-                    })}
-                  </CommandGroup>
-                ) : null}
-              </CommandList>
-              {organizationSlug ? (
-                <div className="border-border border-t p-1">
-                  <Link
-                    className="text-muted-foreground hover:bg-accent hover:text-accent-foreground flex items-center rounded-sm px-2 py-1.5 text-sm transition-colors outline-none"
-                    href={`/${organizationSlug}/integrations`}
-                    onClick={() => setIsContextPickerOpen(false)}
-                  >
-                    {tChatShared("manageIntegrations")}
-                  </Link>
-                </div>
-              ) : null}
-            </Command>
-          </PopoverContent>
-        </Popover>
-      </TooltipTrigger>
-      <TooltipContent>
-        {contextPickerDisabledReason ?? tChatShared("toolsAndContext")}
-      </TooltipContent>
-    </Tooltip>
+            ) : null}
+            {integrationContextOptions.length > 0 ? (
+              <CommandGroup heading={tChatShared("context")}>
+                {integrationContextOptions.map((option) => {
+                  const inContext = isInContext(option.contextItem);
+                  return (
+                    <CommandItem
+                      data-checked={inContext}
+                      key={option.id}
+                      keywords={[option.searchText]}
+                      onSelect={() => {
+                        if (inContext) {
+                          removeContext(option.contextItem);
+                        } else {
+                          addContext(option);
+                        }
+                        setIsContextPickerOpen(false);
+                      }}
+                      value={option.id}
+                    >
+                      <ChatContextOptionContent option={option} />
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            ) : null}
+            {mcpToolOptions.length > 0 ? (
+              <CommandGroup heading={t("mcpGroup")}>
+                {mcpToolOptions.map((option) => {
+                  const inContext = isInContext(option.contextItem);
+                  return (
+                    <CommandItem
+                      data-checked={inContext}
+                      key={option.id}
+                      keywords={[option.searchText]}
+                      onSelect={() => {
+                        if (inContext) {
+                          removeContext(option.contextItem);
+                        } else {
+                          addContext(option);
+                        }
+                        setIsContextPickerOpen(false);
+                      }}
+                      value={option.id}
+                    >
+                      <ChatContextOptionContent option={option} />
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            ) : null}
+          </CommandList>
+          {organizationSlug ? (
+            <div className="border-border border-t p-1">
+              <Link
+                className="text-muted-foreground hover:bg-accent hover:text-accent-foreground flex items-center rounded-sm px-2 py-1.5 text-sm transition-colors outline-none"
+                href={`/${organizationSlug}/integrations`}
+                onClick={() => setIsContextPickerOpen(false)}
+              >
+                {tChatShared("manageIntegrations")}
+              </Link>
+            </div>
+          ) : null}
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
+
+const EMPTY_POST_MENTIONS: readonly ChatPostMention[] = [];
+const EMPTY_ANNOTATIONS: readonly ChatAnnotation[] = [];
 
 interface ChatInputAdvancedProps {
   availableModels?: readonly ChatModelOption[];
@@ -1052,6 +1097,7 @@ interface ChatInputAdvancedProps {
   showAuthorAvatars?: boolean;
   onEmptyChange?: (isEmpty: boolean) => void;
   draftStorageKey?: string;
+  postMentions?: readonly ChatPostMention[];
   ref?: Ref<ChatInputHandle>;
 }
 
@@ -1059,6 +1105,7 @@ interface QueuedSendSnapshot {
   value: string;
   attachments: ChatAttachment[];
   pendingUploadIds: string[];
+  annotationIds: string[];
 }
 
 function handleComposerEditorKeyDown(
@@ -1075,9 +1122,9 @@ function handleComposerEditorKeyDown(
     setMentionQuery,
   }: {
     editor: HTMLDivElement | null;
-    filteredMentionItems: ChatContextOption[];
+    filteredMentionItems: ChatMentionOption[];
     handleSend: () => void;
-    insertMention: (option: ChatContextOption) => void;
+    insertMention: (option: ChatMentionOption) => void;
     mentionAnchorRef: RefObject<{ node: Node; offset: number } | null>;
     mentionIndex: number;
     mentionQuery: string | null;
@@ -1142,6 +1189,7 @@ function handleComposerEditorKeyDown(
 }
 
 function sendOrQueueComposer({
+  annotationIds,
   quote,
   chatIncludedInPlan,
   check,
@@ -1155,6 +1203,7 @@ function sendOrQueueComposer({
   isUsageBlocked,
   onSend,
   performSend,
+  sendSnapshot,
   setInternalError,
   setPendingSend,
   attachments,
@@ -1162,6 +1211,7 @@ function sendOrQueueComposer({
   taggedSkillNames,
   limitMessage,
 }: {
+  annotationIds: string[];
   quote?: string | null;
   attachments: ChatAttachment[];
   chatIncludedInPlan: boolean;
@@ -1179,19 +1229,31 @@ function sendOrQueueComposer({
   isUsageBlocked: boolean;
   onSend?: (value: string, attachments: ChatAttachment[]) => void;
   performSend: () => boolean;
+  sendSnapshot: (
+    value: string,
+    attachments: ChatAttachment[],
+    sentAnnotationIds?: readonly string[]
+  ) => boolean;
   pendingUploads: PendingUploadItem[];
   setInternalError: Dispatch<SetStateAction<string | null>>;
   setPendingSend: Dispatch<SetStateAction<QueuedSendSnapshot | null>>;
   taggedSkillNames: readonly string[];
   limitMessage: string;
 }) {
-  if (isLoading) {
+  if (isLoading && !isUploading) {
     const outbound = prependTaggedSkills(
       serializeEditorWithReferences(editor),
       taggedSkillNames
     );
-    const hasAttachments = attachments.length > 0 || pendingUploads.length > 0;
-    if ((!outbound && !quote) || hasAttachments) {
+    if (attachments.length > 0) {
+      sendSnapshot(
+        prependComposerPrefix(outbound, quote),
+        [...attachments],
+        annotationIds
+      );
+      return;
+    }
+    if (!outbound && !quote) {
       return;
     }
     clearError();
@@ -1209,7 +1271,7 @@ function sendOrQueueComposer({
         return;
       }
     }
-    onSend?.(prependChatQuote(outbound, quote), []);
+    onSend?.(prependComposerPrefix(outbound, quote), []);
     clearComposer();
     return;
   }
@@ -1235,9 +1297,10 @@ function sendOrQueueComposer({
     }
     clearError();
     setPendingSend({
-      value: prependChatQuote(outbound, quote),
+      value: prependComposerPrefix(outbound, quote),
       attachments: [...attachments],
       pendingUploadIds: pendingUploads.map((pending) => pending.id),
+      annotationIds,
     });
     return;
   }
@@ -1271,13 +1334,38 @@ export function ChatInputAdvanced({
   showAuthorAvatars = false,
   onEmptyChange,
   draftStorageKey,
+  postMentions = EMPTY_POST_MENTIONS,
   ref,
 }: ChatInputAdvancedProps) {
   const t = useTranslations("chat.input");
   const tCommon2 = useTranslations("common");
+  const tAnnotations = useTranslations("chat.annotations");
   const tChatShared = useTranslations("chat.shared");
   const limitMessage = t("send.noCredits");
   const quoteContext = useChatQuote();
+  const quoteContextRef = useRef(quoteContext);
+  const postTitlesById = useMemo(
+    () => new Map(postMentions.map((post) => [post.postId, post.title])),
+    [postMentions]
+  );
+  const postTitlesByIdRef = useRef(postTitlesById);
+  const untitledLabelRef = useRef(tCommon2("labels.untitled"));
+  useEffect(() => {
+    quoteContextRef.current = quoteContext;
+    postTitlesByIdRef.current = postTitlesById;
+    untitledLabelRef.current = tCommon2("labels.untitled");
+  }, [postTitlesById, quoteContext, tCommon2]);
+  const formatQueuedLabel = useCallback(
+    (text: string) =>
+      toChatDisplayLabel(text, postTitlesById, (count) =>
+        tAnnotations("count", { count })
+      ),
+    [postTitlesById, tAnnotations]
+  );
+  const composerPrefix = buildComposerPrefix(
+    quoteContext?.quote,
+    quoteContext?.annotations ?? EMPTY_ANNOTATIONS
+  );
   const contextPickerId = useId();
   const slashListId = useId();
   const mentionListId = useId();
@@ -1351,6 +1439,7 @@ export function ChatInputAdvanced({
     : null;
   const attachmentsRef = useRef(attachments);
   const pendingUploadsRef = useRef(pendingUploads);
+  const pendingHashesRef = useRef(new Map<string, string>());
 
   useEffect(() => {
     attachmentsRef.current = attachments;
@@ -1437,7 +1526,7 @@ export function ChatInputAdvanced({
       }
 
       const accepted: File[] = [];
-      for (const file of files.slice(0, remainingSlots)) {
+      for (const file of files) {
         if (
           !isAllowedChatMimeType(file.type, model) &&
           !/\.heic$/i.test(file.name) &&
@@ -1470,21 +1559,56 @@ export function ChatInputAdvanced({
         return false;
       }
 
-      const placeholders = accepted.map((file) => ({
+      const { unique, duplicates } = await splitDuplicateChatFiles(
+        accepted,
+        attachedContentHashes(
+          attachmentsRef.current,
+          pendingHashesRef.current.values()
+        )
+      );
+      for (const file of duplicates) {
+        toast.info(t("upload.duplicate", { name: file.name }));
+      }
+      const openSlots =
+        MAX_CHAT_ATTACHMENTS -
+        attachmentsRef.current.length -
+        pendingUploadsRef.current.length;
+      if (unique.length > openSlots) {
+        toast.error(t("upload.maxAttachments", { max: MAX_CHAT_ATTACHMENTS }));
+      }
+      const candidates = unique.slice(0, Math.max(0, openSlots));
+      if (candidates.length === 0) {
+        return duplicates.length > 0;
+      }
+
+      const placeholders = candidates.map(({ file, sha256 }) => ({
         id: crypto.randomUUID(),
         filename: file.name,
+        sha256,
       }));
-      updatePendingUploads([...pendingUploadsRef.current, ...placeholders]);
+      for (const placeholder of placeholders) {
+        if (placeholder.sha256) {
+          pendingHashesRef.current.set(placeholder.id, placeholder.sha256);
+        }
+      }
+      updatePendingUploads([
+        ...pendingUploadsRef.current,
+        ...placeholders.map(({ id, filename }) => ({ id, filename })),
+      ]);
 
       const results = await Promise.all(
-        accepted.map(async (file, index) => {
+        candidates.map(async ({ file, sha256 }, index) => {
           const placeholder = placeholders[index];
           if (!placeholder) {
             return false;
           }
           try {
             const readyFile = await prepareChatImage(file);
-            const result = await uploadFile({ file: readyFile, type: "chat" });
+            const result = await uploadFile({
+              file: readyFile,
+              sha256: readyFile === file ? sha256 : undefined,
+              type: "chat",
+            });
             const uploadedAttachment = {
               url: result.url,
               key: result.key,
@@ -1502,6 +1626,21 @@ export function ChatInputAdvanced({
                 )
               );
               return false;
+            }
+
+            // Identical files share a content-addressed key; keep one chip.
+            if (
+              attachmentsRef.current.some(
+                (attachment) => attachment.key === result.key
+              )
+            ) {
+              toast.info(t("upload.duplicate", { name: file.name }));
+              updatePendingUploads(
+                pendingUploadsRef.current.filter(
+                  (pending) => pending.id !== placeholder.id
+                )
+              );
+              return true;
             }
 
             const nextAttachments = [
@@ -1531,9 +1670,19 @@ export function ChatInputAdvanced({
           }
         })
       );
+      for (const placeholder of placeholders) {
+        pendingHashesRef.current.delete(placeholder.id);
+      }
       return results.every(Boolean);
     },
-    [cleanupChatUpload, currentModel.label, model, t, updatePendingUploads]
+    [
+      cleanupChatUpload,
+      currentModel.label,
+      model,
+      t,
+      tCommon2,
+      updatePendingUploads,
+    ]
   );
 
   const onFileInputChange = useCallback(
@@ -1821,15 +1970,27 @@ export function ChatInputAdvanced({
     [context]
   );
 
-  const filteredMentionItems = useMemo(() => {
+  const postMentionOptions = useMemo(
+    () =>
+      postMentions.map((post): ChatMentionOption => ({
+        id: `post-${post.postId}`,
+        kind: "post",
+        label: post.title,
+        searchText: `${post.title} ${post.contentType.replaceAll("_", " ")}`,
+        post,
+      })),
+    [postMentions]
+  );
+
+  const filteredMentionItems = useMemo((): ChatMentionOption[] => {
     if (mentionQuery === null) {
       return [];
     }
     const q = mentionQuery.trim().toLowerCase();
-    return contextOptions.filter((option) =>
+    return [...postMentionOptions, ...contextOptions].filter((option) =>
       option.searchText.toLowerCase().includes(q)
     );
-  }, [contextOptions, mentionQuery]);
+  }, [contextOptions, mentionQuery, postMentionOptions]);
 
   const readEditorText = useCallback(() => {
     const editor = editorRef.current;
@@ -1838,9 +1999,29 @@ export function ChatInputAdvanced({
     }
     return (editor.innerText ?? "").replace(/\u00A0/g, " ");
   }, []);
-  const submitRef = useRef<() => void>(() => {
-    // noop
-  });
+  const submitRef = useRef<() => void>(() => {});
+
+  const insertPostChip = useCallback(
+    (post: { postId: string; title: string }, range: Range) => {
+      const editor = editorRef.current;
+      if (!editor) {
+        return;
+      }
+      const spacer = document.createTextNode("\u00A0");
+      range.deleteContents();
+      range.insertNode(spacer);
+      range.insertNode(createPostReferenceElement(post));
+      const caret = document.createRange();
+      caret.setStartAfter(spacer);
+      caret.collapse(true);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(caret);
+      editor.dispatchEvent(new Event("input", { bubbles: true }));
+      editor.focus();
+    },
+    []
+  );
 
   useImperativeHandle(
     ref,
@@ -1850,8 +2031,23 @@ export function ChatInputAdvanced({
         if (!editor) {
           return;
         }
-        editor.textContent = text;
-        setIsEmpty(text.trim().length === 0);
+        const parsed = parseChatAnnotations(text);
+        if (parsed && quoteContextRef.current) {
+          quoteContextRef.current.setAnnotations(
+            parsed.annotations.map((annotation) => ({
+              ...annotation,
+              id: crypto.randomUUID(),
+            }))
+          );
+        }
+        const body = parsed ? parsed.rest : text;
+        setEditorTextWithPostReferences(
+          editor,
+          body,
+          postTitlesByIdRef.current,
+          untitledLabelRef.current
+        );
+        setIsEmpty(body.trim().length === 0);
         editor.focus();
         const range = document.createRange();
         range.selectNodeContents(editor);
@@ -1860,6 +2056,52 @@ export function ChatInputAdvanced({
         sel?.removeAllRanges();
         sel?.addRange(range);
       },
+      insertPostReference: (post) => {
+        const editor = editorRef.current;
+        if (!editor) {
+          return;
+        }
+        const existing = Array.from(
+          editor.querySelectorAll<HTMLElement>("[data-integration-reference]")
+        ).some(
+          (chip) => chip.dataset.value === getPostReferenceValue(post.postId)
+        );
+        if (existing) {
+          editor.focus();
+          return;
+        }
+        const selection = window.getSelection();
+        const current =
+          selection && selection.rangeCount > 0
+            ? selection.getRangeAt(0)
+            : null;
+        let range: Range;
+        if (current && editor.contains(current.startContainer)) {
+          range = current;
+        } else {
+          range = document.createRange();
+          range.selectNodeContents(editor);
+          range.collapse(false);
+          const text = editor.textContent ?? "";
+          if (text && !/\s$/.test(text)) {
+            range.insertNode(document.createTextNode("\u00A0"));
+            range.collapse(false);
+          }
+        }
+        insertPostChip(post, range);
+      },
+      setAttachments: (next: ChatAttachment[]) => {
+        const merged = mergeChatAttachments(attachmentsRef.current, next);
+        if (merged.length > MAX_CHAT_ATTACHMENTS) {
+          toast.error(
+            t("upload.maxAttachments", { max: MAX_CHAT_ATTACHMENTS })
+          );
+          return false;
+        }
+        attachmentsRef.current = merged;
+        setAttachments(merged);
+        return true;
+      },
       focus: () => {
         editorRef.current?.focus();
       },
@@ -1867,7 +2109,7 @@ export function ChatInputAdvanced({
         submitRef.current();
       },
     }),
-    []
+    [insertPostChip, t]
   );
 
   const persistDraft = useCallback(
@@ -1899,7 +2141,7 @@ export function ChatInputAdvanced({
         // noop
       }
     },
-    [draftStorageKey]
+    [draftStorageKey, taggedSkillsRef]
   );
 
   const schedulePersistDraft = useCallback(
@@ -2056,7 +2298,12 @@ export function ChatInputAdvanced({
       }
     }
     const restoredText = restoredSkills.text.trim();
-    editor.textContent = restoredText;
+    setEditorTextWithPostReferences(
+      editor,
+      restoredText,
+      new Map(postMentions.map((post) => [post.postId, post.title])),
+      tCommon2("labels.untitled")
+    );
     setIsEmpty(restoredText.length === 0);
     persistDraft(restoredDraft.items);
   }, [
@@ -2065,8 +2312,10 @@ export function ChatInputAdvanced({
     isSkillsReady,
     onAddContext,
     persistDraft,
+    postMentions,
     readEditorText,
     skills,
+    tCommon2,
     tagSkill,
   ]);
 
@@ -2103,7 +2352,7 @@ export function ChatInputAdvanced({
   }, [closeSlashMenu, initialValue]);
 
   const insertMention = useCallback(
-    (option: ChatContextOption) => {
+    (option: ChatMentionOption) => {
       const editor = editorRef.current;
       const anchor = mentionAnchorRef.current;
       if (!editor || !anchor) {
@@ -2121,6 +2370,13 @@ export function ChatInputAdvanced({
       const replaceRange = document.createRange();
       replaceRange.setStart(anchor.node, anchor.offset);
       replaceRange.setEnd(cursor.startContainer, cursor.startOffset);
+
+      if (option.kind === "post") {
+        mentionAnchorRef.current = null;
+        setMentionQuery(null);
+        insertPostChip(option.post, replaceRange);
+        return;
+      }
 
       replaceRange.deleteContents();
       const selection = window.getSelection();
@@ -2142,7 +2398,7 @@ export function ChatInputAdvanced({
       setMentionQuery(null);
       editor.focus();
     },
-    [onAddContext, persistDraft]
+    [insertPostChip, onAddContext, persistDraft]
   );
 
   const insertSlashSkill = useCallback(
@@ -2261,36 +2517,48 @@ export function ChatInputAdvanced({
     [onAddContext, persistDraft]
   );
 
-  const clearComposer = useCallback(() => {
-    const editor = editorRef.current;
-    if (editor) {
-      editor.innerHTML = "";
-    }
-    if (draftStorageKey) {
-      try {
-        window.localStorage.removeItem(draftStorageKey);
-        window.localStorage.removeItem(skillDraftStorageKey(draftStorageKey));
-      } catch {
-        // noop
+  const clearComposer = useCallback(
+    (sentAnnotationIds?: readonly string[]) => {
+      const editor = editorRef.current;
+      if (editor) {
+        editor.innerHTML = "";
       }
-    }
-    setIsEmpty(true);
-    setAttachments([]);
-    attachmentsRef.current = [];
-    setPendingSend(null);
-    completedUploadsRef.current.clear();
-    for (const item of contextRef.current) {
-      onRemoveContext?.(item);
-    }
-    clearTaggedSkills();
-    quoteContext?.setQuote(null);
-  }, [clearTaggedSkills, draftStorageKey, onRemoveContext, quoteContext]);
+      if (draftStorageKey) {
+        try {
+          window.localStorage.removeItem(draftStorageKey);
+          window.localStorage.removeItem(skillDraftStorageKey(draftStorageKey));
+        } catch {
+          // noop
+        }
+      }
+      setIsEmpty(true);
+      setAttachments([]);
+      attachmentsRef.current = [];
+      setPendingSend(null);
+      completedUploadsRef.current.clear();
+      for (const item of contextRef.current) {
+        onRemoveContext?.(item);
+      }
+      clearTaggedSkills();
+      quoteContext?.setQuote(null);
+      if (sentAnnotationIds) {
+        const sent = new Set(sentAnnotationIds);
+        quoteContext?.setAnnotations((current) =>
+          current.filter((annotation) => !sent.has(annotation.id))
+        );
+      } else {
+        quoteContext?.setAnnotations([]);
+      }
+    },
+    [clearTaggedSkills, draftStorageKey, onRemoveContext, quoteContext]
+  );
 
   const sendSnapshot = useCallback(
-    (value: string, snapshotAttachments: ChatAttachment[]) => {
-      if (isLoading) {
-        return false;
-      }
+    (
+      value: string,
+      snapshotAttachments: ChatAttachment[],
+      sentAnnotationIds?: readonly string[]
+    ) => {
       if (!(value || snapshotAttachments.length > 0)) {
         return false;
       }
@@ -2321,7 +2589,7 @@ export function ChatInputAdvanced({
         submittedKeysRef.current.add(attachment.key);
       }
       onSend?.(value, snapshotAttachments);
-      clearComposer();
+      clearComposer(sentAnnotationIds);
       return true;
     },
     [
@@ -2330,7 +2598,6 @@ export function ChatInputAdvanced({
       clearError,
       customer,
       chatIncludedInPlan,
-      isLoading,
       isUsageBlocked,
       limitMessage,
       model,
@@ -2348,14 +2615,14 @@ export function ChatInputAdvanced({
       taggedSkillNames
     );
     const currentAttachments = attachmentsRef.current;
-    if (!outbound && !quoteContext?.quote && currentAttachments.length === 0) {
+    if (!outbound && !composerPrefix && currentAttachments.length === 0) {
       return false;
     }
     return sendSnapshot(
-      prependChatQuote(outbound, quoteContext?.quote),
+      prependComposerPrefix(outbound, composerPrefix),
       currentAttachments
     );
-  }, [isLoading, sendSnapshot, taggedSkillNames, quoteContext]);
+  }, [composerPrefix, isLoading, sendSnapshot, taggedSkillNames]);
 
   const handleSend = useCallback(() => {
     const editor = editorRef.current;
@@ -2363,7 +2630,10 @@ export function ChatInputAdvanced({
       return;
     }
     sendOrQueueComposer({
-      quote: quoteContext?.quote,
+      annotationIds: (quoteContext?.annotations ?? EMPTY_ANNOTATIONS).map(
+        (annotation) => annotation.id
+      ),
+      quote: composerPrefix,
       attachments: attachmentsRef.current,
       chatIncludedInPlan,
       check,
@@ -2379,6 +2649,7 @@ export function ChatInputAdvanced({
       limitMessage,
       pendingUploads: pendingUploadsRef.current,
       performSend,
+      sendSnapshot,
       setInternalError,
       setPendingSend,
       taggedSkillNames,
@@ -2396,8 +2667,10 @@ export function ChatInputAdvanced({
     limitMessage,
     onSend,
     performSend,
+    sendSnapshot,
     taggedSkillNames,
-    quoteContext,
+    composerPrefix,
+    quoteContext?.annotations,
   ]);
 
   useEffect(() => {
@@ -2420,10 +2693,11 @@ export function ChatInputAdvanced({
       return;
     }
 
-    sendSnapshot(pendingSend.value, [
-      ...pendingSend.attachments,
-      ...resolvedAttachments,
-    ]);
+    sendSnapshot(
+      pendingSend.value,
+      mergeChatAttachments(pendingSend.attachments, resolvedAttachments),
+      pendingSend.annotationIds
+    );
   }, [isUploading, pendingSend, sendSnapshot, t]);
 
   const handlePaste = useCallback(
@@ -2625,6 +2899,7 @@ export function ChatInputAdvanced({
         {mentionQuery === null ? null : (
           <ChatMentionMenu
             contextOptionsCount={contextOptions.length}
+            hasPostMentions={postMentionOptions.length > 0}
             filteredMentionItems={filteredMentionItems}
             insertMention={insertMention}
             isInContext={isInContext}
@@ -2651,6 +2926,7 @@ export function ChatInputAdvanced({
               <ChatComposerNudge
                 attachments={attachments}
                 authorsById={authorsById}
+                formatQueuedLabel={formatQueuedLabel}
                 context={context}
                 isQueued={isQueued}
                 onEditQueued={onEditQueued}
@@ -2674,6 +2950,7 @@ export function ChatInputAdvanced({
         >
           <section aria-label={tChatShared("chatInputDropArea")}>
             <ChatQuotePreview disabled={isQueued} />
+            <ChatAnnotationsPreview disabled={isQueued} />
             <input
               accept={`${allowedChatMimeTypes.join(",")},image/heic,.heic`}
               className="hidden"
@@ -2682,7 +2959,7 @@ export function ChatInputAdvanced({
               ref={fileInputRef}
               type="file"
             />
-            <div className="bg-background relative flex min-w-0 flex-col rounded-t-[13px]">
+            <div className="relative flex min-w-0 flex-col rounded-t-[13px]">
               <div className="flex w-full min-w-0 items-center rounded-t-[12px]">
                 <div className="relative flex min-w-0 flex-1 cursor-text transition-colors [--lh:1lh]">
                   {/* biome-ignore lint/a11y/useSemanticElements: rich mention editor requires a contentEditable host instead of a native textarea. */}
@@ -2732,14 +3009,6 @@ export function ChatInputAdvanced({
               </div>
             </div>
             <Composer.Toolbar>
-              <ChatComposerAttachButton
-                attachmentCount={attachments.length}
-                disabled={isLoading || isQueued}
-                onAttach={() => fileInputRef.current?.click()}
-                pendingUploadCount={pendingUploads.length}
-                tooltip={attachmentTooltipText}
-              />
-
               <ChatComposerModelPicker
                 availableModels={availableModels}
                 currentModel={currentModel}
@@ -2758,37 +3027,47 @@ export function ChatInputAdvanced({
                 thinkingLevel={thinkingLevel}
               />
 
-              <ChatComposerContextPicker
-                addContext={addContext}
-                contextOptions={contextOptions}
-                contextPickerDisabledReason={contextPickerDisabledReason}
-                contextPickerId={contextPickerId}
-                integrationContextOptions={integrationContextOptions}
-                isContextPickerOpen={isContextPickerOpen}
-                isInContext={isInContext}
-                isLoading={isLoading}
-                isQueued={isQueued}
-                mcpToolOptions={mcpToolOptions}
-                organizationSlug={organizationSlug}
-                removeContext={removeContext}
-                setIsContextPickerOpen={setIsContextPickerOpen}
-              />
+              <div className="ml-auto flex items-center gap-1">
+                <ChatComposerContextPicker
+                  addContext={addContext}
+                  contextOptions={contextOptions}
+                  contextPickerDisabledReason={contextPickerDisabledReason}
+                  contextPickerId={contextPickerId}
+                  integrationContextOptions={integrationContextOptions}
+                  isContextPickerOpen={isContextPickerOpen}
+                  isInContext={isInContext}
+                  isLoading={isLoading}
+                  isQueued={isQueued}
+                  mcpToolOptions={mcpToolOptions}
+                  organizationSlug={organizationSlug}
+                  removeContext={removeContext}
+                  setIsContextPickerOpen={setIsContextPickerOpen}
+                />
 
-              <ChatComposerSendButton
-                attachmentCount={attachments.length}
-                hasUnsupportedAttachments={hasUnsupportedAttachmentsForModel}
-                isEmpty={
-                  isEmpty && taggedSkills.length === 0 && !quoteContext?.quote
-                }
-                isLoading={isLoading}
-                isQueued={isQueued}
-                isStopping={isStopping}
-                isUsageBlocked={isUsageBlocked}
-                onCancelQueue={() => setPendingSend(null)}
-                onSend={handleSend}
-                onStop={onStop}
-                pendingUploadCount={pendingUploads.length}
-              />
+                <ChatComposerAttachButton
+                  attachmentCount={attachments.length}
+                  disabled={isQueued}
+                  onAttach={() => fileInputRef.current?.click()}
+                  pendingUploadCount={pendingUploads.length}
+                  tooltip={attachmentTooltipText}
+                />
+
+                <ChatComposerSendButton
+                  attachmentCount={attachments.length}
+                  hasUnsupportedAttachments={hasUnsupportedAttachmentsForModel}
+                  isEmpty={
+                    isEmpty && taggedSkills.length === 0 && !composerPrefix
+                  }
+                  isLoading={isLoading}
+                  isQueued={isQueued}
+                  isStopping={isStopping}
+                  isUsageBlocked={isUsageBlocked}
+                  onCancelQueue={() => setPendingSend(null)}
+                  onSend={handleSend}
+                  onStop={onStop}
+                  pendingUploadCount={pendingUploads.length}
+                />
+              </div>
             </Composer.Toolbar>
           </section>
         </Composer.Frame>

@@ -106,6 +106,15 @@ export function buildHead(page: Metadata = {}): Head {
       pushMeta(meta, "property", "og:image:alt", alt);
       pushMeta(meta, "property", "og:image:type", type);
     }
+    const video = openGraph.videos?.[0];
+    if (video) {
+      const { url, width, height, type } = video;
+      pushMeta(meta, "property", "og:video", absoluteUrl(url));
+      pushMeta(meta, "property", "og:video:secure_url", absoluteUrl(url));
+      pushMeta(meta, "property", "og:video:type", type);
+      pushMeta(meta, "property", "og:video:width", width);
+      pushMeta(meta, "property", "og:video:height", height);
+    }
     pushMeta(meta, "property", "og:type", openGraph.type);
     pushMeta(
       meta,

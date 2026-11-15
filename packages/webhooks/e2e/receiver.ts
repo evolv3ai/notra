@@ -1,7 +1,5 @@
-// Local webhook receiver for end-to-end testing. Verifies Notra signatures,
-// simulates various endpoint behaviors (per path mode), and serves a live
-// HTML inspector page.
 import { existsSync, readFileSync } from "node:fs";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import { RECEIVER_ORIGIN } from "./env";
 
@@ -16,7 +14,7 @@ interface ReceivedRequest {
   eventId: string | null;
   deliveryId: string | null;
   timestamp: string | null;
-  signatureValid: boolean | null; // null = no secret known
+  signatureValid: boolean | null;
   signatureHeader: string | null;
   payload: string;
   attemptForDelivery: number;
@@ -25,8 +23,6 @@ interface ReceivedRequest {
 const received: ReceivedRequest[] = [];
 const flakyCounts = new Map<string, number>();
 
-// Secrets are re-read per request so endpoints created after the receiver
-// started (the CLI writes them into .secrets.json) verify without a restart.
 const loadSecrets = (): Record<string, string> =>
   existsSync(SECRETS_PATH)
     ? (JSON.parse(readFileSync(SECRETS_PATH, "utf8")) as Record<string, string>)
@@ -68,8 +64,6 @@ async function verifySignature(
     new TextEncoder().encode(message)
   );
 }
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const html = await Bun.file(new URL("page.html", import.meta.url)).text();
 

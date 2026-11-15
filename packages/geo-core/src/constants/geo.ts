@@ -10,6 +10,8 @@ import type {
   GeoChatSkin,
   GeoCompetitor,
   GeoCompetitorShareTimeseriesPoint,
+  GeoDrainProvider,
+  GeoIngestMethod,
   GeoGroundedProvider,
   GeoGroundedProviderConfig,
   GeoIngestFramework,
@@ -34,41 +36,61 @@ import {
 } from "./geo-model-catalog";
 
 export const GEO_MAX_ENGINES = 64;
-export const GEO_MODEL_CATALOG_STALE_MS = 60 * 60 * 1000;
+export const GEO_MODEL_CATALOG_STALE_MS = 30_000;
 
-export const GEO_JUDGE_MODEL = "openai/gpt-5.4-nano";
+export const GEO_JUDGE_MODEL = "openai/gpt-6-luna";
+/** Default effort spends 350+ reasoning tokens per answer for no gain. */
+export const GEO_JUDGE_REASONING_EFFORT = "low";
+/** Prompt translation stays on the small model; it needs no judgement. */
+export const GEO_TRANSLATION_MODEL = "openai/gpt-5.4-nano";
 
 export const GEO_OPENAI_API_KEY_ENV = "OPENAI_API_KEY";
 export const GEO_ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY";
 export const GEO_PERPLEXITY_API_KEY_ENV = "PERPLEXITY_API_KEY";
 export const GEO_CURSOR_API_KEY_ENV = "CURSOR_API_KEY";
-export const GEO_SERPAPI_API_KEY_ENV = "SERPAPI_API_KEY";
 
 /** Catalog id of the Cursor engine; the SDK model id is the slug part. */
 export const GEO_CURSOR_ENGINE_ID = "cursor/composer-2.5";
 export const GEO_CURSOR_MODEL_ID = "composer-2.5";
-export const GEO_OPENCODE_ENGINE_ID = "opencode/gpt-5.6-sol-medium";
+export const GEO_OPENCODE_ENGINE_ID = "opencode/gpt-6.1-sol-medium";
+const GEO_OPENCODE_ENGINE_IDS = [
+  "opencode/gpt-6-astra",
+  "opencode/gpt-6-luna",
+  "opencode/gpt-6.1-sol-medium",
+  "opencode/claude-sonnet-5.5",
+  "opencode/claude-opus-5.5",
+] as const;
 export const GEO_CLAUDE_CODE_ENGINE_IDS = [
+  "claude-code/claude-sonnet-5.5",
+  "claude-code/claude-opus-5.5",
   "claude-code/claude-fable-5.1",
-  "claude-code/claude-opus-5",
 ] as const;
 export const GEO_CODEX_ENGINE_IDS = [
+  "codex/gpt-6.1-sol",
+  "codex/gpt-6-luna",
   "codex/gpt-6-astra",
-  "codex/gpt-5.6-sol-rei",
+] as const;
+export const GEO_FX_ENGINE_IDS = [
+  "fx/gpt-6.1-sol",
+  "fx/gpt-5.4-mini",
+  "fx/claude-opus-5.5",
+  "fx/claude-sonnet-5.5",
+  "fx/kimi-k3",
+  "fx/grok-4.7",
 ] as const;
 export const GEO_CODING_AGENT_ENGINE_IDS = [
+  ...GEO_OPENCODE_ENGINE_IDS,
   ...GEO_CLAUDE_CODE_ENGINE_IDS,
   ...GEO_CODEX_ENGINE_IDS,
+  ...GEO_FX_ENGINE_IDS,
 ] as const;
-export const GEO_AI_OVERVIEW_ENGINE_ID = "google/ai-overview";
+export const GEO_PAID_CODING_AGENT_ENGINE_IDS: readonly string[] = [
+  GEO_CURSOR_ENGINE_ID,
+  ...GEO_CODING_AGENT_ENGINE_IDS,
+];
 export const GEO_PROVIDER_TIMEOUT_MS = 120_000;
 export const GEO_ANSWER_TIMEOUT_MS = 180_000;
 export const GEO_CURSOR_TIMEOUT_MS = GEO_ANSWER_TIMEOUT_MS;
-export const GEO_AI_OVERVIEW_TIMEOUT_MS = GEO_ANSWER_TIMEOUT_MS;
-/** Databuddy flag that exposes the Cursor engine to an organization. */
-export const GEO_CURSOR_FLAG_KEY = "geo-cursor";
-/** Databuddy flag that exposes OpenCode, Claude Code, and Codex. */
-export const GEO_OPENCODE_FLAG_KEY = "geo-opencode";
 export const GEO_FLAG_CACHE_TTL_MS = 60_000;
 export const GEO_FLAG_STALE_TIME_MS = 30_000;
 export const GEO_FLAG_ERROR_REASON = "ERROR";
@@ -208,12 +230,6 @@ export const GEO_COLLISION_STOPWORDS = new Set([
   "you",
   "your",
 ]);
-export const GEO_SEARCH_GAP_ACTION_ORDER: Record<GeoSearchGapAction, number> = {
-  create: 0,
-  update: 1,
-  merge: 2,
-  ignore: 3,
-};
 export const GEO_SEARCH_GAP_ACTION_CLASS: Record<GeoSearchGapAction, string> = {
   create: "border-geo-up/30 bg-geo-up/10 text-geo-up",
   update: "border-geo-mid/30 bg-geo-mid/10 text-geo-mid",
@@ -259,6 +275,18 @@ export const GEO_GROUNDED_PROVIDERS: readonly GeoGroundedProviderConfig[] = [
     isAvailable: () => true,
   },
   {
+    provider: "gateway-meta",
+    zdr: "none",
+    envVar: null,
+    isAvailable: () => true,
+  },
+  {
+    provider: "gateway-spacexai",
+    zdr: "none",
+    envVar: null,
+    isAvailable: () => true,
+  },
+  {
     provider: "direct-openai",
     zdr: "none",
     envVar: GEO_OPENAI_API_KEY_ENV,
@@ -286,7 +314,6 @@ export const GEO_DIRECT_GROUNDED_PROVIDERS: ReadonlySet<GeoGroundedProvider> =
     "direct-perplexity",
   ]);
 
-// Decode historical records and queued tasks only; never used to select models.
 export const GEO_LEGACY_GROUNDED_MODELS: Readonly<Record<string, string>> = {
   "openai-direct-grounded": "openai/gpt-5.4",
   "anthropic-direct-grounded": "anthropic/claude-sonnet-4.6",
@@ -325,8 +352,10 @@ export const GEO_BRAND_LABELS: Record<string, string> = {
   opencode: "OpenCode",
   "claude-code": "Claude Code",
   codex: "Codex",
+  fx: "fx",
   copilot: "Copilot",
   mistral: "Mistral",
+  cohere: "Cohere",
   deepseek: "DeepSeek",
   meta: "Meta",
   grok: "Grok",
@@ -343,12 +372,13 @@ export const GEO_MAX_SEQUENCES = 10;
 export const GEO_COMPETITOR_SHARE_LIMIT = 50;
 export const GEO_PROMPT_HISTORY_LIMIT = 120;
 export const GEO_PROMPT_HISTORY_SKELETON_ROWS = 4;
-/** Named brands shown in the scan-history "New brands" cell before +N. */
-export const GEO_PROMPT_HISTORY_NEW_COMPETITORS_VISIBLE = 3;
-export const GEO_PROMPT_HISTORY_EMPTY_POSITION = "\u2013";
-export const GEO_PROMPT_HISTORY_EMPTY_COMPETITORS = "\u2013";
+/** Scans the prompt sheet's history renders per infinite-scroll page. */
+export const GEO_PROMPT_HISTORY_PAGE_SIZE = 10;
+/** Sources listed in the prompt sheet before "Show all". */
+export const GEO_PROMPT_SOURCES_VISIBLE_ROWS = 5;
+/** Brands named in the prompts table's "Mentioned instead" cell before +N. */
+export const GEO_PROMPT_MENTIONED_INSTEAD_VISIBLE = 2;
 export const GEO_SHARE_OF_VOICE_TOP_BRANDS = 5;
-export const GEO_SHARE_OF_VOICE_PAGE_TOP_BRANDS = 8;
 export const GEO_VISIBILITY_TABLE_ROWS = GEO_SHARE_OF_VOICE_TOP_BRANDS + 1;
 export const GEO_SEQUENCE_MAX_TURNS = 5;
 /** Conversations generated at setup or on demand; small on purpose, every turn is a check per engine in each scan. */
@@ -363,7 +393,15 @@ export const GEO_CONVERSATION_CONTEXT_PROMPT_LIMIT = 12;
 export const GEO_GROUNDED_MAX_SEARCHES = 3;
 export const GEO_ANSWER_MAX_TOKENS = 4096;
 export const GEO_GROUNDED_ANSWER_MAX_TOKENS = 4096;
-export const GEO_JUDGE_MAX_TOKENS = 800;
+export const GEO_FLEX_MODELS: ReadonlySet<string> = new Set([
+  "openai/gpt-6-sol",
+  "openai/gpt-6-astra",
+  "openai/gpt-5.6-sol",
+  "openai/gpt-5.6-luna",
+  "openai/gpt-5.6-terra",
+]);
+/** Room for low-effort reasoning plus the structured result. */
+export const GEO_JUDGE_MAX_TOKENS = 1500;
 export const GEO_SCAN_CONCURRENCY = 4;
 export const GEO_SCAN_DEFAULT_INTERVAL_HOURS = 24;
 export const GEO_SCAN_INTERVAL_OPTIONS = [
@@ -389,10 +427,11 @@ export const GEO_SCAN_MIN_INTERVAL_HOURS =
 export const GEO_SCAN_MAX_INTERVAL_HOURS =
   GEO_SCAN_MAX_INTERVAL_DAYS * GEO_SCAN_HOURS_PER_DAY;
 export const GEO_SCAN_CUSTOM_INTERVAL_VALUE = "custom";
-export const GEO_SCAN_INTERVAL_LABEL_PREFIX = /^Every\s+/;
-export const GEO_SCAN_INTERVAL_FALLBACK_NOUN = "scan interval";
 export const GEO_SCAN_NO_RESULTS_RETRY_DELAY = "5m";
 export const GEO_SCAN_STALE_MS = 2 * 60 * 60 * 1000;
+// Scan claims renew, so the stale threshold is not a total runtime limit.
+// ponytail: scans over 24h need lock renewal or per-batch billing settlement.
+export const GEO_SCAN_BILLING_LOCK_TTL_MS = 24 * 60 * 60 * 1000;
 export const GEO_SCAN_START_RETRY_WINDOW_MS = 12 * 60 * 60 * 1000;
 /**
  * How long a cron sweep owns a due schedule row before another sweep may
@@ -420,18 +459,11 @@ export const GEO_SCAN_BILLING_PRECHECK_TIMEOUT_MS = 10_000;
 export const GEO_SCAN_POLL_INTERVAL_MS = 3000;
 export const GEO_START_SCAN_MUTATION_KEY = "geo-start-scan";
 export const GEO_RESCAN_SOURCE_KINDS = ["gap", "prompt"] as const;
-export const GEO_GAPS_LIFT_NOW_LABEL = "now";
-export const GEO_GAPS_LIFT_TONE_CLASS = {
-  up: "text-geo-up",
-  down: "text-geo-down",
-  flat: "text-muted-foreground",
-} as const;
 export const GEO_EXCERPT_MAX_LENGTH = 300;
 export const GEO_PROMPT_MIN_LENGTH = 8;
 export const GEO_PROMPT_MAX_LENGTH = 300;
 export const GEO_PROMPT_MAX_TAGS = 20;
 export const GEO_PROMPT_TAG_MAX_LENGTH = 40;
-export const GEO_PROMPT_TAG_SEPARATOR_REGEX = /[\s,]+/;
 export const GEO_PROMPT_INTENTS = [
   "comparison",
   "list",
@@ -475,10 +507,14 @@ export const GEO_DISCOVERY_CACHE_PREFIX = "geo:discovery:v7";
 export const GEO_DISCOVERY_CACHE_TTL_SECONDS = 60 * 60;
 export const GEO_COMPETITOR_SUGGESTIONS_CACHE_PREFIX =
   "geo:competitor-suggestions:v1";
-export const GEO_INGEST_IDENTITY_CACHE_PREFIX = "geo:ingest-identity:v1";
 export const GEO_INGEST_HOSTS_CACHE_PREFIX = "geo:ingest-hosts:v2";
+export const GEO_INGEST_SITE_CACHE_PREFIX = "geo:ingest-site:v2";
+export const GEO_INGEST_SITE_INACTIVE_TTL_SECONDS = 60;
+export const GEO_INGEST_SITE_MEMORY_TTL_MS = 60_000;
+export const GEO_INGEST_SITE_MEMORY_MAX_ENTRIES = 5000;
+export const GEO_INGEST_ORGANIZATION_SITES_CACHE_PREFIX =
+  "geo:ingest-organization-sites:v2";
 export const GEO_INGEST_IDENTITY_ACTIVE_TTL_SECONDS = 5 * 60;
-export const GEO_INGEST_IDENTITY_INACTIVE_TTL_SECONDS = 60;
 export const GEO_ONBOARDING_MAX_PROMPTS = 30;
 export const GEO_ONBOARDING_SUGGESTED_COMPETITORS = 10;
 export const GEO_BRAND_SEARCH_MIN_QUERY_LENGTH = 2;
@@ -498,19 +534,52 @@ export const AI_TRAFFIC_DEFAULT_LOG_LIMIT = 50;
 export const AI_TRAFFIC_DEFAULT_PAGES_LIMIT = 20;
 export const AI_TRAFFIC_PAGES_FETCH_LIMIT = 500;
 export const AI_TRAFFIC_LOG_FETCH_LIMIT = 200;
-export const GEO_TRAFFIC_SOURCES_PAGE_PARAM = "sourcesPage";
-export const GEO_TRAFFIC_PAGES_PAGE_PARAM = "topPagesPage";
 export const GEO_TRAFFIC_PAGES_PATH_PARAM = "pagePath";
-export const GEO_TRAFFIC_LOG_PAGE_PARAM = "logPage";
 export const GEO_TRAFFIC_HOST_PARAM = "host";
 export const GEO_TRAFFIC_HOST_ALL = "all";
+export const GEO_TRAFFIC_SITES_MODES = ["exclude"] as const;
+export const GEO_TRAFFIC_SITES_PARAM = "sites";
 export const GEO_CITATIONS_ROW_HEIGHT = 40;
 export const GEO_PURPOSE_COLUMN_WIDTH = "12.5rem";
 export const GEO_TRAFFIC_LIVE_INTERVAL_MS = 30_000;
 export const GEO_INGEST_PATH = "/api/geo/ingest";
+export const GEO_DRAIN_PROVIDERS = [
+  "vercel",
+  "cloudflare",
+] as const satisfies readonly GeoDrainProvider[];
+export const GEO_DRAIN_PATHS = {
+  vercel: "/api/geo/drains/vercel",
+  cloudflare: "/api/geo/drains/cloudflare",
+} as const satisfies Record<GeoDrainProvider, string>;
+export const GEO_DRAIN_DOCS_URLS = {
+  vercel: "https://docs.usenotra.com/ai-traffic/install/vercel-log-drain",
+  cloudflare: "https://docs.usenotra.com/ai-traffic/install/cloudflare-logpush",
+} as const satisfies Record<GeoDrainProvider, string>;
+export const GEO_INGEST_DEFAULT_METHOD: GeoIngestMethod = "sdk";
+export const GEO_INGEST_METHODS = [
+  "sdk",
+  "vercel",
+  "cloudflare",
+] as const satisfies readonly GeoIngestMethod[];
+export const GEO_CLOUDFLARE_LOGPUSH_FIELDS = [
+  "ClientCountry",
+  "ClientIP",
+  "ClientRegionCode",
+  "ClientRequestHost",
+  "ClientRequestMethod",
+  "ClientRequestReferer",
+  "ClientRequestScheme",
+  "ClientRequestSource",
+  "ClientRequestURI",
+  "ClientRequestUserAgent",
+  "EdgeResponseStatus",
+  "EdgeStartTimestamp",
+  "RayID",
+  "RequestHeaders",
+] as const;
 export const GEO_INGEST_SNIPPET_FALLBACK =
   "// Set GEO_INGEST_SECRET to generate your install snippet";
-export const GEO_INGEST_PACKAGE = "@usenotra/geo";
+const GEO_INGEST_PACKAGE = "@usenotra/geo";
 export const GEO_INGEST_PACKAGE_MANAGER_OPTIONS = [
   { value: "bun", label: "bun", command: `bun add ${GEO_INGEST_PACKAGE}` },
   { value: "pnpm", label: "pnpm", command: `pnpm add ${GEO_INGEST_PACKAGE}` },
@@ -533,6 +602,7 @@ export const GEO_INGEST_FRAMEWORK_OPTIONS = [
   { value: "tanstack", label: "TanStack Start", file: "src/start.ts" },
   { value: "astro", label: "Astro", file: "src/middleware.ts" },
   { value: "sveltekit", label: "SvelteKit", file: "src/hooks.server.ts" },
+  { value: "reactRouter", label: "React Router", file: "app/root.tsx" },
   {
     value: "netlify",
     label: "Netlify",
@@ -544,8 +614,9 @@ export const GEO_INGEST_FRAMEWORK_OPTIONS = [
   file: string;
 }[];
 export const GEO_INGEST_SECRET_ENV = "GEO_INGEST_SECRET";
-export const GEO_INGEST_SECRET_FALLBACK_ENV = "BEACON_INGEST_SECRET";
 export const GEO_INGEST_TOKEN_SEPARATOR = ".";
+export const GEO_INGEST_SITE_TOKEN_PREFIX = "nst.";
+export const GEO_INGEST_SITE_TOKEN_SIGNING_DOMAIN = "notra-sites-traffic:";
 export const GEO_INGEST_BEARER_PREFIX = "Bearer ";
 export const GEO_MAX_STORED_UA_LENGTH = 200;
 export const AI_TRAFFIC_DEFAULT_JOURNEYS_LIMIT = 25;
@@ -553,7 +624,6 @@ export const AI_TRAFFIC_DEFAULT_JOURNEYS_LIMIT = 25;
 export const OWN_BRAND_ROW_ID = "own-brand";
 
 export const COMPETITOR_PROMPTS_TABLE_HEIGHT = 288;
-export const COMPETITOR_PROMPTS_PAGE_TABLE_HEIGHT = 620;
 export const COMPETITORS_TABLE_ROW_HEIGHT = 52;
 
 export const PROMPTS_TABLE_HEIGHT = 420;
@@ -564,7 +634,6 @@ export const GEO_LOGO_DEBOUNCE_MS = 500;
 export const GEO_COLOR_DEBOUNCE_MS = 200;
 export const GEO_PROMPT_FUNNEL_TOP_POSITION = 3;
 
-export const GEO_JOURNEY_PARAM = "ntr";
 export const GEO_JOURNEY_EXPLICIT_PREFIX = "n_";
 export const GEO_JOURNEY_FINGERPRINT_PREFIX = "f_";
 export const GEO_JOURNEY_BUCKET_SECONDS = 1800;
@@ -869,22 +938,13 @@ export const GEO_JOURNEY_SEARCH_PREFIXES = [
 export const GEO_JOURNEY_OVERVIEW_ROWS = 5;
 export const GEO_JOURNEY_PATH_LABEL_MAX = 28;
 
-export const GEO_PROMPT_PREVIEW_ROW_HEIGHT = 72;
 export const GEO_MENTION_TREND_TOTAL_KEY = "total";
-export const GEO_MENTION_TREND_TOTAL_LABEL = "All Models";
 export const GEO_DEFAULT_RANGE: GeoRangePreset = "30d";
 export const GEO_MENTION_TREND_LINE_KEY = "trend";
 export const GEO_MENTION_TREND_AGENT_ICON_LIMIT = 4;
-export const GEO_MENTION_TREND_ALL_PROVIDERS_LABEL = "All Models";
 export const GEO_MENTION_SUMMARY_VISIBLE = 5;
 export const GEO_MENTION_ROW_HEIGHT_REM = 2.75;
 export const GEO_MENTION_FADE_HEIGHT_REM = 2;
-/*
- * Visible counts `mentioned OR ownedSourceCited`, Citations counts
- * `ownedSourceCited` alone, so Citations is a subset of Visible and the two
- * never add up. Spell that out: side by side the numbers read as rival totals.
- */
-export const GEO_SCAN_PREFLIGHT_PENDING = "Starting…";
 export const GEO_RANGE_PRESETS = [
   { value: "today" },
   { value: "yesterday" },
@@ -908,10 +968,6 @@ export const GEO_DEFAULT_QUERY_DAYS = 30;
 export const GEO_MAX_RANGE_DAYS = 366;
 export const GEO_FILTER_TRIGGER_CLASS =
   "corner-squircle flex h-7 items-center gap-1.5 rounded-lg border bg-background px-2.5 text-xs outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring";
-/** Search vs memory gap that names a specific bottleneck. */
-export const GEO_FAMILY_IMPROVE_SPLIT = 0.25;
-/** Overall rate high enough that remaining misses are the whole job. */
-export const GEO_FAMILY_IMPROVE_STRONG_RATE = 0.7;
 export const GEO_FAMILY_BRANDS_LIMIT = 6;
 export const GEO_SPARKLINE_MIN_POINTS = 2;
 export const GEO_SPARKLINE_FLAT_THRESHOLD = 0.05;
@@ -957,6 +1013,42 @@ export const GEO_MAX_DOMAINS = 20;
 export const GEO_PROJECT_DOMAINS_PLACEHOLDER = "docs.example.com";
 export const GEO_COMPETITOR_MAX_SYNONYMS = 8;
 export const GEO_SHORT_FIELD_MAX_LENGTH = 128;
+
+export const MCP_EVENT_STATUSES = ["ok", "tool_error", "rpc_error"] as const;
+
+export const MCP_ELICITATION_OUTCOMES = [
+  "accept",
+  "decline",
+  "cancel",
+] as const;
+
+export const MCP_EVENT_MAX_DURATION_MS = 3_600_000;
+
+export const MCP_EVENT_MAX_RESPONSE_BYTES = 2_147_483_647;
+
+export const MCP_EVENT_MAX_SEQUENCE = 4_294_967_295;
+
+export const MCP_EVENT_MIN_ERROR_CODE = -2_147_483_648;
+
+export const MCP_EVENT_MAX_ERROR_CODE = 2_147_483_647;
+
+export const MCP_EVENT_CONTEXT_MAX_LENGTH = 512;
+
+export const MCP_EVENT_CAPTURE_MAX_LENGTH = 4096;
+
+export const MCP_EVENT_MAX_TOOLS = 500;
+
+export const MCP_EVENT_BATCH_MAX_EVENTS = 100;
+
+export const MCP_ANALYTICS_DEFAULT_DAYS = 14;
+
+export const MCP_ANALYTICS_TABLE_LIMIT = 50;
+
+export const MCP_ANALYTICS_LOG_LIMIT = 100;
+
+export const MCP_ANALYTICS_DETAIL_LIMIT = 20;
+
+export const MCP_SESSION_EVENTS_LIMIT = 500;
 export const GEO_DOMAIN_REGEX = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/;
 /** Debounce before persisting GEO settings. Short enough for toggles. */
 export const GEO_SETTINGS_AUTO_SAVE_MS = 800;
@@ -964,15 +1056,11 @@ export const GEO_MAX_LANGUAGES = 4;
 export const GEO_LANGUAGE_MAX_PROMPTS = 5;
 export const GEO_TRANSLATION_MAX_TOKENS = 2000;
 
-export const COPY_FEEDBACK_MS = 2000;
-
 export const GEO_TAB_VALUES = [
   "visibility",
   "brand-sentiment",
   "journeys",
 ] as const satisfies readonly GeoTab[];
-
-export const GEO_TRAFFIC_REVEAL_MS = 150;
 
 export const GEO_DEFAULT_TAB: GeoTab = "visibility";
 
@@ -981,22 +1069,15 @@ export const GEO_CHAT_SKIN_SURFACE: Record<GeoChatSkin, string> = {
   chatgpt: "bg-background",
   gemini: "bg-white dark:bg-[#1f1f1f]",
   perplexity: "bg-white dark:bg-[#111]",
-  opencode: "bg-[var(--opencode-tui-background,#090909)]",
-  "claude-code": "bg-[#0f0f0f]",
-  codex: "bg-[#0f0f0f]",
+  opencode:
+    "dark bg-[var(--opencode-tui-background,#090909)] text-foreground scheme-dark",
+  "claude-code": "dark bg-[#0f0f0f] text-foreground scheme-dark",
+  codex: "dark bg-[#0f0f0f] text-foreground scheme-dark",
 };
-
-export const GEO_TAB_BREADCRUMB_LABELS = {
-  visibility: "Visibility",
-  "brand-sentiment": "Brand sentiment",
-  journeys: "Journeys",
-} satisfies Record<GeoTab, string>;
 
 /** Served by the dashboard app; stands in for fictional `.example` brands. */
 export const GEO_NOTRA_LOGO_PATH = "/icon0.svg";
 
-export const GEO_AVATAR_FALLBACK_BASE =
-  "https://api.dicebear.com/9.x/glass/svg";
 export const GEO_LOGO_SIZE_PX = 40;
 
 export const GEO_COMPETITOR_DETAIL_DAYS = 30;
@@ -1014,24 +1095,10 @@ export const GEO_SAMPLE_DATA_ENABLED =
 
 export const GEO_CHANGES_LIMIT = 40;
 export const GEO_CHANGES_LABEL = "What changed";
-export const GEO_CHANGES_ITEM_LABEL = "changes";
-export const GEO_CHANGES_PAGE_KEY = "changes";
 export const GEO_CHANGES_SKELETON_ROWS = 5;
 /** One named brand fits the column; the rest collapse into a "+N" tooltip. */
 export const GEO_CHANGES_COMPETITOR_STACK_LIMIT = 1;
-export const GEO_CHANGES_POSITION_PREFIX = "#";
 export const GEO_CHANGES_EMPTY_DETAIL = "-";
-export const GEO_CHANGE_KIND_LABELS: Record<GeoChangeKind, string> = {
-  gained_mention: "Gained mention",
-  lost_mention: "Lost mention",
-  position_improved: "Position up",
-  position_dropped: "Position down",
-  competitor_displaced: "Displaced by competitor",
-  citation_added: "Citation gained",
-  citation_removed: "Citation lost",
-  competitor_cited: "Competitor cited",
-  new_engine: "New engine",
-};
 
 export const GEO_CHANGE_KIND_ORDER: Record<GeoChangeKind, number> = {
   lost_mention: 0,
@@ -1077,34 +1144,14 @@ export const GEO_MENTION_EVALUATION_NO_POSITION = "none";
 
 export const GEO_LIVE_CHANNEL_PREFIX = "geo";
 export const GEO_LIVE_WATCH_KEY_PREFIX = "geo:live:watch";
-// Refreshed on every realtime (re)connect, which happens at least every
-// 300 s (Upstash Realtime's Fluid stream limit), so it lapses shortly after
-// the last GEO tab closed.
 export const GEO_LIVE_WATCH_TTL_SECONDS = 330;
-// How long ingest trusts a watch lookup. A tab opened within this window
-// waits at most this long for its first live update; polling covers it.
 export const GEO_LIVE_WATCH_MEMO_MS = 15_000;
-// "Nobody watches" is remembered only briefly: a tab that just opened should
-// not miss the traffic of its first seconds.
 export const GEO_LIVE_UNWATCHED_MEMO_MS = 3000;
-// Scan batches finish every few seconds; viewers refetch at most this often
-// while a scan runs. Start and finish are always announced.
 export const GEO_VISIBILITY_LIVE_PROGRESS_INTERVAL_SECONDS = 10;
-// Consecutive realtime connects that never opened (expired session, outage)
-// before the GEO pages stop retrying for a while and rely on polling.
 export const GEO_LIVE_MAX_FAILED_CONNECTS = 3;
 export const GEO_LIVE_PAUSE_AFTER_FAILURES_MS = 60_000;
-// Tinybird buffers rows written with wait=false and flushes them within
-// ~2.8 s (p90). Traffic updates are announced once that window has passed,
-// so the refetch they trigger already sees the new rows.
 export const GEO_TRAFFIC_LIVE_SETTLE_MS = 4000;
-// A busy site announces at most this often, so open tabs refetch the traffic
-// pipes every few seconds instead of after every request burst.
 export const GEO_TRAFFIC_LIVE_MIN_INTERVAL_MS = 10_000;
-// With a live connection, polling only covers missed or dropped events.
 export const GEO_LIVE_FALLBACK_INTERVAL_MS = 120_000;
-// A running scan still polls slowly: its last batch can finish between two
-// events while the stream reconnects.
 export const GEO_LIVE_SCAN_FALLBACK_INTERVAL_MS = 15_000;
-// Coalesces bursts (parallel scan batches, several projects) into one refetch.
 export const GEO_LIVE_INVALIDATE_THROTTLE_MS = 2000;

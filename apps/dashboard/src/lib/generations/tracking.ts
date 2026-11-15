@@ -18,8 +18,6 @@ function getResultsKey(organizationId: string): string {
 }
 
 export function generateRunId(triggerId: string): string {
-  // Several runs start in the same millisecond (one per selected format); a
-  // bare timestamp collides and the later run is dropped as a duplicate.
   return `${triggerId}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
 }
 

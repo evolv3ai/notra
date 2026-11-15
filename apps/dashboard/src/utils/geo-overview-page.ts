@@ -14,7 +14,11 @@ import type {
   GeoTrackedPrompt,
 } from "@notra/geo-core/types/geo";
 
-import type { GeoOverviewPageReady, GeoRangeControl } from "@/types/geo";
+import type {
+  GeoOverviewLoadingState,
+  GeoOverviewPageReady,
+  GeoRangeControl,
+} from "@/types/geo";
 import type { GeoScanModelMenuProps } from "@/types/geo-scan-activity";
 
 export function countEnabledGeoPrompts(
@@ -33,6 +37,20 @@ export function geoOverviewQueriesEnabled(
   hasSettings: boolean
 ): boolean {
   return Boolean(organizationId) && !isSettingsPending && hasSettings;
+}
+
+export function geoOverviewLoading(input: GeoOverviewLoadingState): boolean {
+  if (input.settingsPending) {
+    return true;
+  }
+  if (!input.queriesEnabled) {
+    return false;
+  }
+  return (
+    input.overviewPending ||
+    input.timeseriesPending ||
+    (input.visibilityEnabled && input.visibilityPending.some(Boolean))
+  );
 }
 
 export function geoOverviewTabEnabled(
@@ -84,7 +102,6 @@ export function toGeoOverviewReadyPage(input: {
   journeyStatsFailed: boolean;
   journeysLoading: boolean;
   isScanning: boolean;
-  revealActive: boolean;
   scanMenu: GeoScanModelMenuProps;
 }): GeoOverviewPageReady {
   const engines = input.engines ?? [];
@@ -104,13 +121,11 @@ export function toGeoOverviewReadyPage(input: {
     companyName: input.settings.companyName,
     geoRange: input.geoRange,
     isScanning: input.isScanning,
-    revealActive: input.revealActive,
     tabs: {
       promptCount: input.promptCount ?? 0,
       activeTab: input.activeTab,
       onActiveTabChange: input.onActiveTabChange,
       organizationSlug: input.organizationSlug,
-      revealActive: input.revealActive,
       settings: input.settings,
       engines,
       timeseriesPoints,
@@ -125,6 +140,7 @@ export function toGeoOverviewReadyPage(input: {
       journeyStats: input.journeyStats ?? null,
       journeyStatsFailed: input.journeyStatsFailed,
       journeysLoading: input.journeysLoading,
+      journeyRange: input.geoRange.query,
       organizationId: input.organizationId,
     },
     scanMenu: input.scanMenu,

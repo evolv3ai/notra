@@ -17,7 +17,6 @@ export function useEnterComplete(mountProgress: MotionValue<number>): boolean {
         setComplete(true);
       }
     });
-    // Catch a MotionValue that already finished before we subscribed.
     if (mountProgress.get() >= 1) {
       setComplete(true);
     }

@@ -65,8 +65,6 @@ export const selectGitHubRepositories = Effect.fn("GitHub.selectRepositories")(
       repositories,
     });
 
-    // The transaction has committed. A cache outage must not turn a saved
-    // selection into a failed request that asks the user to repeat the write.
     yield* Effect.forEach(
       installations,
       (installation) =>

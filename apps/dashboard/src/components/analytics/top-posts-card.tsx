@@ -12,14 +12,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@notra/ui/components/ui/tooltip";
-import { useFormatter, useTranslations } from "next-intl";
 import { useMemo } from "react";
+import { InstrumentEmpty, InstrumentModule } from "ui/card";
+import { DataTable, type TableColumn } from "ui/table";
+import { useFormatter, useTranslations } from "use-intl";
 
-import {
-  InstrumentEmpty,
-  InstrumentModule,
-} from "@/components/instrument/instrument-module";
-import { Table, type TableColumn } from "@/components/motion/table";
 import { ANALYTICS_TOOLTIP_DELAY_MS } from "@/constants/analytics";
 import { TABLE_ROW_HEIGHT, TABLE_SKELETON_ROWS } from "@/constants/table";
 import { useDayLabel } from "@/lib/hooks/use-day-label";
@@ -142,7 +139,15 @@ export function TopPostsCard({
         ),
       },
     ],
-    [posts.length, t, format, formatDayLabel, formatMetric]
+    [
+      posts.length,
+      t,
+      tCommon,
+      tAnalyticsShared,
+      format,
+      formatDayLabel,
+      formatMetric,
+    ]
   );
 
   return (
@@ -159,8 +164,7 @@ export function TopPostsCard({
           seed="Top posts"
         />
       ) : (
-        <Table
-          className="rounded-2xl"
+        <DataTable
           columns={columns}
           data={posts}
           defaultSort={{ key: "engagement", direction: "desc" }}

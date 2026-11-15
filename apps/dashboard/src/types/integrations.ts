@@ -1,7 +1,6 @@
 import type { GitHubConnectionMethod } from "@notra/ai/types/github-connection";
-import type { IntegrationType } from "@notra/schemas/dashboard/integrations";
-import type { useTranslations } from "next-intl";
 import type React from "react";
+import type { useTranslations } from "use-intl";
 
 export type IntegrationsSharedTranslator = ReturnType<
   typeof useTranslations<"integrations.shared">
@@ -22,8 +21,6 @@ export interface GitHubRepository {
   hasWebhook?: boolean;
   outputs?: RepositoryOutput[];
 }
-
-export type Repository = GitHubRepository;
 
 export interface GitHubIntegration {
   id: string;
@@ -75,7 +72,7 @@ export interface LinearIntegration {
   };
 }
 
-export interface GranolaIntegration {
+interface GranolaIntegration {
   id: string;
   displayName: string;
   enabled: boolean;
@@ -103,18 +100,6 @@ export interface GranolaIntegrationCardProps {
   onUpdate?: () => void;
 }
 
-export type WebhookLogType = "release" | "push" | "ping";
-
-export interface IntegrationWebhookLog {
-  id: string;
-  type: WebhookLogType;
-  action: string;
-  status: "success" | "failed";
-  message?: string;
-  payload?: Record<string, unknown>;
-  createdAt: string;
-}
-
 export interface GitHubRepoInfo {
   owner: string;
   repo: string;
@@ -128,16 +113,6 @@ export interface AvailableRepo {
   private: boolean;
   description: string | null;
   url: string;
-}
-
-export interface IntegrationUIConfig {
-  id: IntegrationType;
-  name: string;
-  description: string;
-  icon: React.ReactNode;
-  href: string;
-  available: boolean;
-  category: "input" | "output";
 }
 
 export interface AddIntegrationDialogProps {
@@ -179,7 +154,7 @@ export interface IntegrationCardDitherProps {
   color: string;
 }
 
-export type DitherInteractionProps = Pick<
+type DitherInteractionProps = Pick<
   React.HTMLAttributes<HTMLElement>,
   "onBlur" | "onFocus" | "onPointerEnter" | "onPointerLeave"
 >;
@@ -187,11 +162,6 @@ export type DitherInteractionProps = Pick<
 export interface IntegrationCardDitherInteraction {
   active: boolean;
   interactionProps: DitherInteractionProps;
-}
-
-export interface RepositoryListProps {
-  integrationId: string;
-  organizationId: string;
 }
 
 export interface WebhookSetupDialogProps {
@@ -202,20 +172,4 @@ export interface WebhookSetupDialogProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   trigger?: React.ReactNode;
-}
-
-export interface AddRepositoryButtonProps {
-  onAdd?: () => void;
-  label?: string;
-}
-
-export interface CreateLinearIntegrationParams {
-  organizationId: string;
-  userId: string;
-  displayName: string;
-  accessToken: string;
-  linearOrganizationId: string;
-  linearOrganizationName?: string;
-  linearTeamId?: string;
-  linearTeamName?: string;
 }

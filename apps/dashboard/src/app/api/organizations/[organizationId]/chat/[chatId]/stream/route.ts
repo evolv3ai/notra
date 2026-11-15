@@ -9,8 +9,6 @@ import { chatIdSchema } from "@notra/ai/schemas/chat";
 import type { HistoryMessage } from "@upstash/realtime";
 import type { UIMessageChunk } from "ai";
 import { UI_MESSAGE_STREAM_HEADERS } from "ai";
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
 
 import {
   CHAT_STREAM_CURSOR_HEADER,
@@ -19,19 +17,18 @@ import {
 } from "@/constants/chat-stream";
 import { withOrganizationAuth } from "@/lib/auth/organization";
 import { chatStreamResumeSchema } from "@/schemas/chat-stream";
+import type { RouteContext } from "@/types/api/routes";
 import { encodeChatStreamId } from "@/utils/chat-stream-id";
 import { ratelimit } from "@/utils/ratelimit";
-
-interface RouteContext {
-  params: Promise<{ organizationId: string; chatId: string }>;
-}
 
 function toSseChunk(chunk: UIMessageChunk, cursor: string) {
   return `id: ${cursor}\ndata: ${JSON.stringify(chunk)}\n\n`;
 }
 
-// react-doctor-disable-next-line react-doctor/nextjs-no-side-effect-in-get-handler -- pending.delete only mutates this connection's replay buffer, not application state
-export async function GET(request: NextRequest, { params }: RouteContext) {
+export async function GET(
+  request: Request,
+  { params }: RouteContext<{ organizationId: string; chatId: string }>
+) {
   const { organizationId, chatId } = await params;
   const auth = await withOrganizationAuth(request, organizationId);
 
@@ -41,7 +38,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
 
   const chatIdParse = chatIdSchema.safeParse(chatId);
   if (!chatIdParse.success) {
-    return NextResponse.json(
+    return Response.json(
       { error: "Invalid chat ID", details: chatIdParse.error.issues },
       { status: 400 }
     );
@@ -53,7 +50,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     cursor: request.headers.get(CHAT_STREAM_CURSOR_HEADER),
   });
   if (!resume.success || (resume.data.cursor && !resume.data.streamId)) {
-    return NextResponse.json(
+    return Response.json(
       { error: "Invalid stream resume cursor" },
       { status: 400 }
     );
@@ -62,7 +59,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     `${organizationId}:${auth.context.user.id}`
   );
   if (!withinLimit) {
-    return NextResponse.json(
+    return Response.json(
       { error: "Rate limit exceeded", reset },
       { status: 429 }
     );
@@ -74,8 +71,6 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   }
 
   const activeStreamId = await getActiveChatStream(organizationId, safeChatId);
-  // Reconnect to the same generation even after its lease has been released.
-  // Its terminal chunk may be in history while a newer generation is active.
   const streamId = resume.data.streamId ?? activeStreamId;
 
   if (!streamId) {
@@ -94,6 +89,14 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   let closed = false;
   let removeAbortListener: (() => void) | undefined;
+  const teardown = () => {
+    closed = true;
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+    unsubscribe?.();
+    removeAbortListener?.();
+  };
 
   const toChunks = (data: unknown): UIMessageChunk[] =>
     Array.isArray(data) ? (data as UIMessageChunk[]) : [data as UIMessageChunk];
@@ -106,17 +109,10 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
         if (closed) {
           return;
         }
-        closed = true;
-        if (timeout) {
-          clearTimeout(timeout);
-        }
-        unsubscribe?.();
-        removeAbortListener?.();
+        teardown();
         controller.close();
       };
 
-      // This is a connection deadline, not the end of generation. Leave the
-      // active stream and history intact so the client can resume it.
       timeout = setTimeout(close, CHAT_STREAM_MAX_LIFETIME_MS);
       request.signal.addEventListener("abort", close, { once: true });
       removeAbortListener = () =>
@@ -149,8 +145,6 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
           }
         };
 
-        // Subscribe first, then replay history and deduplicate the overlap by
-        // Redis stream ID. A finish arriving during history() must not be lost.
         unsubscribe = await channel.subscribe({
           events: ["ai.chunk"],
           onData: (message) => {
@@ -172,8 +166,6 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
           return;
         }
         const [resumeId, resumeIndex] = resume.data.cursor?.split(":") ?? [];
-        // Start at the cursor's timestamp instead of the oldest retained item.
-        // A full page may still contain the terminal chunk needed to resume.
         const history = await channel.history({
           start: resumeId ? Number(resumeId.split("-")[0]) : undefined,
           limit: CHAT_STREAM_HISTORY_LIMIT,
@@ -189,8 +181,6 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
         ) {
           throw new Error("Chat replay cursor is no longer available");
         }
-        // A pending finish alone cannot prove continuity after a full page.
-        // Require an ID seen in both history and the subscription.
         const replayHistory = history.slice(resumePosition);
         if (
           resumeId &&
@@ -231,23 +221,11 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
         }
         pending.clear();
       } catch (error) {
-        closed = true;
-        if (timeout) {
-          clearTimeout(timeout);
-        }
-        unsubscribe?.();
-        removeAbortListener?.();
+        teardown();
         throw error;
       }
     },
-    cancel() {
-      closed = true;
-      if (timeout) {
-        clearTimeout(timeout);
-      }
-      unsubscribe?.();
-      removeAbortListener?.();
-    },
+    cancel: teardown,
   });
 
   return new Response(stream, {

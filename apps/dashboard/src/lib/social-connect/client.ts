@@ -1,4 +1,4 @@
-import "server-only";
+import "@tanstack/react-start/server-only";
 import type { SocialConnectPlatform } from "@notra/schemas/dashboard/social-accounts";
 import PostForMe from "post-for-me";
 
@@ -19,6 +19,12 @@ function getApiKey(platform: SocialConnectPlatform): string | undefined {
 
 export function isSocialConnectConfigured(): boolean {
   return Boolean(getApiKey("twitter") || getApiKey("linkedin"));
+}
+
+export function isSocialConnectPlatformConfigured(
+  platform: SocialConnectPlatform
+): boolean {
+  return Boolean(getApiKey(platform));
 }
 
 export function getSocialConnectClient(

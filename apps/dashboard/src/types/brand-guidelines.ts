@@ -93,7 +93,7 @@ export interface NormalizedScreenshot {
   sortOrder: number;
 }
 
-export interface StoredBrandGuidelineAsset {
+interface StoredBrandGuidelineAsset {
   id: string;
   guidelineId: string;
   kind: BrandGuidelineAssetKind;
@@ -110,7 +110,7 @@ export interface StoredBrandGuidelineAsset {
   sortOrder: number;
 }
 
-export interface StoredBrandGuidelineColor {
+interface StoredBrandGuidelineColor {
   id: string;
   guidelineId: string;
   role: BrandGuidelineColorRole;
@@ -121,7 +121,7 @@ export interface StoredBrandGuidelineColor {
   sortOrder: number;
 }
 
-export interface StoredBrandGuidelineFont {
+interface StoredBrandGuidelineFont {
   id: string;
   guidelineId: string;
   role: BrandGuidelineFontRole;
@@ -133,7 +133,7 @@ export interface StoredBrandGuidelineFont {
   sortOrder: number;
 }
 
-export interface StoredBrandGuidelineScreenshot {
+interface StoredBrandGuidelineScreenshot {
   id: string;
   guidelineId: string;
   kind: BrandGuidelineScreenshotKind;
@@ -148,7 +148,7 @@ export interface StoredBrandGuidelineScreenshot {
   sortOrder: number;
 }
 
-export interface StoredBrandGuidelineToken {
+interface StoredBrandGuidelineToken {
   id: string;
   guidelineId: string;
   type: BrandGuidelineTokenType;
@@ -166,6 +166,10 @@ export interface StoredBrandGuideline {
   contextDevMeta: unknown;
   lastGeneratedAt: Date | null;
   lastGenerationError: string | null;
+  sourcePdfFilename: string | null;
+  sourcePdfUrl: string | null;
+  sourcePdfText: string | null;
+  sourcePdfUploadedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   assets: StoredBrandGuidelineAsset[];
@@ -183,3 +187,26 @@ export interface BrandGuidelineGenerationStepInput {
 export type BrandGuidelineWorkflowStepResult =
   | { success: true }
   | { success: false; error: string };
+
+export interface AttachBrandGuidelineSourcePdfInput {
+  brandSettingsId: string;
+  filename: string;
+  key: string;
+  organizationId: string;
+}
+
+export type BrandGuidelinePdfErrorKey =
+  | "generateFirst"
+  | "invalidFile"
+  | "noText"
+  | "readFailed"
+  | "unavailable";
+
+export interface GuidelineContentSummary {
+  lastGeneratedAt: Date | string | null;
+  assets: readonly unknown[];
+  colors: readonly unknown[];
+  fonts: readonly unknown[];
+  tokens: readonly unknown[];
+  screenshots: readonly unknown[];
+}

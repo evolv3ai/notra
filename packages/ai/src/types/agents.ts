@@ -247,14 +247,3 @@ export interface BlogPostAgentOptions {
   log?: AILogTarget;
   telemetryMetadata?: TccMetadata;
 }
-
-export interface ChatAgentContext {
-  organizationId: string;
-  sessionId?: string;
-  currentMarkdown: string;
-  selectedText?: string;
-  onMarkdownUpdate: (markdown: string) => void;
-  brandContext?: string;
-  log?: AILogTarget;
-  telemetryMetadata?: TccMetadata;
-}

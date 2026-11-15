@@ -14,24 +14,22 @@ import {
   patchProjectRequestSchema,
   projectResponseSchema,
 } from "@notra/schemas/api/geo-projects";
+import { Effect } from "effect";
 
 import {
   GEO_COMMON_ERROR_RESPONSES,
   GEO_OPENAPI_TAG,
 } from "../constants/geo-openapi";
 import { runGeoEffect } from "../runtime/geo";
-import { geoErrorResponse } from "../utils/geo";
+import { geoErrorResponse, geoOutcomeResponse } from "../utils/geo";
 import { createOpenApiApp } from "../utils/openapi-app";
 
 export const geoProjectsRoutes = createOpenApiApp();
 
-const GEO_TAG = GEO_OPENAPI_TAG;
-const commonErrors = GEO_COMMON_ERROR_RESPONSES;
-
 const listProjectsRoute = createRoute({
   method: "get",
   path: "/projects",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "listProjects",
   summary: "List GEO projects",
   responses: {
@@ -39,14 +37,14 @@ const listProjectsRoute = createRoute({
       description: "Projects fetched successfully",
       content: { "application/json": { schema: listProjectsResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const createProjectRoute = createRoute({
   method: "post",
   path: "/projects",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "createProject",
   summary: "Create a GEO project",
   request: {
@@ -60,14 +58,14 @@ const createProjectRoute = createRoute({
       description: "Project created successfully",
       content: { "application/json": { schema: projectResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const getProjectRoute = createRoute({
   method: "get",
   path: "/projects/{projectId}",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "getProject",
   summary: "Get a single GEO project",
   request: { params: projectParamsSchema },
@@ -76,14 +74,14 @@ const getProjectRoute = createRoute({
       description: "Project fetched successfully",
       content: { "application/json": { schema: projectResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const patchProjectRoute = createRoute({
   method: "patch",
   path: "/projects/{projectId}",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "updateProject",
   summary: "Rename a GEO project or relink its brand identity",
   request: {
@@ -98,25 +96,25 @@ const patchProjectRoute = createRoute({
       description: "Project updated successfully",
       content: { "application/json": { schema: projectResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
 const deleteProjectRoute = createRoute({
   method: "delete",
   path: "/projects/{projectId}",
-  tags: [GEO_TAG],
+  tags: [GEO_OPENAPI_TAG],
   operationId: "deleteProject",
   summary: "Delete a GEO project and all of its GEO data",
   description:
-    "Cascades to the project's GEO settings, prompts, sequences, competitors, scans, checks and reports, and cancels any pending scheduled scan. Agent feedback is kept but detached. The organization's last project cannot be deleted.",
+    "Cascades to the project's GEO settings, prompts, sequences, competitors, scans, checks and reports, and cancels any pending scheduled scan. Agent feedback is kept but detached. The organization's last project cannot be deleted. Projects with hosted Sites cannot be deleted; delete their Sites first.",
   request: { params: projectParamsSchema },
   responses: {
     200: {
       description: "Project deleted successfully",
       content: { "application/json": { schema: deleteProjectResponseSchema } },
     },
-    ...commonErrors,
+    ...GEO_COMMON_ERROR_RESPONSES,
   },
 });
 
@@ -124,16 +122,11 @@ geoProjectsRoutes.openapi(listProjectsRoute, async (c) => {
   const base = c.get("geo");
   const outcome = await runGeoEffect(
     "projectsList",
-    listGeoProjects(base.organizationId)
+    listGeoProjects(base.organizationId).pipe(
+      Effect.map(({ projects }) => ({ projects }))
+    )
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json(
-    { projects: outcome.value.projects, organization: base.organization },
-    200
-  );
+  return geoOutcomeResponse(c, outcome, 200);
 });
 
 geoProjectsRoutes.openapi(createProjectRoute, async (c) => {
@@ -141,16 +134,11 @@ geoProjectsRoutes.openapi(createProjectRoute, async (c) => {
   const { name, brandSettingsId } = c.req.valid("json");
   const outcome = await runGeoEffect(
     "projectCreate",
-    createGeoProject(base.organizationId, name, brandSettingsId)
+    createGeoProject(base.organizationId, name, brandSettingsId).pipe(
+      Effect.map((project) => ({ project }))
+    )
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json(
-    { project: outcome.value, organization: base.organization },
-    201
-  );
+  return geoOutcomeResponse(c, outcome, 201);
 });
 
 geoProjectsRoutes.openapi(getProjectRoute, async (c) => {
@@ -175,19 +163,13 @@ geoProjectsRoutes.openapi(getProjectRoute, async (c) => {
 geoProjectsRoutes.openapi(patchProjectRoute, async (c) => {
   const base = c.get("geo");
   const { projectId } = c.req.valid("param");
-  const update = c.req.valid("json");
   const outcome = await runGeoEffect(
     "projectUpdate",
-    updateGeoProject(base.organizationId, projectId, update)
+    updateGeoProject(base.organizationId, projectId, c.req.valid("json")).pipe(
+      Effect.map((project) => ({ project }))
+    )
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json(
-    { project: outcome.value, organization: base.organization },
-    200
-  );
+  return geoOutcomeResponse(c, outcome, 200);
 });
 
 geoProjectsRoutes.openapi(deleteProjectRoute, async (c) => {
@@ -195,11 +177,9 @@ geoProjectsRoutes.openapi(deleteProjectRoute, async (c) => {
   const { projectId } = c.req.valid("param");
   const outcome = await runGeoEffect(
     "projectDelete",
-    deleteGeoProject(base.organizationId, projectId)
+    deleteGeoProject(base.organizationId, projectId).pipe(
+      Effect.map(({ id }) => ({ id }))
+    )
   );
-  if (!outcome.ok) {
-    return geoErrorResponse(c, outcome.failure);
-  }
-
-  return c.json({ id: outcome.value.id, organization: base.organization }, 200);
+  return geoOutcomeResponse(c, outcome, 200);
 });

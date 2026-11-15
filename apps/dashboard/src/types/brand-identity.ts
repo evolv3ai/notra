@@ -2,11 +2,12 @@ import type { IconSvgElement } from "@hugeicons/react";
 import type { SupportedLanguage } from "@notra/ai/constants/languages";
 import type { ToneProfile } from "@notra/ai/schemas/tone";
 import type { AffectedTrigger } from "@notra/schemas/dashboard/integrations";
-import type { Dispatch } from "react";
+import type { Dispatch, ReactElement, ReactNode } from "react";
 
 import type { useBrandForm } from "@/lib/hooks/use-brand-form";
 import type { BrandSettings, ProgressData } from "@/types/hooks/brand-analysis";
 import type {
+  BrandGuideline,
   BrandGuidelineAsset,
   BrandGuidelineAssetKind,
   BrandGuidelineAssetVariant,
@@ -43,7 +44,11 @@ export interface GuidelinesPanelProps {
   voiceId: string;
 }
 
-export interface GuidelinesSectionContext {
+export interface GuidelinesSourcePdfSectionProps extends GuidelinesPanelProps {
+  guideline: BrandGuideline | null;
+}
+
+interface GuidelinesSectionContext {
   organizationId: string;
   voiceId: string;
 }
@@ -102,17 +107,23 @@ export interface GuidelinesScreenshotEditDialogProps extends GuidelineEditDialog
   screenshot: BrandGuidelineScreenshot;
 }
 
-export interface BrandIdentityHeaderProps {
+export interface BrandIdentityActionsProps {
   activeTab: BrandTab;
+  /** Identity options, shown before the primary action. */
+  menu?: ReactNode;
   onAddIdentity: () => void;
   onAddReference: () => void;
   onAddSitemap: () => void;
   onRefreshGuidelines: () => void;
   isRefreshingGuidelines: boolean;
+  organizationId: string;
+  voiceId: string;
 }
 
 export interface BrandIdentityTabsProps {
   activeTab: BrandTab;
+  /** Rendered at the end of the tab row. */
+  toolbar?: ReactNode;
   addReferenceOpen: boolean;
   addSitemapOpen: boolean;
   initialData: BrandFormInitialData;
@@ -170,6 +181,8 @@ export interface ModalContentProps {
 }
 
 export interface VoiceSelectorProps {
+  /** Cards list every identity; summary and menu show the selected one. */
+  layout?: "cards" | "summary" | "menu";
   voices: BrandSettings[];
   activeVoiceId: string;
   onSelect: (id: string) => void;
@@ -186,6 +199,38 @@ export interface VoiceSelectorProps {
   isDeleteDialogOpen: boolean;
   onRequestDelete: (voiceId: string) => void;
   onDeleteDialogChange: (open: boolean) => void;
+}
+
+export interface VoiceActionsMenuProps {
+  disabled: boolean;
+  isReanalyzing: boolean;
+  label: string;
+  nativeButton?: boolean;
+  onEditName: () => void;
+  onOpen: () => void;
+  onReanalyze: () => void;
+  onRequestDelete: () => void;
+  onSetDefault: () => void;
+  render: ReactElement;
+  triggerClassName?: string;
+  voice: BrandSettings;
+}
+
+type VoiceMenuProps = Omit<
+  VoiceActionsMenuProps,
+  "nativeButton" | "render" | "triggerClassName"
+>;
+
+export interface VoiceCardsProps {
+  activeVoiceId: string;
+  menuProps: (voice: BrandSettings) => VoiceMenuProps;
+  onSelect: (id: string) => void;
+  voices: BrandSettings[];
+}
+
+export interface VoiceSummaryProps {
+  menuProps: VoiceMenuProps;
+  voice: BrandSettings;
 }
 
 export interface AddIdentityDialogProps {
@@ -216,7 +261,7 @@ export interface BrandFormProps {
   onSavingChange?: (isSaving: boolean) => void;
 }
 
-export type BrandFormApi = ReturnType<typeof useBrandForm>;
+type BrandFormApi = ReturnType<typeof useBrandForm>;
 
 export interface CompanyProfileFieldsProps {
   form: BrandFormApi;
@@ -228,6 +273,10 @@ export interface ToneLanguageFieldsProps {
 }
 
 export interface AudienceFieldProps {
+  form: BrandFormApi;
+}
+
+export interface CustomInstructionsFieldProps {
   form: BrandFormApi;
 }
 
@@ -243,4 +292,9 @@ export interface GuidelinesActionButtonProps {
   icon: IconSvgElement;
   label: string;
   onClick: () => void;
+}
+
+export interface BrandSkeletonFieldProps {
+  label: string;
+  tall?: boolean;
 }

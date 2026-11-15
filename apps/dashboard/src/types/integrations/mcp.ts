@@ -2,8 +2,8 @@ import type {
   AddMcpServerFormValues,
   beginMcpOAuthRequestSchema,
 } from "@notra/schemas/dashboard/integrations";
-import type { useTranslations } from "next-intl";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
+import type { useTranslations } from "use-intl";
 import type { z } from "zod";
 
 import type { useMcpServerForm } from "@/lib/hooks/use-mcp-server-form";
@@ -44,7 +44,7 @@ export interface McpConnectionTestStatusProps {
   status: McpTestStatus;
 }
 
-export type McpServerFormApi = ReturnType<typeof useMcpServerForm>;
+type McpServerFormApi = ReturnType<typeof useMcpServerForm>;
 
 export interface McpAuthenticationFieldsProps {
   form: McpServerFormApi;
@@ -68,7 +68,7 @@ export interface McpDialogFooterProps {
   onTest: () => void;
 }
 
-export interface McpServer {
+interface McpServer {
   authType: "none" | "headers" | "oauth";
   id: string;
   name: string;
@@ -113,7 +113,7 @@ export interface McpStoreIntegration {
   connection: McpServer | null;
 }
 
-export interface ConnectedMcpStoreIntegration extends McpStoreIntegration {
+interface ConnectedMcpStoreIntegration extends McpStoreIntegration {
   connection: McpServer;
 }
 

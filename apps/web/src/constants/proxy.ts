@@ -5,6 +5,7 @@ export const DUALMARK_SKIP_PATHS = [
   "/api",
   "/ask",
   "/apple-icon.png",
+  "/auth.md",
   "/demo-dark.webp",
   "/demo.webp",
   "/design.md",
@@ -21,10 +22,14 @@ export const DUALMARK_SKIP_PATHS = [
   "/notra-mark.svg",
   "/og",
   "/og-image.png",
+  "/onboard.md",
+  "/qr-code-generator.md",
   "/robots.txt",
   "/rss.xml",
   "/sitemap.xml",
   "/testimonials",
+  "/utm-builder.md",
+  "/video",
   "/web-app-manifest-192x192.png",
   "/web-app-manifest-512x512.png",
 ] as const;
@@ -39,8 +44,8 @@ export const PROXY_EXCLUDED_PATH_PREFIXES = [
   "/assets/",
 ] as const;
 
-export const STATIC_PAGE_CACHE_CONTROL =
-  "public, max-age=0, s-maxage=31536000, stale-while-revalidate=86400";
+export const PUBLIC_PAGE_CACHE_CONTROL =
+  "public, max-age=0, s-maxage=300, stale-while-revalidate=60";
 
 export const DYNAMIC_PAGE_CACHE_CONTROL =
   "private, no-cache, no-store, max-age=0, must-revalidate";
@@ -48,3 +53,5 @@ export const DYNAMIC_PAGE_CACHE_CONTROL =
 export const GEO_INGEST_ENDPOINT = "https://ingest.usenotra.com";
 
 export const DOCS_PROXY_ORIGIN = "https://notra.mintlify.site";
+
+export const OAUTH_ISSUER_ORIGIN = "https://oauth.usenotra.com";

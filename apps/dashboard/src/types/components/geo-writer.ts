@@ -2,7 +2,6 @@ import type { GeoContentSubtype } from "@notra/ai/types/geo-writer";
 import type {
   GeoCompetitor,
   GeoContentBriefDetail,
-  GeoContentBriefSummary,
   GeoWriterSourceKind,
 } from "@notra/geo-core/types/geo";
 import type { ReactNode } from "react";
@@ -10,14 +9,6 @@ import type { ReactNode } from "react";
 import type { GeoWriteDialogEntry } from "@/types/analytics/geo-events";
 import type { GeoProjectBrandIdentity } from "@/types/geo";
 import type { Sitemap } from "@/types/hooks/brand-sitemaps";
-
-export interface BriefHistoryProps {
-  briefs: GeoContentBriefSummary[];
-  activeBriefId?: string;
-  onOpen: (briefId: string) => void;
-  onHover?: (briefId: string) => void;
-  loading?: boolean;
-}
 
 export interface GeoWriterNeedsSetupProps {
   organizationId: string;
@@ -96,7 +87,7 @@ export interface WriteOptionCardProps {
   disabled?: boolean;
 }
 
-export interface WriteDialogBaseline {
+interface WriteDialogBaseline {
   mentionedEngines: number;
   totalEngines: number;
 }
@@ -130,7 +121,6 @@ export interface WriteDialogProps {
   entry?: GeoWriteDialogEntry;
 }
 
-/** Input for opening WriteDialog from a GEO gap row. */
 export interface GeoGapsWriteEntry {
   promptId: string;
   prompt: string;
@@ -159,4 +149,13 @@ export interface WriterExecuteState {
 
 export interface WriterExecuteActions {
   execute: () => void;
+}
+
+export interface ContentArticleLoadingInput {
+  briefId: string | undefined;
+  briefStatus: string | undefined;
+  isPostStillPlan: boolean;
+  loadedArticleBriefId: string | null;
+  pendingArticleBriefId: string | null;
+  hasDraft: boolean;
 }

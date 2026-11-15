@@ -1,16 +1,11 @@
 "use client";
 
+import { sleep } from "@notra/utils/sleep";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ChatgptStoryMessage } from "@/types/design-system-chatgpt";
 
 const WHITESPACE_PATTERN = /(\s+)/;
-
-function wait(ms: number) {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}
 
 export function useChatgptPlayback(
   script: readonly ChatgptStoryMessage[],
@@ -45,7 +40,8 @@ export function useChatgptPlayback(
       message: ChatgptStoryMessage,
       alive: () => boolean
     ): Promise<void> => {
-      const delay = (ms: number) => wait(reducedMotion ? Math.min(ms, 70) : ms);
+      const delay = (ms: number) =>
+        sleep(reducedMotion ? Math.min(ms, 70) : ms);
 
       if (message.from === "user") {
         setMessages((current) => [...current, message]);

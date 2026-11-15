@@ -1,0 +1,49 @@
+---
+title: Dropdown Menu
+description: A Base UI menu with the Depth surface of the buttons, submenus and selection items.
+---
+
+Open the menu to try highlighted items, a submenu, checkbox and radio selections. The popup shares its rounded corners, subtle gradient and layered shadows with the Select.
+
+Built on shadcn's Base UI Dropdown Menu composition, with Notra styling. Base UI owns opening, dismissal, submenu timing, focus, keyboard navigation and selection; the wrappers add no custom interaction state or event handlers.
+
+<Component path="dropdown-menu/examples/dropdown-menu-demo" />
+
+## Installation
+
+<RegistryInstall name="notra-dropdown-menu" />
+
+This installs `components/dropdown-menu/components/dropdown-menu.tsx`, which wraps shadcn's Dropdown Menu and adds the shared dropdown styles. Your `components/ui/dropdown-menu.tsx` stays as it is. Use a shadcn project on Base UI and Tailwind CSS v4. The example uses the [Notra Button](/components/button) as its trigger.
+
+## Usage
+
+```tsx
+import { Button } from "@/components/button/components/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/dropdown-menu/components/dropdown-menu";
+
+<DropdownMenu>
+  <DropdownMenuTrigger render={<Button variant="outline" />}>
+    Open menu
+  </DropdownMenuTrigger>
+  <DropdownMenuContent className="w-56">
+    <DropdownMenuGroup>
+      <DropdownMenuLabel>Workspace</DropdownMenuLabel>
+      <DropdownMenuItem>Settings</DropdownMenuItem>
+      <DropdownMenuItem>Invite members</DropdownMenuItem>
+    </DropdownMenuGroup>
+  </DropdownMenuContent>
+</DropdownMenu>
+```
+
+## Items and keyboard support
+
+Place labels inside `DropdownMenuGroup`. Use `DropdownMenuCheckboxItem` for toggles, `DropdownMenuRadioGroup` and `DropdownMenuRadioItem` for a single selection, and `DropdownMenuSub` for nested actions. Set `disabled` on unavailable items and `variant="destructive"` on destructive actions.
+
+The menu opens below its trigger by default and flips when it needs more room. Submenus open to the side. Arrow keys move between items, Escape closes the menu and returns focus to the trigger. Popup motion is disabled when reduced motion is enabled.

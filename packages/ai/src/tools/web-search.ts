@@ -12,7 +12,7 @@ import { type Tool, tool } from "ai";
 import z from "zod";
 
 export const WEB_SEARCH_TOOL_NAME = "webSearch";
-export const FETCH_WEBPAGE_TOOL_NAME = "fetchWebpage";
+const FETCH_WEBPAGE_TOOL_NAME = "fetchWebpage";
 
 export function isWebSearchAvailable(): boolean {
   return isContextDevConfigured();
@@ -105,7 +105,7 @@ const fetchWebpageInputSchema: z.ZodType<ContextDevFetchWebpageInput> =
       .describe("Fetch timeout in milliseconds."),
   });
 
-export function createWebSearchTool(): Tool {
+function createWebSearchTool(): Tool {
   return tool({
     description: toolDescription({
       toolName: WEB_SEARCH_TOOL_NAME,
@@ -121,7 +121,7 @@ export function createWebSearchTool(): Tool {
   });
 }
 
-export function createUnavailableWebSearchTool(): Tool {
+function createUnavailableWebSearchTool(): Tool {
   return tool({
     description: toolDescription({
       toolName: WEB_SEARCH_TOOL_NAME,
@@ -157,7 +157,7 @@ export function createFetchWebpageTool(): Tool {
   });
 }
 
-export function createUnavailableFetchWebpageTool(): Tool {
+function createUnavailableFetchWebpageTool(): Tool {
   return tool({
     description: toolDescription({
       toolName: FETCH_WEBPAGE_TOOL_NAME,
@@ -177,10 +177,10 @@ export function createUnavailableFetchWebpageTool(): Tool {
   });
 }
 
-export const WEB_SEARCH_TOOL_DESCRIPTION =
+const WEB_SEARCH_TOOL_DESCRIPTION =
   "**Web Search**: Search the live web using webSearch for current facts, public docs, news, competitive context, and source-aware research. Prefer limit: 5 unless the user asks for broader coverage. Use result titles, URLs, descriptions, and scraped markdown for citations or follow-up research. Requires Context.dev API configuration to return live data.";
 
-export const FETCH_WEBPAGE_TOOL_DESCRIPTION =
+const FETCH_WEBPAGE_TOOL_DESCRIPTION =
   "**Fetch Webpage**: Fetch a specific public URL using fetchWebpage and return clean markdown plus metadata. Use this when the user provides a URL and asks to read, browse, summarize, inspect, or extract from that page. Requires Context.dev API configuration to return live data.";
 
 export function registerWebSearchTools(

@@ -1,3 +1,4 @@
+import { logError } from "@notra/ai/utils/server-log";
 import { db } from "@notra/db/drizzle";
 import { posts } from "@notra/db/schema";
 import { postGitHubSyncRequestSchema } from "@notra/schemas/api/post-github-sync";
@@ -57,16 +58,22 @@ export async function POST(request: Request) {
         );
       }
     }
-    await publishSavedContentToGitHub({
-      organizationId,
-      contentId: postId,
-      contentType: post.contentType,
-      repositoryId: linked.repositoryId,
-      linkedOnly: true,
+    const published = await publishSavedContentToGitHub(
+      {
+        organizationId,
+        contentId: postId,
+        contentType: post.contentType,
+        repositoryId: linked.repositoryId,
+        linkedOnly: true,
+      },
+      { publisherUserId: actorId }
+    );
+    return Response.json({
+      success: true,
+      skipped: published.skipped ?? false,
     });
-    return Response.json({ success: true });
   } catch (error) {
-    console.error("Failed to sync saved post to GitHub", { postId, error });
+    logError("Failed to sync saved post to GitHub", error, { postId });
     return Response.json(
       { error: "Failed to update the linked GitHub pull request" },
       { status: 502 }

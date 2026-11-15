@@ -2,23 +2,12 @@ import { db } from "@notra/db/drizzle";
 import { projects } from "@notra/db/schema";
 import { GEO_PROJECTS_OLDEST_ORDER } from "@notra/geo-core/constants/geo-projects";
 import { and, eq } from "drizzle-orm";
-import { cookies } from "next/headers";
 import { cache } from "react";
 
 import { retryTransientDbError } from "@/lib/db/retry";
 import { getLastVisitedProject } from "@/utils/cookies";
+import { readServerCookies as cookies } from "@/utils/server-cookies";
 
-/**
- * The project the GEO pages will show once the client has hydrated. The
- * sidebar resolves the same value (URL param, then the last-visited cookie,
- * then the oldest project) and writes it into the URL after `projectsList`
- * lands. Resolving it on the server lets the query keys of the server prefetch
- * and the first client render agree, so the hydrated cache is used instead of
- * being refetched, and the GEO subtree does not remount on the URL rewrite.
- *
- * Requested IDs are validated separately from the shared cookie/oldest fallback.
- * Layouts and pages share that fallback even when their URL arguments differ.
- */
 export const resolveInitialGeoProjectId = cache(
   async (
     organizationId: string,

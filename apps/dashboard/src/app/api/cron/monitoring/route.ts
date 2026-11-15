@@ -1,23 +1,20 @@
 import { flushLogs } from "@notra/ai/evlog";
+import { getEvlogRuntime } from "@notra/ai/utils/evlog-runtime";
+import { sweepOgDesignCosts } from "@notra/ai/utils/og-design-store";
 import { isDemoMode } from "@notra/utils/demo-mode";
 import { Effect, Result } from "effect";
 
 import { checkMissedGeoScans } from "@/lib/analytics/geo-scan-watchdog";
 import { runMonitoringSweep } from "@/lib/analytics/monitoring-sweep";
+import { isAuthorizedCron } from "@/lib/auth/cron";
 import { scheduleRequestErrorTelemetry } from "@/utils/request-error-telemetry";
 import { retryWorkflowFailureAlerts } from "@/utils/workflow-failure-alert";
 import { logWorkflowTelemetry } from "@/utils/workflow-telemetry";
 
-export const maxDuration = 120;
-
 export async function GET(request: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!isAuthorizedCron(request)) {
     return new Response("Unauthorized", { status: 401 });
   }
-  // The public demo runs no background jobs; scans start on demand. Checked
-  // after auth so reading the request keeps this route dynamic (a static
-  // 204 breaks the build).
   if (isDemoMode()) {
     return new Response(null, { status: 204 });
   }
@@ -40,7 +37,18 @@ export async function GET(request: Request) {
       errorName: error instanceof Error ? error.name : "UnknownError",
     });
   }
-  if (!process.env.AXIOM_TOKEN) {
+  const telemetry = getEvlogRuntime();
+  try {
+    await Effect.runPromise(sweepOgDesignCosts());
+  } catch (error) {
+    logWorkflowTelemetry({
+      event: "monitoring.operation.failed",
+      operation: "og.cost.sweep",
+      outcome: "error",
+      errorName: error instanceof Error ? error.name : "UnknownError",
+    });
+  }
+  if (!telemetry.aiDrain) {
     scheduleRequestErrorTelemetry(flushLogs);
     return Response.json({ skipped: "telemetry_not_configured" });
   }

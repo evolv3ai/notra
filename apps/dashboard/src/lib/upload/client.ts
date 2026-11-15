@@ -13,11 +13,21 @@ import type {
   UploadPresignedResponse,
   UploadType,
 } from "@/types/upload/client";
+import { sha256File } from "@/utils/sha256-file";
 
 async function getPresignedUrl(
   file: File,
-  type: UploadType
+  type: UploadType,
+  sha256?: string
 ): Promise<UploadPresignedResponse> {
+  if (type === "chat") {
+    return dashboardOrpc.upload.createPresignedUpload.call({
+      type,
+      fileType: file.type,
+      fileSize: file.size,
+      sha256,
+    });
+  }
   return dashboardOrpc.upload.createPresignedUpload.call({
     type,
     fileType: file.type,
@@ -51,6 +61,7 @@ async function uploadSvgThroughServer(
 
 export async function uploadFile({
   file,
+  sha256: knownSha256,
   type,
 }: UploadFileProps): Promise<UploadFileResponse> {
   if (
@@ -60,25 +71,48 @@ export async function uploadFile({
     return uploadSvgThroughServer(file, type);
   }
 
-  const { url, key, publicUrl } = await getPresignedUrl(file, type);
+  const isChatAttachment =
+    type === "chat" &&
+    ALLOWED_CHAT_MIME_TYPES.includes(file.type as AllowedChatMimeType);
+  const sha256 = isChatAttachment
+    ? (knownSha256 ?? (await sha256File(file)))
+    : undefined;
+  const { url, key, publicUrl, reused } = await getPresignedUrl(
+    file,
+    type,
+    sha256
+  );
+  if (reused) {
+    return { url: publicUrl, key };
+  }
+  if (!url) {
+    throw new Error("Upload URL missing");
+  }
   await uploadToR2(url, file);
 
-  if (
-    type === "chat" &&
-    ALLOWED_CHAT_MIME_TYPES.includes(file.type as AllowedChatMimeType)
-  ) {
-    try {
-      await dashboardOrpc.upload.recordChatAttachment.call({
-        key,
-        filename: file.name,
-        mediaType: file.type as AllowedChatMimeType,
-        size: file.size,
-      });
-    } catch (error) {
-      console.error("Failed to record chat attachment", { key, error });
-    }
+  if (!isChatAttachment) {
+    return { url: publicUrl, key };
   }
 
+  const recording = dashboardOrpc.upload.recordChatAttachment.call({
+    key,
+    filename: file.name,
+    mediaType: file.type as AllowedChatMimeType,
+    sha256,
+    size: file.size,
+  });
+  // Hashed uploads only exist under their content key once the server has
+  // verified and published them, so a failed check fails the upload.
+  if (sha256) {
+    const published = await recording;
+    return {
+      url: published.publicUrl ?? publicUrl,
+      key: published.key,
+    };
+  }
+  await recording.catch((error: unknown) => {
+    console.error("Failed to record chat attachment", { key, error });
+  });
   return { url: publicUrl, key };
 }
 

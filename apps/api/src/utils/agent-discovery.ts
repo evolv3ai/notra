@@ -11,7 +11,7 @@ const SUPPORTED_RESOURCE_URLS = new Set([
   MCP_ORIGIN_URL,
   MCP_RESOURCE_URL,
 ]);
-export const SITE_URL = "https://www.usenotra.com";
+const SITE_URL = "https://www.usenotra.com";
 
 export const RESOURCE_METADATA_URL = `${API_URL}/.well-known/oauth-protected-resource`;
 export const AUTH_GUIDE_URL = `${SITE_URL}/auth.md`;

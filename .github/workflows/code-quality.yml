@@ -13,8 +13,191 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  quality:
-    runs-on: ubuntu-latest
+  # PRs only run the checks their diff can affect; main pushes run everything
+  # because they gate production releases.
+  changes:
+    runs-on: depot-ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      checks: ${{ steps.plan.outputs.checks }}
+      infrastructure: ${{ steps.plan.outputs.infrastructure }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Bun
+        if: github.event_name == 'pull_request'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.4
+
+      - name: Plan checks
+        id: plan
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != pull_request ] || git diff --name-only "$BASE_SHA"...HEAD | grep -q '^\.github/workflows/code-quality\.yml$'; then
+            echo 'checks=["lint","tests","tests-sites-builder","browser","build-api","build-web","build-dashboard","build-console","typecheck"]' >> "$GITHUB_OUTPUT"
+            echo infrastructure=true >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(git diff --name-only "$BASE_SHA"...HEAD)
+          affected=$(TURBO_SCM_BASE="$BASE_SHA" bunx turbo@2.11.7 ls --affected --output=json | jq -c '[.packages.items[].name]')
+          echo "Affected packages: $affected"
+          has() { jq -e --arg p "$1" 'index($p) != null' <<< "$affected" > /dev/null; }
+          checks='["lint"'
+          if [ "$affected" != "[]" ] || grep -qE '^scripts/github/' <<< "$files"; then checks="$checks,\"tests\""; fi
+          has @notra/sites-builder && checks="$checks,\"tests-sites-builder\""
+          # menu-highlight builds both the dashboard and the web stylesheet.
+          if has dashboard || has web; then checks="$checks,\"browser\""; fi
+          has api && checks="$checks,\"build-api\""
+          has web && checks="$checks,\"build-web\""
+          has dashboard && checks="$checks,\"build-dashboard\""
+          has console && checks="$checks,\"build-console\""
+          if jq -e 'any(.[]; IN("@notra/agent","@notra/ai","@notra/db","@notra/utils","@notra/geo-core","dashboard","console","ui","web"))' <<< "$affected" > /dev/null; then checks="$checks,\"typecheck\""; fi
+          echo "checks=$checks]" >> "$GITHUB_OUTPUT"
+          if grep -qE '^(packages/db|packages/sites-server|packages/schemas)/|^(bun\.lock|package\.json)$' <<< "$files"; then
+            echo infrastructure=true >> "$GITHUB_OUTPUT"
+          else
+            echo infrastructure=false >> "$GITHUB_OUTPUT"
+          fi
+
+  checks:
+    name: Quality (${{ matrix.check }})
+    needs: changes
+    runs-on: depot-ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        check: ${{ fromJSON(needs.changes.outputs.checks) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.4
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24.11.1
+
+      # Exact key only: restore-keys made every lockfile change re-save the
+      # previous cache plus new packages, so it grew past 1.4 GB.
+      - name: Restore Bun package cache
+        id: bun-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/.bun/install/cache
+          key: bun-v2-${{ runner.os }}-${{ runner.arch }}-1.4.4-${{ hashFiles('bun.lock') }}
+
+      - name: Check Vercel installs
+        if: matrix.check == 'build-web'
+        run: |
+          for app in dashboard web ui agent onboarding-agent; do
+            echo "::group::Check $app Vercel install"
+            (
+              cd "apps/$app"
+              bash -c "$(bun -p 'require("./vercel.json").installCommand')"
+            )
+            echo "::endgroup::"
+          done
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # One writer per lockfile; parallel saves of the same key all but one fail.
+      - name: Save Bun package cache
+        if: matrix.check == 'lint' && steps.bun-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ steps.bun-cache.outputs.cache-primary-key }}
+
+      - name: Run ultracite check
+        if: matrix.check == 'lint'
+        run: bun check
+
+      # PRs test only packages their diff affects (plus dependents); main
+      # pushes still run everything because they gate production releases.
+      # Sites builder runs its real builds in its own job: it alone takes as
+      # long as every other package together.
+      - name: Run unit and integration tests
+        if: matrix.check == 'tests'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            TURBO_SCM_BASE="$BASE_SHA" bun run test --force --log-order=stream --affected --concurrency=2 --filter='!@notra/sites-builder'
+          else
+            bun run test --force --log-order=stream --concurrency=2 --filter='!@notra/sites-builder'
+          fi
+
+      - name: Run sites builder tests
+        if: matrix.check == 'tests-sites-builder'
+        working-directory: apps/sites-builder
+        run: bun run test
+
+      - name: Install browser test runtime
+        if: matrix.check == 'browser'
+        working-directory: apps/dashboard
+        run: bunx --no-install playwright install --with-deps --only-shell chromium
+
+      - name: Run dashboard browser regressions
+        if: matrix.check == 'browser'
+        working-directory: apps/dashboard
+        run: bun run test:browser
+
+      - name: Verify web build
+        if: matrix.check == 'build-web'
+        run: bun run build --filter=web
+
+      - name: Verify standalone API on Alpine Linux
+        if: matrix.check == 'build-api'
+        run: |
+          docker build --platform linux/amd64 -f apps/api/Dockerfile -t notra-api-production .
+          docker run --rm --network none \
+            --mount type=bind,source="$PWD/apps/api/scripts/production-artifact.test.ts",target=/app/scripts/production-artifact.test.ts,readonly \
+            --entrypoint bun notra-api-production test /app/scripts/production-artifact.test.ts
+
+      - name: Verify dashboard Vercel build
+        if: matrix.check == 'build-dashboard'
+        working-directory: apps/dashboard
+        env:
+          VERCEL: "1"
+        run: bun run build && bun run test:workflow-production
+
+      - name: Verify console build
+        if: matrix.check == 'build-console'
+        run: bun run build --filter=console
+
+      - name: Restore incremental TypeScript state
+        if: matrix.check == 'typecheck'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            apps/*/.cache/typecheck.tsbuildinfo
+            packages/*/.cache/typecheck.tsbuildinfo
+          key: typecheck-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('bun.lock', 'package.json', 'apps/*/package.json', 'packages/*/package.json', 'apps/*/tsconfig*.json', 'packages/*/tsconfig*.json', 'packages/typescript-config/*.json') }}-${{ github.sha }}
+          restore-keys: |
+            typecheck-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('bun.lock', 'package.json', 'apps/*/package.json', 'packages/*/package.json', 'apps/*/tsconfig*.json', 'packages/*/tsconfig*.json', 'packages/typescript-config/*.json') }}-
+
+      - name: Typecheck tested packages and UI docs
+        if: matrix.check == 'typecheck'
+        run: bun run check-types --concurrency=2 --filter=@notra/agent --filter=@notra/ai --filter=@notra/db --filter=@notra/utils --filter=@notra/geo-core --filter=dashboard --filter=console --filter=ui --filter=web
+
+  infrastructure:
+    needs: changes
+    if: needs.changes.outputs.infrastructure == 'true'
+    runs-on: depot-ubuntu-24.04
     timeout-minutes: 10
     services:
       postgres:
@@ -32,25 +215,25 @@ jobs:
           --health-retries 10
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
-      - name: Check Vercel installs
-        run: |
-          for app in dashboard web ui agent onboarding-agent; do
-            echo "::group::Check $app Vercel install"
-            (
-              cd "apps/$app"
-              bash -c "$(bun -p 'require("./vercel.json").installCommand')"
-            )
-            echo "::endgroup::"
-          done
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 24.11.1
+
+      - name: Restore Bun package cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/.bun/install/cache
+          key: bun-v2-${{ runner.os }}-${{ runner.arch }}-1.4.4-${{ hashFiles('bun.lock') }}
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -67,21 +250,35 @@ jobs:
           bun run db:migrate
           bun run db:migrate
 
-      - name: Run ultracite check
-        run: bun check
+      - name: Test post history triggers on migrated schema
+        working-directory: packages/db
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/notra_migrations
+        run: bun test ./tests/post-history.test.ts
 
-      - name: Run unit and integration tests
-        run: bun run test --force
+      - name: Test Sites branch workflow and migration 0128 rolling compatibility
+        env:
+          SITES_BRANCH_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/notra_migrations
+        run: bun test packages/sites-server/tests/branch-workflow.test.ts packages/db/tests/sites-branch-migration.test.ts
 
-      - name: Restore incremental TypeScript state
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            apps/*/.cache/typecheck.tsbuildinfo
-            packages/*/.cache/typecheck.tsbuildinfo
-          key: typecheck-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('bun.lock', 'package.json', 'apps/*/package.json', 'packages/*/package.json', 'apps/*/tsconfig*.json', 'packages/*/tsconfig*.json', 'packages/typescript-config/*.json') }}-${{ github.sha }}
-          restore-keys: |
-            typecheck-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('bun.lock', 'package.json', 'apps/*/package.json', 'packages/*/package.json', 'apps/*/tsconfig*.json', 'packages/*/tsconfig*.json', 'packages/typescript-config/*.json') }}-
+      - name: Test content Git publishing migration 0129 rolling compatibility
+        env:
+          SITES_BRANCH_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/notra_migrations
+        run: bun test packages/db/tests/content-git-publishing-migration.test.ts
 
-      - name: Typecheck tested packages and UI docs
-        run: bun run check-types --filter=@usenotra/geo --filter=@notra/agent --filter=@notra/ai --filter=@notra/geo-core --filter=dashboard --filter=ui
+  quality:
+    if: always()
+    needs: [changes, checks, infrastructure]
+    runs-on: depot-ubuntu-24.04
+    # Depot runner boot counts against this budget and can take several minutes.
+    timeout-minutes: 10
+    steps:
+      - name: Require all quality checks
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          INFRASTRUCTURE_RESULT: ${{ needs.infrastructure.result }}
+        run: |
+          test "$CHANGES_RESULT" = success
+          test "$CHECKS_RESULT" = success
+          [ "$INFRASTRUCTURE_RESULT" = success ] || [ "$INFRASTRUCTURE_RESULT" = skipped ]

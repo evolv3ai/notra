@@ -16,6 +16,7 @@ import { Exa } from "@notra/ui/components/ui/svgs/exa";
 import { Firecrawl } from "@notra/ui/components/ui/svgs/firecrawl";
 import { FirecrawlDark } from "@notra/ui/components/ui/svgs/firecrawlDark";
 import { Firefox } from "@notra/ui/components/ui/svgs/firefox";
+import { Fx } from "@notra/ui/components/ui/svgs/fx";
 import { Google } from "@notra/ui/components/ui/svgs/google";
 import { Grok } from "@notra/ui/components/ui/svgs/grok";
 import { GrokDark } from "@notra/ui/components/ui/svgs/grokDark";
@@ -47,6 +48,7 @@ import type { ComponentType, SVGProps } from "react";
 export const SIMPLE_ENGINE_ICONS: Partial<
   Record<EngineIconKey, ComponentType<SVGProps<SVGSVGElement>>>
 > = {
+  fx: Fx,
   amazon: Amazon,
   exa: Exa,
   commoncrawl: CommonCrawl,

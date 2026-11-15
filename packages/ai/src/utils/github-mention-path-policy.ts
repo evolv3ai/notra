@@ -1,4 +1,5 @@
 import {
+  GITHUB_MENTION_IMAGE_PATH_PATTERN,
   GITHUB_MENTION_PROTECTED_DATA_FILE_PATTERN,
   GITHUB_MENTION_WRITABLE_EXTENSIONS,
 } from "@notra/ai/constants/github-mention";
@@ -29,8 +30,7 @@ const CONFIG_DATA_FILE_PATTERN =
  * Allowlist first: only content and content data files pass, so application
  * code, scripts, CI, and tool configuration are out of reach by default.
  */
-export function getGitHubMentionPathBlockReason(path: string) {
-  const segments = path.split("/");
+function getStructuralBlockReason(segments: string[], path: string) {
   if (
     !path ||
     path.startsWith("/") ||
@@ -41,6 +41,27 @@ export function getGitHubMentionPathBlockReason(path: string) {
   }
   if (segments.some((segment) => segment.startsWith("."))) {
     return "dot files and dot directories are not editable";
+  }
+  return null;
+}
+
+/** Generated images are the only binary files a mention may write. */
+export function getGitHubMentionImagePathBlockReason(path: string) {
+  const segments = path.split("/");
+  const structural = getStructuralBlockReason(segments, path);
+  if (structural) {
+    return structural;
+  }
+  return GITHUB_MENTION_IMAGE_PATH_PATTERN.test(path)
+    ? null
+    : "generated images are PNG files, so the path must end in .png";
+}
+
+export function getGitHubMentionPathBlockReason(path: string) {
+  const segments = path.split("/");
+  const structural = getStructuralBlockReason(segments, path);
+  if (structural) {
+    return structural;
   }
   const fileName = segments.at(-1) ?? "";
   const extension = fileName.includes(".")

@@ -84,7 +84,6 @@ export const CLAUDE_CODE_SESSION: ClaudeCodeSession = {
   ],
 };
 
-/** Answers the demo plays back, one per prompt you send, in order. */
 export const CLAUDE_CODE_REPLIES: ClaudeCodeReply[] = [
   {
     answer:

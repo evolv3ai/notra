@@ -35,7 +35,6 @@ import type {
   ChatgptModelSelectorProps,
 } from "../types/chatgpt";
 
-/** Half the thumb width, so dots line up with where the thumb stops. */
 const BURST_MS = 1000;
 const THUMB_INSET = "0.875rem";
 
@@ -44,7 +43,6 @@ const PRO_EFFORT_ID: ChatgptEffortId = "pro";
 const sliderClassName = [
   "[&_[data-slot=slider-track]]:bg-chatgpt-slider-track [&_[data-slot=slider-track]]:h-6",
   "[&_[data-slot=slider-range]]:bg-chatgpt-slider-fill [&_[data-slot=slider-range]]:before:absolute [&_[data-slot=slider-range]]:before:inset-0 [&_[data-slot=slider-range]]:before:bg-(image:--chatgpt-pro-gradient) [&_[data-slot=slider-range]]:before:bg-size-[200%_100%] [&_[data-slot=slider-range]]:before:animate-chatgpt-flow motion-reduce:[&_[data-slot=slider-range]]:before:animate-none [&_[data-slot=slider-range]]:before:opacity-0 [&_[data-slot=slider-range]]:before:transition-opacity [&_[data-slot=slider-range]]:before:duration-500 group-data-[pro=true]/slider:[&_[data-slot=slider-range]]:before:opacity-100",
-  // Ease the thumb and fill between stops, but follow the pointer 1:1 while dragging.
   "[&_[data-slot=slider-thumb]]:transition-[inset-inline-start,left,scale] [&_[data-slot=slider-thumb]]:duration-300 [&_[data-slot=slider-thumb]]:ease-[cubic-bezier(0.22,1,0.36,1)] [&_[data-slot=slider-range]]:transition-[width,inset-inline-start] [&_[data-slot=slider-range]]:duration-300 [&_[data-slot=slider-range]]:ease-[cubic-bezier(0.22,1,0.36,1)]",
   "group-data-[moving=true]/slider:[&_[data-slot=slider-thumb]]:transition-none group-data-[moving=true]/slider:[&_[data-slot=slider-range]]:transition-none motion-reduce:[&_[data-slot=slider-thumb]]:transition-none motion-reduce:[&_[data-slot=slider-range]]:transition-none [&_[data-slot=slider-thumb]]:active:scale-95",
   "[&_[data-slot=slider-thumb]]:bg-chatgpt-slider-thumb [&_[data-slot=slider-thumb]]:size-7 [&_[data-slot=slider-thumb]]:border-0 [&_[data-slot=slider-thumb]]:shadow-[0_2px_8px_rgb(0_0_0/0.35)] [&_[data-slot=slider-thumb]]:ring-0 [&_[data-slot=slider-thumb]]:hover:ring-0 [&_[data-slot=slider-thumb]]:active:ring-0 [&_[data-slot=slider-thumb]]:focus-visible:ring-2 [&_[data-slot=slider-thumb]]:focus-visible:ring-chatgpt-focus/60",
@@ -115,7 +113,6 @@ const useElementWidth = () => {
 interface ModelListProps {
   model: ChatgptModelOption["id"];
   models: readonly ChatgptModelOption[];
-  /** Called with `undefined` when the selected model is pressed again. */
   onSelect: (model: ChatgptModelOption | undefined) => void;
 }
 
@@ -165,13 +162,10 @@ export const ChatgptModelSelector = ({
 }: ChatgptModelSelectorProps) => {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<"effort" | "models">("effort");
-  // Both views stay mounted in one grid cell, so the popup never changes size. Only the
-  // background card animates its height, which avoids the positioner lagging a frame behind.
   const [effortHeight, effortRef] = useElementHeight();
   const [modelsHeight, modelsRef] = useElementHeight();
   const cardHeight = view === "effort" ? effortHeight : modelsHeight;
 
-  // The card only animates after its first measurement, so opening never plays a resize.
   const [cardReady, setCardReady] = useState(false);
   useEffect(() => {
     if (!open) {
@@ -201,8 +195,6 @@ export const ChatgptModelSelector = ({
   const isPro = selectedEffort.id === PRO_EFFORT_ID;
   const lastIndex = Math.max(efforts.length - 1, 1);
 
-  // Both trigger labels stay mounted and crossfade while the trigger eases between their
-  // widths, so opening and closing never snap the trigger's size.
   const [closedLabelWidth, closedLabelRef] = useElementWidth();
   const [openLabelWidth, openLabelRef] = useElementWidth();
   const labelWidth = open ? openLabelWidth : closedLabelWidth;
@@ -214,7 +206,6 @@ export const ChatgptModelSelector = ({
     }
   };
 
-  // The burst plays once when the slider lands on Pro, not whenever the view remounts.
   const [burstActive, setBurstActive] = useState(false);
   useEffect(() => {
     if (!burstActive) {
@@ -325,7 +316,6 @@ export const ChatgptModelSelector = ({
               data-moving={moving}
               data-pro={isPro}
               data-slot="chatgpt-effort-slider"
-              // Clicking a stop eases the thumb there; only a real drag follows the pointer 1:1.
               onPointerCancel={() => setMoving(false)}
               onPointerDown={() => setMoving(false)}
               onPointerMove={(event) => {

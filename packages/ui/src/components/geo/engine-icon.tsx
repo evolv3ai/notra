@@ -23,6 +23,7 @@ import { Exa } from "@notra/ui/components/ui/svgs/exa";
 import { Firecrawl } from "@notra/ui/components/ui/svgs/firecrawl";
 import { FirecrawlDark } from "@notra/ui/components/ui/svgs/firecrawlDark";
 import { Firefox } from "@notra/ui/components/ui/svgs/firefox";
+import { Fx } from "@notra/ui/components/ui/svgs/fx";
 import { Gemini } from "@notra/ui/components/ui/svgs/gemini";
 import { Google } from "@notra/ui/components/ui/svgs/google";
 import { Huawei } from "@notra/ui/components/ui/svgs/huawei";
@@ -39,6 +40,7 @@ import { Openai } from "@notra/ui/components/ui/svgs/openai";
 import { OpenaiDark } from "@notra/ui/components/ui/svgs/openaiDark";
 import { Opencode } from "@notra/ui/components/ui/svgs/opencode";
 import { OpencodeDark } from "@notra/ui/components/ui/svgs/opencodeDark";
+import { Parallel } from "@notra/ui/components/ui/svgs/parallel";
 import { Perplexity } from "@notra/ui/components/ui/svgs/perplexity";
 import { Qwen } from "@notra/ui/components/ui/svgs/qwen";
 import { QwenDark } from "@notra/ui/components/ui/svgs/qwenDark";
@@ -95,6 +97,7 @@ function EngineIconGraphic({ engine, className }: EngineIconProps) {
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
 const SIMPLE_ICONS: Partial<Record<EngineIconKey, IconComponent>> = {
+  fx: Fx,
   claude: ClaudeAiIcon,
   "claude-code": ClaudeAiIcon,
   gemini: Gemini,
@@ -114,6 +117,7 @@ const SIMPLE_ICONS: Partial<Record<EngineIconKey, IconComponent>> = {
   kimi: Kimi,
   amazon: Amazon,
   exa: Exa,
+  parallel: Parallel,
   commoncrawl: CommonCrawl,
   youcom: YouCom,
   liner: Liner,
@@ -129,6 +133,8 @@ const SIMPLE_ICONS: Partial<Record<EngineIconKey, IconComponent>> = {
 
 const SIMPLE_ICON_CLASSES: Partial<Record<EngineIconKey, string>> = {
   gemini: "overflow-visible",
+  // Parallel's mark draws in `currentColor`; these are its brand ink and paper.
+  parallel: "text-[#1D1C1A] dark:text-[#FCFBFA]",
 };
 
 const THEMED_ICONS: Partial<

@@ -1,15 +1,12 @@
 import { randomUUID } from "node:crypto";
 
+import { withReferenceBillingFlag } from "@notra/ai/utils/brand-references";
 import { db } from "@notra/db/drizzle";
 import { brandReferences, brandSettings } from "@notra/db/schema";
-import type { BrandReferenceMemorySyncResult } from "@notra/db/types/brand-reference-memory";
-import { syncPersistedBrandReferenceMemory } from "@notra/db/utils/brand-reference-memory";
 import { canonicalizeReferenceSourceUrl } from "@notra/db/utils/reference-source-url";
 import { desc, eq } from "drizzle-orm";
-import { Effect } from "effect";
 
 import { REFERENCE_INSERT_BATCH_SIZE } from "../constants/references";
-import { REFERENCE_MEMORY_SYNC_CONCURRENCY } from "../constants/supermemory";
 import type { ReferenceInput } from "../types/references";
 
 function referenceKey(reference: Pick<ReferenceInput, "content" | "type">) {
@@ -57,7 +54,7 @@ export async function addBrandReferences(
   organizationId: string,
   references: ReferenceInput[]
 ) {
-  const persistence = await db.transaction(async (tx) => {
+  return await db.transaction(async (tx) => {
     const [settings] = await tx
       .select({ id: brandSettings.id })
       .from(brandSettings)
@@ -73,48 +70,30 @@ export async function addBrandReferences(
 
     const existing = await tx
       .select({
-        applicableTo: brandReferences.applicableTo,
         content: brandReferences.content,
-        id: brandReferences.id,
-        metadata: brandReferences.metadata,
-        note: brandReferences.note,
         sourceUrl: brandReferences.sourceUrl,
-        supermemorySyncedAt: brandReferences.supermemorySyncedAt,
         type: brandReferences.type,
       })
       .from(brandReferences)
       .where(eq(brandReferences.brandSettingsId, settings.id));
-    const existingByKey = new Map(
-      existing.map((reference) => [referenceKey(reference), reference])
+    const existingKeys = new Set(existing.map(referenceKey));
+    const existingSourceUrls = new Set(
+      existing.flatMap((reference) => {
+        const sourceUrl = getCanonicalSourceUrl(reference.sourceUrl);
+        return sourceUrl ? [sourceUrl] : [];
+      })
     );
-    const existingBySourceUrl = new Map<string, (typeof existing)[number]>();
-    for (const reference of existing) {
-      const sourceUrl = getCanonicalSourceUrl(reference.sourceUrl);
-      if (sourceUrl) {
-        existingBySourceUrl.set(sourceUrl, reference);
-      }
-    }
     const uniqueReferences = new Map<string, ReferenceInput>();
     const uniqueSourceUrls = new Set<string>();
-    const referencesToRepair = new Map<string, (typeof existing)[number]>();
     for (const reference of references) {
       const key = referenceKey(reference);
       const sourceUrl = getCanonicalSourceUrl(reference.sourceUrl);
-      const existingSourceReference = sourceUrl
-        ? existingBySourceUrl.get(sourceUrl)
-        : undefined;
-      const existingContentReference = existingByKey.get(key);
-      const existingReference =
-        existingSourceReference ?? existingContentReference;
-      if (existingReference) {
-        if (existingReference.supermemorySyncedAt === null) {
-          referencesToRepair.set(existingReference.id, existingReference);
-        }
-        continue;
-      }
       if (
+        existingKeys.has(key) ||
         uniqueReferences.has(key) ||
-        (sourceUrl ? uniqueSourceUrls.has(sourceUrl) : false)
+        (sourceUrl
+          ? existingSourceUrls.has(sourceUrl) || uniqueSourceUrls.has(sourceUrl)
+          : false)
       ) {
         continue;
       }
@@ -132,7 +111,10 @@ export async function addBrandReferences(
       brandSettingsId: settings.id,
       content: reference.content,
       id: randomUUID(),
-      metadata: buildReferenceMetadata(reference),
+      // Onboarding references never charge the REFERENCES quota.
+      metadata: withReferenceBillingFlag(buildReferenceMetadata(reference), {
+        metered: false,
+      }),
       note: reference.note ?? null,
       sourceCapturedAt: reference.sourceCapturedAt
         ? new Date(reference.sourceCapturedAt)
@@ -142,10 +124,14 @@ export async function addBrandReferences(
       sourceUrl: reference.sourceUrl ?? null,
       type: reference.type,
     }));
-    const inserted: (typeof brandReferences.$inferSelect)[] = [];
+    const inserted: Pick<typeof brandReferences.$inferSelect, "id" | "type">[] =
+      [];
     for (let i = 0; i < values.length; i += REFERENCE_INSERT_BATCH_SIZE) {
       const chunk = values.slice(i, i + REFERENCE_INSERT_BATCH_SIZE);
-      const rows = await tx.insert(brandReferences).values(chunk).returning();
+      const rows = await tx
+        .insert(brandReferences)
+        .values(chunk)
+        .returning({ id: brandReferences.id, type: brandReferences.type });
       inserted.push(...rows);
     }
 
@@ -153,48 +139,7 @@ export async function addBrandReferences(
       brandSettingsId: settings.id,
       inserted,
       insertedCount: inserted.length,
-      referencesToSync: [...inserted, ...referencesToRepair.values()],
       skippedCount: references.length - inserted.length,
     };
   });
-
-  const uniqueReferencesToSync = new Map(
-    persistence.referencesToSync.map((reference) => [reference.id, reference])
-  );
-  const syncResults: BrandReferenceMemorySyncResult[] = await Effect.runPromise(
-    Effect.all(
-      [...uniqueReferencesToSync.values()].map((reference) =>
-        Effect.promise(() =>
-          syncPersistedBrandReferenceMemory({
-            organizationId,
-            referenceId: reference.id,
-            voiceId: persistence.brandSettingsId,
-          })
-        )
-      ),
-      { concurrency: REFERENCE_MEMORY_SYNC_CONCURRENCY }
-    )
-  );
-
-  const failures = syncResults.filter((result) => result.status === "failed");
-  const synced = syncResults.filter((result) => result.status === "synced");
-  const insertedIds = new Set(
-    persistence.inserted.map((reference) => reference.id)
-  );
-  return {
-    brandSettingsId: persistence.brandSettingsId,
-    failures,
-    inserted: persistence.inserted.map((reference) => ({
-      id: reference.id,
-      type: reference.type,
-    })),
-    insertedCount: persistence.insertedCount,
-    repairedCount: synced.filter(
-      (result) => !insertedIds.has(result.referenceId)
-    ).length,
-    skippedCount: persistence.skippedCount,
-    status: failures.length > 0 ? "partial" : "complete",
-    syncFailedCount: failures.length,
-    syncedCount: synced.length,
-  };
 }

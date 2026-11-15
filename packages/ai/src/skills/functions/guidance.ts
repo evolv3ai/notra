@@ -7,9 +7,7 @@ import {
   normalizeInlineText,
 } from "./format";
 
-export function filterPromptableSkills<T extends SkillSummary>(
-  skills: T[]
-): T[] {
+function filterPromptableSkills<T extends SkillSummary>(skills: T[]): T[] {
   return skills.filter((skill) => skill.description.trim().length > 0);
 }
 

@@ -6,7 +6,6 @@ import {
   GEO_AGENT_LABELS,
   GEO_JOURNEY_BROWSE_CATEGORY,
   GEO_JOURNEY_CHIP_LENGTH,
-  GEO_JOURNEY_EXPLICIT_PREFIX,
   GEO_MAX_RANGE_DAYS,
   GEO_SPARKLINE_MIN_POINTS,
   GEO_SPARKLINE_FLAT_THRESHOLD,
@@ -24,7 +23,6 @@ import type {
   GeoTrafficTotals,
   GeoTrafficTrendRow,
   GeoVisitorType,
-  TrafficMetricDeltas,
 } from "../types/geo";
 import { formatDayLabel } from "./day-label";
 
@@ -43,11 +41,6 @@ export function isTrackedGeoVisitorType(value: GeoVisitorType): boolean {
   return !GEO_UNTRACKED_VISITOR_TYPES.includes(value);
 }
 
-/**
- * Own string members only: sources and agents come from request headers, so a
- * visitor sending "constructor" would otherwise be labelled with an inherited
- * `Object` member instead of a string.
- */
 function lookupLabel(
   labels: Record<string, string>,
   key: string,
@@ -60,19 +53,37 @@ function lookupLabel(
   return typeof label === "string" ? label : fallback;
 }
 
+/** Product name for a source; bot names fall back to their vendor spelling. */
 export function formatGeoSource(source: string): string {
   const trimmed = source.trim();
-  return lookupLabel(GEO_SOURCE_LABELS, trimmed.toLowerCase(), trimmed);
+  return lookupLabel(
+    GEO_SOURCE_LABELS,
+    trimmed.toLowerCase(),
+    formatGeoAgent(trimmed)
+  );
 }
 
-// Signature names keep the vendor's casing ("GPTBot"), so a lowercased token
-// from older rows or hand-written data can be mapped back to it.
 const SIGNATURE_AGENT_NAMES: Record<string, string> = Object.fromEntries(
   AI_AGENT_SIGNATURES.map((signature) => [
     signature.agent.toLowerCase(),
     signature.agent,
   ])
 );
+
+const SIGNATURE_VENDORS: Record<string, string> = Object.fromEntries(
+  AI_AGENT_SIGNATURES.map((signature) => [
+    signature.agent.toLowerCase(),
+    signature.vendor,
+  ])
+);
+
+/** Company running a bot, e.g. "GPTBot" → "OpenAI"; null for unknown bots. */
+export function geoAgentVendor(agent: string): string | null {
+  const key = agent.trim().toLowerCase();
+  return Object.hasOwn(SIGNATURE_VENDORS, key)
+    ? (SIGNATURE_VENDORS[key] ?? null)
+    : null;
+}
 
 /** Bot name as its vendor writes it, e.g. "meta-externalagent" → "Meta-ExternalAgent". */
 export function formatGeoAgent(agent: string): string {
@@ -117,9 +128,6 @@ export function toGeoTrafficTotals(
   return totals;
 }
 
-// Previous-window totals, mirroring toGeoTrafficTotals. Returns null when the
-// endpoint sent no comparison data at all, so callers can hide their deltas
-// instead of rendering an all-zero baseline as "+100%".
 export function toGeoTrafficPreviousTotals(
   sources: readonly GeoTrafficSource[],
   previousConversions: number | null = null
@@ -161,12 +169,6 @@ const HOURS_PER_DAY = 24;
 
 export function formatGeoJourneyChip(journeyId: string): string {
   return journeyId.slice(-GEO_JOURNEY_CHIP_LENGTH);
-}
-
-export function toGeoJourneyKind(journeyId: string): "tagged" | "fingerprint" {
-  return journeyId.startsWith(GEO_JOURNEY_EXPLICIT_PREFIX)
-    ? "tagged"
-    : "fingerprint";
 }
 
 export function toggleGeoTrafficFilterValue<T extends string>(
@@ -226,13 +228,6 @@ export function formatGeoJourneySpan(
   return `${unit(Math.floor(hours / HOURS_PER_DAY), "day")} ${unit(hours % HOURS_PER_DAY, "hour")}`;
 }
 
-export function formatMarkdownShare(markdown: number, visits: number): string {
-  if (visits === 0) {
-    return "-";
-  }
-  return `${Math.round((markdown / visits) * 100)}%`;
-}
-
 export function trafficDayKey(day: string): string {
   return String(day).slice(0, 10);
 }
@@ -244,7 +239,7 @@ export function hasTrafficSourceSeries(
 }
 
 export function trafficSparklineDays(
-  points: readonly GeoTrafficPoint[],
+  points: readonly Pick<GeoTrafficPoint, "day">[],
   from?: string,
   to?: string
 ): string[] {
@@ -347,61 +342,6 @@ export function trafficVisitDelta(
 
 export function isGeoStatDeltaNew(delta: number): boolean {
   return delta === GEO_STAT_DELTA_NEW;
-}
-
-export function formatGeoTrafficRequestCount(total: number): string {
-  return `${total.toLocaleString()} ${total === 1 ? "request" : "requests"}`;
-}
-
-function sumTrafficTrendMetric(
-  rows: readonly GeoTrafficTrendRow[],
-  key:
-    | typeof GEO_TRAFFIC_TREND_CRAWLER_KEY
-    | typeof GEO_TRAFFIC_TREND_REFERRAL_KEY
-): number {
-  return rows.reduce((total, row) => total + row[key], 0);
-}
-
-export function trafficMetricDeltas(
-  rows: readonly GeoTrafficTrendRow[]
-): TrafficMetricDeltas {
-  const empty: TrafficMetricDeltas = {
-    crawler: null,
-    aiReferral: null,
-    total: null,
-  };
-  if (rows.length < GEO_SPARKLINE_MIN_POINTS) {
-    return empty;
-  }
-
-  const mid = Math.floor(rows.length / 2);
-  const previous = rows.slice(0, mid);
-  const current = rows.slice(mid);
-  const previousCrawler = sumTrafficTrendMetric(
-    previous,
-    GEO_TRAFFIC_TREND_CRAWLER_KEY
-  );
-  const currentCrawler = sumTrafficTrendMetric(
-    current,
-    GEO_TRAFFIC_TREND_CRAWLER_KEY
-  );
-  const previousReferral = sumTrafficTrendMetric(
-    previous,
-    GEO_TRAFFIC_TREND_REFERRAL_KEY
-  );
-  const currentReferral = sumTrafficTrendMetric(
-    current,
-    GEO_TRAFFIC_TREND_REFERRAL_KEY
-  );
-
-  return {
-    crawler: trafficVisitDelta(currentCrawler, previousCrawler),
-    aiReferral: trafficVisitDelta(currentReferral, previousReferral),
-    total: trafficVisitDelta(
-      currentCrawler + currentReferral,
-      previousCrawler + previousReferral
-    ),
-  };
 }
 
 export function sparklineTrend(

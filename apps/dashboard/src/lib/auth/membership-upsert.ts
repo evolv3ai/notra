@@ -1,17 +1,14 @@
+import { logWarn } from "@notra/ai/utils/server-log";
 import { db } from "@notra/db/drizzle";
 import { members } from "@notra/db/schema";
+import { isPgUniqueViolation } from "@notra/db/utils/pg-errors";
 import { and, eq, sql } from "drizzle-orm";
 
 import { MEMBERSHIP_CONFLICT_TARGET_RETRY_MS } from "@/constants/auth/membership";
-import type {
-  MembershipUpsertInput,
-  MembershipUpsertStrategies,
-} from "@/types/auth/membership";
+import type { MembershipUpsertInput } from "@/types/auth/membership";
 
 /** Postgres `invalid_column_reference`: no unique index matches ON CONFLICT. */
 const MISSING_CONFLICT_TARGET_CODE = "42P10";
-/** Postgres `unique_violation`: concurrent insert for the same membership key. */
-const UNIQUE_VIOLATION_CODE = "23505";
 
 let conflictTargetRetryAt = 0;
 
@@ -24,10 +21,6 @@ function hasPostgresErrorCode(error: unknown, code: string): boolean {
     current = (current as { cause?: unknown }).cause;
   }
   return false;
-}
-
-function hasMissingConflictTargetCode(error: unknown): boolean {
-  return hasPostgresErrorCode(error, MISSING_CONFLICT_TARGET_CODE);
 }
 
 async function withMembershipAdvisoryLock<T>(
@@ -63,8 +56,6 @@ async function upsertMembershipAtomically(
         set: {
           role: sql`CASE WHEN ${members.role} = 'owner' THEN ${members.role} ELSE excluded.role END`,
         },
-        // Skip the UPDATE when the row already matches: every login hits this
-        // path, and owners keep their role regardless of the incoming value.
         setWhere: sql`${members.role} <> 'owner' AND ${members.role} <> excluded.role`,
       });
   });
@@ -83,7 +74,6 @@ async function updateMembershipRoleIfNeeded(
   }
 }
 
-/** Pre-0085 path: serialize reads and writes for each membership. */
 async function upsertMembershipReadThenWrite(
   input: MembershipUpsertInput
 ): Promise<void> {
@@ -109,7 +99,7 @@ async function upsertMembershipReadThenWrite(
         await tx.execute(sql`RELEASE SAVEPOINT membership_insert`);
       } catch (error) {
         await tx.execute(sql`ROLLBACK TO SAVEPOINT membership_insert`);
-        if (!hasPostgresErrorCode(error, UNIQUE_VIOLATION_CODE)) {
+        if (!isPgUniqueViolation(error)) {
           throw error;
         }
         const raced = await tx.query.members.findFirst({
@@ -130,51 +120,25 @@ async function upsertMembershipReadThenWrite(
   });
 }
 
-/**
- * Runs the atomic upsert and, if Postgres reports that no unique index matches
- * the ON CONFLICT target (migration 0085 not applied yet), the legacy path.
- * Cache a missing index for 60 seconds to avoid a failed statement on every login.
- * The next call after expiry retries the atomic upsert so warm processes recover
- * after the migration without restarting.
- */
-async function runMembershipUpsert(
-  strategies: MembershipUpsertStrategies,
+export async function upsertMembership(
   input: MembershipUpsertInput
 ): Promise<void> {
   if (Date.now() < conflictTargetRetryAt) {
-    await strategies.readThenWrite(input);
+    await upsertMembershipReadThenWrite(input);
     return;
   }
 
   try {
-    await strategies.atomic(input);
+    await upsertMembershipAtomically(input);
     conflictTargetRetryAt = 0;
   } catch (error) {
-    if (!hasMissingConflictTargetCode(error)) {
+    if (!hasPostgresErrorCode(error, MISSING_CONFLICT_TARGET_CODE)) {
       throw error;
     }
     conflictTargetRetryAt = Date.now() + MEMBERSHIP_CONFLICT_TARGET_RETRY_MS;
-    strategies.onFallback?.();
-    await strategies.readThenWrite(input);
+    logWarn(
+      "[auth] members(organization_id, user_id) unique index missing; apply migration 0085. Falling back to read-then-write membership sync."
+    );
+    await upsertMembershipReadThenWrite(input);
   }
-}
-
-function warnConflictTargetMissing(): void {
-  console.warn(
-    "[auth] members(organization_id, user_id) unique index missing; apply migration 0085. Falling back to read-then-write membership sync."
-  );
-}
-
-const productionStrategies: MembershipUpsertStrategies = {
-  atomic: upsertMembershipAtomically,
-  readThenWrite: upsertMembershipReadThenWrite,
-  onFallback: warnConflictTargetMissing,
-};
-
-/**
- * Upserts a membership keyed by (organization_id, user_id).
- * TODO: drop the read-then-write fallback once 0085 is confirmed in production.
- */
-export function upsertMembership(input: MembershipUpsertInput): Promise<void> {
-  return runMembershipUpsert(productionStrategies, input);
 }

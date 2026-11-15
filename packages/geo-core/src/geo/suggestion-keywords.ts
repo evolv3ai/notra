@@ -1,15 +1,18 @@
 import type { GscQueryRow } from "@notra/ai/types/google-search-console";
+import { escapeRegExp } from "@notra/utils/escape";
 
 import {
   GSC_QUERY_CLUSTER_CAP,
   GSC_QUERY_CLUSTER_WORDS,
+  GSC_QUESTION_MIN_IMPRESSIONS,
   GSC_SYNC_MAX_KEYWORDS_FOR_MODEL,
+  GSC_SYNC_MAX_QUESTIONS_FOR_MODEL,
   GSC_SYNC_MIN_IMPRESSIONS,
 } from "../constants/google-search-console";
 import type { GeoSuggestionKeyword } from "../types/geo";
+import { isQuestionQuery } from "../utils/gsc-question";
 
 const MIN_BRAND_TERM_LENGTH = 3;
-const REGEXP_ESCAPE_REGEX = /[.*+?^${}()|[\]\\]/g;
 const BRAND_TOKEN_SEPARATOR = "[-_\\s]+";
 /*
  * `\b` counts only [A-Za-z0-9_] as word characters, so a brand that starts or
@@ -20,36 +23,22 @@ const BRAND_TOKEN_SEPARATOR = "[-_\\s]+";
  * letter from its accent.
  */
 const BRAND_WORD_CHAR = "[\\p{L}\\p{N}\\p{M}_]";
-/*
- * Own-site account and careers pages only. Changelog / status page /
- * privacy policy are product categories ("changelog generator"), so those
- * stay in and the suggestion prompt skips "<product> changelog".
- */
 const NAVIGATIONAL_QUERY =
   /^(?:[\p{L}\p{N}._-]+\s+){0,2}(?:log(?:in|\s+in|-in)|sign(?:\s+|-)?(?:in|up)|anmelden|einloggen|careers|karriere|stellenangebote|impressum)$/iu;
 const WINNING_POSITION = 3;
 const STRIKING_POSITION = 20;
 const WEAK_POSITION = 40;
-/** 0.02: a 12k-impression 40% CTR #1 still loses to a 200-impression gap at position 11. */
 const WINNING_WEIGHT = 0.02;
 const STRIKING_WEIGHT = 1;
 const WEAK_WEIGHT = 0.6;
 const DISTANT_WEIGHT = 0.25;
-/** CTR above this counts as satisfied demand and stops lowering the score. */
 const CTR_SATURATION = 0.5;
-
-function escapeRegExp(value: string): string {
-  return value.replace(REGEXP_ESCAPE_REGEX, "\\$&");
-}
 
 export function normalizeSuggestionKey(value: string): string {
   return value.trim().toLowerCase();
 }
 
 function normalizeForBrandMatch(value: string): string {
-  // NFC so an accent written as a combining mark folds back into its letter;
-  // the punctuation pass below would otherwise strip the bare mark and make
-  // decomposed "Nestlé" stop matching the composed alias.
   return normalizeSuggestionKey(value.normalize("NFC"))
     .replace(/[-_]+/g, " ")
     .replace(/[^\p{L}\p{N}\s]+/gu, " ")
@@ -62,7 +51,6 @@ export function promptMentionsBrand(
   brandTerms: string[]
 ): boolean {
   const normalized = ` ${normalizeForBrandMatch(text)} `;
-  // Space-delimited so a short alias like "hub" does not drop "github".
   return brandTerms.some((term) =>
     normalized.includes(` ${normalizeForBrandMatch(term)} `)
   );
@@ -133,10 +121,26 @@ function clusterKey(query: string): string {
     .join(" ");
 }
 
+/** Both pulls can return the same query; the first row wins. */
+export function mergeQueryRows(
+  ...sources: readonly GscQueryRow[][]
+): GscQueryRow[] {
+  const byQuery = new Map<string, GscQueryRow>();
+  for (const row of sources.flat()) {
+    const key = normalizeSuggestionKey(row.query);
+    if (!byQuery.has(key)) {
+      byQuery.set(key, row);
+    }
+  }
+  return [...byQuery.values()];
+}
+
 /**
  * Ranks queries the site shows up for but does not win. Google's own response
  * is click-sorted, so a page already at position 1 would otherwise fill the
- * prompt budget and the actual gaps never reach the model.
+ * prompt budget and the actual gaps never reach the model. Questions get
+ * their own slots first: they are long tail and would lose on volume, yet
+ * they are already worded like a prompt.
  */
 export function selectKeywordsForModel(
   rows: GscQueryRow[],
@@ -145,7 +149,10 @@ export function selectKeywordsForModel(
   const ranked = rows
     .filter(
       (row) =>
-        row.impressions >= GSC_SYNC_MIN_IMPRESSIONS &&
+        row.impressions >=
+          (isQuestionQuery(row.query)
+            ? GSC_QUESTION_MIN_IMPRESSIONS
+            : GSC_SYNC_MIN_IMPRESSIONS) &&
         !promptMentionsBrand(row.query, brandTerms) &&
         !isNavigationalQuery(row.query)
     )
@@ -155,11 +162,25 @@ export function selectKeywordsForModel(
         right.impressions - left.impressions
     );
 
-  const picked: GscQueryRow[] = [];
+  const picked = new Set<GscQueryRow>();
+  for (const row of ranked) {
+    if (picked.size >= GSC_SYNC_MAX_QUESTIONS_FOR_MODEL) {
+      break;
+    }
+    // No clustering: "how do i …" questions share their opener, not their intent.
+    if (isQuestionQuery(row.query)) {
+      picked.add(row);
+    }
+  }
+
   const perCluster = new Map<string, number>();
   for (const row of ranked) {
-    if (picked.length >= GSC_SYNC_MAX_KEYWORDS_FOR_MODEL) {
+    if (picked.size >= GSC_SYNC_MAX_KEYWORDS_FOR_MODEL) {
       break;
+    }
+    // Questions past their quota stay out, so head terms keep the rest.
+    if (picked.has(row) || isQuestionQuery(row.query)) {
+      continue;
     }
     const key = clusterKey(row.query);
     const count = perCluster.get(key) ?? 0;
@@ -167,9 +188,9 @@ export function selectKeywordsForModel(
       continue;
     }
     perCluster.set(key, count + 1);
-    picked.push(row);
+    picked.add(row);
   }
-  return picked;
+  return ranked.filter((row) => picked.has(row));
 }
 
 /**

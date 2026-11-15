@@ -16,7 +16,7 @@ export const MCP_CLIENTS: McpClient[] = [
     label: "Codex",
     iconSrc: "/mcp/codex.svg",
     invertInDark: true,
-    command: `codex mcp add notra -- npx -y mcp-remote ${MCP_URL}`,
+    command: `codex mcp add notra --url ${MCP_URL}`,
   },
   {
     id: "cursor",
@@ -51,36 +51,42 @@ export const MCP_VISIBLE_TOOL_COUNT = 5;
 
 export const MCP_FALLBACK_TOOL_CARDS: McpToolCard[] = [
   {
-    name: "list_events",
-    description: "Everything your team shipped this week, in one call.",
+    name: "get_geo_snapshot",
+    description: "Your AI visibility in one call, with the next best actions.",
   },
   {
-    name: "create_post",
-    description: "Draft changelogs, launch posts, and social updates.",
+    name: "create_geo_scan",
+    description: "Ask ChatGPT, Claude and Gemini what your buyers ask.",
   },
   {
-    name: "publish_post",
-    description: "Ship the result to your changelog, blog, X, or LinkedIn.",
+    name: "list_geo_content_gaps",
+    description: "Find the prompts where competitors show up instead of you.",
+  },
+  {
+    name: "plan_geo_content_brief",
+    description: "Turn a content gap into an outline worth publishing.",
+  },
+  {
+    name: "generate_post",
+    description: "Draft changelogs, launch posts and social updates.",
+  },
+  {
+    name: "update_post",
+    description:
+      "Revise drafts in place and publish them, straight from your agent.",
   },
   {
     name: "schedule_post",
-    description: "Queue content on a cadence your audience can trust.",
+    description:
+      "Queue a post to publish at the time your audience is reading.",
   },
   {
-    name: "get_brand_voice",
-    description: "Your tone, cadence, and vocabulary as context.",
+    name: "get_brand_identity",
+    description: "Your tone, audience and vocabulary as context.",
   },
   {
     name: "list_posts",
     description: "Browse every draft and published post in your workspace.",
-  },
-  {
-    name: "update_post",
-    description: "Revise drafts in place, straight from your agent.",
-  },
-  {
-    name: "list_schedules",
-    description: "See everything queued and when it goes out.",
   },
   {
     name: "create_schedule",
@@ -89,10 +95,6 @@ export const MCP_FALLBACK_TOOL_CARDS: McpToolCard[] = [
   {
     name: "list_integrations",
     description: "Check which sources feed your shipped-work timeline.",
-  },
-  {
-    name: "update_brand_voice",
-    description: "Teach Notra new vocabulary as your brand evolves.",
   },
   {
     name: "create_skill",
@@ -119,25 +121,28 @@ export const MCP_TERMINAL_ASSISTANT_MESSAGE =
   "I'll pull the week from **notra**, draft it in your voice, then publish.";
 
 export const MCP_TERMINAL_TODOS: ClaudeCodeTodo[] = [
-  { label: "Pull this week's merged PRs via notra", status: "done" },
-  { label: "Draft the changelog in brand voice", status: "active" },
-  { label: "Publish and schedule social updates", status: "todo" },
+  {
+    label: "Draft the changelog from this week's PRs via notra",
+    status: "done",
+  },
+  { label: "Review the draft in brand voice", status: "active" },
+  { label: "Publish the changelog", status: "todo" },
 ];
 
 export const MCP_TERMINAL_TOOL_CALLS: McpTerminalToolCall[] = [
   {
-    tool: "notra - list_events (MCP)",
-    arg: 'range: "week"',
-    result: "14 merged PRs, 2 releases",
+    tool: "notra - generate_post (MCP)",
+    arg: 'contentType: "changelog", lookbackWindow: "last_7_days"',
+    result: "generation queued from 14 merged PRs",
   },
   {
-    tool: "notra - create_post (MCP)",
-    arg: 'type: "changelog"',
+    tool: "notra - get_post_generation_status (MCP)",
+    arg: 'jobId: "gen_8f2k"',
     result: '"Scheduler v2, 40% faster builds"',
   },
   {
-    tool: "notra - publish_post (MCP)",
-    arg: 'type: "changelog"',
+    tool: "notra - update_post (MCP)",
+    arg: 'status: "published"',
     result: "live at acme.com/changelog",
   },
 ];

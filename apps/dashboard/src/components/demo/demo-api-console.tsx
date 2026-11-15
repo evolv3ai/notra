@@ -5,15 +5,15 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@notra/ui/components/ui/button";
 import { Input } from "@notra/ui/components/ui/input";
 import { Textarea } from "@notra/ui/components/ui/textarea";
-import { useTranslations } from "next-intl";
-import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
+import { useTranslations } from "use-intl";
 
 import {
   DEMO_CONSOLE_METHODS,
   DEMO_CONSOLE_PRESETS,
   DEMO_CONSOLE_SECTION_BY_SEGMENT,
 } from "@/constants/demo-console";
+import { usePathname } from "@/lib/navigation";
 import type {
   DemoConsolePreset,
   DemoConsoleResponse,
@@ -141,7 +141,7 @@ export function DemoApiConsole({ sandbox }: DemoApiConsoleProps) {
             {t("copy")}
           </Button>
         </div>
-        <code className="truncate font-mono text-xs">
+        <code className="ph-no-capture truncate font-mono text-xs">
           {`${sandbox.apiKey.slice(0, 16)}…`}
         </code>
         <p className="text-muted-foreground text-xs">

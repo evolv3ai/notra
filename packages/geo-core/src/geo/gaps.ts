@@ -14,7 +14,7 @@ import {
 } from "@notra/db/schema";
 import type { GeoContentBriefStatus } from "@notra/db/types/geo-writer";
 import { and, desc, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
-import { Effect } from "effect";
+import { Cause, Effect } from "effect";
 
 import {
   GEO_AI_SEARCH_GAP_MAX_QUERIES,
@@ -62,6 +62,7 @@ import {
   searchGapPosition,
   toGapBriefBaseline,
 } from "../utils/geo-gaps";
+import { logGeoFailure } from "../utils/geo-log";
 import { competitorKey } from "./domain";
 import { geoDb } from "./effect";
 import { GeoSettingsMissingError } from "./errors";
@@ -311,14 +312,14 @@ function aggregateMentionChecks(
 ): Map<string, PromptGapAgg> {
   const byPrompt = new Map<string, PromptGapAgg>();
   for (const check of checks) {
-    const entry = byPrompt.get(check.promptId) ?? {
+    const entry: PromptGapAgg = byPrompt.get(check.promptId) ?? {
       promptText: check.prompt,
       total: 0,
       mentioned: 0,
-      missing: [] as string[],
-      mentionedEngines: [] as string[],
-      competitors: [] as string[],
-      searchQueriesByEngine: [] as string[][],
+      missing: [],
+      mentionedEngines: [],
+      competitors: [],
+      searchQueriesByEngine: [],
     };
     entry.total += 1;
     if (check.mentioned) {
@@ -350,13 +351,13 @@ function aggregateAiSearches(
     ) {
       continue;
     }
-    const entry = byKey.get(key) ?? {
-      variants: new Map<string, number>(),
-      prompts: new Set<string>(),
-      engines: new Set<string>(),
-      checkIds: new Set<string>(),
-      coveredCheckIds: new Set<string>(),
-      competitors: [] as string[],
+    const entry: GeoAiSearchAgg = byKey.get(key) ?? {
+      variants: new Map(),
+      prompts: new Set(),
+      engines: new Set(),
+      checkIds: new Set(),
+      coveredCheckIds: new Set(),
+      competitors: [],
     };
     entry.variants.set(
       row.query,
@@ -390,7 +391,6 @@ function toAiSearchGapRows(
   for (const [key, entry] of byKey) {
     const totalSearches = entry.checkIds.size;
     const searches = totalSearches - entry.coveredCheckIds.size;
-    // Console queries match on the same year-free key AI searches group by.
     const corroboratedBySearchConsole = searchConsoleKeys.has(key);
     if (
       searches <
@@ -566,25 +566,22 @@ const loadCollisionCandidates = Effect.fn("geo.gaps.collisionCandidates")(
             .limit(GEO_COLLISION_SITEMAP_PAGE_LIMIT)
         )
       : [];
-    const candidates: GeoContentCollisionCandidate[] = [];
-    for (const page of pageRows) {
-      candidates.push({
-        kind: "page",
+    const candidates: GeoContentCollisionCandidate[] = [
+      ...pageRows.map((page) => ({
+        kind: "page" as const,
         id: page.id,
         url: page.url,
         title: page.title,
         slug: null,
-      });
-    }
-    for (const post of postRows) {
-      candidates.push({
-        kind: "post",
+      })),
+      ...postRows.map((post) => ({
+        kind: "post" as const,
         id: post.id,
         url: post.htmlUrl,
         title: post.title,
         slug: post.slug,
-      });
-    }
+      })),
+    ];
     return candidates;
   }
 );
@@ -650,7 +647,9 @@ const computeGeoContentGaps = Effect.fn("geo.gaps.compute")(function* (
           and(
             eq(geoPromptSuggestions.organizationId, scope.organizationId),
             eq(geoPromptSuggestions.projectId, projectId),
-            eq(geoPromptSuggestions.status, "pending")
+            eq(geoPromptSuggestions.status, "pending"),
+            // Autopilot's pause suggestions are not writing opportunities.
+            eq(geoPromptSuggestions.source, "search_console")
           )
         )
         .orderBy(desc(geoPromptSuggestions.createdAt))
@@ -701,7 +700,6 @@ const computeGeoContentGaps = Effect.fn("geo.gaps.compute")(function* (
     ),
     loadCollisionCandidates(scope),
   ]);
-  // `loadMentionGapInputs` already read this project's geo_settings row.
   const {
     checks,
     prompts,
@@ -756,6 +754,14 @@ const computeGeoContentGaps = Effect.fn("geo.gaps.compute")(function* (
       opportunity: won ? 0 : score.opportunity,
       won,
       brief: toBriefRef(briefBySource.get(sourceKey("gap", id))),
+      recommendation: recommendSearchGapAction({
+        matches: scoreContentCollisions(
+          { prompt, title, queries: entry.searchQueriesByEngine.flat() },
+          collisionCandidates
+        ),
+        impressions: null,
+        clicks: null,
+      }),
     });
   };
   forEachMissingMajorityGap(
@@ -835,13 +841,15 @@ export const loadGeoContentGaps = Effect.fn("geo.gaps.load")(function* (
       snapshotReady: true,
     };
   }
-  // Projects without a snapshot (new, or from before snapshots existed) build it
-  // once on first read; later reads only load it. A failed build shows the
-  // preparing state and the hourly cron retries.
   return yield* refreshGeoContentGaps(scope).pipe(
     Effect.catchCause((cause) =>
       Effect.sync((): GeoContentGapsResponse => {
-        console.error("[GEO] Could not build content gaps snapshot:", cause);
+        logGeoFailure(
+          "geo.gaps.snapshot_build_failed",
+          "Could not build content gaps snapshot",
+          Cause.squash(cause),
+          { projectId: scope.projectId }
+        );
         return {
           promptGaps: [],
           searchGaps: [],
@@ -887,7 +895,12 @@ export const refreshGeoContentGapsBestEffort = Effect.fn(
   yield* refreshGeoContentGaps(input).pipe(
     Effect.catchCause((cause) =>
       Effect.sync(() => {
-        console.error("[GEO] Could not refresh content gaps:", cause);
+        logGeoFailure(
+          "geo.gaps.refresh_failed",
+          "Could not refresh content gaps",
+          Cause.squash(cause),
+          { projectId: input.projectId }
+        );
       })
     )
   );

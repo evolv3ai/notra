@@ -2,10 +2,6 @@ import type { ReactNode } from "react";
 
 const INLINE_TOKEN = /(`[^`]+`|\*\*[^*]+\*\*)/g;
 
-/**
- * Renders the two bits of markdown Claude Code styles inline:
- * `code` in the link color and **bold** in bright white.
- */
 export const renderClaudeCodeInline = (text: string): ReactNode[] => {
   let offset = 0;
 

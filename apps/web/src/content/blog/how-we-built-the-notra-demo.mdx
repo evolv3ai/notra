@@ -1,0 +1,213 @@
+---
+title: "How we built demo.usenotra.com"
+description: "How every visitor to demo.usenotra.com gets their own Notra workspace in 0.4 seconds without signing up: signed cookies, a Postgres sandbox pool and a fake model."
+date: "2026-10-12T00:00:00.000Z"
+updatedAt: "2026-10-12T00:00:00.000Z"
+author: "jan"
+image: "/og/blog/how-we-built-the-notra-demo.png"
+---
+
+Trying a new developer tool usually means a signup form and a confirmation email before you see anything.
+
+[demo.usenotra.com](https://demo.usenotra.com) has neither. You open the link and land in your own workspace for Fieldnote, a fictional meeting notes app, with a GEO project, a few posts, a brand voice and an API key already set up. Click around, change things, call it from your terminal. We delete it after six hours.
+
+We thought about building a clickable mockup. It would have held up until someone pasted the curl example from our docs into a terminal. Notra has an API, a CLI and an MCP server, so the demo needs a backend that answers real requests, and the easiest backend to keep correct is the one we already have.
+
+So the demo runs the real product against its own database. A new workspace is ready in about 0.4 seconds, and since no visit ever reaches a model provider, it costs us close to nothing to run (except for the $1–2 a month on <Brand name="Railway" />).
+
+## One codebase, two deployments [#one-codebase-two-deployments]
+
+The demo isn't a fork. It deploys the same `apps/dashboard` and `apps/api` from `main` a second time, so every release ships to both.
+
+The two deployments differ only at a handful of choke points that already existed in the code: auth, the model router, the GEO model layer, the <Brand name="Tinybird" /> client and the Octokit instance. In production they talk to <Brand name="WorkOS" />, AI providers, <Brand name="Tinybird" /> and our <Brand name="GitHub">GitHub App</Brand>. In the demo they return a signed cookie, a fake model, generated analytics and a fictional repository, and the feature code calling them has no idea which one it got.
+
+<DemoDeploymentsDiagram />
+
+A new feature that goes through these choke points works in the demo on the day it ships. One that adds a new external service breaks in the demo until someone writes a stub for it. The demo has no real keys, so at least it breaks without spending money.
+
+## Who are you without a login? [#the-anonymous-id]
+
+A workspace needs an owner, and the demo has no login, so every visitor gets an `anonymousId`, which is `anon_` followed by 16 random characters:
+
+```ts
+// apps/dashboard/src/lib/demo/sandbox.ts
+function createAnonymousId(): string {
+  return `${DEMO_ANONYMOUS_ID_PREFIX}${randomToken(DEMO_ANONYMOUS_ID_LENGTH)}`;
+}
+```
+
+`randomToken` draws from `crypto.getRandomValues` over a 62-character alphabet and uses rejection sampling. The obvious `byte % 62` would be slightly biased, because 256 isn't a multiple of 62 and the first eight characters would come up more often.
+
+The ID goes into a cookie called `notra_demo`: the payload as base64url JSON, a dot, and an HMAC-SHA256 signature over it. The cookie is `httpOnly` and `secure` and expires after six hours. It is also partitioned with `sameSite=none`, because the demo runs inside an iframe on our landing page too, and browsers never store a `lax` cookie there.
+
+<DemoCookieDiagram />
+
+The ID itself is public. You'll see it in the UI and in the metadata of your API key. Getting into a workspace takes a valid signature, which only the server can produce.
+
+From there, auth works the way it always does. In production, `getAuthIdentity` asks WorkOS who you are. In the demo, it resolves the cookie to a sandbox and the sandbox to a regular `users` row. Permission checks, `organizationId` filters and oRPC handlers run unchanged.
+
+## Why not keep it in the browser? [#a-sandbox-is-a-real-organization]
+
+Our first idea was IndexedDB. Every visitor's data would stay on their machine, and the browser would clean it up for us.
+
+The catch is that only the browser can see that data. The dashboard and the public API read from Postgres on the server, and curl, the CLI and MCP clients have no way into your browser's storage.
+
+So a sandbox is a real organization in a separate database. It has a fake owner and a few teammates, a GEO project with prompts, competitors and scan history, a handful of posts and writing skills, a brand identity, some connected (fake) social accounts and its own API key. All of it belongs to Fieldnote, an "AI meeting notes app for product teams" whose competitors live on `.example` domains.
+
+One table ties a visitor to their organization:
+
+```sql
+CREATE TABLE demo_sandboxes (
+  anonymous_id    text PRIMARY KEY,
+  organization_id text NOT NULL REFERENCES organizations ON DELETE CASCADE,
+  user_id         text NOT NULL REFERENCES users ON DELETE CASCADE,
+  api_key         text,
+  api_key_id      text,
+  time_zone       text NOT NULL DEFAULT 'UTC',
+  anchor_at       timestamp NOT NULL,
+  ip_hash         text,
+  personalization jsonb,
+  created_at      timestamp NOT NULL DEFAULT now(),
+  last_seen_at    timestamp NOT NULL DEFAULT now(),
+  expires_at      timestamp NOT NULL
+);
+```
+
+To delete a sandbox, we delete the organization. `ON DELETE CASCADE` handles the rest.
+
+## A database anyone can write to [#neon]
+
+The demo database is its own Neon project. It runs the same Drizzle migrations and the same `node-postgres` driver as production, so a schema change lands in both places the same way.
+
+Anyone with a browser can write to it, so we added three guards:
+
+1. The app connects as a data-only role with no DDL, a 20 s statement timeout and a connection limit. Migrations run as the owner role before each deploy and nowhere else.
+2. Both apps check that every organization in the database belongs to a sandbox. The demo API exits on boot if one doesn't, and the dashboard refuses to serve any demo request. If demo mode ever points at the production database, nothing runs against it.
+3. A sandbox takes about 5 MB. We cap how many can exist at once and evict idle ones first, which keeps the database at a few hundred megabytes.
+
+{/* TODO Jan: why Neon specifically. Branching for testing against real demo data? Scale-to-zero for a low-traffic demo? This is where the shoutout goes. */}
+
+## From 17 seconds to 0.4 [#sandbox-pool]
+
+The first version seeded a sandbox when you arrived. That took about 17 seconds behind a "Setting up your workspace…" screen, which is a long time to stare at a spinner.
+
+Now we seed a few sandboxes ahead of time. They're ordinary rows in `demo_sandboxes`, keyed `pool_…` instead of `anon_…`. That prefix can never pass the cookie check, so nobody can open a pool sandbox before it's claimed.
+
+Your first request goes to `/api/demo/enter`, which claims one. Simplified, the query looks like this:
+
+```ts
+const [pooled] = await tx
+  .select()
+  .from(demoSandboxes)
+  .where(like(demoSandboxes.anonymousId, "pool_%"))
+  .orderBy(asc(demoSandboxes.createdAt))
+  .limit(1)
+  .for("update", { of: demoSandboxes, skipLocked: true });
+```
+
+With `SKIP LOCKED`, two visitors who arrive in the same millisecond get two different sandboxes, and neither waits for the other's lock. In the same transaction, the row is re-keyed from `pool_…` to your new `anon_…` ID. You get the cookie and a redirect into your workspace.
+
+<DemoPoolDiagram />
+
+After the response is sent, the same request tops the pool back up and deletes expired sandboxes. A Redis lock makes sure only one refill runs at a time.
+
+## Seed data that never gets old [#demo-clock]
+
+Demo data goes stale. "Last scan: 3 days ago" turns into "Last scan: 5 weeks ago" a month later, and the product looks abandoned.
+
+So the seed has no fixed dates. It's written against a `demoClock` that is anchored to the moment the sandbox was created:
+
+```ts
+const clock = createDemoClock(now, timeZone);
+clock.local({ daysAgo: 1, hour: 9, minute: 41 }); // yesterday at 09:41
+```
+
+Pool sandboxes are seeded before anyone shows up, so they start in the server's time zone and switch to yours once your browser reports it.
+
+A fresh sandbox looks right, but one that is still open after midnight doesn't, because "yesterday" now means two days ago. So on the first request of a new local day, we rebase the sandbox and move every timestamp in the organization forward by `now - anchor_at`.
+
+We don't keep a list of timestamp columns, because the next table someone adds would be missing from it. We ask Postgres instead:
+
+```sql
+SELECT table_name, array_agg(column_name)
+FROM information_schema.columns c
+WHERE table_schema = 'public'
+  AND data_type IN ('timestamp without time zone', 'timestamp with time zone')
+  AND EXISTS (SELECT 1 FROM information_schema.columns o
+              WHERE o.table_name = c.table_name AND o.column_name = 'organization_id')
+GROUP BY table_name;
+```
+
+Not every timestamp should move, though. If you wrote a post last night, it should still say last night. Only seeded history and future schedules shift:
+
+```sql
+col = CASE WHEN col <= :anchor OR col > :now
+           THEN col + :delta * interval '1 second'
+           ELSE col END
+```
+
+<DemoRebaseDiagram />
+
+A compare-and-set on `anchor_at` stops two parallel requests from both shifting the data.
+
+## A model that never calls a provider [#fake-model]
+
+Notra calls models all over the place: chat, content generation, brand analysis, GEO answers, and the judge that decides whether your brand was mentioned. In the demo, the model router hands out an in-process AI SDK `LanguageModel` instead, and GEO gets a fake model layer of its own. Between them, they handle three kinds of requests:
+
+- Structured output is built from the requested JSON schema. The shapes that matter get canned answers, recognized by their keys: `personas` returns realistic personas, `workingTitle` plus `sections` returns a writer brief. Everything else goes through a schema faker that respects `$ref` and length limits and picks values by key name.
+- Chat matches your message against a handful of scenarios, like "write a post" or "how's my visibility", and streams the answer word by word. When the agent should create something, the fake model emits a real tool call, and the real tool writes a real row.
+- GEO scans run the real workflow. Only the model layer is swapped:
+
+```ts
+// packages/geo-core/src/geo/host-layers.ts
+export const geoModelLayer = isDemoMode() ? geoModelDemo : geoModelLive;
+```
+
+Fake answers are derived from a hash of their input, so everyone sees the same Fieldnote and we can reproduce bug reports.
+
+## The API is real too [#demo-api]
+
+Every sandbox gets a real [Unkey](https://www.unkey.com) key with the prefix `notra_demo_`, issued from a separate Unkey workspace. It expires with the sandbox and allows 60 requests per minute. [demo-api.usenotra.com](https://demo-api.usenotra.com) is our normal `apps/api`, pointed at the demo database.
+
+```sh
+curl https://demo-api.usenotra.com/v1/posts \
+  -H "Authorization: Bearer notra_demo_…" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Hello from curl","contentType":"blog_post","markdown":"# Hi"}'
+```
+
+Every request is written to `demo_request_log` and published over [Upstash Realtime](https://upstash.com). The open dashboard picks it up, adds it to a live feed and refetches whatever it touched. Run the curl above and the post shows up in your content list a moment later.
+
+<DemoApiFlowDiagram />
+
+Clicks in the UI land in the same feed. The ones that have a public endpoint come with their REST equivalent and a curl command you can copy.
+
+## Limits [#limits]
+
+A sandbox lives for six hours. Each network can only create a limited number of sandboxes per hour. Our first limit was too strict and locked out an entire office behind one IP. Reset gives you a fresh workspace under the same ID, and Customize rebuilds it around your own name and company. Login, billing, OAuth connections and real publishing are stubbed or blocked.
+
+{/* TODO: "Use it from your agent" once the MCP server can point at demo-api. The CLI already works: notra --base-url https://demo-api.usenotra.com --api-key notra_demo_… posts list */}
+
+Try it at [demo.usenotra.com](https://demo.usenotra.com) and break whatever you like, since it's deleted after six hours anyway lol.
+
+## FAQ [#faq]
+
+### Do I need an account to try Notra? [#do-i-need-an-account-to-try-notra]
+
+No. Open [demo.usenotra.com](https://demo.usenotra.com) and you land in your own workspace with sample data already set up. There's no signup form, email or credit card.
+
+### How long does a demo workspace last? [#how-long-does-a-demo-workspace-last]
+
+Six hours. After that, the workspace and everything in it is deleted. You can reset it at any time to start over with fresh sample data.
+
+### Can I use the Notra API from the demo? [#can-i-use-the-notra-api-from-the-demo]
+
+Yes. Every demo workspace comes with its own API key for demo-api.usenotra.com, which runs the same code as the production API. Requests from curl or the Notra CLI show up live in the dashboard.
+
+### Does the demo use real AI models? [#does-the-demo-use-real-ai-models]
+
+No. Every model call goes to a fake model that runs inside the app and returns realistic answers, so the demo never calls an AI provider and nothing you type is sent to one.
+
+### Is the demo the real product? [#is-the-demo-the-real-product]
+
+Yes. It runs the same dashboard and API code as production, deployed a second time against its own database. The services behind login, AI models, analytics and GitHub are swapped for stand-ins, and billing and publishing are switched off.

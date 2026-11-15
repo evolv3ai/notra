@@ -10,8 +10,8 @@ import {
   identifyServerGroup,
   setServerPersonProperties,
 } from "@notra/posthog/server";
-import { after } from "next/server";
 
+import { runAfterResponse } from "@/lib/after-response";
 import type {
   IdentifyOrganizationGroupInput,
   IdentifyProjectGroupInput,
@@ -21,29 +21,15 @@ import type {
 } from "@/types/analytics/posthog";
 
 function scheduleCapture(capture: () => void): void {
-  // Capture itself can start network work. Keep both capture and delivery in
-  // Next's supported lifetime, including during prerendering. Workflows use
-  // trackServerEventAndFlush instead of relying on a request context.
-  const deliver = async () => {
-    try {
-      capture();
-      await flushPostHogServer();
-    } catch (error) {
-      console.error("[posthog] capture delivery failed", error);
-    }
-  };
-  try {
-    after(deliver);
-  } catch {
-    // CLI/background callers have no Next lifetime to extend. Delivery is
-    // best effort there; neither a capture throw nor a rejection escapes.
-    void deliver();
-  }
+  runAfterResponse("[posthog] capture delivery failed", async () => {
+    capture();
+    await flushPostHogServer();
+  });
 }
 
-export function trackServerEvent(input: TrackServerEventInput): void {
+function eventCapture(input: TrackServerEventInput): () => void {
   const requestContext = getPostHogRequestContext(input.headers);
-  scheduleCapture(() =>
+  return () =>
     captureServerEvent({
       event: input.event,
       distinctId: resolvePostHogDistinctId(requestContext, input.userId),
@@ -51,22 +37,17 @@ export function trackServerEvent(input: TrackServerEventInput): void {
       organizationId: input.organizationId,
       projectId: input.projectId,
       properties: input.properties,
-    })
-  );
+    });
+}
+
+export function trackServerEvent(input: TrackServerEventInput): void {
+  scheduleCapture(eventCapture(input));
 }
 
 export async function trackServerEventAndFlush(
   input: TrackServerEventInput
 ): Promise<void> {
-  const requestContext = getPostHogRequestContext(input.headers);
-  captureServerEvent({
-    event: input.event,
-    distinctId: resolvePostHogDistinctId(requestContext, input.userId),
-    sessionId: requestContext.sessionId,
-    organizationId: input.organizationId,
-    projectId: input.projectId,
-    properties: input.properties,
-  });
+  eventCapture(input)();
   await flushPostHogServer();
 }
 

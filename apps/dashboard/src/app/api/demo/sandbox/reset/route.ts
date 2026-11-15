@@ -1,9 +1,5 @@
-import { demoSandboxRoute } from "@/lib/demo/route";
-import { resetDemoSandbox } from "@/lib/demo/sandbox";
+import { demoSandboxRoute, rebuildDemoSandboxResponse } from "@/lib/demo/route";
 
-export const maxDuration = 60;
-
-export const POST = demoSandboxRoute(async (sandbox) => {
-  const { slug } = await resetDemoSandbox(sandbox);
-  return Response.json({ slug });
-});
+export const POST = demoSandboxRoute((sandbox) =>
+  rebuildDemoSandboxResponse(sandbox)
+);

@@ -1,0 +1,19 @@
+---
+title: Run Button
+description: A play and stop button with a progress ring.
+---
+
+<Component path="workflow/examples/workflow-run-button" />
+
+<RegistryInstall name="workflow-run-button" />
+
+`WorkflowRunButton` is its own button built on the Base UI `Button` primitive, so it leaves your shadcn `Button` alone. It reads Run workflow, then Stop with a ring that fills with `progress`, then Run again.
+
+| Prop | Default | Description |
+| --- | --- | --- |
+| `phase` | | `idle`, `running` or `done`. |
+| `progress` | `0` | From 0 to 1. |
+| `onPlay` | | Called from idle and done. |
+| `onStop` | | Called while running. |
+
+<include>./_used-in.mdx</include>

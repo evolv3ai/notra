@@ -1,0 +1,146 @@
+---
+title: "Publishing and deployments"
+sidebarTitle: "Publishing"
+description: "How changes go live, how to edit in Notra, and how to roll back, resume publishing or take a site offline."
+authors:
+  - handle: jan
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/sites/publishing
+  type: how-to
+  applies_to:
+    - notra
+  language: en
+  status: stable
+---
+
+Notra deploys a site when you push, merge or publish from the editor, and keeps the live version online until the new build is ready. This page covers what triggers a deploy, how to follow it, how to edit in Notra and how to roll back, take offline or delete a site.
+
+## Publishing from Content
+
+Choose **Publish** or **Update** in Content to publish a blog post or changelog to GitHub. A connected site uses its production branch and site folder. Existing publications keep their target when their project or the repository's site list changes. New publications ask you to choose a site when more than one matches. This choice belongs to the post; change the default site in the integration settings.
+
+The integration's **Review process** controls how changes reach that branch. **Open a pull request** creates a draft pull request for review. **Publish directly** commits to the target branch. Scheduled direct publications commit at their scheduled time, including schedules without a merge step. Protected branches, pending Sites drafts and files changed on GitHub fall back to a pull request when you explicitly publish.
+
+Saving updates an open content pull request. In direct mode, saving updates an already-live file when GitHub still has the version Notra last wrote. Metadata edits share a 600 ms save delay, so rapid changes are saved and synced together. Saving never opens a new pull request after the previous one closes; use **Update** to start another review. Edits to the entry on the review branch must be resolved before Notra can update it. Sites Design can still add changes to other files in the same pull request.
+
+Deleting a post keeps its repository files by default. Choose the removal switch to remove its recorded entry and images through the review process. Images referenced by another post's publication are kept.
+
+## What triggers a deploy
+
+With automatic publishing on, production builds go live as described below.
+
+| Trigger | What happens |
+| --- | --- |
+| **Push** to the production branch | Notra builds the commit and it goes live |
+| **Pull request** into the production branch | Notra builds a [preview](/sites/previews) |
+| **Manual update** | Notra builds the latest commit of the production branch and it goes live |
+| **Redeploy** | Notra builds the same commit again |
+| **Settings change** | Changing section paths, the production branch, the site folder, branding or the primary domain rebuilds the site |
+
+Production builds go live automatically unless a rollback has paused publishing. While paused, new builds still finish and appear in **Deployments**, but the rolled-back version stays live until you choose **Promote** or **Undo rollback**.
+
+When automatic publishing is on, the live version stays online until the new build is ready and then everything switches at once, so a failed build never touches the live site.
+
+If the site is in a subdirectory, a push that changes nothing in its folder doesn't deploy and gets no check run, so other work in a monorepo doesn't rebuild the site. Notra still deploys when it can't tell which files changed, for example after a force push or on a new branch.
+
+Notra updates the theme from time to time, and a site picks up the new theme with its next deploy. Use **Manual update** to pick it up right away.
+
+## Following a deploy
+
+Open **Deployments** to see production and preview builds, newest first, and filter by environment and status or search by branch and commit.
+
+A deployment moves through **Queued**, **Building**, **Uploading** and **Successful**, and Notra marks the one serving your site **Live**. A successful build isn't necessarily live, for example while publishing is paused after a rollback. The other statuses are:
+
+| Status | Meaning |
+| --- | --- |
+| **Failed** | The build stopped, and the log and **Diagnostics** list each problem with its file and line |
+| **Superseded** | A newer commit replaced this build before it started. For a site in a subdirectory, only commits that change its folder replace a build |
+| **Canceled** | The build was stopped |
+| **Expired** | Notra removed the files of this old deployment, so you can't restore it |
+
+Open a deployment for its timeline, the live build log, diagnostics and the number of files it produced.
+
+### GitHub checks
+
+Every commit that deploys gets a check run, **Notra Sites** for production and **Notra Sites preview** for previews. Published builds link to the live site or preview; builds that aren't live link to the deployment in Notra. Failed builds add their errors and warnings as annotations on the lines in the pull request. **Re-run** on GitHub redeploys the commit.
+
+Successful production builds held by a rollback show **Automatic publishing paused** in their GitHub check. Promoting a build updates its check to **Live**.
+
+## The editor
+
+The site's **Editor** edits your repository's files from the browser. Notra saves your edits as drafts, and they don't change the repository or the live site until you publish.
+
+- **New file**: pick **Blog** or **Changelog** and enter a title and file name to start a post.
+- **File types**: you can edit `.md`, `.mdx`, `.js`, `.jsx`, `.json` and `.css` files, plus the root [`.notraignore`](/sites/repository#exclude-files-with-notraignore). Drafts save automatically.
+- **Check for problems**: runs the same checks as a build, while **Changes** shows your edits next to the published version.
+- **Publish**: opens a dialog with a commit message and the way to publish.
+  - **Open pull request** opens a pull request from a new branch, and it's the default unless **Settings → Publishing** is set to **Direct commit**.
+  - **Commit and deploy** commits straight to the production branch. It's only available when **Settings → Publishing** is set to **Direct commit**, and not when the branch is protected on GitHub.
+
+You can't publish while there are errors. If a file changed on GitHub after you started editing, the editor shows **These files changed on GitHub**, and **Keep my edits on the latest version** moves your drafts onto the new version.
+
+### Publish an unlisted post from Content
+
+For a blog post or changelog written in **Content**, use its metadata controls:
+
+1. Open the post, choose **Details** if the side panel is closed, and select **Overview**.
+2. Turn on **Unlisted**. The page stays reachable by its direct HTML and Markdown URLs, but disappears from public listings, feeds, sitemaps and generated AI indexes.
+3. Publish the post to your site's GitHub repository, or choose **Update pull request** to update its linked pull request. Merge the change into the production branch. The new build goes live when ready unless a rollback has paused publishing.
+
+Changing the toggle saves the setting in Notra; it does not change an already deployed page until you publish and deploy the update. Unlisted pages are not private: anyone with the URL can read them.
+
+For blog posts, **Visible in search** is off and disabled while **Unlisted** is on. Turning **Unlisted** off restores your previous search setting; publish and deploy again to make the change live.
+
+If the post contains handwritten frontmatter in Notra, its `hidden` field takes precedence over the toggle. Edit or remove that field in the post itself. For files edited in the site's repository editor, set [`hidden: true` in frontmatter](/sites/posts#hidden-pages).
+
+## Roll back to an earlier deployment
+
+Only workspace owners and admins can roll back an active site.
+
+1. Open **Deployments** and find the earlier successful production build you want to publish.
+2. Open its action menu and choose **Rollback**.
+3. Confirm **Roll back**. The stored build goes live without rebuilding or changing your Git commits.
+
+The **Live** badge moves to that build, and the page shows **Automatic publishing paused**. New pushes and manual updates still create builds, but they won't replace it. Previews continue to update independently.
+
+You can roll back to an earlier build among the last ten successful production builds. Failed, skipped and preview builds don't count toward that window. The build must still have its stored files and match the current domain, section paths and branding setting. If those settings changed, **Redeploy** its commit instead.
+
+### Resume automatic publishing
+
+Choose **Promote** from the newest successful production build's action menu, or **Undo rollback** from the paused-publishing banner or the live build's menu.
+
+Both actions publish the newest successful production build available at that moment and resume automatic publishing. **Undo rollback** doesn't necessarily return to the build that was live before the rollback: a newer build may have finished while publishing was paused.
+
+### How long builds are kept
+
+Notra keeps the last ten successful production builds and protects the live build even if it falls outside that window. Active previews, builds still in progress and builds within the 24-hour cleanup grace period also keep their files. That grace period doesn't expand the ten-build rollback window.
+
+Cleanup removes older build files and marks those deployments **Expired**, while keeping their history, logs and diagnostics.
+
+## Settings
+
+| Section | What you can change |
+| --- | --- |
+| **General** | Site name, production branch and the site folder for monorepos |
+| **Content** | Which sections are on, and their paths |
+| **Previews** | Who can open previews. See [Previews](/sites/previews) |
+| **Publishing** | **Pull request** (recommended) or **Direct commit** for publishing from the editor |
+| **Danger zone** | Notra branding, turning analytics off, taking the site offline and deleting it |
+
+Changing settings, domains and preview access needs the owner or admin role.
+
+### Free plan limits
+
+A workspace on the Free plan can have one site and one custom domain, and its sites always show the "Powered by Notra" badge. Paid plans remove all three limits. At a limit, the dashboard hides **New site** or **Add domain**. To add more, upgrade under **Settings > Billing & Usage**. See [Billing and plans](/organization/billing).
+
+If a workspace moves to the Free plan, its existing sites and domains keep working, it can't add new ones until it's back within the limits, and the badge comes back on with the next build.
+
+### Take a site offline
+
+**Settings → Danger zone → Take offline** stops serving every page within seconds, including cached ones, and visitors see a "This site is unavailable" page. Notra deletes nothing, and **Bring back online** restores the last live version.
+
+### Delete a site
+
+**Delete site** removes the site, its deployments and its domains from Notra, and leaves your GitHub repository untouched.

@@ -1,4 +1,5 @@
 import { createRoute } from "@hono/zod-openapi";
+import { trackAiTrafficEvent } from "@notra/ai/billing/ai-traffic-events";
 import {
   feedbackOrganizationParamsSchema,
   feedbackParamsSchema,
@@ -14,8 +15,10 @@ import type { z } from "zod";
 
 import { API_FEEDBACK_VIA } from "../constants/analytics";
 import {
+  FEEDBACK_IDEMPOTENCY_CONFLICT_ERROR,
   FEEDBACK_NOT_FOUND_ERROR,
   FEEDBACK_ORGANIZATION_NOT_FOUND_ERROR,
+  FEEDBACK_QUOTA_EXCEEDED_ERROR,
   FEEDBACK_PROJECT_NOT_FOUND_ERROR,
 } from "../constants/feedback";
 import { ORGANIZATION_SCOPED_API_KEY_ERROR } from "../constants/skills";
@@ -88,7 +91,9 @@ const submitOrganizationFeedbackRoute = createRoute({
   responses: {
     202: feedbackAcceptedResponse,
     400: errorResponse("Invalid request body"),
+    402: errorResponse(FEEDBACK_QUOTA_EXCEEDED_ERROR),
     404: errorResponse(FEEDBACK_ORGANIZATION_NOT_FOUND_ERROR),
+    409: errorResponse(FEEDBACK_IDEMPOTENCY_CONFLICT_ERROR),
     429: publicFeedbackRateLimitedResponse,
   },
 });
@@ -108,8 +113,10 @@ const submitFeedbackRoute = createRoute({
     202: feedbackAcceptedResponse,
     400: errorResponse("Invalid request body"),
     401: errorResponse("Missing or invalid credentials"),
+    402: errorResponse(FEEDBACK_QUOTA_EXCEEDED_ERROR),
     403: errorResponse("Forbidden"),
     404: errorResponse(FEEDBACK_PROJECT_NOT_FOUND_ERROR),
+    409: errorResponse(FEEDBACK_IDEMPOTENCY_CONFLICT_ERROR),
     429: feedbackRateLimitedResponse,
     503: errorResponse("Authentication service unavailable"),
   },
@@ -182,24 +189,6 @@ const updateFeedbackRoute = createRoute({
   },
 });
 
-async function handleSubmitFeedbackAccepted(
-  c: Context,
-  organizationId: string,
-  via: (typeof API_FEEDBACK_VIA)[keyof typeof API_FEEDBACK_VIA],
-  success: SubmitFeedbackProgramSuccess
-) {
-  const feedback = serializeFeedback(success.feedback);
-
-  trackFeedbackReceived(c, {
-    organizationId,
-    feedback,
-    deduplicated: success.deduplicated,
-    via,
-  });
-
-  return c.json({ feedback, deduplicated: success.deduplicated }, 202);
-}
-
 async function submitFeedbackHandler(
   c: Context,
   organizationId: string,
@@ -216,14 +205,23 @@ async function submitFeedbackHandler(
     })
   );
   if (result._tag === "Failure") {
-    const response = respondToFeedbackFailure(c, result.failure);
-    if (response) {
-      return response;
+    if (result.failure._tag === "FeedbackQuotaExceededError") {
+      return c.json({ error: FEEDBACK_QUOTA_EXCEEDED_ERROR }, 402);
     }
-    throw result.failure;
+    if (result.failure._tag === "FeedbackIdempotencyConflictError") {
+      return c.json({ error: FEEDBACK_IDEMPOTENCY_CONFLICT_ERROR }, 409);
+    }
+    return respondToFeedbackFailure(c, result.failure);
   }
 
-  return handleSubmitFeedbackAccepted(c, organizationId, via, result.success);
+  const { deduplicated } = result.success;
+  if (!deduplicated) {
+    void trackAiTrafficEvent(organizationId);
+  }
+  const feedback = serializeFeedback(result.success.feedback);
+  trackFeedbackReceived(c, { organizationId, feedback, deduplicated, via });
+
+  return c.json({ feedback, deduplicated }, 202);
 }
 
 feedbackRoutes.openapi(submitOrganizationFeedbackRoute, async (c) => {
@@ -240,11 +238,7 @@ feedbackRoutes.openapi(submitOrganizationFeedbackRoute, async (c) => {
     })
   );
   if (organizationResult._tag === "Failure") {
-    const response = respondToFeedbackFailure(c, organizationResult.failure);
-    if (response) {
-      return response;
-    }
-    throw organizationResult.failure;
+    return respondToFeedbackFailure(c, organizationResult.failure);
   }
 
   const organizationId = organizationResult.success;
@@ -298,7 +292,6 @@ feedbackRoutes.openapi(listFeedbackRoute, async (c) => {
       query: c.req.valid("query"),
     })
   );
-  // listFeedback only fails on database errors; domain 404s are not produced here.
   if (result._tag === "Failure") {
     throw result.failure;
   }
@@ -329,11 +322,7 @@ feedbackRoutes.openapi(getFeedbackRoute, async (c) => {
     })
   );
   if (result._tag === "Failure") {
-    const response = respondToFeedbackFailure(c, result.failure);
-    if (response) {
-      return response;
-    }
-    throw result.failure;
+    return respondToFeedbackFailure(c, result.failure);
   }
 
   return c.json({ feedback: serializeFeedback(result.success) }, 200);
@@ -355,11 +344,7 @@ feedbackRoutes.openapi(updateFeedbackRoute, async (c) => {
     })
   );
   if (result._tag === "Failure") {
-    const response = respondToFeedbackFailure(c, result.failure);
-    if (response) {
-      return response;
-    }
-    throw result.failure;
+    return respondToFeedbackFailure(c, result.failure);
   }
 
   return c.json({ feedback: serializeFeedback(result.success) }, 200);

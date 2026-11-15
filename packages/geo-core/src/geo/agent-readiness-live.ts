@@ -54,6 +54,22 @@ function parseApiReport(
   };
 }
 
+async function toApiProblemError(
+  response: Response,
+  targetUrl: string
+): Promise<AgentReadinessApiError> {
+  const parsedProblem = agentReadinessApiProblemSchema.safeParse(
+    await response.json().catch(() => null)
+  );
+  return new AgentReadinessApiError({
+    message: toAgentReadinessApiErrorMessage(
+      parsedProblem.success ? parsedProblem.data.code : null,
+      targetUrl,
+      response.status
+    ),
+  });
+}
+
 async function fetchStoredReport(
   targetUrl: string,
   signal: AbortSignal,
@@ -77,16 +93,7 @@ async function fetchStoredReport(
     return null;
   }
   if (!response.ok) {
-    const parsedProblem = agentReadinessApiProblemSchema.safeParse(
-      await response.json().catch(() => null)
-    );
-    throw new AgentReadinessApiError({
-      message: toAgentReadinessApiErrorMessage(
-        parsedProblem.success ? parsedProblem.data.code : null,
-        targetUrl,
-        response.status
-      ),
-    });
+    throw await toApiProblemError(response, targetUrl);
   }
 
   const parsed = agentReadinessApiReportSchema.safeParse(await response.json());
@@ -159,16 +166,7 @@ async function streamScan(
   });
 
   if (!(response.ok && response.body)) {
-    const parsedProblem = agentReadinessApiProblemSchema.safeParse(
-      await response.json().catch(() => null)
-    );
-    throw new AgentReadinessApiError({
-      message: toAgentReadinessApiErrorMessage(
-        parsedProblem.success ? parsedProblem.data.code : null,
-        targetUrl,
-        response.status
-      ),
-    });
+    throw await toApiProblemError(response, targetUrl);
   }
 
   const reader = response.body.getReader();
@@ -224,7 +222,7 @@ function readinessNetwork<A>(run: (signal: AbortSignal) => Promise<A>) {
   });
 }
 
-export function makeAgentReadinessNetwork(fetchRequest: AgentReadinessFetch) {
+function makeAgentReadinessNetwork(fetchRequest: AgentReadinessFetch) {
   return Layer.effect(
     AgentReadinessNetwork,
     Effect.sync(() =>

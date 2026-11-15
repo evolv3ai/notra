@@ -32,7 +32,7 @@ export interface GeoSentimentResponse {
   };
 }
 
-export interface GeoSentimentEvidenceItem {
+interface GeoSentimentEvidenceItem {
   id: string;
   scanId: string;
   promptId: string;

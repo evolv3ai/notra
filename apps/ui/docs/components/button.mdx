@@ -9,11 +9,9 @@ Primary, secondary, outline and destructive get a vertical gradient, a top highl
 
 ## Installation
 
-```bash
-bunx shadcn@latest add @notra/notra-button
-```
+<RegistryInstall name="notra-button" />
 
-This replaces `components/ui/button.tsx`. The gradient is built from your `--primary`, `--foreground`, `--background`, `--muted` and `--destructive` tokens, so it follows your theme.
+This installs `components/button/components/button.tsx`, which wraps shadcn's Button. Your `components/ui/button.tsx` stays as it is. The gradient is built from your `--primary`, `--foreground`, `--background`, `--muted` and `--destructive` tokens, so it follows your theme.
 
 ## Sizes
 
@@ -25,7 +23,7 @@ This replaces `components/ui/button.tsx`. The gradient is built from your `--pri
 
 Pass `loading` while an action runs. The label blurs up and out, three dots rise in from below and bounce in turn, and the button keeps its width so nothing around it shifts. A loading button can't be clicked again but stays focusable, and sets `aria-busy`.
 
-The animated layers live in `components/ui/button-content.tsx`, a client component, so `button.tsx` and `buttonVariants` still work in server components.
+The animated layers live in `components/button/components/button-content.tsx`, a client component, so `button.tsx` and `buttonVariants` still work in server components.
 
 <Component path="button/examples/button-loading" />
 

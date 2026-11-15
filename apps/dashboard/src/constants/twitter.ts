@@ -9,12 +9,10 @@ export const TWEET_LIGHT_CODE_POINT_RANGES: ReadonlyArray<
   [0x20_10, 0x20_1f],
   [0x20_32, 0x20_37],
 ];
-export const TWITTER_BRAND_COLOR = "#000000";
 export const TWITTER_DUPLICATE_POST_DOCS_URL =
   "https://developer.x.com/en/support/x-api/error-troubleshooting";
 
 export const TWEET_MENTION_REGEX = /(?<![\w.])@(\w{1,15})/g;
-export const TWEET_HASHTAG_REGEX = /#(\w+)/g;
 export const TWEET_CASHTAG_REGEX =
   /(?<![\w$])\$([A-Za-z]{1,6}(?:[._][A-Za-z]{1,2})?)/g;
 export const TWEET_URL_REGEX =

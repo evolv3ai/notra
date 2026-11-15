@@ -1,10 +1,9 @@
 "use client";
 
 import { supportsPostSlug } from "@notra/ai/schemas/post";
-import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useLayoutEffect, useRef } from "react";
+import { useLocale, useTranslations } from "use-intl";
 
-import { ContentDetailSourceMetadata } from "@/components/content/content-detail-source-metadata";
 import { ContentEditorMediaInsert } from "@/components/content/editor/content-editor-media-insert";
 import { LexicalEditor } from "@/components/content/editor/lexical-editor";
 import { longFormEditorTheme } from "@/components/content/editor/long-form-editor-theme";
@@ -30,7 +29,6 @@ export function LongFormEditor({
   editorRef,
   editorKey,
   reviewPreviousMarkdown = null,
-  organizationId,
 }: ContentEditorProps) {
   const t = useTranslations("content.editors");
   const tCommon = useTranslations("common");
@@ -148,12 +146,6 @@ export function LongFormEditor({
             {formatArticleDate(new Date(content.date), locale)}
           </time>
         </div>
-        {organizationId ? (
-          <ContentDetailSourceMetadata
-            organizationId={organizationId}
-            sourceMetadata={content.sourceMetadata}
-          />
-        ) : null}
       </div>
 
       <div className="mt-8 [&_.draggable-block-menu]:-left-6">

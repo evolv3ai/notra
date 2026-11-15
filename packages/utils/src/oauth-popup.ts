@@ -108,12 +108,11 @@ export function openMcpOAuthPopup() {
 export function createMcpOAuthPopupCompletionResponse(url: string) {
   const messageType = JSON.stringify(MCP_OAUTH_POPUP_MESSAGE);
   const completionUrl = JSON.stringify(url).replaceAll("<", "\\u003c");
-  const fallbackUrl = JSON.stringify(url).replaceAll("<", "\\u003c");
   const popupNamePrefix = JSON.stringify(MCP_OAUTH_POPUP_NAME_PREFIX);
   const channelName = JSON.stringify(MCP_OAUTH_POPUP_CHANNEL);
 
   return new Response(
-    `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Authorization complete</title></head><body><p>Authorization complete. You can close this window.</p><script>const prefix=${popupNamePrefix}+"-";const popupId=window.name.startsWith(prefix)?window.name.slice(prefix.length):null;const payload={type:${messageType},url:${completionUrl},popupId};if(popupId&&window.opener&&!window.opener.closed){window.opener.postMessage(payload,window.location.origin);window.close()}else if(popupId&&typeof BroadcastChannel!=="undefined"){const channel=new BroadcastChannel(${channelName});channel.postMessage(payload);channel.close();window.close()}else{window.location.replace(${fallbackUrl})}</script></body></html>`,
+    `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Authorization complete</title></head><body><p>Authorization complete. You can close this window.</p><script>const prefix=${popupNamePrefix}+"-";const popupId=window.name.startsWith(prefix)?window.name.slice(prefix.length):null;const payload={type:${messageType},url:${completionUrl},popupId};if(popupId&&window.opener&&!window.opener.closed){window.opener.postMessage(payload,window.location.origin);window.close()}else if(popupId&&typeof BroadcastChannel!=="undefined"){const channel=new BroadcastChannel(${channelName});channel.postMessage(payload);channel.close();window.close()}else{window.location.replace(${completionUrl})}</script></body></html>`,
     {
       headers: {
         "cache-control": "no-store",

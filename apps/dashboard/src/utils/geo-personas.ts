@@ -15,10 +15,6 @@ import type { GeoSequenceEngineThread } from "@/types/geo";
 import type { PersonaMemoryGroup } from "@/types/geo-personas-ui";
 import { buildSequenceEngineThreads } from "@/utils/geo-sequences";
 
-/**
- * A persona turn carries the same shape as a conversation turn apart from the
- * owning id, so it can be replayed by the conversation components unchanged.
- */
 function toSequenceTurn(result: GeoPersonaTurnResult): GeoSequenceTurnResult {
   const { personaId, ...turn } = result;
   return { ...turn, sequenceId: personaId };
@@ -67,10 +63,6 @@ export function personaInitials(name: string): string {
     .join("");
 }
 
-/**
- * A sentence end glued to the next sentence, e.g. "early.Owns". Needs a
- * lowercase letter on both sides so "U.S." or "Ph.D." stay intact.
- */
 const GLUED_SENTENCE_BREAK = /(?<=\p{Ll}[.!?])(?=\p{Lu}\p{Ll})/gu;
 
 /**

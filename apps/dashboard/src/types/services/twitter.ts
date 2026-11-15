@@ -34,7 +34,7 @@ export interface TwitterUserLookup {
   pinnedTweet: TwitterTweet | null;
 }
 
-export type TwitterVerifiedType = "blue" | "business" | "government" | "none";
+type TwitterVerifiedType = "blue" | "business" | "government" | "none";
 
 export interface TwitterVerificationResponse {
   data?: {

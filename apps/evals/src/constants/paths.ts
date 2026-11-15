@@ -6,6 +6,5 @@ export const APP_DIR = resolve(
   "../.."
 );
 export const REPO_ROOT = resolve(APP_DIR, "../..");
-/** Saved runs. Gitignored. */
 export const RUNS_DIR = join(APP_DIR, ".runs");
 export const CACHE_DIR = join(APP_DIR, ".cache");

@@ -9,6 +9,10 @@ export const NAVBAR_MOBILE_OVERLAY_LAYOUT = {
     shell: "pt-[6.5rem]",
     inset: "px-11",
   },
+  announcement: {
+    shell: "pt-[9rem]",
+    inset: "px-11",
+  },
   compact: {
     shell: "pt-20",
     inset: "px-7",

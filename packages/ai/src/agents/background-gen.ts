@@ -32,6 +32,7 @@ import type {
 import { summarizeRouteUsage } from "@notra/ai/utils/route-usage";
 import { buildTelemetryOptions } from "@notra/ai/utils/tcc";
 import { toAgentTokenUsage } from "@notra/ai/utils/token-usage";
+import { withUsageContext } from "@notra/ai/utils/usage-attribution";
 import { isStepCount, ToolLoopAgent } from "ai";
 
 export class ContentGenerationSkippedError extends Error {
@@ -42,6 +43,16 @@ export class ContentGenerationSkippedError extends Error {
 }
 
 export async function runBackgroundGen(
+  options: BackgroundGenOptions
+): Promise<BackgroundGenResult> {
+  return await withUsageContext(
+    options.organizationId,
+    options.telemetryMetadata,
+    () => runBackgroundGenWithContext(options)
+  );
+}
+
+async function runBackgroundGenWithContext(
   options: BackgroundGenOptions
 ): Promise<BackgroundGenResult> {
   const {
@@ -67,10 +78,7 @@ export async function runBackgroundGen(
     includeSearchBrandReferencesTool,
   } = options;
 
-  if (
-    (!repositories || repositories.length === 0) &&
-    (!linearIntegrations || linearIntegrations.length === 0)
-  ) {
+  if (repositories.length === 0 && !linearIntegrations?.length) {
     throw new Error(
       `At least one repository or Linear integration must be provided to generate ${contentLabel}.`
     );
@@ -84,12 +92,12 @@ export async function runBackgroundGen(
 
   await assertRouteHasCredits({ organizationId, modelId: CONTENT_AGENT_MODEL });
 
-  const model = createModel(organizationId, CONTENT_AGENT_MODEL, {}, log);
+  const model = createModel(organizationId, CONTENT_AGENT_MODEL, log);
 
   const prompt = getUserPrompt(contentLabel, promptInput);
 
   const allowedIntegrationIds = Array.from(
-    new Set((repositories ?? []).map((repo) => repo.integrationId))
+    new Set(repositories.map((repo) => repo.integrationId))
   );
 
   const allowedLinearIntegrationIds = Array.from(
@@ -135,8 +143,6 @@ export async function runBackgroundGen(
         },
         gateway: { tags: ["content-generation"] },
       },
-      // Fall back to the previous, proven content model rather than the
-      // generic OpenAI chain (gpt-5.4-mini), which was never evaluated here.
       { modelId: CONTENT_AGENT_MODEL, fallbackModels: [AGENT_DEFAULT_MODEL] }
     ),
     tools: {
@@ -158,13 +164,18 @@ export async function runBackgroundGen(
       listAvailableSkills: listAvailableSkills({ organizationId }),
       getSkillByName: getSkillByName({ organizationId }),
       createPost: createCreatePostTool(postToolsConfig, postToolsResult),
-      updatePost: createUpdatePostTool(postToolsConfig, postToolsResult),
+      updatePost: createUpdatePostTool(postToolsConfig, postToolsResult, {
+        onlyRunPosts: true,
+      }),
       viewPost: createViewPostTool(postToolsConfig),
       skip: createSkipTool(postToolsResult),
       fail: createFailTool(postToolsResult),
     },
     instructions,
-    stopWhen: isStepCount(50),
+    stopWhen: [
+      isStepCount(50),
+      () => Boolean(postToolsResult.skipReason || postToolsResult.failReason),
+    ],
     ...buildTelemetryOptions(telemetryMetadata),
   });
 

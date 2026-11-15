@@ -1,0 +1,57 @@
+---
+title: "Examples"
+description: "Finished Notra sites you can open, copy and deploy, each with a different look and setup."
+authors:
+  - handle: jan
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/sites/examples
+  type: reference
+  applies_to:
+    - notra
+  language: en
+  status: stable
+---
+
+Every example is a complete site folder in [`sites`](https://github.com/usenotra/sites-examples/tree/main/sites) of the [Notra examples repository](https://github.com/usenotra/sites-examples), with its own `blog.json`, posts, changelog and a README that lists what it shows. Examples served under a path also have a small app or config for the main website in [`hosts`](https://github.com/usenotra/sites-examples/tree/main/hosts).
+
+To start from one, copy its folder into your repository and create a site from it under **Sites → New site**. If the folder isn't at the root of the repository, turn on **Site is in a subdirectory** and enter its path.
+
+## Domains
+
+| Example | Setup | Live | Code |
+| --- | --- | --- | --- |
+| Ledgerly | Own subdomain | [subdomain-example.notra.site/blog](https://subdomain-example.notra.site/blog) | [`subdomain`](https://github.com/usenotra/sites-examples/tree/main/sites/subdomain) |
+| Pathway | `/blog` on a Next.js site | [nextjs-example.notra.site/blog](https://nextjs-example.notra.site/blog) | [site](https://github.com/usenotra/sites-examples/tree/main/sites/nextjs), [host](https://github.com/usenotra/sites-examples/tree/main/hosts/nextjs) |
+| Brightdesk | `/blog` on a TanStack Start site | [tanstack-start-example.notra.site/blog](https://tanstack-start-example.notra.site/blog) | [site](https://github.com/usenotra/sites-examples/tree/main/sites/tanstack-start), [host](https://github.com/usenotra/sites-examples/tree/main/hosts/tanstack-start) |
+| Fernhill | `/blog` on an Astro site | [astro-example.notra.site/blog](https://astro-example.notra.site/blog) | [site](https://github.com/usenotra/sites-examples/tree/main/sites/astro), [host](https://github.com/usenotra/sites-examples/tree/main/hosts/astro) |
+| Quillstack | `/blog` with Vercel rewrites | [vercel-example.notra.site/blog](https://vercel-example.notra.site/blog) | [site](https://github.com/usenotra/sites-examples/tree/main/sites/vercel), [host](https://github.com/usenotra/sites-examples/tree/main/hosts/vercel) |
+| Tidepool | `/blog` with Netlify rewrites | [netlify-example.notra.site/blog](https://netlify-example.notra.site/blog) | [site](https://github.com/usenotra/sites-examples/tree/main/sites/netlify), [host](https://github.com/usenotra/sites-examples/tree/main/hosts/netlify) |
+| Relaywave | `/blog` through a Cloudflare Worker | [cf-example.notra.site/blog](https://cf-example.notra.site/blog) | [site](https://github.com/usenotra/sites-examples/tree/main/sites/cloudflare), [host](https://github.com/usenotra/sites-examples/tree/main/hosts/cloudflare) |
+| Stonebridge | `/blog` through nginx | [nginx-example.notra.site/blog](https://nginx-example.notra.site/blog) | [site](https://github.com/usenotra/sites-examples/tree/main/sites/nginx), [host](https://github.com/usenotra/sites-examples/tree/main/hosts/nginx) |
+| Ada Brennan | Blog only | [personal-example.notra.site/blog](https://personal-example.notra.site/blog) | [`personal`](https://github.com/usenotra/sites-examples/tree/main/sites/personal) |
+
+## Analytics
+
+The analytics examples use placeholder IDs, so swap in your own before you deploy. Provider scripts only run on the live production site.
+
+| Example | Provider | Live | Code |
+| --- | --- | --- | --- |
+| Cadence | PostHog (EU Cloud) | [posthog-example.notra.site/blog](https://posthog-example.notra.site/blog) | [`posthog`](https://github.com/usenotra/sites-examples/tree/main/sites/posthog) |
+| Northwind Studio | Plausible | [plausible-example.notra.site/blog](https://plausible-example.notra.site/blog) | [`plausible`](https://github.com/usenotra/sites-examples/tree/main/sites/plausible) |
+| Kilnworks | Umami | [umami-example.notra.site/blog](https://umami-example.notra.site/blog) | [`umami`](https://github.com/usenotra/sites-examples/tree/main/sites/umami) |
+| Harborline | Google Analytics 4 | [ga3-example.notra.site/blog](https://ga3-example.notra.site/blog) | [`google-analytics`](https://github.com/usenotra/sites-examples/tree/main/sites/google-analytics) |
+
+## Design and features
+
+For the unmodified default theme, use [`sites/default`](https://github.com/usenotra/sites-examples/tree/main/sites/default). It includes sample blog posts and release notes without custom styles or components. Deploy it with **Site is in a subdirectory** set to `sites/default`, the blog path set to `/blog` and the changelog path set to `/changelog`.
+
+| Example | What it shows | Live | Code |
+| --- | --- | --- | --- |
+| Forgekit | Changelog first, dark only, monospace headings | [devtool-changelog-example.notra.site/changelog](https://devtool-changelog-example.notra.site/changelog) | [`devtool-changelog`](https://github.com/usenotra/sites-examples/tree/main/sites/devtool-changelog) |
+| Meridian Review | Serif magazine with an image hero, pull quotes and author bios | [editorial-example.notra.site/blog](https://editorial-example.notra.site/blog) | [`editorial`](https://github.com/usenotra/sites-examples/tree/main/sites/editorial) |
+| Nova | Launch week, dark by default, banner and gradient | [dark-launch-example.notra.site/blog](https://dark-launch-example.notra.site/blog) | [`dark-launch`](https://github.com/usenotra/sites-examples/tree/main/sites/dark-launch) |
+| Orbitly | Own header, footer, slots and design tokens | [match-your-website-example.notra.site/blog](https://match-your-website-example.notra.site/blog) | [`match-your-website`](https://github.com/usenotra/sites-examples/tree/main/sites/match-your-website) |
+| Pixelmint | Own React components, a script and every built-in component | [custom-components-example.notra.site/blog](https://custom-components-example.notra.site/blog) | [`custom-components`](https://github.com/usenotra/sites-examples/tree/main/sites/custom-components) |
+| DriftDB | Open source: variables, redirects, SEO and instructions for AI agents | [open-source-example.notra.site/blog](https://open-source-example.notra.site/blog) | [`open-source`](https://github.com/usenotra/sites-examples/tree/main/sites/open-source) |

@@ -1,0 +1,14 @@
+{
+  "extends": "@notra/typescript-config/base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "types": ["node", "bun-types/test", "bun-types/html-rewriter"],
+    "noEmit": true
+  },
+  "include": [
+    "tests/connected-lifecycle-postgres.test.ts",
+    "src/types/worker-runtime.d.ts"
+  ]
+}

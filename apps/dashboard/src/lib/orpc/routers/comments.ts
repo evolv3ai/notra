@@ -1,35 +1,76 @@
 import { realtime } from "@notra/ai/realtime";
 import { db } from "@notra/db/drizzle";
 import {
-  agentFeedback,
-  geoShelfSources,
   discussionComments,
   discussionReactions,
+  posts,
   users,
 } from "@notra/db/schema";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
-import { getTranslations } from "next-intl/server";
 
 import { assertOrganizationAccess } from "@/lib/auth/organization";
+import { getTranslations } from "@/lib/i18n/server";
 import { authorizedProcedure } from "@/lib/orpc/base";
-import { badRequest, notFound } from "@/lib/orpc/utils/errors";
+import { badRequest, conflict, notFound } from "@/lib/orpc/utils/errors";
 import { publishCommentChange } from "@/lib/realtime/comments";
 import {
   commentTargetSchema,
   createCommentSchema,
   changeCommentSchema,
   reactCommentSchema,
+  resolveCommentSchema,
 } from "@/schemas/comments";
 import type { AuthenticatedUser } from "@/types/auth/organization";
-import type { CommentTarget, DiscussionComment } from "@/types/comments";
-import { assertCommentAuthor, replyDepth } from "@/utils/comment-permissions";
+import type {
+  CommentTarget,
+  CommentTransaction,
+  CreateCommentInput,
+  DiscussionComment,
+} from "@/types/comments";
+import {
+  assertCommentAuthor,
+  assertResolvableComment,
+  replyDepth,
+} from "@/utils/comment-permissions";
+import { assertDiscussionTarget } from "@/utils/discussion-access";
 
 function targetWhere(input: CommentTarget) {
   return and(
     eq(discussionComments.organizationId, input.organizationId),
-    input.targetType === "feedback"
-      ? eq(discussionComments.feedbackId, input.targetId)
-      : eq(discussionComments.shelfSourceId, input.targetId)
+    eq(
+      {
+        feedback: discussionComments.feedbackId,
+        shelf: discussionComments.shelfSourceId,
+        content: discussionComments.contentId,
+      }[input.targetType],
+      input.targetId
+    )
+  );
+}
+
+async function isSameComment(
+  tx: CommentTransaction,
+  input: CreateCommentInput,
+  userId: string
+) {
+  const [existing] = await tx
+    .select()
+    .from(discussionComments)
+    .where(and(targetWhere(input), eq(discussionComments.id, input.id)))
+    .limit(1);
+  const { anchor } = input;
+  return Boolean(
+    existing &&
+    existing.userId === userId &&
+    existing.parentId === input.parentId &&
+    existing.body === input.body &&
+    (anchor
+      ? existing.anchor &&
+        Object.entries(anchor).every(
+          ([key, value]) =>
+            existing.anchor?.[key as keyof typeof anchor] === value
+        )
+      : !existing.anchor)
   );
 }
 
@@ -42,21 +83,7 @@ async function assertDiscussionAccess(
     organizationId: input.organizationId,
     user: context.user,
   });
-  const table =
-    input.targetType === "feedback" ? agentFeedback : geoShelfSources;
-  const [target] = await db
-    .select({ id: table.id })
-    .from(table)
-    .where(
-      and(
-        eq(table.id, input.targetId),
-        eq(table.organizationId, input.organizationId)
-      )
-    )
-    .limit(1);
-  if (!target) {
-    throw notFound("Discussion not found");
-  }
+  await assertDiscussionTarget(input);
 }
 
 async function findComment(input: CommentTarget & { commentId: string }) {
@@ -97,6 +124,15 @@ export const commentsRouter = {
               )
             )
         : [];
+      const reactionsByComment = new Map<string, typeof reactions>();
+      for (const reaction of reactions) {
+        const group = reactionsByComment.get(reaction.commentId);
+        if (group) {
+          group.push(reaction);
+        } else {
+          reactionsByComment.set(reaction.commentId, [reaction]);
+        }
+      }
       const items: DiscussionComment[] = rows.map(
         ({ comment, name, image }) => ({
           ...comment,
@@ -105,9 +141,10 @@ export const commentsRouter = {
           createdAt: comment.createdAt.toISOString(),
           editedAt: comment.editedAt?.toISOString() ?? null,
           deletedAt: comment.deletedAt?.toISOString() ?? null,
-          reactions: reactions
-            .filter((reaction) => reaction.commentId === comment.id)
-            .map(({ emoji, userId }) => ({ emoji, userId })),
+          resolvedAt: comment.resolvedAt?.toISOString() ?? null,
+          reactions: (reactionsByComment.get(comment.id) ?? []).map(
+            ({ emoji, userId }) => ({ emoji, userId })
+          ),
         })
       );
       return {
@@ -124,28 +161,109 @@ export const commentsRouter = {
     .input(createCommentSchema)
     .handler(async ({ context, input }) => {
       await assertDiscussionAccess(context, input);
-      const parent = input.parentId
-        ? await findComment({ ...input, commentId: input.parentId })
-        : null;
-      const depth = replyDepth(
-        parent,
-        (await getTranslations("errors.comments"))("replyNotAllowed")
+      const rejectedMessage = (await getTranslations("errors.comments"))(
+        "replyNotAllowed"
       );
-      await db
-        .insert(discussionComments)
-        .values({
-          id: input.id,
-          organizationId: input.organizationId,
-          feedbackId: input.targetType === "feedback" ? input.targetId : null,
-          shelfSourceId: input.targetType === "shelf" ? input.targetId : null,
-          parentId: input.parentId,
-          depth,
-          userId: context.user.id,
-          body: input.body,
-        })
-        .onConflictDoNothing();
+      await db.transaction(async (tx) => {
+        if (input.anchor) {
+          const [post] = await tx
+            .select({ revision: posts.revision })
+            .from(posts)
+            .where(
+              and(
+                eq(posts.id, input.targetId),
+                eq(posts.organizationId, input.organizationId)
+              )
+            )
+            .limit(1)
+            .for("share");
+          if (!post) {
+            throw notFound("Discussion not found");
+          }
+          if (post.revision !== input.anchor.revision) {
+            if (await isSameComment(tx, input, context.user.id)) {
+              return;
+            }
+            throw conflict(
+              (await getTranslations("errors.comments"))("anchorStale")
+            );
+          }
+        } else {
+          await assertDiscussionTarget(input, tx);
+        }
+        const [parent] = input.parentId
+          ? await tx
+              .select({
+                depth: discussionComments.depth,
+                deletedAt: discussionComments.deletedAt,
+              })
+              .from(discussionComments)
+              .where(
+                and(
+                  targetWhere(input),
+                  eq(discussionComments.id, input.parentId)
+                )
+              )
+              .limit(1)
+              .for("update")
+          : [null];
+        if (input.parentId && !parent) {
+          throw notFound("Comment not found");
+        }
+        const depth = replyDepth(parent ?? null, rejectedMessage);
+        const [created] = await tx
+          .insert(discussionComments)
+          .values({
+            id: input.id,
+            organizationId: input.organizationId,
+            feedbackId: input.targetType === "feedback" ? input.targetId : null,
+            shelfSourceId: input.targetType === "shelf" ? input.targetId : null,
+            contentId: input.targetType === "content" ? input.targetId : null,
+            parentId: input.parentId,
+            depth,
+            userId: context.user.id,
+            body: input.body,
+            anchor: input.anchor ?? null,
+          })
+          .onConflictDoNothing()
+          .returning({ id: discussionComments.id });
+        if (
+          !created &&
+          input.anchor &&
+          !(await isSameComment(tx, input, context.user.id))
+        ) {
+          throw conflict("Comment id is already in use");
+        }
+      });
       await publishCommentChange(input);
       return { id: input.id };
+    }),
+  resolve: authorizedProcedure
+    .input(resolveCommentSchema)
+    .handler(async ({ context, input }) => {
+      await assertDiscussionAccess(context, input);
+      const comment = await findComment(input);
+      assertResolvableComment(comment);
+      const [updated] = await db
+        .update(discussionComments)
+        .set({
+          resolvedAt: input.resolved ? new Date() : null,
+          resolvedByUserId: input.resolved ? context.user.id : null,
+        })
+        .where(
+          and(
+            targetWhere(input),
+            eq(discussionComments.id, comment.id),
+            isNull(discussionComments.parentId),
+            isNull(discussionComments.deletedAt)
+          )
+        )
+        .returning({ id: discussionComments.id });
+      if (!updated) {
+        throw badRequest("Only active content root threads can be resolved");
+      }
+      await publishCommentChange(input);
+      return { success: true };
     }),
   edit: authorizedProcedure
     .input(changeCommentSchema)

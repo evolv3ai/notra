@@ -2,7 +2,6 @@ import { createGateway } from "@ai-sdk/gateway";
 import { APICallError } from "@ai-sdk/provider";
 import {
   EVALUATION_DEFAULT_TIMEOUT_MS,
-  EVALUATION_DISABLED_VALUES,
   EVALUATION_FLAG_ENV,
   EVALUATION_MODEL_ID,
 } from "@notra/ai/constants/evaluation";
@@ -14,11 +13,12 @@ import type {
   EvaluationQuestions,
   EvaluationResult,
 } from "@notra/ai/types/evaluation";
+import { readEnvSwitch } from "@notra/ai/utils/env-switch";
+import { withGatewayEvaluationTelemetry } from "@notra/ai/utils/gateway-evaluation-model";
 import { experimental_evaluate as evaluateWithModel } from "ai";
 
 function isFlagEnabled(): boolean {
-  const raw = process.env[EVALUATION_FLAG_ENV]?.trim().toLowerCase();
-  return !(raw && EVALUATION_DISABLED_VALUES.has(raw));
+  return readEnvSwitch(EVALUATION_FLAG_ENV, { defaultOn: true });
 }
 
 // On Vercel the gateway also authenticates via OIDC without an explicit key.
@@ -57,7 +57,7 @@ function combineSignals(
  * Gateway. Runs outside the model router: only Vercel serves them, they are
  * ZDR by default, and callers always keep an LLM fallback.
  */
-export function createEvaluationClient(
+function createEvaluationClient(
   config: EvaluationClientConfig = {}
 ): EvaluationClient {
   const apiKey = config.apiKey ?? process.env.AI_GATEWAY_API_KEY?.trim();
@@ -83,7 +83,16 @@ export function createEvaluationClient(
     const startedAt = performance.now();
 
     const result = await evaluateWithModel({
-      model: getGateway().evaluationModel(modelId),
+      model: withGatewayEvaluationTelemetry(
+        getGateway().evaluationModel(modelId),
+        {
+          ...params.logContext,
+          ...(params.organizationId
+            ? { organizationId: params.organizationId }
+            : {}),
+        },
+        { ...config, apiKey }
+      ),
       state: params.state,
       questions: params.questions,
       abortSignal: combineSignals(
@@ -95,6 +104,7 @@ export function createEvaluationClient(
           zeroDataRetention: true,
           disallowPromptTraining: true,
           tags: [`evaluation-${params.feature}`],
+          ...(params.organizationId ? { user: params.organizationId } : {}),
         },
       },
     });
@@ -138,9 +148,4 @@ let defaultClient: EvaluationClient | null = null;
 export function getEvaluationClient(): EvaluationClient {
   defaultClient ??= createEvaluationClient();
   return defaultClient;
-}
-
-/** Test/ops hook: replace the singleton (pass `null` to rebuild from env). */
-export function setEvaluationClient(next: EvaluationClient | null): void {
-  defaultClient = next;
 }

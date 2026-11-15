@@ -2,6 +2,7 @@
 
 import {
   ArrowUpRight01Icon,
+  Calendar03Icon,
   Copy01Icon,
   Delete02Icon,
   MoreHorizontalIcon,
@@ -20,9 +21,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@notra/ui/components/ui/dropdown-menu";
-import { useTranslations } from "next-intl";
-import Link from "next/link";
+import { useTranslations } from "use-intl";
 
+import Link from "@/components/framework/link";
 import type { CollectionMenuItemsProps } from "@/types/content/collection";
 import { collectionHref, collectionTitle } from "@/utils/content-collections";
 import { copyTextToClipboard } from "@/utils/copy-to-clipboard";
@@ -32,10 +33,12 @@ export function CollectionMenuItems({
   organizationSlug,
   disabled,
   onDelete,
+  onSchedule,
   variant = "context",
 }: CollectionMenuItemsProps) {
   const t = useTranslations("content.collections.actions");
   const tCommon = useTranslations("common.actions");
+  const tSchedule = useTranslations("content.calendar.schedule");
   const Item = variant === "context" ? ContextMenuItem : DropdownMenuItem;
   const Separator =
     variant === "context" ? ContextMenuSeparator : DropdownMenuSeparator;
@@ -71,6 +74,15 @@ export function CollectionMenuItems({
         <HugeiconsIcon aria-hidden="true" icon={Copy01Icon} />
         {t("copyLink")}
       </Item>
+      {!collection.isGenerating &&
+      collection.postCount === 1 &&
+      collection.singlePost &&
+      collection.statusSummary.published === 0 ? (
+        <Item disabled={disabled} onClick={() => onSchedule(collection)}>
+          <HugeiconsIcon aria-hidden="true" icon={Calendar03Icon} />
+          {tSchedule("trigger")}
+        </Item>
+      ) : null}
       <Separator />
       <Item
         disabled={disabled || collection.isGenerating}

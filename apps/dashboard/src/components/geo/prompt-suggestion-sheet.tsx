@@ -1,6 +1,9 @@
 "use client";
 
+import { HelpCircleIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { GSC_SYNC_LOOKBACK_DAYS } from "@notra/geo-core/constants/google-search-console";
+import { isQuestionQuery } from "@notra/geo-core/utils/gsc-question";
 import {
   Sheet,
   SheetContent,
@@ -10,11 +13,12 @@ import {
   SheetScrollArea,
   SheetTitle,
 } from "@notra/ui/components/ui/sheet";
-import { useLocale, useTranslations } from "next-intl";
+import { useRetainedValue } from "@notra/ui/hooks/use-retained-value";
 import { useMemo } from "react";
+import { InstrumentModule } from "ui/card";
+import { DataTable } from "ui/table";
+import { useLocale, useTranslations } from "use-intl";
 
-import { Table } from "@/components/motion/table";
-import { useRetainedValue } from "@/lib/hooks/use-retained-value";
 import type {
   PromptSuggestionSheetProps,
   SuggestionQueryTableProps,
@@ -31,49 +35,67 @@ function SuggestionQueryTable({ queries }: SuggestionQueryTableProps) {
   return (
     <section className="min-w-0 space-y-2">
       <h3 className="text-sm font-medium">{tGeoShared("searchQueries")}</h3>
-      <Table
+      <DataTable
         autoHeight
-        className="rounded-2xl"
         columns={[
           {
             key: "query",
             header: tCommon("labels.query"),
             width: "1fr",
             minWidth: "10rem",
-            sortable: true,
             cell: (query) => (
-              <span className="block leading-relaxed wrap-anywhere">
-                {query.query}
+              <span className="flex min-w-0 items-start gap-1.5 leading-snug">
+                {isQuestionQuery(query.query) ? (
+                  <HugeiconsIcon
+                    aria-label={t("question")}
+                    className="text-muted-foreground mt-0.5 size-3.5 shrink-0"
+                    icon={HelpCircleIcon}
+                    role="img"
+                    strokeWidth={2}
+                  />
+                ) : null}
+                <span className="min-w-0 wrap-anywhere">{query.query}</span>
               </span>
             ),
           },
           {
             key: "impressions",
             header: tCommon("labels.impressions"),
-            width: "8.5rem",
+            width: "6.5rem",
             align: "right",
-            sortable: true,
-            cell: (query) => formatCount(query.impressions, locale),
+            cell: (query) => (
+              <span className="tabular-nums">
+                {formatCount(query.impressions, locale)}
+              </span>
+            ),
           },
           {
             key: "clicks",
             header: tCommon("labels.clicks"),
-            width: "6rem",
+            width: "4.5rem",
             align: "right",
-            sortable: true,
-            cell: (query) => formatCount(query.clicks, locale),
+            cell: (query) => (
+              <span className="tabular-nums">
+                {formatCount(query.clicks, locale)}
+              </span>
+            ),
           },
           {
             key: "position",
             header: tCommon("labels.position"),
-            width: "6.5rem",
+            width: "5.5rem",
             align: "right",
-            sortable: true,
-            cell: (query) => `#${formatOneDecimal(query.position, locale)}`,
+            cell: (query) => (
+              <span className="tabular-nums">
+                #{formatOneDecimal(query.position, locale)}
+              </span>
+            ),
           },
         ]}
-        data={[...queries]}
-        defaultSort={{ key: "impressions", direction: "desc" }}
+        // Two to eight rows: a fixed order beats sort controls.
+        data={[...queries].sort(
+          (left, right) => right.impressions - left.impressions
+        )}
         emptyState={t("noQueryData")}
         getRowId={(query) => query.query}
         height={tableHeightFor(0)}
@@ -109,7 +131,7 @@ export function PromptSuggestionSheet({
       open={suggestion !== null}
     >
       <SheetContent
-        className="data-[side=right]:w-[calc(100%-1rem)]"
+        className="data-[side=right]:w-[calc(100%-1rem)] data-[side=right]:sm:max-w-3xl"
         side="right"
         variant="inset"
       >
@@ -126,13 +148,12 @@ export function PromptSuggestionSheet({
             key={detail.id}
           >
             <div className="space-y-4">
-              <section className="bg-background min-w-0 overflow-hidden rounded-xl border">
-                <div className="bg-muted/70 border-b px-4 py-3">
-                  <h3 className="text-sm font-medium">
-                    {tGeoShared("searchPerformance")}
-                  </h3>
-                </div>
-                <dl className="grid grid-cols-2 gap-5 p-4 sm:grid-cols-4">
+              <InstrumentModule
+                eyebrow={tGeoShared("searchPerformance")}
+                hint={t("lookback", { days: GSC_SYNC_LOOKBACK_DAYS })}
+                variant="table-compact"
+              >
+                <dl className="grid grid-cols-2 gap-5 sm:grid-cols-4">
                   <div className="space-y-1">
                     <dt className="text-muted-foreground text-xs">
                       {tCommon("labels.impressions")}
@@ -170,22 +191,17 @@ export function PromptSuggestionSheet({
                     </dd>
                   </div>
                 </dl>
-                <p className="text-muted-foreground px-4 pb-4 text-xs">
-                  {t("lookback", { days: GSC_SYNC_LOOKBACK_DAYS })}
-                </p>
-              </section>
+              </InstrumentModule>
 
               {title ? (
-                <section className="bg-background min-w-0 overflow-hidden rounded-xl border">
-                  <div className="bg-muted/70 border-b px-4 py-3">
-                    <h3 className="text-sm font-medium">
-                      {tGeoShared("suggestedTitle")}
-                    </h3>
-                  </div>
-                  <p className="p-4 text-sm leading-relaxed wrap-anywhere">
+                <InstrumentModule
+                  eyebrow={tGeoShared("suggestedTitle")}
+                  variant="table-compact"
+                >
+                  <p className="text-sm leading-relaxed wrap-anywhere">
                     {title}
                   </p>
-                </section>
+                </InstrumentModule>
               ) : null}
 
               <SuggestionQueryTable queries={detail.keywords} />

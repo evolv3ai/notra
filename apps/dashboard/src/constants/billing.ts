@@ -68,9 +68,6 @@ export const INVOICE_PRODUCT_NAME_FALLBACKS: Record<string, string> = {
   [LEGACY_PLANS.PRO]: "Pro",
   [LEGACY_PLANS.PRO_YEARLY]: "Pro",
 };
-
-export const INVOICE_TABLE_COLUMN_COUNT = 4;
-
 export const BILLING_PLAN_SKELETON_KEYS = [
   PLANS.STARTER,
   PLANS.GROWTH,
@@ -86,16 +83,13 @@ export const BILLING_PLAN_FEATURE_SKELETON_KEYS = [
   "feature-6",
 ] as const;
 
-export const BILLING_INVOICE_SKELETON_KEYS = [
-  "invoice-1",
-  "invoice-2",
-  "invoice-3",
-] as const;
+export const BILLING_INVOICE_SKELETON_ROWS = 3;
 
-export const USAGE_METRIC_SKELETON_KEYS = [
-  "answers",
-  "credits",
-  "pull-request-credits",
+export const INVOICE_SKELETON_COLUMN_WIDTHS = [
+  "140px",
+  "1fr",
+  "120px",
+  "120px",
 ] as const;
 
 export const USAGE_FEATURE_SKELETON_KEYS = [
@@ -121,24 +115,31 @@ export const AUTUMN_ORGANIZATION_HEADER = "x-notra-organization";
 
 export const USAGE_RANGES = ["7d", "30d", "90d"] as const;
 
-export const USAGE_FEATURE_ORDER: readonly string[] = [
-  FEATURES.AI_ANSWERS,
-  FEATURES.IMAGE_GENERATIONS,
-  FEATURES.LONG_FORM_POSTS,
-  FEATURES.SOCIAL_POSTS,
-  FEATURES.PROJECTS,
-  FEATURES.REFERENCES,
-  FEATURES.TEAM_MEMBERS,
-  FEATURES.WORKFLOWS,
-  FEATURES.INTEGRATIONS,
-];
+export const USAGE_RANGE_LABEL_KEYS = {
+  "7d": "last7Days",
+  "30d": "last30Days",
+  "90d": "last90Days",
+} as const;
 
-export const USAGE_ANSWERS_ACCENT = "#10b981";
-export const USAGE_PULL_REQUEST_CREDITS_ACCENT = "#f59e0b";
-export const USAGE_CHART_ACCENT = "#8b5cf6";
+/** Quotas that are tracked against Autumn; the rest are never decremented. */
+export const USAGE_METERED_FEATURES: readonly string[] = [
+  FEATURES.LONG_FORM_POSTS,
+  FEATURES.IMAGE_GENERATIONS,
+  FEATURES.REFERENCES,
+];
 
 export const USAGE_ANSWERS_CHART_CONFIG = {
   ai_answers: {
     color: "var(--primary)",
   },
 } satisfies ChartConfig;
+
+export const AUTUMN_READ_ROUTES: ReadonlySet<string> = new Set([
+  "aggregateEvents",
+  "getEntity",
+  "getOrCreateCustomer",
+  "listEvents",
+  "listPlans",
+]);
+
+export const CHECKOUT_PLAN_PARAM = "plan";

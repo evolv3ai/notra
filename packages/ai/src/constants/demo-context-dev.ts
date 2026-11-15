@@ -3,11 +3,9 @@ import type {
   ContextDevSearchResult,
 } from "@notra/ai/types/context-dev";
 
-/** Served by the demo dashboard; the fictional homepage's "screenshot". */
 export const DEMO_SCREENSHOT_URL = "/demo/fieldnote-homepage.png";
 export const DEMO_SCREENSHOT_SIZE = { width: 1440, height: 900 } as const;
 
-/** Pages of the fictional site, returned by the sitemap crawl. */
 export const DEMO_SITEMAP_PATHS = [
   "/",
   "/product",
@@ -23,7 +21,6 @@ export const DEMO_SITEMAP_PATHS = [
   "/security",
 ] as const;
 
-/** Design tokens of the fictional homepage, in context.dev's shape. */
 export const DEMO_STYLEGUIDE: Record<string, unknown> = {
   colors: {
     primary: { hex: "#1F6F5C", name: "Field green", usage: "Buttons, links" },
@@ -81,7 +78,6 @@ export const DEMO_COMPETITORS: readonly ContextDevCompetitor[] = [
   },
 ];
 
-/** Search hits for any query; titles stay on the demo's topic. */
 export const DEMO_SEARCH_RESULTS: readonly ContextDevSearchResult[] = [
   {
     url: "https://www.saascompare.example/best-ai-meeting-notes",

@@ -1,0 +1,175 @@
+---
+title: "Logo, navigation and banner"
+sidebarTitle: "Navigation"
+description: "Set your logo and favicon, navbar and footer links, an announcement banner and reader actions on blog posts and changelog entries."
+authors:
+  - handle: jan
+
+docolin:
+  schema_version: 1
+  kind: tools/notra/sites/customize/navigation
+  type: how-to
+  applies_to:
+    - notra
+  language: en
+  status: stable
+---
+
+`blog.json` sets your logo and favicon, the links in the navbar and footer, an announcement banner and reader actions on blog posts and changelog entries. To replace the header or footer with your own markup instead, see [Match your website](/sites/match-your-website).
+
+## Logo and favicon
+
+```json blog.json
+{
+  "name": "Acme",
+  "logo": { "light": "/images/logo.svg", "dark": "/images/logo-dark.svg", "href": "https://acme.com" },
+  "favicon": "/images/favicon.svg"
+}
+```
+
+- `logo` is one path or a `light` and `dark` version, and `href` is where the logo links to, usually your homepage. The header shows the logo next to `name`.
+- `favicon` is one path or `{ "light": ..., "dark": ... }`, and a PNG or JPEG favicon also becomes the icon when someone saves the page to their home screen.
+
+## Navbar
+
+```json blog.json
+"navbar": {
+  "links": [
+    { "label": "Docs", "href": "https://acme.com/docs", "icon": "book-open" },
+    { "label": "Pricing", "href": "https://acme.com/pricing" },
+    { "type": "discord", "href": "https://discord.gg/acme" }
+  ],
+  "primary": { "type": "github", "href": "https://github.com/acme/acme" },
+  "cta": { "label": "Sign up", "href": "https://acme.com/signup" }
+}
+```
+
+| Setting | What it does |
+| --- | --- |
+| `links` | Up to 8 links or dropdowns; link labels hold up to 60 characters and `href` accepts a path, `https://` or `mailto:` URL |
+| `links[].icon` | A [Lucide](https://lucide.dev/icons) icon name from the [bundled set](/sites/reference/blog-json#icons), like `book-open` |
+| `links[].type` | `github`, `discord`, `x`, `linkedin`, `youtube` or `slack`, which shows the platform's icon, and `label` adds text next to it |
+| `primary` | A secondary button with a platform icon and name, like "GitHub", that takes `type` and `href` |
+| `cta` | The main button on the right, which takes `label` and `href`. A Mintlify-style `"primary": { "type": "button", "label", "href" }` is read as `cta` with a warning, so rename it to `cta` when you can |
+
+On phones, the links move into a menu.
+
+### Blog and changelog links
+
+By default, the header shows **Blog** and **Changelog** when both mounted areas have content (the current area also counts when empty). Set `navbar.areas` to choose their labels and order, even before you publish any entries:
+
+```json blog.json
+"navbar": {
+  "areas": [
+    { "area": "changelog", "label": "What's new" },
+    { "area": "blog", "label": "Journal" }
+  ]
+}
+```
+
+Each area can appear once, with an optional label of up to 60 characters. Omit an area from the list to hide its link, or use `"areas": []` to hide both. An area without a configured mount never gets a link. Hiding a link does not unpublish the area or remove its feed. Remove `areas` to restore automatic navigation. `<SiteAreas />` in a custom header uses the same settings.
+
+### Dropdowns
+
+Give a navbar entry `items` instead of `href` to make it a dropdown:
+
+```json blog.json
+"navbar": {
+  "links": [
+    { "label": "Journal", "href": "/blog" },
+    {
+      "label": "Resources",
+      "icon": "book-open",
+      "items": [
+        { "label": "Docs", "href": "https://acme.com/docs" },
+        { "label": "Support", "href": "mailto:help@acme.com" },
+        { "type": "discord", "href": "https://discord.gg/acme", "label": "Community" }
+      ]
+    }
+  ]
+}
+```
+
+A dropdown has 1 to 8 links, including the same platform links and icons as the navbar. Platform links and the `primary` button require an `http://` or `https://` URL. Dropdowns cannot contain other dropdowns. They open on click or with Enter/Space, support Tab between links, and close with Escape, when focus leaves, or when you click outside. On phones, they expand inside the navigation menu.
+
+### Active links
+
+Internal navbar links are underlined and bold on their destination and child pages: `/blog` stays active on `/blog/2026/launch`, but not `/blogger`. The root `/` is active only on the homepage. Absolute URLs on the site's public origin also count as internal; external, email and fragment links are not marked active. A dropdown label is highlighted when one of its links is active. Links expose `aria-current="page"` for an exact match and `aria-current="location"` for a parent section.
+
+## Footer
+
+```json blog.json
+"footer": {
+  "links": [
+    { "header": "Product", "items": [{ "label": "Pricing", "href": "https://acme.com/pricing" }] },
+    { "header": "Company", "items": [{ "label": "About", "href": "https://acme.com/about" }] }
+  ],
+  "socials": { "x": "https://x.com/acme", "github": "https://github.com/acme" }
+}
+```
+
+- `links` is either a flat list of up to 16 links or up to 6 columns with an optional `header` and 1 to 12 `items` each, and you can't mix the two.
+- `socials` takes `x`, `github`, `linkedin`, `youtube`, `discord`, `slack`, `instagram`, `facebook`, `bluesky`, `threads`, `reddit`, `medium`, `telegram`, `hacker-news` and `website`. Search engines get them as your company's profiles, and Notra uses the `x` account for X link previews.
+
+## Banner
+
+```json blog.json
+"banner": {
+  "content": "**Acme Flow** is live. [Read the launch post](/blog/2026/launch)",
+  "type": "info",
+  "dismissible": true
+}
+```
+
+The banner is one line of Markdown (links, bold, italic, code) of up to 300 characters across the top of every page.
+
+| Setting | Values | Default |
+| --- | --- | --- |
+| `type` | `info` (your button color), `warning` or `critical` | `info` |
+| `color` | Your own background as one hex color or `{ "light": ..., "dark": ... }`, and the text turns white | none |
+| `dismissible` | Shows a close button, and a closed banner stays hidden until you change its text | `false` |
+
+## Page actions
+
+Blog posts show a **Copy page** button with a dropdown below the title and description by default. Changelog entries hide these actions by default. Readers can copy the page as Markdown, view its Markdown version or open an AI assistant with a question about the page. The menu does not appear on index pages. `contextual` in `blog.json` configures the actions:
+
+```json blog.json
+"contextual": {
+  "options": [
+    "copy", "view", "chatgpt", "claude",
+    { "title": "Share on LinkedIn", "icon": "linkedin", "href": "https://www.linkedin.com/sharing/share-offsite/?url={url}" }
+  ]
+}
+```
+
+To show the same actions on individual changelog entries, opt in with:
+
+```json blog.json
+"changelog": {
+  "pageActions": true
+}
+```
+
+`changelog.pageActions` defaults to `false`. When enabled, it uses the same `contextual` options as blog posts; `"display": "none"` or `"options": []` still hides the actions in both areas.
+
+- The built-in options are `copy`, `view` (the Markdown version), `chatgpt`, `claude`, `t3chat`, `perplexity` and `grok`. All of them except `t3chat` show by default.
+- **Copy page** copies the generated Markdown, not the rendered HTML or raw MDX. Copying requires HTTPS (or localhost) and clipboard permission. If it fails, a message includes a **View as Markdown** link so you can copy manually, even when `view` is not in your configured options. The button keeps keyboard focus during copying so you can retry without finding it again.
+- AI links open a new tab with a prefilled prompt containing the page title and canonical Markdown URL, not the full article. The provider must be able to fetch the URL; protected previews and local sites are not publicly accessible. You may need to sign in or submit the prompt. No AI request is sent just by viewing the Notra page.
+- Your own options take a `title` and an `href`, plus an optional `description` and [Lucide `icon`](/sites/reference/blog-json#icons). Notra replaces `{url}` and `{markdownUrl}` in the `href` with the page's canonical HTML and Markdown addresses, URL-encoding them when used inside a link.
+- The menu holds up to 12 options. **Copy page** stays in the main button; the other options appear in their configured order in the dropdown. `"options": []` or `"display": "none"` hides all actions.
+
+To keep only the Markdown actions, use:
+
+```json blog.json
+"contextual": {
+  "options": ["copy", "view"]
+}
+```
+
+To change how the actions look, use the `page-actions` [styling hooks](/sites/customize/design#styling-hooks) in your own CSS:
+
+```css style.css
+.page-actions-copy-button { background: var(--accent); color: white; }
+```
+
+Unlike Mintlify's contextual menu, Notra Sites currently uses `"display": "meta"` (the default) or `"none"`, not `"header"` or `"toc"`. It does not support page-level overrides, a built-in assistant, MCP installation or PDF export.
