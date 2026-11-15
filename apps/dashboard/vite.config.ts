@@ -84,7 +84,9 @@ export default defineConfig(({ mode }) => {
       }),
       tanstackStart(),
       react({ compiler: true }),
-      nitro({ traceDeps: ["harfbuzzjs*", "satori"] }),
+      // @ai-sdk/provider-utils loads undici with a runtime createRequire to
+      // download chat attachments, so it must exist in the server output.
+      nitro({ traceDeps: ["harfbuzzjs*", "satori", "undici"] }),
     ],
     ssr: {
       // React is external too (as in apps/web), so the bundle and external
